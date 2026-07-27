@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# generated with CMTools 0.0.0 
+# generated with CMTools 0.0.0 f50285c
 
 #
 # Set the package name and version to install
@@ -15,7 +15,7 @@ if ($PKG_VERSION) {
 }
 
 $PACKAGE = "knowledge"
-$GIT_GROUP = "Laboratory"
+$GIT_GROUP = "rsdoiel"
 $RELEASE = "https://github.com/${GIT_GROUP}/${PACKAGE}/releases/tag/v${VERSION}"
 $SYSTEM_TYPE = Get-ComputerInfo -Property CsSystemType
 if ($SYSTEM_TYPE.CsSystemType.Contains("ARM64")) {

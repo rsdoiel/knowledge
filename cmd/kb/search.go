@@ -15,12 +15,14 @@ func init() {
 	verbs["format"] = cmdFormat
 }
 
-func cmdSearch(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: search TERM")
 	}
 	term := strings.Join(args, " ")
-	results, err := kb.Search(term)
+	results, err := logKBCall(dl, "Search", map[string]any{"term": term}, func() ([]knowledge.KBSearchResult, error) {
+		return kb.Search(term)
+	})
 	if err != nil {
 		return err
 	}
@@ -44,8 +46,8 @@ func cmdSearch(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.
 	return nil
 }
 
-func cmdSummary(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
-	s, err := kb.Summary()
+func cmdSummary(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	s, err := logKBCall(dl, "Summary", nil, kb.Summary)
 	if err != nil {
 		return err
 	}
@@ -58,7 +60,7 @@ func cmdSummary(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io
 	return nil
 }
 
-func cmdFormat(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdFormat(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("format", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "project name; omit for all projects")
@@ -67,7 +69,9 @@ func cmdFormat(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.
 	}
 	var projectID int64
 	if *project != "" {
-		p, err := kb.ProjectByName(*project)
+		p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": *project}, func() (*knowledge.Project, error) {
+			return kb.ProjectByName(*project)
+		})
 		if err != nil {
 			return err
 		}
@@ -76,7 +80,9 @@ func cmdFormat(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.
 		}
 		projectID = p.ID
 	}
-	md, err := kb.FormatMarkdown(projectID)
+	md, err := logKBCall(dl, "FormatMarkdown", map[string]any{"project_id": projectID}, func() (string, error) {
+		return kb.FormatMarkdown(projectID)
+	})
 	if err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ func init() {
 // writes a fresh -out file, never touching the ambient --db database (see
 // the call site in main.go, which skips opening that database for this
 // verb specifically).
-func cmdMerge(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdMerge(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("merge", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	aPath := fs.String("a", "", "path to the first knowledge.db")
@@ -46,7 +46,7 @@ func cmdMerge(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.W
 	if jsonOut {
 		progressOut = io.Discard
 	}
-	summary, reconciled, err := runMerge(*aPath, *bPath, *outPath, *force, progressOut)
+	summary, reconciled, err := runMerge(dl, *aPath, *bPath, *outPath, *force, progressOut)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func cmdMerge(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.W
 // text-mode "kb: <message>" line and the JSON-mode {"error": "<message>"}
 // envelope (see printError), so this is the one place collision detail
 // can go that works correctly in both output modes.
-func runMerge(aPath, bPath, outPath string, force bool, out io.Writer) (summary []knowledge.MergeTableSummary, reconciled int, err error) {
+func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Writer) (summary []knowledge.MergeTableSummary, reconciled int, err error) {
 	scratch, err := os.MkdirTemp("", "kbmerge-")
 	if err != nil {
 		return nil, 0, err
@@ -87,6 +87,7 @@ func runMerge(aPath, bPath, outPath string, force bool, out io.Writer) (summary 
 		return nil, 0, fmt.Errorf("collision report: %w", err)
 	}
 	if len(collisions) > 0 {
+		dl.Log("merge_collision", map[string]any{"a": aPath, "b": bPath, "count": len(collisions), "force": force})
 		if !force {
 			var msg strings.Builder
 			fmt.Fprintf(&msg, "%d name/uuid collision(s) found:\n", len(collisions))
@@ -104,6 +105,7 @@ func runMerge(aPath, bPath, outPath string, force bool, out io.Writer) (summary 
 			return nil, 0, fmt.Errorf("reconcile collisions: %w", err)
 		}
 		reconciled = len(collisions)
+		dl.Log("merge_reconciled", map[string]any{"count": reconciled})
 		fmt.Fprintf(out, "-force set: reconciled %d collision(s) — b's rows now share a's identity, so their observations/links merge normally instead of being dropped\n", reconciled)
 	}
 
@@ -111,6 +113,7 @@ func runMerge(aPath, bPath, outPath string, force bool, out io.Writer) (summary 
 	if err != nil {
 		return nil, reconciled, fmt.Errorf("merge: %w", err)
 	}
+	dl.Log("merge_summary", map[string]any{"a": aPath, "b": bPath, "out": outPath, "reconciled": reconciled, "tables": summary})
 
 	fmt.Fprintf(out, "%-24s %6s %6s %6s\n", "table", "from_a", "from_b", "merged")
 	for _, s := range summary {

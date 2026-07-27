@@ -1,14 +1,16 @@
 
-# generated with CMTools 0.0.0 
+# generated with CMTools 0.0.0 f50285c
 
 #
 # Simple Makefile for Golang based Projects built under POSIX.
 #
 PROJECT = knowledge
 
-GIT_GROUP = Laboratory
+GIT_GROUP = rsdoiel
 
-PROGRAMS = <PROGRAM_LISTS_GOES_HERE>
+PROGRAMS = kb
+
+KB_TOPICS = project observation concept link source search merge
 
 RELEASE_DATE = $(shell date +%Y-%m-%d)
 
@@ -44,7 +46,7 @@ ifeq ($(OS), Windows)
 	EXT = .exe
 endif
 
-build: version.go $(PROGRAMS) man CITATION.cff about.md installer.sh installer.ps1
+build: version.go $(PROGRAMS) kb-topics-help man CITATION.cff about.md installer.sh installer.ps1
 
 version.go: .FORCE
 	cmt codemeta.json version.go
@@ -70,6 +72,19 @@ $(PROGRAMS): $(PACKAGE)
 	@mkdir -p bin
 	go build -o "bin/$@$(EXT)" cmd/$@/*.go
 	@./bin/$@ -help >$@.1.md
+
+# kb-topics-help regenerates each verb's own kb-TOPIC.1.md man-page source
+# (kb project -help, kb merge -help, etc.) after bin/kb is built. Note the
+# usual GNU Make gotcha this shares with $(MAN_PAGES_1) itself: that
+# variable is computed via a shell glob at Makefile-parse time, so a
+# kb-TOPIC.1.md file must already exist (from a previous run, checked into
+# git same as harvey.1.md/harvey-*.7.md are) before `make man` will pick up
+# a *newly created* one in the same invocation -- run `make kb-topics-help`
+# once first if these files don't exist yet.
+kb-topics-help: $(PROGRAMS)
+	@for topic in $(KB_TOPICS); do \
+		./bin/kb $$topic -help >kb-$$topic.1.md; \
+	done
 
 $(MAN_PAGES): .FORCE
 	mkdir -p man/man1

@@ -1,5 +1,5 @@
 <#
-generated with CMTools 0.0.0 
+generated with CMTools 0.0.0 f50285c
 
 .SYNOPSIS
 PowerShell script for running pandoc on all Markdown docs ending in .md

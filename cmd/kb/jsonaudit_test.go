@@ -158,5 +158,5 @@ func dispatchArgs(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out 
 	if !ok {
 		return fmt.Errorf("no such verb %q registered", args[0])
 	}
-	return fn(kb, jsonOut, args[1:], out)
+	return fn(kb, nil, jsonOut, args[1:], out)
 }

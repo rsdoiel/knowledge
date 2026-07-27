@@ -10,7 +10,7 @@ import (
 func TestCmdSource_AddThenList(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"add", "A Paper", "--doi", "10.1/x"}, &out); err != nil {
+	if err := cmdSource(kb, nil, false, []string{"add", "A Paper", "--doi", "10.1/x"}, &out); err != nil {
 		t.Fatalf("source add: %v", err)
 	}
 	if !strings.Contains(out.String(), "added") {
@@ -18,7 +18,7 @@ func TestCmdSource_AddThenList(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := cmdSource(kb, false, []string{"list"}, &out); err != nil {
+	if err := cmdSource(kb, nil, false, []string{"list"}, &out); err != nil {
 		t.Fatalf("source list: %v", err)
 	}
 	if !strings.Contains(out.String(), "A Paper") {
@@ -29,7 +29,7 @@ func TestCmdSource_AddThenList(t *testing.T) {
 func TestCmdSource_AddRequiresTitle(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"add"}, &out); err == nil {
+	if err := cmdSource(kb, nil, false, []string{"add"}, &out); err == nil {
 		t.Error("expected an error when TITLE is missing")
 	}
 }
@@ -37,9 +37,9 @@ func TestCmdSource_AddRequiresTitle(t *testing.T) {
 func TestCmdSource_ShowByID(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	cmdSource(kb, false, []string{"add", "A Paper", "--url", "https://example.org"}, &out)
+	cmdSource(kb, nil, false, []string{"add", "A Paper", "--url", "https://example.org"}, &out)
 	out.Reset()
-	if err := cmdSource(kb, false, []string{"show", "1"}, &out); err != nil {
+	if err := cmdSource(kb, nil, false, []string{"show", "1"}, &out); err != nil {
 		t.Fatalf("source show: %v", err)
 	}
 	if !strings.Contains(out.String(), "A Paper") {
@@ -50,7 +50,7 @@ func TestCmdSource_ShowByID(t *testing.T) {
 func TestCmdSource_ShowNotFound(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"show", "999"}, &out); err == nil {
+	if err := cmdSource(kb, nil, false, []string{"show", "999"}, &out); err == nil {
 		t.Error("expected an error for a nonexistent source")
 	}
 }
@@ -62,7 +62,7 @@ func TestCmdSource_RemoveUnlinkedSucceeds(t *testing.T) {
 		t.Fatalf("AddSource: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"remove", fmt.Sprint(id)}, &out); err != nil {
+	if err := cmdSource(kb, nil, false, []string{"remove", fmt.Sprint(id)}, &out); err != nil {
 		t.Fatalf("source remove: %v", err)
 	}
 	if _, err := kb.ShowSource(id); err == nil {
@@ -82,7 +82,7 @@ func TestCmdSource_RemoveLinkedFails(t *testing.T) {
 		t.Fatalf("LinkObservationSource: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"remove", fmt.Sprint(sid)}, &out); err == nil {
+	if err := cmdSource(kb, nil, false, []string{"remove", fmt.Sprint(sid)}, &out); err == nil {
 		t.Error("expected an error removing a linked source")
 	}
 }
@@ -91,7 +91,7 @@ func TestCmdSource_Retract(t *testing.T) {
 	kb := openTestKB(t)
 	id, _ := kb.AddSource(sourceStub("A Paper"))
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"retract", fmt.Sprint(id), "found", "to", "be", "fraudulent"}, &out); err != nil {
+	if err := cmdSource(kb, nil, false, []string{"retract", fmt.Sprint(id), "found", "to", "be", "fraudulent"}, &out); err != nil {
 		t.Fatalf("source retract: %v", err)
 	}
 	s, err := kb.ShowSource(id)
@@ -109,7 +109,7 @@ func TestCmdSource_Link(t *testing.T) {
 	oid, _ := kb.AddObservation(pid, "note", "body")
 	sid, _ := kb.AddSource(sourceStub("A Paper"))
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"link", fmt.Sprint(oid), fmt.Sprint(sid)}, &out); err != nil {
+	if err := cmdSource(kb, nil, false, []string{"link", fmt.Sprint(oid), fmt.Sprint(sid)}, &out); err != nil {
 		t.Fatalf("source link: %v", err)
 	}
 	sources, err := kb.ObservationSources(oid)
@@ -124,7 +124,7 @@ func TestCmdSource_Link(t *testing.T) {
 func TestCmdSource_CheckRetractionsNoSources(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"check-retractions"}, &out); err != nil {
+	if err := cmdSource(kb, nil, false, []string{"check-retractions"}, &out); err != nil {
 		t.Fatalf("source check-retractions: %v", err)
 	}
 	if !strings.Contains(out.String(), "Checked 0") {
@@ -136,7 +136,7 @@ func TestCmdSource_RemoveJSON(t *testing.T) {
 	kb := openTestKB(t)
 	id, _ := kb.AddSource(sourceStub("A Paper"))
 	var out bytes.Buffer
-	if err := cmdSource(kb, true, []string{"remove", fmt.Sprint(id)}, &out); err != nil {
+	if err := cmdSource(kb, nil, true, []string{"remove", fmt.Sprint(id)}, &out); err != nil {
 		t.Fatalf("source remove: %v", err)
 	}
 	assertValidJSON(t, out.Bytes())
@@ -146,7 +146,7 @@ func TestCmdSource_RetractJSON(t *testing.T) {
 	kb := openTestKB(t)
 	id, _ := kb.AddSource(sourceStub("A Paper"))
 	var out bytes.Buffer
-	if err := cmdSource(kb, true, []string{"retract", fmt.Sprint(id), "reason"}, &out); err != nil {
+	if err := cmdSource(kb, nil, true, []string{"retract", fmt.Sprint(id), "reason"}, &out); err != nil {
 		t.Fatalf("source retract: %v", err)
 	}
 	assertValidJSON(t, out.Bytes())
@@ -158,7 +158,7 @@ func TestCmdSource_LinkJSON(t *testing.T) {
 	oid, _ := kb.AddObservation(pid, "note", "body")
 	sid, _ := kb.AddSource(sourceStub("A Paper"))
 	var out bytes.Buffer
-	if err := cmdSource(kb, true, []string{"link", fmt.Sprint(oid), fmt.Sprint(sid)}, &out); err != nil {
+	if err := cmdSource(kb, nil, true, []string{"link", fmt.Sprint(oid), fmt.Sprint(sid)}, &out); err != nil {
 		t.Fatalf("source link: %v", err)
 	}
 	assertValidJSON(t, out.Bytes())
@@ -167,7 +167,7 @@ func TestCmdSource_LinkJSON(t *testing.T) {
 func TestCmdSource_CheckRetractionsJSON(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSource(kb, true, []string{"check-retractions"}, &out); err != nil {
+	if err := cmdSource(kb, nil, true, []string{"check-retractions"}, &out); err != nil {
 		t.Fatalf("source check-retractions: %v", err)
 	}
 	assertValidJSON(t, out.Bytes())
@@ -176,7 +176,7 @@ func TestCmdSource_CheckRetractionsJSON(t *testing.T) {
 func TestCmdSource_UnknownSubcommand(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSource(kb, false, []string{"bogus"}, &out); err == nil {
+	if err := cmdSource(kb, nil, false, []string{"bogus"}, &out); err == nil {
 		t.Error("expected an error for an unknown source subcommand")
 	}
 }

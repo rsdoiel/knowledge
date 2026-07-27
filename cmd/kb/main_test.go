@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseGlobalFlags_DBAndJSON(t *testing.T) {
-	dbPath, jsonOut, rest, err := parseGlobalFlags([]string{"--db", "/tmp/x.db", "--json", "project", "list"})
+	dbPath, jsonOut, debugOn, rest, err := parseGlobalFlags([]string{"--db", "/tmp/x.db", "--json", "project", "list"})
 	if err != nil {
 		t.Fatalf("parseGlobalFlags: %v", err)
 	}
@@ -18,18 +18,34 @@ func TestParseGlobalFlags_DBAndJSON(t *testing.T) {
 	if !jsonOut {
 		t.Error("expected jsonOut=true")
 	}
+	if debugOn {
+		t.Error("expected debugOn=false")
+	}
 	if len(rest) != 2 || rest[0] != "project" || rest[1] != "list" {
 		t.Errorf("rest = %v, want [project list]", rest)
 	}
 }
 
-func TestParseGlobalFlags_NoGlobalFlags(t *testing.T) {
-	dbPath, jsonOut, rest, err := parseGlobalFlags([]string{"project", "list"})
+func TestParseGlobalFlags_Debug(t *testing.T) {
+	_, _, debugOn, rest, err := parseGlobalFlags([]string{"--debug", "project", "list"})
 	if err != nil {
 		t.Fatalf("parseGlobalFlags: %v", err)
 	}
-	if dbPath != "" || jsonOut {
-		t.Errorf("dbPath=%q jsonOut=%v, want zero values", dbPath, jsonOut)
+	if !debugOn {
+		t.Error("expected debugOn=true")
+	}
+	if len(rest) != 2 || rest[0] != "project" {
+		t.Errorf("rest = %v, want [project list]", rest)
+	}
+}
+
+func TestParseGlobalFlags_NoGlobalFlags(t *testing.T) {
+	dbPath, jsonOut, debugOn, rest, err := parseGlobalFlags([]string{"project", "list"})
+	if err != nil {
+		t.Fatalf("parseGlobalFlags: %v", err)
+	}
+	if dbPath != "" || jsonOut || debugOn {
+		t.Errorf("dbPath=%q jsonOut=%v debugOn=%v, want zero values", dbPath, jsonOut, debugOn)
 	}
 	if len(rest) != 2 {
 		t.Errorf("rest = %v, want [project list]", rest)
@@ -37,25 +53,22 @@ func TestParseGlobalFlags_NoGlobalFlags(t *testing.T) {
 }
 
 func TestParseGlobalFlags_MissingDBValue(t *testing.T) {
-	_, _, _, err := parseGlobalFlags([]string{"--db"})
+	_, _, _, _, err := parseGlobalFlags([]string{"--db"})
 	if err == nil {
 		t.Error("expected an error for --db with no value")
 	}
 }
 
-func TestMainRun_NoArgsPrintsUsage(t *testing.T) {
-	var out, errOut bytes.Buffer
-	code := mainRun(nil, &out, &errOut)
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-	if !strings.Contains(out.String(), "kb") {
-		t.Errorf("expected usage text mentioning kb, got %q", out.String())
-	}
-}
+// No-args behavior (launch the TUI, per cli-tui-design.md decision 4) is
+// intentionally not exercised through mainRun here: doing so would try to
+// start a real tea.Program against this test process's stdin/stdout,
+// which isn't a TTY. The TUI's actual logic (newTUIModel, Update, View) is
+// covered directly in tui_model_test.go without going through a real
+// terminal; running the real thing is a manual, eyes-on verification step
+// instead (see cli-tui-plan.md W7).
 
 func TestMainRun_HelpFlagPrintsUsage(t *testing.T) {
-	for _, args := range [][]string{{"help"}, {"-h"}, {"--help"}} {
+	for _, args := range [][]string{{"help"}, {"-h"}, {"-help"}, {"--help"}} {
 		var out, errOut bytes.Buffer
 		code := mainRun(args, &out, &errOut)
 		if code != 0 {

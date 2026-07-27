@@ -14,7 +14,7 @@ func TestCmdSearch_FindsObservation(t *testing.T) {
 		t.Fatalf("AddObservation: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdSearch(kb, false, []string{"searchable"}, &out); err != nil {
+	if err := cmdSearch(kb, nil, false, []string{"searchable"}, &out); err != nil {
 		t.Fatalf("search: %v", err)
 	}
 	if !strings.Contains(out.String(), "searchable") {
@@ -25,7 +25,7 @@ func TestCmdSearch_FindsObservation(t *testing.T) {
 func TestCmdSearch_RequiresTerm(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSearch(kb, false, nil, &out); err == nil {
+	if err := cmdSearch(kb, nil, false, nil, &out); err == nil {
 		t.Error("expected an error when no search term is given")
 	}
 }
@@ -33,7 +33,7 @@ func TestCmdSearch_RequiresTerm(t *testing.T) {
 func TestCmdSummary_Empty(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSummary(kb, false, nil, &out); err != nil {
+	if err := cmdSummary(kb, nil, false, nil, &out); err != nil {
 		t.Fatalf("summary: %v", err)
 	}
 	if out.Len() == 0 {
@@ -44,7 +44,7 @@ func TestCmdSummary_Empty(t *testing.T) {
 func TestCmdSummary_JSON(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdSummary(kb, true, nil, &out); err != nil {
+	if err := cmdSummary(kb, nil, true, nil, &out); err != nil {
 		t.Fatalf("summary: %v", err)
 	}
 	var got struct {
@@ -60,7 +60,7 @@ func TestCmdFormat_AllProjects(t *testing.T) {
 	pid, _ := kb.AddProject("proj", "a project")
 	kb.AddObservation(pid, "note", "some body")
 	var out bytes.Buffer
-	if err := cmdFormat(kb, false, nil, &out); err != nil {
+	if err := cmdFormat(kb, nil, false, nil, &out); err != nil {
 		t.Fatalf("format: %v", err)
 	}
 	if !strings.Contains(out.String(), "proj") {
@@ -71,7 +71,7 @@ func TestCmdFormat_AllProjects(t *testing.T) {
 func TestCmdFormat_ProjectNotFound(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdFormat(kb, false, []string{"--project", "nonexistent"}, &out); err == nil {
+	if err := cmdFormat(kb, nil, false, []string{"--project", "nonexistent"}, &out); err == nil {
 		t.Error("expected an error for a nonexistent project")
 	}
 }

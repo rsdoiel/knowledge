@@ -13,7 +13,7 @@ import (
 func TestCmdObservation_AddRequiresProject(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	err := cmdObservation(kb, false, []string{"add", "note", "some body"}, &out)
+	err := cmdObservation(kb, nil, false, []string{"add", "note", "some body"}, &out)
 	if err == nil {
 		t.Error("expected an error when --project is missing")
 	}
@@ -25,7 +25,7 @@ func TestCmdObservation_AddThenList(t *testing.T) {
 		t.Fatalf("AddProject: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdObservation(kb, false, []string{"add", "--project", "proj", "finding", "a", "real", "finding"}, &out); err != nil {
+	if err := cmdObservation(kb, nil, false, []string{"add", "--project", "proj", "finding", "a", "real", "finding"}, &out); err != nil {
 		t.Fatalf("observation add: %v", err)
 	}
 	if !strings.Contains(out.String(), "recorded") {
@@ -33,7 +33,7 @@ func TestCmdObservation_AddThenList(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := cmdObservation(kb, false, []string{"list", "--project", "proj"}, &out); err != nil {
+	if err := cmdObservation(kb, nil, false, []string{"list", "--project", "proj"}, &out); err != nil {
 		t.Fatalf("observation list: %v", err)
 	}
 	if !strings.Contains(out.String(), "a real finding") {
@@ -45,7 +45,7 @@ func TestCmdObservation_AddWithSourceDOI(t *testing.T) {
 	kb := openTestKB(t)
 	pid, _ := kb.AddProject("proj", "")
 	var out bytes.Buffer
-	if err := cmdObservation(kb, false, []string{"add", "--project", "proj", "--source-doi", "10.1/x", "note", "from a paper"}, &out); err != nil {
+	if err := cmdObservation(kb, nil, false, []string{"add", "--project", "proj", "--source-doi", "10.1/x", "note", "from a paper"}, &out); err != nil {
 		t.Fatalf("observation add: %v", err)
 	}
 	obs, err := kb.Observations(pid)
@@ -62,7 +62,7 @@ func TestCmdObservation_ShowByID(t *testing.T) {
 	pid, _ := kb.AddProject("proj", "")
 	id, _ := kb.AddObservation(pid, "note", "specific body")
 	var out bytes.Buffer
-	if err := cmdObservation(kb, false, []string{"show", fmt.Sprint(id)}, &out); err != nil {
+	if err := cmdObservation(kb, nil, false, []string{"show", fmt.Sprint(id)}, &out); err != nil {
 		t.Fatalf("observation show: %v", err)
 	}
 	if !strings.Contains(out.String(), "specific body") {
@@ -75,7 +75,7 @@ func TestCmdObservation_ShowJSON(t *testing.T) {
 	pid, _ := kb.AddProject("proj", "")
 	id, _ := kb.AddObservation(pid, "note", "specific body")
 	var out bytes.Buffer
-	if err := cmdObservation(kb, true, []string{"show", fmt.Sprint(id)}, &out); err != nil {
+	if err := cmdObservation(kb, nil, true, []string{"show", fmt.Sprint(id)}, &out); err != nil {
 		t.Fatalf("observation show: %v", err)
 	}
 	var got struct {
@@ -92,7 +92,7 @@ func TestCmdObservation_ShowJSON(t *testing.T) {
 func TestCmdObservation_ShowNotFound(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdObservation(kb, false, []string{"show", "999999"}, &out); err == nil {
+	if err := cmdObservation(kb, nil, false, []string{"show", "999999"}, &out); err == nil {
 		t.Error("expected an error for a nonexistent observation id")
 	}
 }
@@ -109,7 +109,7 @@ func TestCmdObservation_Sources(t *testing.T) {
 		t.Fatalf("LinkObservationSource: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdObservation(kb, false, []string{"sources", fmt.Sprint(oid)}, &out); err != nil {
+	if err := cmdObservation(kb, nil, false, []string{"sources", fmt.Sprint(oid)}, &out); err != nil {
 		t.Fatalf("observation sources: %v", err)
 	}
 	if !strings.Contains(out.String(), "A Paper") {

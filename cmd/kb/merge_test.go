@@ -37,7 +37,7 @@ func TestMerge_TwoIdenticalCopiesProduceMatchingCounts(t *testing.T) {
 
 	outPath := filepath.Join(dir, "merged.db")
 	var out bytes.Buffer
-	if err := cmdMerge(nil, false, []string{"-a", aPath, "-b", bPath, "-out", outPath}, &out); err != nil {
+	if err := cmdMerge(nil, nil, false, []string{"-a", aPath, "-b", bPath, "-out", outPath}, &out); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 	if _, err := os.Stat(outPath); err != nil {
@@ -71,7 +71,7 @@ func TestMerge_CollisionRequiresForce(t *testing.T) {
 
 	outPath := filepath.Join(dir, "merged.db")
 	var out bytes.Buffer
-	err := cmdMerge(nil, false, []string{"-a", aPath, "-b", bPath, "-out", outPath}, &out)
+	err := cmdMerge(nil, nil, false, []string{"-a", aPath, "-b", bPath, "-out", outPath}, &out)
 	if err == nil {
 		t.Fatal("expected an error when a collision exists and -force is not set")
 	}
@@ -97,7 +97,7 @@ func TestMerge_CollisionErrorSurvivesJSONMode(t *testing.T) {
 	buildTestDB(t, bPath, func(kb *knowledge.KnowledgeBase) { kb.AddProject("shared-name", "") })
 
 	var out bytes.Buffer
-	err := cmdMerge(nil, true, []string{"-a", aPath, "-b", bPath, "-out", filepath.Join(dir, "merged.db")}, &out)
+	err := cmdMerge(nil, nil, true, []string{"-a", aPath, "-b", bPath, "-out", filepath.Join(dir, "merged.db")}, &out)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -123,7 +123,7 @@ func TestMerge_JSONModeOutputsSummaryAndSuppressesProgressText(t *testing.T) {
 	outPath := filepath.Join(dir, "merged.db")
 
 	var out bytes.Buffer
-	if err := cmdMerge(nil, true, []string{"-a", aPath, "-b", bPath, "-out", outPath}, &out); err != nil {
+	if err := cmdMerge(nil, nil, true, []string{"-a", aPath, "-b", bPath, "-out", outPath}, &out); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 	assertValidJSON(t, out.Bytes())
@@ -156,7 +156,7 @@ func TestMerge_CollisionReconciledWithForce(t *testing.T) {
 
 	outPath := filepath.Join(dir, "merged.db")
 	var out bytes.Buffer
-	if err := cmdMerge(nil, false, []string{"-a", aPath, "-b", bPath, "-out", outPath, "-force"}, &out); err != nil {
+	if err := cmdMerge(nil, nil, false, []string{"-a", aPath, "-b", bPath, "-out", outPath, "-force"}, &out); err != nil {
 		t.Fatalf("merge with -force: %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestMerge_CollisionReconciledWithForce(t *testing.T) {
 
 func TestMerge_RequiresAllThreePaths(t *testing.T) {
 	var out bytes.Buffer
-	if err := cmdMerge(nil, false, []string{"-a", "x.db"}, &out); err == nil {
+	if err := cmdMerge(nil, nil, false, []string{"-a", "x.db"}, &out); err == nil {
 		t.Error("expected an error when -b/-out are missing")
 	}
 }

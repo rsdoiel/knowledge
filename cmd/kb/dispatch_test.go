@@ -12,7 +12,7 @@ import (
 
 func TestDispatch_UnknownVerbReturnsUsageError(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := dispatch(map[string]verbFunc{}, nil, false, []string{"bogus"}, &out, &errOut)
+	code := dispatch(map[string]verbFunc{}, nil, nil, false, []string{"bogus"}, &out, &errOut)
 	if code != 2 {
 		t.Errorf("exit code = %d, want 2", code)
 	}
@@ -25,14 +25,14 @@ func TestDispatch_CallsMatchedVerbWithRemainingArgs(t *testing.T) {
 	var gotArgs []string
 	var gotJSON bool
 	verbs := map[string]verbFunc{
-		"stub": func(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+		"stub": func(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 			gotArgs = args
 			gotJSON = jsonOut
 			return nil
 		},
 	}
 	var out, errOut bytes.Buffer
-	code := dispatch(verbs, nil, true, []string{"stub", "arg1", "arg2"}, &out, &errOut)
+	code := dispatch(verbs, nil, nil, true, []string{"stub", "arg1", "arg2"}, &out, &errOut)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
@@ -46,12 +46,12 @@ func TestDispatch_CallsMatchedVerbWithRemainingArgs(t *testing.T) {
 
 func TestDispatch_HandlerErrorReturnsExitCode1(t *testing.T) {
 	verbs := map[string]verbFunc{
-		"boom": func(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+		"boom": func(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 			return errors.New("boom")
 		},
 	}
 	var out, errOut bytes.Buffer
-	code := dispatch(verbs, nil, false, []string{"boom"}, &out, &errOut)
+	code := dispatch(verbs, nil, nil, false, []string{"boom"}, &out, &errOut)
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1", code)
 	}

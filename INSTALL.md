@@ -9,7 +9,7 @@ Quick install with curl or irm
 There is an experimental installer.sh script that can be run with the following command to install latest table release. This may work for macOS, Linux and if you’re using Windows with the Unix subsystem. This would be run from your shell (e.g. Terminal on macOS).
 
 ~~~shell
-curl https://Laboratory.github.io/knowledge/installer.sh | sh
+curl https://rsdoiel.github.io/knowledge/installer.sh | sh
 ~~~
 
 This will install the programs included in knowledge in your `$HOME/bin` directory.
@@ -17,7 +17,7 @@ This will install the programs included in knowledge in your `$HOME/bin` directo
 If you are running Windows 10 or 11 use the Powershell command below.
 
 ~~~ps1
-irm https://Laboratory.github.io/knowledge/installer.ps1 | iex
+irm https://rsdoiel.github.io/knowledge/installer.ps1 | iex
 ~~~
 
 ### If your are running macOS or Windows
@@ -36,12 +36,12 @@ Installing from source
 
 ### Steps
 
-1. git clone https://github.com/Laboratory/knowledge
+1. git clone https://github.com/rsdoiel/knowledge
 2. Change directory into the `knowledge` directory
 3. Make to build, test and install
 
 ~~~shell
-git clone https://github.com/Laboratory/knowledge
+git clone https://github.com/rsdoiel/knowledge
 cd knowledge
 make
 make test

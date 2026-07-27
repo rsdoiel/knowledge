@@ -15,7 +15,7 @@ func TestCmdLink_ProjectToConcept(t *testing.T) {
 		t.Fatalf("AddConcept: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdLink(kb, false, []string{"project", "proj", "streaming"}, &out); err != nil {
+	if err := cmdLink(kb, nil, false, []string{"project", "proj", "streaming"}, &out); err != nil {
 		t.Fatalf("link project: %v", err)
 	}
 	p, _ := kb.ProjectByName("proj")
@@ -32,7 +32,7 @@ func TestCmdLink_ProjectNotFound(t *testing.T) {
 	kb := openTestKB(t)
 	kb.AddConcept("streaming", "")
 	var out bytes.Buffer
-	if err := cmdLink(kb, false, []string{"project", "nonexistent", "streaming"}, &out); err == nil {
+	if err := cmdLink(kb, nil, false, []string{"project", "nonexistent", "streaming"}, &out); err == nil {
 		t.Error("expected an error for a nonexistent project")
 	}
 }
@@ -41,7 +41,7 @@ func TestCmdLink_ConceptNotFound(t *testing.T) {
 	kb := openTestKB(t)
 	kb.AddProject("proj", "")
 	var out bytes.Buffer
-	if err := cmdLink(kb, false, []string{"project", "proj", "nonexistent"}, &out); err == nil {
+	if err := cmdLink(kb, nil, false, []string{"project", "proj", "nonexistent"}, &out); err == nil {
 		t.Error("expected an error for a nonexistent concept")
 	}
 }
@@ -53,7 +53,7 @@ func TestCmdLink_ObservationToConcept(t *testing.T) {
 	kb.AddConcept("streaming", "")
 
 	var out bytes.Buffer
-	if err := cmdLink(kb, false, []string{"observation", fmt.Sprint(oid), "streaming"}, &out); err != nil {
+	if err := cmdLink(kb, nil, false, []string{"observation", fmt.Sprint(oid), "streaming"}, &out); err != nil {
 		t.Fatalf("link observation: %v", err)
 	}
 }
@@ -61,7 +61,7 @@ func TestCmdLink_ObservationToConcept(t *testing.T) {
 func TestCmdLink_UnknownSubcommand(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdLink(kb, false, []string{"bogus", "a", "b"}, &out); err == nil {
+	if err := cmdLink(kb, nil, false, []string{"bogus", "a", "b"}, &out); err == nil {
 		t.Error("expected an error for an unknown link subcommand")
 	}
 }

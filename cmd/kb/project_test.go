@@ -10,7 +10,7 @@ import (
 func TestCmdProject_AddThenList(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdProject(kb, false, []string{"add", "alpha", "first", "project"}, &out); err != nil {
+	if err := cmdProject(kb, nil, false, []string{"add", "alpha", "first", "project"}, &out); err != nil {
 		t.Fatalf("project add: %v", err)
 	}
 	if !strings.Contains(out.String(), "alpha") {
@@ -18,7 +18,7 @@ func TestCmdProject_AddThenList(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := cmdProject(kb, false, []string{"list"}, &out); err != nil {
+	if err := cmdProject(kb, nil, false, []string{"list"}, &out); err != nil {
 		t.Fatalf("project list: %v", err)
 	}
 	if !strings.Contains(out.String(), "alpha") {
@@ -29,7 +29,7 @@ func TestCmdProject_AddThenList(t *testing.T) {
 func TestCmdProject_AddJSON(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdProject(kb, true, []string{"add", "beta"}, &out); err != nil {
+	if err := cmdProject(kb, nil, true, []string{"add", "beta"}, &out); err != nil {
 		t.Fatalf("project add: %v", err)
 	}
 	var got struct {
@@ -47,7 +47,7 @@ func TestCmdProject_AddJSON(t *testing.T) {
 func TestCmdProject_ShowNotFound(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	err := cmdProject(kb, false, []string{"show", "nonexistent"}, &out)
+	err := cmdProject(kb, nil, false, []string{"show", "nonexistent"}, &out)
 	if err == nil {
 		t.Error("expected an error for a nonexistent project")
 	}
@@ -59,7 +59,7 @@ func TestCmdProject_ShowFound(t *testing.T) {
 		t.Fatalf("AddProject: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdProject(kb, false, []string{"show", "gamma"}, &out); err != nil {
+	if err := cmdProject(kb, nil, false, []string{"show", "gamma"}, &out); err != nil {
 		t.Fatalf("project show: %v", err)
 	}
 	if !strings.Contains(out.String(), "gamma") || !strings.Contains(out.String(), "a description") {
@@ -75,7 +75,7 @@ func TestCmdProject_Concepts(t *testing.T) {
 		t.Fatalf("LinkProjectConcept: %v", err)
 	}
 	var out bytes.Buffer
-	if err := cmdProject(kb, false, []string{"concepts", "delta"}, &out); err != nil {
+	if err := cmdProject(kb, nil, false, []string{"concepts", "delta"}, &out); err != nil {
 		t.Fatalf("project concepts: %v", err)
 	}
 	if !strings.Contains(out.String(), "streaming") {
@@ -86,7 +86,7 @@ func TestCmdProject_Concepts(t *testing.T) {
 func TestCmdProject_UnknownSubcommand(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
-	if err := cmdProject(kb, false, []string{"bogus"}, &out); err == nil {
+	if err := cmdProject(kb, nil, false, []string{"bogus"}, &out); err == nil {
 		t.Error("expected an error for an unknown project subcommand")
 	}
 }

@@ -12,32 +12,34 @@ func init() {
 	verbs["project"] = cmdProject
 }
 
-func cmdProject(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: project <add|list|show|concepts> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
 	case "add":
-		return cmdProjectAdd(kb, jsonOut, rest, out)
+		return cmdProjectAdd(kb, dl, jsonOut, rest, out)
 	case "list":
-		return cmdProjectList(kb, jsonOut, rest, out)
+		return cmdProjectList(kb, dl, jsonOut, rest, out)
 	case "show":
-		return cmdProjectShow(kb, jsonOut, rest, out)
+		return cmdProjectShow(kb, dl, jsonOut, rest, out)
 	case "concepts":
-		return cmdProjectConcepts(kb, jsonOut, rest, out)
+		return cmdProjectConcepts(kb, dl, jsonOut, rest, out)
 	default:
 		return fmt.Errorf("unknown project subcommand %q", sub)
 	}
 }
 
-func cmdProjectAdd(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdProjectAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: project add NAME [DESCRIPTION]")
 	}
 	name := args[0]
 	desc := strings.Join(args[1:], " ")
-	id, err := kb.AddProject(name, desc)
+	id, err := logKBCall(dl, "AddProject", map[string]any{"name": name, "description": desc}, func() (int64, error) {
+		return kb.AddProject(name, desc)
+	})
 	if err != nil {
 		return err
 	}
@@ -51,8 +53,8 @@ func cmdProjectAdd(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out
 	return nil
 }
 
-func cmdProjectList(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
-	projects, err := kb.Projects()
+func cmdProjectList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	projects, err := logKBCall(dl, "Projects", nil, kb.Projects)
 	if err != nil {
 		return err
 	}
@@ -69,16 +71,19 @@ func cmdProjectList(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, ou
 	return nil
 }
 
-func cmdProjectShow(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdProjectShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: project show NAME")
 	}
-	p, err := kb.ProjectByName(args[0])
+	name := args[0]
+	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": name}, func() (*knowledge.Project, error) {
+		return kb.ProjectByName(name)
+	})
 	if err != nil {
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("project %q not found", args[0])
+		return fmt.Errorf("project %q not found", name)
 	}
 	if jsonOut {
 		return printJSON(out, p)
@@ -90,18 +95,23 @@ func cmdProjectShow(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, ou
 	return nil
 }
 
-func cmdProjectConcepts(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdProjectConcepts(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: project concepts NAME")
 	}
-	p, err := kb.ProjectByName(args[0])
+	name := args[0]
+	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": name}, func() (*knowledge.Project, error) {
+		return kb.ProjectByName(name)
+	})
 	if err != nil {
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("project %q not found", args[0])
+		return fmt.Errorf("project %q not found", name)
 	}
-	concepts, err := kb.ProjectConcepts(p.ID)
+	concepts, err := logKBCall(dl, "ProjectConcepts", map[string]any{"project_id": p.ID}, func() ([]knowledge.Concept, error) {
+		return kb.ProjectConcepts(p.ID)
+	})
 	if err != nil {
 		return err
 	}

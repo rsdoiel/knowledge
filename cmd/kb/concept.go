@@ -13,22 +13,22 @@ func init() {
 	verbs["concept"] = cmdConcept
 }
 
-func cmdConcept(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: concept <add|list> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
 	case "add":
-		return cmdConceptAdd(kb, jsonOut, rest, out)
+		return cmdConceptAdd(kb, dl, jsonOut, rest, out)
 	case "list":
-		return cmdConceptList(kb, jsonOut, rest, out)
+		return cmdConceptList(kb, dl, jsonOut, rest, out)
 	default:
 		return fmt.Errorf("unknown concept subcommand %q", sub)
 	}
 }
 
-func cmdConceptAdd(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
+func cmdConceptAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("concept add", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	identifierType := fs.String("identifier-type", "", "e.g. doi, orcid, ror")
@@ -45,9 +45,13 @@ func cmdConceptAdd(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out
 	var id int64
 	var err error
 	if *identifierType != "" || *identifierValue != "" {
-		id, err = kb.AddConceptWithIdentifier(name, desc, *identifierType, *identifierValue)
+		id, err = logKBCall(dl, "AddConceptWithIdentifier", map[string]any{"name": name, "identifier_type": *identifierType, "identifier_value": *identifierValue}, func() (int64, error) {
+			return kb.AddConceptWithIdentifier(name, desc, *identifierType, *identifierValue)
+		})
 	} else {
-		id, err = kb.AddConcept(name, desc)
+		id, err = logKBCall(dl, "AddConcept", map[string]any{"name": name}, func() (int64, error) {
+			return kb.AddConcept(name, desc)
+		})
 	}
 	if err != nil {
 		return err
@@ -62,8 +66,8 @@ func cmdConceptAdd(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out
 	return nil
 }
 
-func cmdConceptList(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
-	concepts, err := kb.Concepts()
+func cmdConceptList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	concepts, err := logKBCall(dl, "Concepts", nil, kb.Concepts)
 	if err != nil {
 		return err
 	}
