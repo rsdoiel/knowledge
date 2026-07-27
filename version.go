@@ -12,7 +12,7 @@ const (
     ReleaseDate = "2026-07-27"
 
     // ReleaseHash, the Git hash when version.go was generated
-    ReleaseHash = "844c936"
+    ReleaseHash = "824ecb1"
     LicenseText = `
 knowledge is a SQLite3-backed knowledge base module for tracking projects, observations, and concepts
 Copyright (C) 2026 R. S. Doiel
