@@ -22,12 +22,12 @@ func openTestKB(t *testing.T) *KnowledgeBase {
 
 func TestIsValidKind(t *testing.T) {
 	for _, k := range ValidObservationKinds {
-		if !isValidKind(k) {
-			t.Errorf("isValidKind(%q) = false, want true", k)
+		if !IsValidKind(k) {
+			t.Errorf("IsValidKind(%q) = false, want true", k)
 		}
 	}
-	if isValidKind("bogus") {
-		t.Error("isValidKind(\"bogus\") = true, want false")
+	if IsValidKind("bogus") {
+		t.Error("IsValidKind(\"bogus\") = true, want false")
 	}
 }
 
@@ -156,6 +156,27 @@ func TestKnowledgeBase_observationSourceDOI(t *testing.T) {
 	}
 	if got := byID[id2].SourceDOI; got != doi {
 		t.Errorf("observation %d SourceDOI = %q, want %q", id2, got, doi)
+	}
+}
+
+func TestKnowledgeBase_observationByID(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("proj", "")
+	id, err := kb.AddObservation(pid, "finding", "a specific observation")
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	o, err := kb.ObservationByID(id)
+	if err != nil {
+		t.Fatalf("ObservationByID: %v", err)
+	}
+	if o.Body != "a specific observation" || o.Kind != "finding" || o.ProjectID != pid {
+		t.Errorf("ObservationByID(%d) = %+v, want body/kind/projectID to match", id, o)
+	}
+
+	if _, err := kb.ObservationByID(id + 999); err == nil {
+		t.Error("expected an error for a nonexistent observation id")
 	}
 }
 

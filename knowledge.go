@@ -574,7 +574,7 @@ func (kb *KnowledgeBase) AddObservation(projectID int64, kind, body string) (int
  *       "This paper found X", "https://doi.org/10.1234/abcd.5678")
  */
 func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, sourceDOI string) (int64, error) {
-	if !isValidKind(kind) {
+	if !IsValidKind(kind) {
 		return 0, fmt.Errorf("knowledge: invalid kind %q; must be one of: %s",
 			kind, strings.Join(ValidObservationKinds, ", "))
 	}
@@ -644,6 +644,38 @@ func (kb *KnowledgeBase) Observations(projectID int64) ([]Observation, error) {
 		out = []Observation{}
 	}
 	return out, rows.Err()
+}
+
+/** ObservationByID returns a single observation by its id.
+ *
+ * Parameters:
+ *   id (int64) — the observation's id.
+ *
+ * Returns:
+ *   *Observation — the matching observation.
+ *   error        — sql.ErrNoRows if no observation has that id, or on
+ *                  database failure.
+ *
+ * Example:
+ *   o, err := kb.ObservationByID(42)
+ *   if err != nil {
+ *       // not found or DB error
+ *   }
+ */
+func (kb *KnowledgeBase) ObservationByID(id int64) (*Observation, error) {
+	var o Observation
+	var ts string
+	err := kb.db.QueryRow(
+		`SELECT id, project_id, kind, body, source_doi, created_at
+		 FROM   observations
+		 WHERE  id = ?`,
+		id,
+	).Scan(&o.ID, &o.ProjectID, &o.Kind, &o.Body, &o.SourceDOI, &ts)
+	if err != nil {
+		return nil, err
+	}
+	o.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+	return &o, nil
 }
 
 // ─── Concepts ────────────────────────────────────────────────────────────────
@@ -894,8 +926,20 @@ func (kb *KnowledgeBase) recentObservations(projectID int64, n int) ([]Observati
 	return out, rows.Err()
 }
 
-// isValidKind returns true if kind is in ValidObservationKinds.
-func isValidKind(kind string) bool {
+/** IsValidKind reports whether kind is one of ValidObservationKinds.
+ *
+ * Parameters:
+ *   kind (string) — the observation kind to check.
+ *
+ * Returns:
+ *   bool — true if kind is a recognized observation kind.
+ *
+ * Example:
+ *   if !knowledge.IsValidKind(kind) {
+ *       kind = "note"
+ *   }
+ */
+func IsValidKind(kind string) bool {
 	for _, v := range ValidObservationKinds {
 		if v == kind {
 			return true
