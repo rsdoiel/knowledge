@@ -18,6 +18,73 @@ func openTestKB(t *testing.T) *KnowledgeBase {
 	return kb
 }
 
+func TestProjects_CreatedAtIsNonZero(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("alpha", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	projects, err := kb.Projects()
+	if err != nil {
+		t.Fatalf("Projects: %v", err)
+	}
+	if len(projects) != 1 || projects[0].CreatedAt.IsZero() {
+		t.Errorf("projects = %+v, want one project with a non-zero CreatedAt", projects)
+	}
+}
+
+func TestProjectByName_CreatedAtIsNonZero(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("alpha", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	p, err := kb.ProjectByName("alpha")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p == nil || p.CreatedAt.IsZero() {
+		t.Errorf("ProjectByName result = %+v, want a non-zero CreatedAt", p)
+	}
+}
+
+func TestObservations_CreatedAtIsNonZero(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	if _, err := kb.AddObservation(pid, "note", "body"); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	obs, err := kb.Observations(pid)
+	if err != nil {
+		t.Fatalf("Observations: %v", err)
+	}
+	if len(obs) != 1 || obs[0].CreatedAt.IsZero() {
+		t.Errorf("obs = %+v, want one observation with a non-zero CreatedAt", obs)
+	}
+}
+
+func TestObservationByID_CreatedAtIsNonZero(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	id, _ := kb.AddObservation(pid, "note", "body")
+	o, err := kb.ObservationByID(id)
+	if err != nil {
+		t.Fatalf("ObservationByID: %v", err)
+	}
+	if o.CreatedAt.IsZero() {
+		t.Errorf("ObservationByID result = %+v, want a non-zero CreatedAt", o)
+	}
+}
+
+func TestOpen_SetsBusyTimeout(t *testing.T) {
+	kb := openTestKB(t)
+	var ms int
+	if err := kb.db.QueryRow(`PRAGMA busy_timeout;`).Scan(&ms); err != nil {
+		t.Fatalf("query busy_timeout: %v", err)
+	}
+	if ms != 5000 {
+		t.Errorf("busy_timeout = %d, want 5000", ms)
+	}
+}
+
 // ─── isValidKind ─────────────────────────────────────────────────────────────
 
 func TestIsValidKind(t *testing.T) {

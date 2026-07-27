@@ -65,6 +65,7 @@ CREATE VIEW IF NOT EXISTS project_summary AS
 
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 5000;
 `
 
 // sourcesSchema creates the sources authority table and observation_sources join
@@ -522,7 +523,7 @@ func (kb *KnowledgeBase) Projects() ([]Project, error) {
 		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Status, &ts); err != nil {
 			return nil, err
 		}
-		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+		p.CreatedAt = parseTimestamp(ts)
 		out = append(out, p)
 	}
 	if out == nil {
@@ -637,7 +638,7 @@ func (kb *KnowledgeBase) Observations(projectID int64) ([]Observation, error) {
 		if err := rows.Scan(&o.ID, &o.ProjectID, &o.Kind, &o.Body, &o.SourceDOI, &ts); err != nil {
 			return nil, err
 		}
-		o.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+		o.CreatedAt = parseTimestamp(ts)
 		out = append(out, o)
 	}
 	if out == nil {
@@ -674,7 +675,7 @@ func (kb *KnowledgeBase) ObservationByID(id int64) (*Observation, error) {
 	if err != nil {
 		return nil, err
 	}
-	o.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+	o.CreatedAt = parseTimestamp(ts)
 	return &o, nil
 }
 
@@ -920,10 +921,28 @@ func (kb *KnowledgeBase) recentObservations(projectID int64, n int) ([]Observati
 		if err := rows.Scan(&o.ID, &o.ProjectID, &o.Kind, &o.Body, &o.SourceDOI, &ts); err != nil {
 			return nil, err
 		}
-		o.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+		o.CreatedAt = parseTimestamp(ts)
 		out = append(out, o)
 	}
 	return out, rows.Err()
+}
+
+// parseTimestamp parses a created_at value read back from a DATETIME
+// column. The glebarez/go-sqlite driver returns these as RFC3339
+// ("2026-07-27T21:28:19Z"), not the "2006-01-02 15:04:05" layout the raw
+// stored TEXT value uses (visible via the sqlite3 CLI) -- RFC3339 is
+// tried first since it's what every read through this driver actually
+// produces; the space-separated layout is a fallback for robustness, not
+// something normally hit. Errors are not surfaced: a bad timestamp isn't
+// worth failing an otherwise-successful read over, matching this
+// package's existing behavior of silently zero-valuing CreatedAt on
+// parse failure -- callers that need to know should check IsZero().
+func parseTimestamp(ts string) time.Time {
+	if t, err := time.Parse(time.RFC3339, ts); err == nil {
+		return t
+	}
+	t, _ := time.Parse("2006-01-02 15:04:05", ts)
+	return t
 }
 
 /** IsValidKind reports whether kind is one of ValidObservationKinds.
@@ -1087,7 +1106,7 @@ func (kb *KnowledgeBase) ProjectByName(name string) (*Project, error) {
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: project by name: %w", err)
 	}
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+	p.CreatedAt = parseTimestamp(ts)
 	return &p, nil
 }
 
@@ -1104,7 +1123,7 @@ func (kb *KnowledgeBase) projectByID(id int64) (*Project, error) {
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: project by id: %w", err)
 	}
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+	p.CreatedAt = parseTimestamp(ts)
 	return &p, nil
 }
 
