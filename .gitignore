@@ -1,0 +1,14 @@
+*~
+*#
+*.swp
+*.tmp
+*.bak
+.env
+*.env
+*.log
+bin
+testout
+dist
+man
+*.db-shm
+*.db-wal
