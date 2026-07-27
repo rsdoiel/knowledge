@@ -1,4 +1,4 @@
-%kb-observation(1) user manual | version 0.0.1 72e0ed6
+%kb-observation(1) user manual | version 0.0.1 ac284fc
 % R. S. Doiel
 % 2026-07-27
 
