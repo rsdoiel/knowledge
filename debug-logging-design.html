@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="kb---debug-design"><code>kb --debug</code> — Design</h1>
+<p><strong>Status (2026-07-27):</strong> Decisions confirmed. See <a
+href="debug-logging-plan.html">debug-logging-plan.md</a> for the phased
+plan.</p>
+<p><strong>References:</strong> - <code>harvey/debuglog.go</code> — the
+original nil-safe JSONL <code>DebugLog</code> pattern. -
+<code>github.com/caltechlibrary/clasm</code>’s
+<code>internal/debuglog</code> (macmini-rd.local,
+<code>~/WorkLab/clasm</code>) — the same pattern applied to AWS SDK
+calls, explicitly modeled on harvey’s per its own
+<code>DESIGN.md</code>.</p>
+<h2 id="motivation-and-a-correction">Motivation, and a correction</h2>
+<p>You asked for a <code>--debug</code> option that emits enough detail
+to debug the TUI, “more detail since we’re using huh and bubbletea,”
+citing <code>clasm</code> as a precedent that already worked. Worth
+stating plainly since it changes the starting point:
+<strong><code>clasm</code> does not actually log bubbletea/huh
+event-loop detail anywhere</strong> — checked <code>internal/tui</code>,
+<code>internal/ui</code>, and every <code>.go</code> file under
+<code>internal/workflow</code> for any logging call.
+<code>clasm</code>’s <code>-debug</code> is scoped entirely to
+<code>internal/awsclient</code>’s <code>Wrap*</code> decorators, which
+log every AWS SDK call (method, region, params, duration, output/error)
+— the “successful precedent” is the <em>architecture</em> (nil-safe
+JSONL <code>DebugLog</code>, <code>-debug</code> flag, path announced
+once at startup), not an existing example of TUI-level tracing to copy.
+This design applies that same architecture to two things
+<code>clasm</code> doesn’t cover: our own
+<code>knowledge.KnowledgeBase</code> calls, and bubbletea’s
+<code>Update</code> loop itself.</p>
+<p>Confirmed in conversation: <code>--debug</code> applies to
+<strong>both</strong> the TUI and every CLI verb (not TUI-only); the log
+file is <code>./kb-debug-&lt;timestamp&gt;.jsonl</code> in the current
+directory, matching <code>clasm</code>’s convention exactly (not
+<code>&lt;db-dir&gt;/</code>).</p>
+<h2 id="decisions">Decisions</h2>
+<ol type="1">
+<li><p><strong>New file <code>cmd/kb/debuglog.go</code></strong>, same
+shape as <code>clasm</code>’s <code>internal/debuglog</code> (itself
+modeled on <code>harvey/debuglog.go</code>): a nil-safe
+<code>DebugLog</code> struct,
+<code>New(path string) (*DebugLog, error)</code>,
+<code>DefaultPath() string</code>
+(<code>"kb-debug-" + timestamp + ".jsonl"</code>),
+<code>(*DebugLog) Log(event string, fields map[string]any)</code>,
+<code>Path()</code>, <code>Close()</code>. Every method nil-safe (a nil
+<code>*DebugLog</code> is exactly what <code>--debug=false</code>
+produces), so no <code>if debug</code> conditional appears anywhere
+outside the one place <code>--debug</code> is parsed. Scoped to
+<code>cmd/kb</code>, not the <code>knowledge</code> package itself —
+this is a CLI/TUI concern, not something other consumers of the package
+need.</p></li>
+<li><p><strong><code>--debug</code> is a third global flag</strong>,
+alongside <code>--db</code>/<code>--json</code>, parsed in
+<code>parseGlobalFlags</code> the same way. Opened once in
+<code>mainRun</code> (skipped entirely for <code>help</code>/no-op
+paths, same as opening the database is); its path is printed to stderr
+once at startup, matching <code>clasm</code>’s “so the operator knows
+where to <code>tail -f</code> it.”</p></li>
+<li><p><strong><code>verbFunc</code> gains a <code>dl *DebugLog</code>
+parameter</strong>, threaded the same way <code>jsonOut bool</code>
+already is — every verb handler (<code>cmdProject</code>,
+<code>cmdProjectAdd</code>, <code>cmdObservation</code>, … all ~20
+handler functions across 7 files) picks up one more parameter. Rejected:
+a package-level <code>var currentDebugLog *DebugLog</code> — avoids
+touching every signature, but introduces mutable global state for
+something test code also needs to control per-test; an explicit
+parameter is more work to wire but stays consistent with how
+<code>jsonOut</code> already flows through the same functions, and keeps
+every handler’s dependencies visible in its own signature.</p></li>
+<li><p><strong>Knowledge-base calls are logged via an explicit generic
+helper, not an interface decorator.</strong> <code>clasm</code>’s
+<code>Wrap*</code> pattern works because
+<code>EC2API</code>/<code>SSMAPI</code>/etc. are already narrow,
+fake-able <em>interfaces</em> by design (for testing against fakes,
+unrelated to debug logging). <code>*knowledge.KnowledgeBase</code> is a
+concrete struct with ~24 public methods — defining a parallel interface
+just to wrap it in a decorator would duplicate nearly the entire public
+API as a second abstraction, for a single first-party consumer, for one
+purpose (logging). Instead:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// logKBCall runs call, logs one &quot;kb_call&quot; record to dl (method, params,</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co">// duration_ms, and either result or error), and returns call&#39;s result</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">// unchanged. A nil dl makes this call&#39;s own overhead one nil check.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> logKBCall<span class="op">[</span>T <span class="dt">any</span><span class="op">](</span>dl <span class="op">*</span>DebugLog<span class="op">,</span> method <span class="dt">string</span><span class="op">,</span> params <span class="dt">any</span><span class="op">,</span> call <span class="kw">func</span><span class="op">()</span> <span class="op">(</span>T<span class="op">,</span> <span class="dt">error</span><span class="op">))</span> <span class="op">(</span>T<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    start <span class="op">:=</span> time<span class="op">.</span>Now<span class="op">()</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    result<span class="op">,</span> err <span class="op">:=</span> call<span class="op">()</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    fields <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">any</span><span class="op">{</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;method&quot;</span><span class="op">:</span>      method<span class="op">,</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;params&quot;</span><span class="op">:</span>      params<span class="op">,</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;duration_ms&quot;</span><span class="op">:</span> time<span class="op">.</span>Since<span class="op">(</span>start<span class="op">).</span>Milliseconds<span class="op">(),</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        fields<span class="op">[</span><span class="st">&quot;error&quot;</span><span class="op">]</span> <span class="op">=</span> err<span class="op">.</span>Error<span class="op">()</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        fields<span class="op">[</span><span class="st">&quot;result&quot;</span><span class="op">]</span> <span class="op">=</span> result</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    dl<span class="op">.</span>Log<span class="op">(</span><span class="st">&quot;kb_call&quot;</span><span class="op">,</span> fields<span class="op">)</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result<span class="op">,</span> err</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Applied at each of the ~34 real call sites across
+<code>project.go</code>, <code>observation.go</code>,
+<code>concept.go</code>, <code>link.go</code>, <code>source.go</code>,
+<code>search.go</code>, and <code>tui_model.go</code>
+(<code>merge.go</code>’s calls are to package-level functions, not
+<code>*KnowledgeBase</code> methods — covered separately, decision
+6).</p></li>
+<li><p><strong>The TUI additionally logs every <code>tea.Msg</code> and
+every view-state transition</strong> — the actual “more detail… since
+we’re using bubbletea” ask, and the piece with no existing precedent
+anywhere to follow.</p>
+<ul>
+<li>Every message <code>Update</code> receives:
+<code>event="tui_msg"</code>, <code>msg_type</code> (Go type name via
+<code>%T</code>), and for <code>tea.KeyMsg</code> specifically, the key
+string (<code>msg.String()</code>) — this is the concrete, high-value
+case for “why didn’t my keypress do what I expected.”</li>
+<li>Every view-state change (<code>viewProjects</code> →
+<code>viewObservations</code>, etc.):
+<code>event="tui_state_change"</code>, <code>from</code>,
+<code>to</code>.</li>
+<li>Errors already stored in <code>m.err</code> also get an explicit
+<code>event="tui_error"</code> record at the point they’re set, not just
+silently shown in <code>View()</code>.</li>
+</ul></li>
+<li><p><strong><code>merge</code> gets <code>dl</code> too, logging its
+own already-distinct events</strong>
+(<code>event="merge_collision"</code>,
+<code>event="merge_reconciled"</code>,
+<code>event="merge_summary"</code>) at the same points its existing
+progress text is written — not routed through <code>logKBCall</code>,
+since <code>CollisionReport</code>/
+<code>ReconcileCollisions</code>/<code>MergeKnowledgeBases</code> are
+package-level functions operating on file paths, not
+<code>*KnowledgeBase</code> methods.</p></li>
+</ol>
+<h2 id="testing">Testing</h2>
+<p>Mirrors <code>clasm</code>’s own <code>debuglog_test.go</code> almost
+exactly: <code>TestLog_WritesOneJSONObjectPerLine</code> (open a
+temp-file-backed <code>DebugLog</code>, log two events, close, re-read
+the file, assert line count and field values),
+<code>TestLog_NilReceiverIsSafe</code> (every method on a nil
+<code>*DebugLog</code> is a no-op). Plus:
+<code>TestLogKBCall_LogsMethodParamsAndResult</code>,
+<code>TestLogKBCall_LogsErrorInsteadOfResult</code>, and TUI-side tests
+sending a <code>tea.KeyMsg</code>/state-changing key to a model
+constructed with a real temp-file <code>DebugLog</code>, then reading
+the file back to confirm the expected
+<code>tui_msg</code>/<code>tui_state_change</code> records appear —
+following the same “real file, real JSONL, read it back” pattern rather
+than mocking <code>Log</code> itself.</p>
+<h2 id="what-this-does-not-cover">What this does not cover</h2>
+<ul>
+<li>Any change to <code>harvey</code>’s own
+<code>--debug</code>/<code>DebugLog</code> — untouched, separate repo,
+separate concern.</li>
+<li>Redacting sensitive fields (<code>clasm</code>’s one exception:
+<code>CreateKeyPair</code>’s private key material never reaches its log)
+— nothing in <code>knowledge.KnowledgeBase</code>’s API returns
+comparably sensitive data today, so no redaction logic is being added
+preemptively; revisit if that changes.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

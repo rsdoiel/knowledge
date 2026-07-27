@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="installation-knowledge">Installation
+<strong>knowledge</strong></h1>
+<p><strong>knowledge</strong> A standalone SQLite3-backed knowledge base
+for tracking projects, observations, and concepts across independent
+experiments in the rsdoiel/Laboratory workspace. Extracted from the
+harvey terminal agent’s knowledge.go, this module provides a typed CRUD
+API (Open, AddProject, AddObservationWithSource,
+AddConceptWithIdentifier, Search, and related methods) plus UUID-based
+row identity and a SQL/ATTACH-based cross-machine merge tool, so other
+experiments and language-model harnesses can read and write structured
+observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb,
+a single “kb VERB ARGS” binary (matching the git/go command model)
+covering the full API with both human-readable and –json output, a merge
+verb for reconciling two databases that drifted independently, and a
+read-only interactive TUI browser for exploring projects, observations,
+and concepts.</p>
+<h2 id="quick-install-with-curl-or-irm">Quick install with curl or
+irm</h2>
+<p>There is an experimental installer.sh script that can be run with the
+following command to install latest table release. This may work for
+macOS, Linux and if you’re using Windows with the Unix subsystem. This
+would be run from your shell (e.g. Terminal on macOS).</p>
+<pre class="shell"><code>curl https://rsdoiel.github.io/knowledge/installer.sh | sh</code></pre>
+<p>This will install the programs included in knowledge in your
+<code>$HOME/bin</code> directory.</p>
+<p>If you are running Windows 10 or 11 use the Powershell command
+below.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode ps1"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">irm</span> https<span class="op">://</span>rsdoiel<span class="op">.</span><span class="fu">github</span><span class="op">.</span><span class="fu">io</span><span class="op">/</span>knowledge<span class="op">/</span>installer<span class="op">.</span><span class="fu">ps1</span> <span class="op">|</span> <span class="fu">iex</span></span></code></pre></div>
+<h3 id="if-your-are-running-macos-or-windows">If your are running macOS
+or Windows</h3>
+<p>You may get security warnings if you are using macOS or Windows. See
+the notes for the specific operating system you’re using to fix
+issues.</p>
+<ul>
+<li><a href="INSTALL_NOTES_macOS.html">INSTALL_NOTES_macOS.md</a></li>
+<li><a
+href="INSTALL_NOTES_Windows.html">INSTALL_NOTES_Windows.md</a></li>
+</ul>
+<h2 id="installing-from-source">Installing from source</h2>
+<h3 id="required-software">Required software</h3>
+<ul>
+<li>Go &gt;= 1.26.3</li>
+</ul>
+<h3 id="steps">Steps</h3>
+<ol type="1">
+<li>git clone https://github.com/rsdoiel/knowledge</li>
+<li>Change directory into the <code>knowledge</code> directory</li>
+<li>Make to build, test and install</li>
+</ol>
+<pre class="shell"><code>git clone https://github.com/rsdoiel/knowledge
+cd knowledge
+make
+make test
+make install</code></pre>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

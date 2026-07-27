@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="extracting-knowledge.go-from-harvey-design">Extracting
+<code>knowledge.go</code> from <code>harvey</code> — Design</h1>
+<p><strong>Status (2026-07-27):</strong> Draft — audit complete,
+decisions below need sign-off before a <code>-plan.md</code> is
+written.</p>
+<p><strong>References:</strong> -
+<code>harvey/knowledge_db_merge_design.md</code>’s “Sequencing” section
+— the umbrella decision that this is step 2, after the UUID migration +
+merge tool (step 1, done) and before JSON-L export (step 3, deferred). -
+<code>harvey/experiments-migration-design.md</code> — the most recent
+work on <code>knowledge.go</code>, done 2026-07-27, the day before this
+extraction started. Anything below assumes that work already landed (it
+has).</p>
+<h2 id="motivation">Motivation</h2>
+<p>Two other experiments in this Laboratory — <code>henry</code> and
+<code>antennaApp</code> — want to write structured observations into
+<code>agents/knowledge.db</code> today, but the typed CRUD API for it
+(<code>OpenKnowledgeBase</code>, <code>AddProject</code>,
+<code>AddObservationWithSource</code>,
+<code>AddConceptWithIdentifier</code>, <code>Search</code>, etc.) is
+currently locked inside <code>harvey</code>’s own Go module, so they’re
+limited to raw <code>sqlite3</code> CLI inserts. Extracting the code
+into its own module makes <code>harvey</code> a <em>consumer</em> of the
+knowledge base rather than its owner — the same relationship
+<code>cmd/assay</code> already has to harvey’s root package, one layer
+further out.</p>
+<h2 id="whats-actually-being-moved-audited-2026-07-27">What’s actually
+being moved (audited 2026-07-27)</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Source file (harvey)</th>
+<th scope="col">Lines</th>
+<th scope="col">Destination</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>knowledge.go</code></td>
+<td>1532</td>
+<td><code>knowledge.go</code> (this repo, package
+<code>knowledge</code>)</td>
+</tr>
+<tr>
+<td><code>knowledge_merge.go</code></td>
+<td>284</td>
+<td><code>knowledge_merge.go</code></td>
+</tr>
+<tr>
+<td><code>knowledge_test.go</code></td>
+<td>1287</td>
+<td><code>knowledge_test.go</code></td>
+</tr>
+<tr>
+<td><code>knowledge_merge_test.go</code></td>
+<td>577</td>
+<td><code>knowledge_merge_test.go</code> (missed in the first pass of
+this audit — a separate test file from <code>knowledge_test.go</code>,
+covering
+<code>CollisionReport</code>/<code>ReconcileCollisions</code>/<code>MergeKnowledgeBases</code>)</td>
+</tr>
+<tr>
+<td><code>cmd/kbmerge/main.go</code></td>
+<td>126</td>
+<td><code>cmd/kbmerge/main.go</code></td>
+</tr>
+</tbody>
+</table>
+<h2
+id="dependency-audit-the-actual-coupling-to-harvey-is-small">Dependency
+audit — the actual coupling to <code>harvey</code> is small</h2>
+<p>Checked every reference to harvey-specific types from inside
+<code>knowledge.go</code>/<code>knowledge_merge.go</code>, and every
+reference to the knowledge base’s own exported types from
+<em>outside</em> those two files, across all of <code>harvey</code>’s
+other <code>.go</code> files:</p>
+<ul>
+<li><p><strong>Exactly one</strong> harvey-specific dependency exists:
+<code>OpenKnowledgeBase</code> takes <code>*Workspace</code> and calls
+<code>ws.AbsPath(harveySubdir + "/knowledge.db")</code> to resolve the
+default location when <code>customPath == ""</code>.
+<code>Workspace.AbsPath</code> itself (<code>workspace.go:101</code>) is
+a small, harvey-specific helper: it joins a relative path onto
+<code>ws.Root</code> and guards against escaping that root — it has no
+other purpose the extracted module needs.</p></li>
+<li><p><code>IdentifierType</code> and its constants
+(<code>IdentifierDOI</code>, <code>IdentifierORCID</code>, etc.) — used
+by <code>commands_kb.go</code> when calling
+<code>AddConceptWithIdentifier</code>/<code>FindOrCreateSource</code> —
+are defined in a <em>separate</em> harvey file,
+<code>scholarly_identifiers.go</code>, and are <strong>not</strong>
+referenced by <code>knowledge.go</code> at all:
+<code>AddConceptWithIdentifier</code>’s
+<code>identifierType</code>/<code>identifierValue</code> parameters are
+plain <code>string</code>. This type stays in <code>harvey</code>,
+untouched; callers just pass <code>string(harvey.IdentifierORCID)</code>
+into the extracted module’s plain-string parameters, same as
+today.</p></li>
+<li><p>Every other harvey file that uses the knowledge base does so only
+through <strong>method calls</strong> on a <code>*KnowledgeBase</code>
+value obtained from <code>Agent.KB</code> (<code>harvey.go:159</code>) —
+<code>commands_kb.go</code>, <code>commands_memory.go</code>, etc. never
+spell out
+<code>Project</code>/<code>Observation</code>/<code>Concept</code>/<code>Source</code>/<code>KBSearchResult</code>/
+<code>MergeTableSummary</code>/<code>NameCollision</code> by name
+anywhere (Go’s <code>:=</code> type inference means a
+<code>for _, p := range kb.Projects()</code> loop never needs to name
+the type). <strong>This means renaming the package qualifier
+(<code>knowledge.Project</code> instead of bare <code>Project</code>)
+requires zero changes to any file except the ones that spell out
+<code>*KnowledgeBase</code> directly.</strong></p></li>
+<li><p>Real cross-file references to the type itself, outside
+<code>knowledge.go</code>/ <code>knowledge_merge.go</code> (checked
+2026-07-27, including a second pass specifically over test files for
+direct type literals/declarations, which method-call-only usage wouldn’t
+surface):</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">File</th>
+<th scope="col">What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>harvey.go:159</code></td>
+<td><code>Agent.KB *KnowledgeBase</code> field declaration</td>
+</tr>
+<tr>
+<td><code>terminal.go:1549</code></td>
+<td><code>OpenKnowledgeBase(a.Workspace, a.Config.Memory.KnowledgeDB)</code></td>
+</tr>
+<tr>
+<td><code>memory_unified.go:274</code></td>
+<td><code>OpenKnowledgeBase(u.ws, u.cfg.KnowledgeDB)</code></td>
+</tr>
+<tr>
+<td><code>commands_kb.go:334</code></td>
+<td><code>var s Source</code> (in <code>cmdKb</code>’s <code>add</code>
+subcommand, before <code>kb.AddSource(s)</code>)</td>
+</tr>
+<tr>
+<td><code>commands_test.go</code> (4 lines: 1516, 1541, 1575, 1594)</td>
+<td><code>Source{Title: ..., IdentifierType: ..., IdentifierValue: ...}</code>
+literals</td>
+</tr>
+<tr>
+<td><code>config_yaml.go:180</code></td>
+<td><strong>False positive</strong> — <code>knowledgeBaseYAML</code>
+struct field named <code>KnowledgeBase</code> for the
+<code>knowledge_base:</code> YAML key; unrelated to the
+<code>*KnowledgeBase</code> Go type, not touched by this extraction</td>
+</tr>
+</tbody>
+</table>
+<p>A broader sweep (grepping every bare
+<code>Project</code>/<code>Observation</code>/<code>Concept</code>/
+<code>Source</code>/etc. token, not just struct literals) turned up many
+more hits, all confirmed false positives on inspection: English prose in
+<code>helptext.go</code>/<code>commands_kb.go</code>’s user-facing
+output (“Project not found”, “Observation %d not found”), and unrelated
+<code>Source string</code> fields on entirely different types
+(<code>SkillSearchDir.Source</code>, <code>RecordedMemory.Source</code>,
+<code>TemplateEntry.Source</code>) that happen to share a field name
+with the knowledge base’s own <code>Source</code> type but aren’t
+it.</p></li>
+</ul>
+<p>This is a narrow, well-contained seam — six real reference sites
+total across all of <code>harvey</code>, five of them one-line
+changes.</p>
+<h2 id="decisions-draft-need-your-confirmation">Decisions (draft — need
+your confirmation)</h2>
+<ol type="1">
+<li><p><strong>Package name: <code>knowledge</code></strong> (already
+set via <code>go mod init github.com/rsdoiel/knowledge</code>, matches
+this repo). Not in question — confirmed by the scaffold already
+committed.</p></li>
+<li><p><strong>Open question — keep
+<code>KnowledgeBase</code>/<code>OpenKnowledgeBase</code> names as-is,
+or rename to drop the <code>knowledge.KnowledgeBase</code> /
+<code>knowledge.OpenKnowledgeBase</code> stutter</strong>
+(e.g. <code>knowledge.Base</code> / <code>knowledge.Open</code>)?
+Recommendation: <strong>keep the names as-is for this first extraction
+pass.</strong> Renaming at the same time as moving repos and changing
+the <code>Open</code> signature (decision 3) combines two independent
+risks into one change — if something breaks, it’s harder to tell whether
+the move or the rename caused it. A pure cosmetic rename is easy and
+low-risk to do later, in its own small follow-up, once the extracted
+module has already proven itself working end-to-end inside
+<code>harvey</code>.</p></li>
+<li><p><strong>Drop the <code>*Workspace</code> parameter
+entirely.</strong> New signature:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Open<span class="op">(</span>dbPath <span class="dt">string</span><span class="op">)</span> <span class="op">(*</span>KnowledgeBase<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<p>No more “empty string means default location” magic inside the
+library — every caller passes a fully-resolved path. This is what
+“harvey becomes a consumer, not the owner” actually requires: the
+library shouldn’t need to know what a “workspace” is.</p>
+<p>Also add a small convenience helper, since the motivating use case
+(<code>henry</code>, <code>antennaApp</code> — neither has a
+<code>Workspace</code>-shaped abstraction of its own) still benefits
+from not hand-rolling the “agents/knowledge.db under this project root”
+convention every time:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// DefaultPath returns the conventional knowledge.db location under root</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">// (root + &quot;agents/knowledge.db&quot;), for callers with no path override.</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> DefaultPath<span class="op">(</span>root <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> filepath<span class="op">.</span>Join<span class="op">(</span>root<span class="op">,</span> <span class="st">&quot;agents&quot;</span><span class="op">,</span> <span class="st">&quot;knowledge.db&quot;</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>harvey</code>’s two call sites become (illustrative, exact
+wiring in the <code>-plan.md</code>):</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>dbPath <span class="op">:=</span> a<span class="op">.</span>Config<span class="op">.</span>Memory<span class="op">.</span>KnowledgeDB</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> dbPath <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    dbPath <span class="op">=</span> knowledge<span class="op">.</span>DefaultPath<span class="op">(</span>a<span class="op">.</span>Workspace<span class="op">.</span>Root<span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>kb<span class="op">,</span> err <span class="op">:=</span> knowledge<span class="op">.</span>Open<span class="op">(</span>dbPath<span class="op">)</span></span></code></pre></div></li>
+<li><p><strong><code>cmd/kbmerge</code> moves too</strong>, in the same
+pass — it’s a thin wrapper around <code>knowledge_merge.go</code>’s
+<code>CollisionReport</code>/<code>ReconcileCollisions</code>/
+<code>MergeKnowledgeBases</code>, which are moving anyway. Leaving it
+behind in <code>harvey</code> pointing at a not-yet-independent
+dependency doesn’t make sense structurally, and its own tests (none
+exist yet — see <code>harvey/TODO.md</code>/<code>DECISIONS.md</code>,
+<code>cmd/kbmerge</code> has no test file today) aren’t a blocker either
+way.</p></li>
+<li><p><strong><code>harvey</code>’s <code>go.mod</code> uses a
+<code>replace</code> directive during development</strong>:</p>
+<pre><code>replace github.com/rsdoiel/knowledge =&gt; ../knowledge</code></pre>
+<p>This repo hasn’t been pushed to GitHub yet
+(<code>codeRepository</code> in <code>codemeta.json</code> names the
+eventual URL, but nothing exists there today) and has no tagged version
+— a real <code>require</code> line needs either a public tag or a
+<code>replace</code> pointing at the local checkout. Switch to a real
+tagged <code>require</code> once this repo is pushed and versioned;
+document that as a followup, not part of this plan.</p></li>
+<li><p><strong><code>IdentifierType</code> stays in
+<code>harvey</code>.</strong> Confirmed above it’s unused by the
+extracted code — no decision needed here, just stating it so it doesn’t
+get relitigated during implementation.</p></li>
+</ol>
+<h2 id="what-this-design-does-not-cover">What this design does
+<em>not</em> cover</h2>
+<ul>
+<li>Actually moving the files and updating <code>harvey</code>’s call
+sites — that’s the <code>-plan.md</code>, phased TDD, after decisions
+above are confirmed.</li>
+<li>Publishing/tagging <code>github.com/rsdoiel/knowledge</code> on
+GitHub — decision 5 above defers this to a followup once the module is
+proven working via <code>replace</code>.</li>
+<li>JSON-L export/import
+(<code>knowledge_db_jsonl_export_design.md</code>) — explicitly step 3
+of the sequencing, after this extraction, not part of it.</li>
+<li>Any change to the actual schema, migration logic, or merge logic
+itself — this is a pure move, mirroring the “no behavior changes” ground
+rule from <code>harvey/refactoring-plan.md</code>’s R0–R9 work.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

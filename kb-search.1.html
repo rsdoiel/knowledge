@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-search — full-text search and formatted views</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb search TERM</p>
+<p>kb summary</p>
+<p>kb format [–project NAME]</p>
+<h1 id="description">DESCRIPTION</h1>
+<dl>
+<dt>search</dt>
+<dd>
+full-text search across observations, projects, and concepts using the
+FTS5 index. TERM uses standard FTS5 query syntax: multiple words are
+ANDed, “quoted phrases” match exactly, prefix* matches by prefix.
+</dd>
+<dt>summary</dt>
+<dd>
+a formatted overview of every project and its most recent observations
+</dd>
+<dt>format</dt>
+<dd>
+a fully-assembled Markdown view of one project (–project NAME) or every
+project (no –project) — concepts and observations included inline,
+unlike the bare rows kb-project(1)’s show/list return
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb-project(1), kb-observation(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

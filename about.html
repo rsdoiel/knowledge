@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="about-this-software">About this software</h1>
+<h2 id="knowledge-0.0.1">knowledge 0.0.1</h2>
+<p>Proof-of-concept pre-release. Full CRUD API (projects, observations,
+concepts, sources) with FTS5 search and cross-machine merge; cmd/kb
+ships a git/go-style CLI with –json output and a read-mostly bubbletea
+TUI; –debug emits a JSONL trace of every knowledge-base call and TUI
+event. Extracted from harvey’s knowledge.go/knowledge_merge.go.</p>
+<h2 id="authors">Authors</h2>
+<ul>
+<li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>
+</ul>
+<p>A standalone SQLite3-backed knowledge base for tracking projects,
+observations, and concepts across independent experiments in the
+rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent’s
+knowledge.go, this module provides a typed CRUD API (Open, AddProject,
+AddObservationWithSource, AddConceptWithIdentifier, Search, and related
+methods) plus UUID-based row identity and a SQL/ATTACH-based
+cross-machine merge tool, so other experiments and language-model
+harnesses can read and write structured observations directly instead of
+raw sqlite3 CLI inserts. Ships cmd/kb, a single “kb VERB ARGS” binary
+(matching the git/go command model) covering the full API with both
+human-readable and –json output, a merge verb for reconciling two
+databases that drifted independently, and a read-only interactive TUI
+browser for exploring projects, observations, and concepts.</p>
+<ul>
+<li><a href="https://www.gnu.org/licenses/agpl-3.0.txt">License</a></li>
+<li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a>
+<ul>
+<li><a href="https://github.com/rsdoiel/knowledge/issues">Issue
+Tracker</a></li>
+</ul></li>
+</ul>
+<h2 id="programming-languages">Programming languages</h2>
+<ul>
+<li>Go &gt;= 1.26.3</li>
+</ul>
+<h2 id="software-requirements">Software Requirements</h2>
+<ul>
+<li>Go &gt;= 1.26.3</li>
+</ul>
+<h2 id="software-suggestions">Software Suggestions</h2>
+<ul>
+<li>CMTools &gt;= 0.0.45b</li>
+<li>Pandoc &gt;= 3.9</li>
+<li>GNU Make &gt;= 3</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

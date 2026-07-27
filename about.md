@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.0
+version: 0.0.1
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -26,15 +26,15 @@ keywords:
   - CLI
   - TUI
 
-
+date_released: 2026-07-27
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.0
+## knowledge 0.0.1
 
-concept
+Proof-of-concept pre-release. Full CRUD API (projects, observations, concepts, sources) with FTS5 search and cross-machine merge; cmd/kb ships a git/go-style CLI with --json output and a read-mostly bubbletea TUI; --debug emits a JSONL trace of every knowledge-base call and TUI event. Extracted from harvey's knowledge.go/knowledge_merge.go.
 
 ## Authors
 

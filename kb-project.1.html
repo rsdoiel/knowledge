@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-project — manage projects</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb project add NAME <a href="#description">DESCRIPTION</a></p>
+<p>kb project list</p>
+<p>kb project show NAME</p>
+<p>kb project concepts NAME</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>A project is the top-level container observations and concepts attach
+to. Names are unique; adding a project with an existing name is a no-op
+that returns the existing project’s id.</p>
+<dl>
+<dt>add</dt>
+<dd>
+create a project, or return the id of the existing one with that name
+</dd>
+<dt>list</dt>
+<dd>
+list every project (bare rows — see kb-format(1) for an assembled
+Markdown view with linked concepts/observations included)
+</dd>
+<dt>show</dt>
+<dd>
+show a single project by name
+</dd>
+<dt>concepts</dt>
+<dd>
+list the concepts linked to a project
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb-observation(1), kb-link(1), kb-search(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

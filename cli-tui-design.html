@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="kb-cli-and-tui-design"><code>kb</code> — CLI and TUI —
+Design</h1>
+<p><strong>Status (2026-07-27):</strong> Decisions confirmed. See <a
+href="cli-tui-plan.html">cli-tui-plan.md</a> for the phased
+implementation plan.</p>
+<p><strong>References:</strong> -
+<code>module-extraction-design.md</code>/<code>-plan.md</code> — this is
+the natural next step after the extraction:
+<code>henry</code>/<code>antennaApp</code> and other tools/harnesses can
+now depend on <code>github.com/rsdoiel/knowledge</code>, but the only
+executable interface today is <code>cmd/kbmerge</code> (a two-database
+merge tool only). This design adds the general-purpose interface. -
+Confirmed in conversation (2026-07-27): binary name <code>kb</code>;
+human text by default, <code>--json</code> for machine consumption;
+<code>cmd/kbmerge</code> folds into <code>kb</code> as a verb; TUI is
+the same binary launched with no verb, read-mostly to start; TUI built
+on <code>bubbletea</code> rather than <code>termlib</code>.</p>
+<h2 id="motivation">Motivation</h2>
+<p><code>github.com/rsdoiel/knowledge</code> exposes a full typed Go API
+(projects, observations, concepts, sources, search, linking,
+retraction-checking), but the only way to drive it today is: write Go
+code against the package directly, or use <code>cmd/kbmerge</code>
+(merge only). There’s no general command-line or interactive way to read
+or write a knowledge base — <code>henry</code>/<code>antennaApp</code>
+are still limited to raw <code>sqlite3</code> CLI inserts for anything
+beyond what a bespoke Go program provides, and no other tool or LLM
+harness can drive this data store without writing Go.</p>
+<p><code>kb</code> closes that gap: a single binary,
+<code>&lt;TOOL&gt; &lt;VERB&gt; &lt;PARAMETERS&gt;</code> (matching
+<code>git</code>/<code>go</code>’s own model, per your stated
+preference), general enough for scripts, other language-model harnesses,
+and a human at a terminal — plus a read-mostly interactive browser when
+launched bare.</p>
+<h2 id="audit-full-current-api-surface-2026-07-27">Audit — full current
+API surface (2026-07-27)</h2>
+<p>Every exported method/function in
+<code>github.com/rsdoiel/knowledge</code> today:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Area</th>
+<th scope="col">Methods</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lifecycle</td>
+<td><code>Open(dbPath)</code>, <code>DefaultPath(root)</code>,
+<code>(*KnowledgeBase).Close()</code>, <code>.Path()</code></td>
+</tr>
+<tr>
+<td>Projects</td>
+<td><code>AddProject</code>, <code>Projects</code>,
+<code>ProjectByName</code>, <code>ProjectConcepts</code></td>
+</tr>
+<tr>
+<td>Observations</td>
+<td><code>AddObservation</code>, <code>AddObservationWithSource</code>,
+<code>Observations</code>, <code>ObservationByID</code></td>
+</tr>
+<tr>
+<td>Concepts</td>
+<td><code>AddConcept</code>, <code>AddConceptWithIdentifier</code>,
+<code>Concepts</code></td>
+</tr>
+<tr>
+<td>Links</td>
+<td><code>LinkObservationConcept</code>,
+<code>LinkProjectConcept</code></td>
+</tr>
+<tr>
+<td>Sources</td>
+<td><code>AddSource</code>, <code>ListSources</code>,
+<code>ShowSource</code>, <code>RemoveSource</code>,
+<code>RetractSource</code>, <code>LinkObservationSource</code>,
+<code>ObservationSources</code>, <code>FindOrCreateSource</code>,
+<code>CheckRetractions</code></td>
+</tr>
+<tr>
+<td>Search/format</td>
+<td><code>Search</code>, <code>Summary</code>,
+<code>FormatMarkdown</code></td>
+</tr>
+<tr>
+<td>Cross-machine merge</td>
+<td><code>CollisionReport</code>, <code>ReconcileCollisions</code>,
+<code>MergeKnowledgeBases</code> (currently wrapped by
+<code>cmd/kbmerge</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>One real gap found while auditing for this design, not
+related to CLI work directly but relevant to it:</strong>
+<code>Open</code> sets <code>PRAGMA journal_mode = WAL</code> but never
+sets a busy timeout. A single interactive <code>harvey</code> session
+opening the db for a whole run is unlikely to hit this, but the explicit
+goal here — “other language model harnesses or systems can use the
+knowledge base” — means multiple independent processes (this CLI,
+<code>harvey</code>, some other future tool) may now genuinely open and
+write to the same file concurrently. Without a busy timeout, SQLite
+returns <code>SQLITE_BUSY</code> immediately on any write contention
+instead of waiting briefly for the other writer to finish — exactly the
+failure mode this whole feature exists to make more likely. Proposed fix
+(in <code>knowledge.go</code>, not just the CLI): add
+<code>PRAGMA busy_timeout = 5000</code> to the schema applied in
+<code>Open</code>. Benefits every consumer (<code>harvey</code>
+included), not just <code>kb</code>.</p>
+<h2 id="decisions">Decisions</h2>
+<h3 id="verb-tree">1. Verb tree</h3>
+<pre><code>kb project add NAME [DESCRIPTION]
+kb project list
+kb project show NAME
+kb project concepts NAME
+
+kb observation add --project NAME KIND BODY [--source-doi DOI]
+kb observation list --project NAME
+kb observation show ID
+kb observation sources ID
+
+kb concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]
+kb concept list
+
+kb link project PROJECT_NAME CONCEPT_NAME
+kb link observation OBS_ID CONCEPT_NAME
+
+kb source add TITLE [--doi D] [--url U] [--authors A] [--published DATE] [--publisher P] [--rights R] [--version V]
+kb source list
+kb source show ID
+kb source remove ID
+kb source retract ID NOTE
+kb source link OBS_ID SOURCE_ID [--relationship R]
+kb source check-retractions
+
+kb search TERM
+kb summary
+kb format --project NAME        # was FormatMarkdown; &quot;inject&quot; (harvey&#39;s name)
+                                 # is harvey-specific framing (injects into a
+                                 # chat), not appropriate for a general CLI
+
+kb merge -a PATH -b PATH -out PATH [-force]   # cmd/kbmerge folded in verbatim</code></pre>
+<p><code>kb</code> with no verb at all launches the TUI (decision 4).
+<code>kb help</code>/<code>kb -h</code> prints usage;
+<code>kb VERB -h</code> prints that verb’s flags (standard
+<code>flag</code> package behavior).</p>
+<p><code>FindOrCreateSource</code> and
+<code>LinkProjectConcept</code>/<code>LinkObservationConcept</code> (as
+a single unified verb vs. two) — covered by
+<code>kb link project</code>/ <code>kb link observation</code> above;
+<code>FindOrCreateSource</code> is not exposed as its own verb since
+<code>kb source add</code> already does find-or-create semantics via
+<code>AddSource</code>’s existing conflict handling — no separate CLI
+surface needed for it.</p>
+<p><code>kb concept link</code> was considered as an alternative
+spelling to
+<code>kb link project</code>/<code>kb link observation</code>, but
+concepts are the object being linked in both cases (a project-to-concept
+link and an observation-to-concept link), so grouping under
+<code>link SUBJECT_TYPE</code> reads more like
+<code>git remote add</code>/<code>git branch delete</code> (verb-first,
+unambiguous) than <code>kb concept link --project|--observation</code>,
+which would need a flag to disambiguate what’s on the other end of the
+link.</p>
+<h3 id="global-flags---db-path---json">2. Global flags:
+<code>--db PATH</code>, <code>--json</code></h3>
+<pre><code>kb [--db PATH] [--json] VERB [verb-specific flags/args...]</code></pre>
+<ul>
+<li><code>--db PATH</code>: overrides the database location. Default (no
+flag): <code>DefaultPath(cwd)</code>,
+i.e. <code>./agents/knowledge.db</code> relative to the current
+directory — <strong>no parent-directory walking</strong> like
+<code>git</code>’s repo discovery. Simpler and fully predictable for
+scripts/harnesses (which should pass <code>--db</code> explicitly rather
+than rely on directory context anyway); an interactive human in a
+workspace root gets the convenient default for free. Rejected: walking
+up parent directories looking for <code>agents/</code> — adds ambiguity
+(which <code>agents/knowledge.db</code> wins if nested?) for a benefit
+that mostly serves interactive use, which already has the cwd
+default.</li>
+<li><code>--json</code>: switches every verb’s success output to
+structured JSON on stdout (the relevant Go struct(s),
+<code>encoding/json</code>, no custom envelope beyond what’s needed —
+e.g. <code>kb project list --json</code> prints a JSON array of
+<code>Project</code>). Errors always go to <strong>stderr</strong>,
+never stdout, in both modes — <code>{"error": "message"}</code> as JSON
+when <code>--json</code> is set, plain text otherwise — so stdout stays
+cleanly parseable even when a script/harness doesn’t perfectly separate
+the two streams. Exit code <code>1</code> on any error, <code>0</code>
+on success, matching Unix/<code>git</code>/<code>go</code>
+convention.</li>
+</ul>
+<h3 id="no-persistent-current-project-state">3. No persistent “current
+project” state</h3>
+<p>Unlike <code>harvey</code>’s interactive
+<code>/kb project use ID</code> (which sets
+<code>Config.Memory.CurrentProjectID</code> for the rest of the
+session), <code>kb</code> is stateless across invocations — every verb
+that needs a project takes an explicit <code>--project NAME</code> flag.
+No hidden state file recording “the current project” between runs. This
+is deliberate for the stated “other harnesses” use case: concurrent or
+scripted callers must not have their behavior depend on some other
+process’s last <code>use</code> call.</p>
+<h3
+id="tui-same-binary-bare-kb-read-mostly-to-start-built-on-bubbletea">4.
+TUI: same binary, bare <code>kb</code>, read-mostly to start, built on
+<code>bubbletea</code></h3>
+<p><code>kb</code> with no arguments launches an interactive terminal
+browser: list projects → drill into a project’s observations/concepts →
+search. No add/edit/link/retract in this first version — that’s an
+explicit, separate future increment, not part of this plan. Built on
+<code>github.com/charmbracelet/bubbletea</code> (+ <code>bubbles</code>
+for its ready-made list component) rather than <code>termlib</code> —
+confirmed in conversation: <code>termlib</code> only provides primitives
+(box-drawing, raw mode, line editing), not a scrollable/selectable list
+widget, and building that from scratch on top of <code>termlib</code> is
+real, avoidable work for a browser UI whose whole point is lists. This
+is the <strong>first use of a <code>charmbracelet</code> dependency
+anywhere in this Laboratory</strong> (checked — no other experiment
+currently imports <code>bubbletea</code>/<code>bubbles</code>) — worth
+knowing since it sets a precedent, not because it’s a problem.</p>
+<h3
+id="a.-help-text-follows-harveys-helptext.go-pattern-generates-real-man-pages">5a.
+Help text follows harvey’s <code>helptext.go</code> pattern, generates
+real man pages</h3>
+<p>Confirmed by checking <code>harvey/helptext.go</code>,
+<code>harvey/help_dispatch.go</code>, and <code>harvey/Makefile</code>:
+harvey’s help text isn’t ad-hoc <code>fmt.Errorf</code> strings — it’s a
+set of Go string constants written as Pandoc-Markdown man pages
+(<code>%{app_name}(1) user manual | version {version} {release_hash}</code>
+title block, then
+<code># NAME</code>/<code># SYNOPSIS</code>/<code># DESCRIPTION</code>/<code># OPTIONS</code>
+sections), with
+<code>{app_name}</code>/<code>{version}</code>/<code>{release_date}</code>/<code>{release_hash}</code>
+tokens substituted via <code>FmtHelp</code> (already generated into this
+module’s own <code>version.go</code> by <code>cmt</code>, unused until
+now). The Makefile then does
+<code>./bin/TOOL -help &gt; TOOL.1.md</code>, i.e. the binary’s own
+<code>-help</code> output <em>is</em> the checked-in Markdown man page
+source, and
+<code>pandoc TOOL.1.md --from markdown --to man -s &gt; man/man1/TOOL.1</code>
+produces the real troff man page.</p>
+<p><code>kb</code> adopts the same pattern, one level deeper — matching
+<code>git</code>’s own convention of one man page per subcommand
+(<code>git-commit(1)</code>, <code>git-log(1)</code>), which also
+matches the <code>&lt;TOOL&gt; &lt;VERB&gt;</code> model this whole CLI
+is built around:</p>
+<ul>
+<li><code>cmd/kb/helptext.go</code> (replacing the flat
+<code>usageText</code> string from the W2 scaffold): a top-level
+<code>kb(1)</code> constant (<code>kb -h</code>/<code>kb help</code>)
+plus one constant per verb group (<code>kb-project(1)</code>,
+<code>kb-observation(1)</code>, <code>kb-concept(1)</code>,
+<code>kb-link(1)</code>, <code>kb-source(1)</code>,
+<code>kb-search(1)</code>, <code>kb-merge(1)</code>), each real
+Pandoc-Markdown man-page content, following harvey’s exact section
+structure.</li>
+<li><code>kb VERB -h</code>/<code>kb help VERB</code> prints that verb’s
+constant (formatted via <code>knowledge.FmtHelp</code>, reusing the
+module’s own <code>Version</code>/<code>ReleaseDate</code>/
+<code>ReleaseHash</code>).</li>
+<li>A <code>Makefile</code> target (new — this repo doesn’t have one yet
+outside CMTools’ generated one) generates <code>.1.md</code> files the
+same way harvey’s does (<code>./bin/kb -help &gt; kb.1.md</code>,
+<code>./bin/kb project -h &gt; kb-project.1.md</code>, etc.) and
+converts them via <code>pandoc --to man</code>.</li>
+<li>Short, inline <code>fmt.Errorf("usage: ...")</code> messages (as
+sketched in W3’s early implementation) are fine for
+<em>argument-validation</em> errors (wrong number of args, missing
+required flag) — those aren’t man pages, they’re the same kind of
+one-line usage reminder <code>git commit</code> prints on a bad
+invocation before you’d reach for <code>git help commit</code>. The two
+coexist, same as they do in <code>git</code> and in harvey today.</li>
+</ul>
+<h3 id="busy_timeout-fix-lands-in-knowledge.go-not-just-the-cli">5.
+<code>busy_timeout</code> fix lands in <code>knowledge.go</code>, not
+just the CLI</h3>
+<p>Per the audit finding above: add
+<code>PRAGMA busy_timeout = 5000</code> to the schema applied in
+<code>Open</code>. Small, low-risk, benefits every existing
+consumer.</p>
+<h3
+id="command-dispatch-small-hand-rolled-dispatch-table-no-cli-framework">6.
+Command dispatch: small hand-rolled dispatch table, no CLI
+framework</h3>
+<p><code>cmd/kb/main.go</code> gets an unexported
+<code>dispatch(args []string) error</code> that maps verb name to
+handler function; each verb owns its own <code>flag.FlagSet</code>.
+Global <code>--db</code>/<code>--json</code> parsed once, up front,
+before dispatching. No <code>cobra</code>/<code>urfave-cli</code>/etc.
+dependency — matches <code>cmd/kbmerge</code>’s existing
+stdlib-<code>flag</code> precedent; this is just enough shared plumbing
+for one binary’s <code>main.go</code>, not a reusable package.</p>
+<h3
+id="showlist-verbs-return-bare-rows-kb-format-is-the-assembled-view">7.
+<code>show</code>/<code>list</code> verbs return bare rows;
+<code>kb format</code> is the assembled view</h3>
+<p><code>kb project show</code>/<code>kb project list</code> (and the
+equivalent for observations/ concepts/sources) return exactly what the
+underlying <code>Projects()</code>/ <code>ProjectByName()</code>/etc.
+methods already return — no inline assembly of linked concepts or recent
+observations. <code>kb format --project NAME</code> (→
+<code>FormatMarkdown</code>) is the existing, already-built place to get
+the fully-assembled Markdown view. Fast, predictable, and avoids two
+different “shapes” of project data depending on which verb produced
+it.</p>
+<h2 id="what-this-does-not-cover">What this does not cover</h2>
+<ul>
+<li>Actual implementation — the <code>-plan.md</code>, phased TDD, after
+the open questions above are resolved.</li>
+<li>Full CRUD in the TUI (add/edit/link/retract) — explicit, separate,
+later increment.</li>
+<li>Any change to <code>harvey</code>’s own <code>/kb</code> command
+surface (<code>commands_kb.go</code>) — independent, unaffected;
+<code>harvey</code> keeps its interactive slash-commands as they are
+today, this doesn’t replace or wrap them.</li>
+<li>Authentication/authorization — out of scope; this is a local-file
+SQLite tool, same trust model as the file’s own permissions today.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

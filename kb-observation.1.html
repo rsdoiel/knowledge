@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-observation — manage observations</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb observation add –project NAME KIND BODY [–source-doi DOI]</p>
+<p>kb observation list –project NAME</p>
+<p>kb observation show ID</p>
+<p>kb observation sources ID</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>An observation is a timestamped note attached to a project. KIND is
+one of note, finding, decision, question, or hypothesis.</p>
+<dl>
+<dt>add</dt>
+<dd>
+record a new observation under –project; –source-doi records the
+normalized DOI of the paper it was extracted from, if any
+</dd>
+<dt>list</dt>
+<dd>
+list a project’s observations, most recent first
+</dd>
+<dt>show</dt>
+<dd>
+show a single observation by id
+</dd>
+<dt>sources</dt>
+<dd>
+list the sources cited by an observation (see kb-source(1))
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb-project(1), kb-link(1), kb-source(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

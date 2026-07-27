@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="extracting-knowledge.go-from-harvey-implementation-plan">Extracting
+<code>knowledge.go</code> from <code>harvey</code> — Implementation
+Plan</h1>
+<p>See <a
+href="module-extraction-design.html">module-extraction-design.md</a> for
+the full audit and confirmed decisions. This covers the actual move:
+files copied verbatim (minus the <code>*Workspace</code> seam),
+<code>harvey</code> rewired to consume this module via a
+<code>replace</code> directive, old files deleted from
+<code>harvey</code>.</p>
+<p>No behavior changes, no renames beyond what decision 3 requires
+(dropping <code>*Workspace</code>) — same “pure move” ground rule as
+<code>harvey/refactoring-plan.md</code>’s R0–R9. Work items ordered W1 →
+W6; commit after each, not after the whole thing.</p>
+<hr />
+<h2
+id="w1-copy-the-four-files-into-this-repo-adapt-the-workspace-seam">W1 —
+Copy the four files into this repo, adapt the <code>Workspace</code>
+seam</h2>
+<h3 id="files-to-create-copied-from-harvey-then-edited">Files to create
+(copied from <code>harvey/</code>, then edited)</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">New file (this repo)</th>
+<th scope="col">Copied from</th>
+<th scope="col">Edits needed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>knowledge.go</code></td>
+<td><code>harvey/knowledge.go</code></td>
+<td><code>package harvey</code> → <code>package knowledge</code>;
+<code>OpenKnowledgeBase(ws *Workspace, customPath string)</code> →
+<code>Open(dbPath string)</code>; add
+<code>DefaultPath(root string) string</code>; remove the
+<code>ws.AbsPath(...)</code> branch entirely (see below)</td>
+</tr>
+<tr>
+<td><code>knowledge_merge.go</code></td>
+<td><code>harvey/knowledge_merge.go</code></td>
+<td><code>package harvey</code> → <code>package knowledge</code> only —
+this file already takes plain path strings everywhere, no
+<code>Workspace</code> reference</td>
+</tr>
+<tr>
+<td><code>knowledge_test.go</code></td>
+<td><code>harvey/knowledge_test.go</code></td>
+<td><code>package harvey</code> → <code>package knowledge</code>;
+<code>openTestKB</code>/<code>reopenTestKB</code> helpers: replace
+<code>NewWorkspace(t.TempDir())</code> +
+<code>OpenKnowledgeBase(ws, "")</code> with a plain
+<code>t.TempDir() + "/knowledge.db"</code> path +
+<code>Open(path)</code></td>
+</tr>
+<tr>
+<td><code>knowledge_merge_test.go</code></td>
+<td><code>harvey/knowledge_merge_test.go</code></td>
+<td>Same package rename; two call sites
+(<code>TestMergeKnowledgeBases_CreatesMigratedSchema</code> and one
+more, both reopening a merged file) drop the
+<code>NewWorkspace</code>/<code>ws</code> argument the same way</td>
+</tr>
+</tbody>
+</table>
+<h3 id="exact-openknowledgebase-opendefaultpath-edit">Exact
+<code>OpenKnowledgeBase</code> →
+<code>Open</code>/<code>DefaultPath</code> edit</h3>
+<p>Old (<code>knowledge.go:282-298</code>, in <code>harvey</code>):</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> OpenKnowledgeBase<span class="op">(</span>ws <span class="op">*</span>Workspace<span class="op">,</span> customPath <span class="dt">string</span><span class="op">)</span> <span class="op">(*</span>KnowledgeBase<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> dbPath <span class="dt">string</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> customPath <span class="op">!=</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> filepath<span class="op">.</span>IsAbs<span class="op">(</span>customPath<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>            dbPath <span class="op">=</span> customPath</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>            <span class="kw">var</span> err <span class="dt">error</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>            dbPath<span class="op">,</span> err <span class="op">=</span> ws<span class="op">.</span>AbsPath<span class="op">(</span>customPath<span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> err <span class="dt">error</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        dbPath<span class="op">,</span> err <span class="op">=</span> ws<span class="op">.</span>AbsPath<span class="op">(</span>harveySubdir <span class="op">+</span> <span class="st">&quot;/knowledge.db&quot;</span><span class="op">)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    db<span class="op">,</span> err <span class="op">:=</span> sql<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;sqlite&quot;</span><span class="op">,</span> dbPath<span class="op">)</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span></code></pre></div>
+<p>New, in this repo’s <code>knowledge.go</code>:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// DefaultPath returns the conventional knowledge.db location under root</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">// (root + &quot;agents/knowledge.db&quot;), for callers with no path override.</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">//</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Example:</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co">//   dbPath := DefaultPath(workspaceRoot)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">//   kb, err := Open(dbPath)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> DefaultPath<span class="op">(</span>root <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> filepath<span class="op">.</span>Join<span class="op">(</span>root<span class="op">,</span> <span class="st">&quot;agents&quot;</span><span class="op">,</span> <span class="st">&quot;knowledge.db&quot;</span><span class="op">)</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co">// Open opens (or creates) the SQLite knowledge base at dbPath. The schema</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co">// is applied on every open so tables are created on first use without</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co">// manual migration.</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co">//</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="co">// Example:</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="co">//   kb, err := Open(DefaultPath(workspaceRoot))</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="co">//   if err != nil {</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="co">//       log.Fatal(err)</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="co">//   }</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="co">//   defer kb.Close()</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Open<span class="op">(</span>dbPath <span class="dt">string</span><span class="op">)</span> <span class="op">(*</span>KnowledgeBase<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    db<span class="op">,</span> err <span class="op">:=</span> sql<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;sqlite&quot;</span><span class="op">,</span> dbPath<span class="op">)</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span></code></pre></div>
+<p><code>harveySubdir</code> (the <code>"agents"</code> constant,
+<code>workspace.go:66</code> in harvey) is now inlined into
+<code>DefaultPath</code> and not otherwise needed by this module.
+Everything after the <code>db, err := sql.Open(...)</code> line is
+unchanged — schema application, <code>kbAlterStmts</code>, UUID
+backfill, <code>migrateExperimentsToProjects</code>, FTS setup, all copy
+verbatim.</p>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go build ./...</code> succeeds inside
+<code>~/Laboratory/knowledge</code> (once <code>go.mod</code> has the
+right dependencies — run <code>go mod tidy</code> after copying; the two
+external deps, <code>github.com/google/uuid</code> and
+<code>github.com/glebarez/go-sqlite</code>, need adding).</li>
+<li><code>go test ./...</code> passes inside
+<code>~/Laboratory/knowledge</code> — this is the same test suite that
+was green in <code>harvey</code> moments before the copy, so a failure
+here means the <code>Workspace</code>-removal edit broke something, not
+a new bug.</li>
+</ul>
+<hr />
+<h2 id="w2-move-cmdkbmerge">W2 — Move <code>cmd/kbmerge</code></h2>
+<h3 id="file-to-create">File to create</h3>
+<p><code>cmd/kbmerge/main.go</code>, copied from
+<code>harvey/cmd/kbmerge/main.go</code>. Single edit: the import changes
+from</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>harvey <span class="st">&quot;github.com/rsdoiel/harvey&quot;</span></span></code></pre></div>
+<p>to</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>knowledge <span class="st">&quot;github.com/rsdoiel/knowledge&quot;</span></span></code></pre></div>
+<p>and every
+<code>harvey.CollisionReport</code>/<code>harvey.ReconcileCollisions</code>/
+<code>harvey.MergeKnowledgeBases</code> call becomes
+<code>knowledge.CollisionReport</code>/etc. — same pattern
+<code>cmd/assay</code> already uses to import harvey’s root package from
+inside the same repo (per <code>harvey/CLAUDE.md</code>’s “Two
+executables” section), just one module over now instead of the same
+one.</p>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go build -o bin/kbmerge ./cmd/kbmerge</code> succeeds inside
+<code>~/Laboratory/knowledge</code>.</li>
+<li>Manual smoke test: run it against two temp copies of a real
+<code>knowledge.db</code>, same as the verification already done in
+<code>harvey/DECISIONS.md</code>’s 2026-07-27 entries — confirms the
+moved binary behaves identically, not just that it compiles.</li>
+</ul>
+<hr />
+<h2 id="w3-wire-harvey-to-consume-this-module">W3 — Wire
+<code>harvey</code> to consume this module</h2>
+<h3 id="harveygo.mod"><code>harvey/go.mod</code></h3>
+<pre><code>require github.com/rsdoiel/knowledge v0.0.0-00010101000000-000000000000
+
+replace github.com/rsdoiel/knowledge =&gt; ../knowledge</code></pre>
+<p>Run <code>go mod tidy</code> inside <code>harvey/</code> after adding
+the <code>replace</code> line — it resolves the pseudo-version
+automatically once the replace target exists locally. Per design
+decision 5, switch the <code>require</code> to a real tagged version
+(and drop the <code>replace</code>) only once this repo is pushed to
+GitHub and tagged — not part of this plan.</p>
+<h3 id="files-to-edit-in-harvey">Files to edit in
+<code>harvey</code></h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">File</th>
+<th scope="col">Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>harvey.go:159</code></td>
+<td><code>KB *KnowledgeBase</code> →
+<code>KB *knowledge.KnowledgeBase</code>; add import</td>
+</tr>
+<tr>
+<td><code>terminal.go:1549</code> (<code>initKnowledgeBase</code>)</td>
+<td>Resolve the path first
+(<code>dbPath := a.Config.Memory.KnowledgeDB; if dbPath == "" { dbPath = knowledge.DefaultPath(a.Workspace.Root) }</code>),
+then <code>kb, err := knowledge.Open(dbPath)</code></td>
+</tr>
+<tr>
+<td><code>memory_unified.go:274</code></td>
+<td>Same pattern, using <code>u.cfg.KnowledgeDB</code> /
+<code>u.ws.Root</code></td>
+</tr>
+<tr>
+<td><code>commands_kb.go:334</code></td>
+<td><code>var s Source</code> → <code>var s knowledge.Source</code></td>
+</tr>
+<tr>
+<td><code>commands_test.go</code> (4 lines: 1516, 1541, 1575, 1594)</td>
+<td><code>Source{...}</code> → <code>knowledge.Source{...}</code></td>
+</tr>
+</tbody>
+</table>
+<p>Add <code>knowledge "github.com/rsdoiel/knowledge"</code> to the
+import block of every file touched above that doesn’t already have
+it.</p>
+<h3 id="files-to-delete-from-harvey">Files to delete from
+<code>harvey</code></h3>
+<pre><code>knowledge.go
+knowledge_merge.go
+knowledge_test.go
+knowledge_merge_test.go
+cmd/kbmerge/</code></pre>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li><code>go build ./...</code> succeeds inside
+<code>harvey/</code>.</li>
+<li><code>go vet ./...</code> clean.</li>
+<li>No remaining references to the bare (unqualified)
+<code>KnowledgeBase</code>, <code>Project</code>,
+<code>Observation</code>, <code>Concept</code>, <code>Source</code>,
+<code>KBSearchResult</code>, <code>MergeTableSummary</code>, or
+<code>NameCollision</code> identifiers anywhere in <code>harvey</code> —
+a <code>grep -rn</code> for each should show zero hits outside
+comments/strings once this step is done (confirms the design doc’s “six
+real reference sites” audit was complete, not just mostly
+complete).</li>
+</ul>
+<hr />
+<h2 id="w4-full-verification-both-repos">W4 — Full verification, both
+repos</h2>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># in ~/Laboratory/knowledge</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> vet ./...</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test ./...</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co"># in ~/Laboratory/harvey</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> vet ./...</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test ./...</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> build <span class="at">-o</span> bin/harvey cmd/harvey/<span class="pp">*</span>.go</span></code></pre></div>
+<p>(<code>go test -race</code> remains blocked on this Pi by the
+pre-existing ThreadSanitizer VMA-width issue noted throughout
+<code>harvey/DECISIONS.md</code> — not a new gap from this change.)</p>
+<p>Manual smoke test against the <strong>real, already-merged</strong>
+<code>agents/knowledge.db</code> (the one placed on both
+<code>wren</code> and <code>macmini-rd.local</code> in the 2026-07-27
+cross-machine merge — back it up first, same caution as every other
+real-data step this session):</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> ~/Laboratory/agents/knowledge.db /tmp/knowledge.db.pre-extraction-backup</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ~/Laboratory/harvey <span class="kw">&amp;&amp;</span> <span class="ex">go</span> run ./cmd/harvey   <span class="co"># or bin/harvey once built</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co"># run a /kb command (e.g. /kb project list) — confirm the 5 real projects</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># (harvey, henry, antennaApp, sparqlset, audiobox) still show up correctly</span></span></code></pre></div>
+<h3 id="acceptance-criteria-3">Acceptance criteria</h3>
+<ul>
+<li>Both repos’ test suites pass.</li>
+<li><code>harvey</code>’s real knowledge base opens correctly through
+the new module and shows the expected, already-verified
+project/observation counts — proof this isn’t just “compiles,” the
+actual live data round-trips correctly through the moved code.</li>
+</ul>
+<hr />
+<h2 id="w5-update-harveys-docs-to-reflect-the-new-architecture">W5 —
+Update <code>harvey</code>’s docs to reflect the new architecture</h2>
+<h3 id="file-to-edit">File to edit</h3>
+<p><code>harvey/CLAUDE.md</code>’s “Three-silo memory architecture”
+table — the <strong>Knowledge base</strong> row currently says:</p>
+<pre><code>| **Knowledge base** | `knowledge.go`, `agents/knowledge.db` | ... |</code></pre>
+<p>Update to:</p>
+<pre><code>| **Knowledge base** | `github.com/rsdoiel/knowledge` (external module, via `replace` in `go.mod` until published), `agents/knowledge.db` | ... |</code></pre>
+<p>Also update the “Repository overview” section of the <em>root</em>
+Laboratory <code>CLAUDE.md</code> if it still names
+<code>harvey/knowledge.go</code> anywhere for the shared
+<code>agents/knowledge.db</code> — check before editing; don’t assume
+without verifying current text first (this file already has one
+known-stale section, per <code>knowledge_db_schema_stale.md</code>
+memory — don’t compound it with a second one from this change).</p>
+<h3 id="acceptance-criteria-4">Acceptance criteria</h3>
+<ul>
+<li>Docs match the actual code layout after W1–W4.</li>
+</ul>
+<hr />
+<h2 id="w6-log-the-decision">W6 — Log the decision</h2>
+<p><code>harvey/DECISIONS.md</code>, new entry following the same
+convention as every other 2026-07-27 entry this session: what moved,
+why, what was rejected (the stutter rename, decision 2), what’s still
+open (publishing the new repo, dropping the <code>replace</code>
+directive). Cross-reference this repo’s
+<code>module-extraction-design.md</code>/<code>-plan.md</code>.</p>
+<hr />
+<h2 id="out-of-scope-here">Out of scope here</h2>
+<ul>
+<li>Renaming <code>KnowledgeBase</code>/<code>OpenKnowledgeBase</code>
+(design decision 2 — a separate, later, low-risk follow-up).</li>
+<li>Publishing <code>github.com/rsdoiel/knowledge</code> to GitHub and
+tagging a real version (design decision 5).</li>
+<li>JSON-L export/import
+(<code>knowledge_db_jsonl_export_design.md</code>) — step 3 of
+<code>harvey/knowledge_db_merge_design.md</code>’s sequencing, after
+this.</li>
+<li>Registering the <code>knowledge</code> experiment in the shared
+<code>agents/knowledge.db</code> itself (per the Laboratory root
+<code>CLAUDE.md</code> convention) — worth doing, but a one-line
+addition that doesn’t need its own plan phase; can happen any time after
+W1.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

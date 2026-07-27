@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="knowledge-architecture-ux-decision-log">knowledge — Architecture
+&amp; UX Decision Log</h1>
+<p>This file records significant architectural and UX decisions, their
+rationale, and known trade-offs. New decisions are added at the top.
+Each entry names the decision, the context that prompted it, the chosen
+approach, the rejected alternatives, and the consequences.</p>
+<hr />
+<h2
+id="kb---debug-nil-safe-jsonl-trace-of-every-knowledge-base-call-and-tui-event">2026-07-27
+— <code>kb --debug</code>: nil-safe JSONL trace of every knowledge-base
+call and TUI event</h2>
+<p><strong>Context.</strong> Asked for a <code>--debug</code> option to
+help debug the TUI, citing <code>github.com/caltechlibrary/clasm</code>
+(macmini-rd.local, <code>~/WorkLab/clasm</code>) as a working precedent.
+Auditing it first (see <code>debug-logging-design.md</code>) found a
+correction worth recording: <code>clasm</code> doesn’t actually log any
+bubbletea/huh event-loop detail anywhere — its <code>-debug</code> is
+scoped entirely to <code>internal/awsclient</code>’s AWS SDK call
+decorators. The reusable part of the precedent was the
+<em>architecture</em> (a nil-safe JSONL <code>DebugLog</code>,
+flag-gated, path announced once at startup — itself modeled on
+<code>harvey/debuglog.go</code>), not an existing TUI-tracing example to
+copy. Confirmed decisions: <code>--debug</code> applies to both the TUI
+and every CLI verb; log file is
+<code>./kb-debug-&lt;timestamp&gt;.jsonl</code> in the current
+directory.</p>
+<p><strong>Decision.</strong> <code>cmd/kb/debuglog.go</code>: a
+<code>DebugLog</code> type mirroring <code>clasm</code>’s
+<code>internal/debuglog</code> (every method nil-safe, so
+<code>--debug=false</code> costs one nil check per call site, no
+<code>if debug</code> conditionals anywhere else), plus a generic
+<code>logKBCall</code>/<code>logKBCallErr</code> helper pair wrapping
+every real <code>*knowledge.KnowledgeBase</code> call — an explicit
+wrapper at each of the ~34 real call sites, not an interface decorator
+(<code>clasm</code>’s <code>Wrap*</code> pattern works because its AWS
+clients are already narrow, fake-able interfaces by design;
+<code>*knowledge.KnowledgeBase</code> is a concrete struct with ~24
+methods, and defining a parallel interface just to wrap it in a
+decorator would duplicate nearly the entire public API for one
+first-party consumer, for one purpose). <code>verbFunc</code> gained a
+<code>dl *DebugLog</code> parameter, threaded the same way
+<code>jsonOut bool</code> already was, across all ~20 handler functions
+in
+<code>project.go</code>/<code>observation.go</code>/<code>concept.go</code>/<code>link.go</code>/<code>source.go</code>/<code>search.go</code>/<code>merge.go</code>.
+The TUI additionally logs every <code>tea.Msg</code> <code>Update</code>
+receives (<code>tui_msg</code>, with the key string for
+<code>tea.KeyMsg</code>) and every view-state transition
+(<code>tui_state_change</code>) and error (<code>tui_error</code>), via
+<code>setState</code>/<code>setErr</code> helpers that replaced every
+bare field assignment — so any future state/error the TUI grows is
+automatically covered, not just today’s.</p>
+<p><strong>Two real bugs found, neither anticipated by the design
+doc:</strong> - <code>merge</code> and
+<code>source check-retractions</code> are the only two verbs whose
+underlying package-level logic writes directly to
+<code>out</code>/<code>progressOut</code> rather than returning a clean
+result — <code>CheckRetractions(int, int, error)</code> doesn’t fit
+<code>logKBCall</code>’s single-result generic shape, so it’s logged
+manually via <code>dl.Log("kb_call", ...)</code> instead of forced
+through an awkward wrapper type. - <strong>A genuine data-loss bug in
+the precedent itself, caught by manual verification, not anticipated by
+the design</strong>: two <code>kb --debug</code> invocations within the
+same second silently overwrote each other’s log file, because
+<code>DefaultDebugLogPath</code>’s original second-granularity timestamp
+(copied from <code>clasm</code>) collided, and <code>NewDebugLog</code>
+opens with <code>O_TRUNC</code>. This matters far more for
+<code>kb</code> than it ever did for <code>clasm</code> —
+<code>clasm</code> is one long interactive session per invocation, while
+<code>kb</code>’s verbs are typically many short-lived separate
+processes, exactly the pattern that triggers the collision. Worse: even
+switching to microsecond-precision timestamps still collided under a
+tight-loop regression test on this hardware’s clock resolution. Fixed
+with a per-process atomic counter (the only unconditionally-unique
+component regardless of clock behavior) combined with the PID and
+timestamp for readability — verified both by the regression test and a
+real two-invocation smoke test.</p>
+<p><strong>Rejected.</strong> A package-level
+<code>var currentDebugLog *DebugLog</code> instead of threading
+<code>dl</code> through every signature — avoids the mechanical
+signature change across ~20 functions, but introduces mutable global
+state that test code would also need to fight; explicit-parameter
+threading stays consistent with how <code>jsonOut</code> already flows
+through the same functions. Redacting any logged field — nothing in
+<code>knowledge.KnowledgeBase</code>’s API returns comparably sensitive
+data to <code>clasm</code>’s one exception
+(<code>ec2:CreateKeyPair</code>’s private key material), so no redaction
+logic was added preemptively.</p>
+<p><strong>Consequences.</strong>
+<code>go build</code>/<code>go vet</code>/<code>gofmt</code>/<code>go test</code>
+clean throughout (TDD-first every phase, red confirmed before each fix);
+90+ tests total. Manually verified end-to-end in a real pseudo-terminal:
+drove the TUI through drilling into a project, toggling to concepts and
+back, searching, and quitting, then read the resulting JSONL back as a
+genuinely useful, chronological trace — including catching bubbletea’s
+own internal <code>cursor.BlinkMsg</code>, confirming every message is
+logged, not a curated subset. Also confirmed directly (not just asserted
+by unit tests): <code>--debug</code>’s absence produces zero log files
+and byte-identical command output.</p>
+<h2
+id="cmdkb-a-tool-verb-parameters-cli-and-a-read-mostly-tui">2026-07-27 —
+<code>cmd/kb</code>: a
+<code>&lt;TOOL&gt; &lt;VERB&gt; &lt;PARAMETERS&gt;</code> CLI, and a
+read-mostly TUI</h2>
+<p><strong>Context.</strong> After the module extraction (see
+<code>module-extraction-design.md</code>/<code>-plan.md</code>), the
+only executable interface to this package was <code>cmd/kbmerge</code> —
+a two-database merge tool only. There was no general way to read or
+write a knowledge base from the command line, a script, or another
+language-model harness without writing Go against the package directly.
+Full audit and confirmed decisions in <code>cli-tui-design.md</code>;
+phased plan in <code>cli-tui-plan.md</code>.</p>
+<p><strong>Decision.</strong> <code>cmd/kb</code>, a single binary
+covering the full package API as verbs (<code>project</code>,
+<code>observation</code>, <code>concept</code>, <code>link</code>,
+<code>source</code>,
+<code>search</code>/<code>summary</code>/<code>format</code>,
+<code>merge</code>), matching the <code>git</code>/<code>go</code>
+command model per an explicit user preference. Global
+<code>--db PATH</code> / <code>--json</code> flags; human text by
+default, structured JSON on <code>--json</code>, with errors always
+routed to stderr in both modes so stdout stays parseable for scripts.
+<code>cmd/kbmerge</code> was retired — its logic became the
+<code>merge</code> verb verbatim (same flags), since the design’s whole
+point was one binary, not several. Bare <code>kb</code> (no verb)
+launches a read-mostly interactive TUI (<code>bubbletea</code> +
+<code>bubbles/list</code>/<code>textinput</code> — the first
+<code>charmbracelet</code> dependency anywhere in this Laboratory) for
+browsing projects → observations/concepts → search results, with editing
+deferred to a later increment. Help text follows harvey’s own
+<code>helptext.go</code> pattern: Pandoc-Markdown man-page constants per
+verb group (<code>kb(1)</code>, <code>kb-project(1)</code>, etc.),
+formatted through the module’s own
+<code>FmtHelp</code>/<code>Version</code>/<code>ReleaseDate</code>/<code>ReleaseHash</code>,
+with a <code>Makefile</code> target generating the <code>.1.md</code>
+sources and converting them to real troff pages via
+<code>pandoc --to man</code>.</p>
+<p><strong>Real bugs found along the way, not anticipated by the design
+doc:</strong> - <strong><code>CreatedAt</code> was always the zero
+value</strong> on every <code>Project</code>/<code>Observation</code> —
+<code>time.Parse("2006-01-02 15:04:05", ts)</code> (six call sites,
+inherited from harvey’s original code) assumed a format the
+<code>glebarez/go-sqlite</code> driver never actually returns; it
+returns RFC3339. Fixed with a <code>parseTimestamp</code> helper
+(RFC3339 first, legacy format as fallback), confirmed via a raw
+<code>database/sql</code> probe before touching any code. This also
+silently affects <code>harvey</code> today (same inherited code) — not
+fixed there, out of scope for this repo. - <strong><code>Open</code> had
+no <code>busy_timeout</code></strong> — fine for a single long-lived
+<code>harvey</code> session, but the entire point of this CLI is
+multiple independent processes touching the same file concurrently.
+Added <code>PRAGMA busy_timeout = 5000</code>. - <strong>Four
+<code>source</code> verbs silently ignored <code>--json</code></strong>
+(<code>remove</code>, <code>retract</code>, <code>link</code>,
+<code>check-retractions</code>), and <strong><code>merge</code> accepted
+but completely ignored <code>jsonOut</code></strong> — found during a
+dedicated JSON-mode audit pass (W6), not the initial per-verb
+implementation. All fixed. - <strong><code>merge</code>’s collision
+detail only ever went to stdout</strong>, even on the abort path —
+meaning JSON mode would either leak non-JSON text onto stdout or lose
+the detail entirely if suppressed. Fixed by moving collision detail into
+the returned error’s message, so it survives correctly into both the
+text-mode line and the JSON error envelope. -
+<strong><code>commands_kb.go</code>’s <code>/kb show</code></strong> (in
+<code>harvey</code>, found while wiring the module extraction, logged
+here for continuity) was reaching into <code>KnowledgeBase</code>’s
+unexported <code>db</code> field directly — invisible while both lived
+in one package. Fixed with a new <code>ObservationByID</code> method
+instead of exposing internals. - <strong><code>list.Model</code>
+zero-value panic</strong> — the TUI’s three non-root lists
+(<code>observationList</code>/<code>conceptList</code>/<code>searchList</code>)
+were left uninitialized until first populated; the very first
+<code>WindowSizeMsg</code> calling <code>SetSize</code> on one paniced.
+Fixed by constructing all four via <code>list.New()</code> up front.</p>
+<p><strong>Rejected.</strong> A CLI framework
+(<code>cobra</code>/<code>urfave-cli</code>) for verb dispatch — a small
+hand-rolled dispatch table matches <code>cmd/kbmerge</code>’s existing
+stdlib-<code>flag</code> precedent and needs no new dependency. Renaming
+<code>KnowledgeBase</code>/<code>Open</code> to drop the
+<code>knowledge.KnowledgeBase</code> stutter — deferred to its own
+low-risk follow-up (see the module-extraction entry). A persistent
+“current project” state file (unlike harvey’s interactive
+<code>/kb project use</code>) — this CLI is explicitly stateless across
+invocations so concurrent/scripted callers never depend on another
+process’s last selection.</p>
+<p><strong>Consequences.</strong>
+<code>go build</code>/<code>go vet</code>/<code>gofmt</code>/<code>go test</code>
+clean throughout (TDD-first at every phase, red confirmed before each
+fix). Manual smoke tests against real production data at every phase:
+<code>search</code>/<code>summary</code>/<code>project list</code>
+against a copy of <code>~/WorkLab/agents/knowledge.db</code> (8 real
+projects), <code>merge</code> against real copies of the merged
+Laboratory database, and the TUI itself verified in a real
+pseudo-terminal (via a scripted <code>pty</code> session) rather than
+skipped, since unit tests alone can’t confirm terminal rendering.
+<code>codemeta.json</code>’s description updated;
+<code>README.md</code>/<code>about.md</code>/<code>CITATION.cff</code>
+regenerated via <code>cmt</code>. Not yet done: publishing a new tagged
+version of this module and updating <code>harvey/go.mod</code> to point
+at it — a deliberate, separate step, same as every version bump so
+far.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

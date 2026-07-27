@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-merge — reconcile two knowledge.db files that drifted
+independently</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb merge -a PATH -b PATH -out PATH [-force]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>merge reads two knowledge.db files (e.g. from two machines that have
+drifted independently) read-only and writes their deduped union to a
+fresh -out file, which must not already exist. It never modifies -a or
+-b; placing the merged file into position is left to you.</p>
+<p>Unlike every other verb, merge operates entirely on the explicit
+-a/-b/-out paths — it ignores –db and never opens (or creates) the
+ambient ./agents/knowledge.db.</p>
+<p>If a project or concept with the same name exists in both files under
+different internal identities (a collision — typically from before a
+database’s identifiers were established), merge aborts and lists them
+unless -force is given, in which case b’s identity is reconciled to a’s
+so both sides’ observations and links survive under one merged
+entity.</p>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

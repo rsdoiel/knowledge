@@ -6,11 +6,11 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 
 ## Release Notes
 
-- version: 0.0.0
+- version: 0.0.1
 - status: concept
+- released: 2026-07-27
 
-
-concept
+Proof-of-concept pre-release. Full CRUD API (projects, observations, concepts, sources) with FTS5 search and cross-machine merge; cmd/kb ships a git/go-style CLI with --json output and a read-mostly bubbletea TUI; --debug emits a JSONL trace of every knowledge-base call and TUI event. Extracted from harvey's knowledge.go/knowledge_merge.go.
 
 
 ### Authors

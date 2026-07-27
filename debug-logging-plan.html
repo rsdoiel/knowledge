@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="kb---debug-implementation-plan"><code>kb --debug</code> —
+Implementation Plan</h1>
+<p>See <a href="debug-logging-design.html">debug-logging-design.md</a>
+for the full rationale and confirmed decisions. Work items ordered W1 →
+W5. TDD-first: each phase’s tests are written and confirmed red before
+its implementation.</p>
+<hr />
+<h2 id="w1-debuglog-type-logkbcall-helper">W1 — <code>DebugLog</code>
+type + <code>logKBCall</code> helper</h2>
+<h3 id="files-to-create">Files to create</h3>
+<p><code>cmd/kb/debuglog.go</code> — <code>DebugLog</code> struct,
+<code>New</code>, <code>DefaultPath</code>, <code>Log</code>,
+<code>Path</code>, <code>Close</code> (verbatim shape from
+<code>clasm</code>’s <code>internal/debuglog</code>, per design decision
+1), plus the <code>logKBCall[T any]</code> generic helper (decision
+4).</p>
+<h3 id="tests-to-add-cmdkbdebuglog_test.go">Tests to add
+(<code>cmd/kb/debuglog_test.go</code>)</h3>
+<ul>
+<li><code>TestLog_WritesOneJSONObjectPerLine</code> — port of
+<code>clasm</code>’s own test.</li>
+<li><code>TestLog_NilReceiverIsSafe</code></li>
+<li><code>TestDefaultPath_MatchesExpectedFormat</code></li>
+<li><code>TestLogKBCall_LogsMethodParamsAndResult</code> — fake
+<code>call func() (string, error)</code> returning a value; assert the
+JSONL record has <code>method</code>, <code>params</code>,
+<code>result</code>, <code>duration_ms</code>, and the call’s return
+value is passed through unchanged.</li>
+<li><code>TestLogKBCall_LogsErrorInsteadOfResult</code> — fake call
+returning an error; assert <code>error</code> field present, no
+<code>result</code> field, error passed through unchanged.</li>
+<li><code>TestLogKBCall_NilDebugLogStillReturnsCallResult</code> —
+confirms the logging wrapper itself is transparent when <code>dl</code>
+is nil (no panic, correct passthrough), same spirit as
+<code>TestLog_NilReceiverIsSafe</code> one level up.</li>
+</ul>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2 id="w2-wire---debug-through-verbfunc-and-every-handler">W2 — Wire
+<code>--debug</code> through <code>verbFunc</code> and every
+handler</h2>
+<h3 id="files-to-modify">Files to modify</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">File</th>
+<th scope="col">Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>main.go</code></td>
+<td><code>parseGlobalFlags</code> returns <code>debugPath string</code>
+(or a parsed bool + computed default) alongside
+<code>dbPath</code>/<code>jsonOut</code>; <code>mainRun</code> opens the
+<code>DebugLog</code> once (skipped for help/no-op paths), prints its
+path to stderr, passes <code>dl</code> into
+<code>dispatch</code>/<code>runTUI</code></td>
+</tr>
+<tr>
+<td><code>dispatch.go</code></td>
+<td><code>verbFunc</code> gains <code>dl *DebugLog</code>;
+<code>dispatch</code>’s own signature and its one call site updated</td>
+</tr>
+<tr>
+<td><code>project.go</code>, <code>observation.go</code>,
+<code>concept.go</code>, <code>link.go</code>, <code>source.go</code>,
+<code>search.go</code></td>
+<td>every handler function gains <code>dl *DebugLog</code>; every real
+<code>kb.*</code> call site (34 total, per the design’s audit) becomes
+<code>logKBCall(dl, "MethodName", params, func() (T, error) { return kb.MethodName(args...) })</code></td>
+</tr>
+<tr>
+<td><code>merge.go</code></td>
+<td><code>cmdMerge</code> gains <code>dl *DebugLog</code>; three new log
+points per decision 6 (not routed through <code>logKBCall</code>, since
+these are package-level functions, not <code>*KnowledgeBase</code>
+methods)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="files-to-modify-tests">Files to modify (tests)</h3>
+<p>Every existing test in <code>project_test.go</code>,
+<code>observation_test.go</code>, <code>concept_test.go</code>,
+<code>link_test.go</code>, <code>source_test.go</code>,
+<code>search_test.go</code>, <code>merge_test.go</code>,
+<code>jsonaudit_test.go</code>, <code>dispatch_test.go</code> that calls
+a handler directly needs one more argument at the call site
+(<code>nil</code> for <code>dl</code> in tests that don’t care about
+logging — nil-safety means this is a mechanical, behavior-preserving
+addition, not a new failure mode).</p>
+<h3 id="tests-to-add">Tests to add</h3>
+<ul>
+<li>One representative test per verb file confirming a real
+<code>kb_call</code> JSONL record actually appears when a non-nil
+<code>dl</code> is passed (not exhaustive per call site —
+<code>logKBCall</code>’s own W1 tests already cover the wrapper’s
+correctness; this just confirms it’s actually wired at real call sites,
+not just defined).</li>
+<li><code>TestMerge_LogsCollisionAndSummaryEvents</code> — real
+<code>dl</code>, confirm
+<code>merge_collision</code>/<code>merge_reconciled</code>/<code>merge_summary</code>
+events appear as appropriate.</li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go build ./...</code>, <code>go vet ./...</code>,
+<code>go test ./...</code> all clean — this is the phase most likely to
+have a missed call site or stale test signature, so treat any compile
+error here as a real signal, not noise to silence.</li>
+</ul>
+<hr />
+<h2 id="w3-tui-log-every-tea.msg-and-state-transition">W3 — TUI: log
+every <code>tea.Msg</code> and state transition</h2>
+<h3 id="files-to-modify-1">Files to modify</h3>
+<p><code>tui.go</code> (<code>runTUI</code> gains a
+<code>dl *DebugLog</code> parameter, passed to
+<code>newTUIModel</code>), <code>tui_model.go</code>
+(<code>tuiModel</code> gains a <code>dl *DebugLog</code> field;
+<code>Update</code> logs <code>tui_msg</code> for every message —
+including the key string for <code>tea.KeyMsg</code> — before
+dispatching to the existing per-state handlers; every
+<code>m.state = viewX</code> assignment logs
+<code>tui_state_change</code>; every <code>m.err = err</code> assignment
+logs <code>tui_error</code>; <code>loadObservations</code>/
+<code>loadConcepts</code>/<code>runSearch</code>’s <code>kb.*</code>
+calls route through <code>logKBCall</code>, same as decision 4).</p>
+<h3 id="tests-to-add-tui_model_test.go">Tests to add
+(<code>tui_model_test.go</code>)</h3>
+<ul>
+<li><code>TestTUIModel_LogsKeyMsgEvents</code> — construct a model with
+a real temp-file <code>DebugLog</code>, send a <code>tea.KeyMsg</code>,
+close the log, read it back, assert a <code>tui_msg</code> record with
+the right key string appears.</li>
+<li><code>TestTUIModel_LogsStateTransitions</code> — send Enter (drill
+into a project), assert a <code>tui_state_change</code> record with
+<code>from="viewProjects"</code>/<code>to="viewObservations"</code>
+appears.</li>
+<li><code>TestTUIModel_LogsKBCallsFromSearch</code> — run the existing
+search flow (<code>/</code> → type → Enter), assert a
+<code>kb_call</code> record for <code>Search</code> appears alongside
+the <code>tui_msg</code>/<code>tui_state_change</code> records already
+covered.</li>
+</ul>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+<li>Manual verification: run <code>bin/kb --debug</code> in a real
+terminal (same pseudo-tty approach used for W7’s original TUI
+verification), then <code>tail</code>/<code>cat</code> the resulting
+<code>kb-debug-*.jsonl</code> and confirm it reads as a genuinely useful
+debugging trace of the session just run — this is the actual point of
+the feature, not just “does it compile.”</li>
+</ul>
+<hr />
+<h2 id="w4-final-verification">W4 — Final verification</h2>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> build ./...</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> vet ./...</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">gofmt</span> <span class="at">-l</span> cmd/kb/<span class="pp">*</span>.go</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test ./...</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> build <span class="at">-o</span> bin/kb ./cmd/kb</span></code></pre></div>
+<p>Manual smoke test: <code>./bin/kb --debug project list</code> (and a
+couple of other verbs) against a scratch database, confirm the announced
+log path exists, contains valid JSONL, and <code>--debug</code> being
+<em>absent</em> produces no log file and no behavior change (the
+nil-safety guarantee, checked for real, not just asserted by the unit
+tests).</p>
+<p>Log the feature in this repo’s <code>DECISIONS.md</code> (append,
+don’t create a new file — one already exists from the CLI/TUI work).</p>
+<hr />
+<h2 id="out-of-scope-here">Out of scope here</h2>
+<ul>
+<li>Any change to <code>harvey</code>’s own
+<code>--debug</code>/<code>DebugLog</code>.</li>
+<li>Redacting any field (see design doc’s “what this does not
+cover”).</li>
+<li>Extending <code>--debug</code> to log TUI <em>rendering</em>
+(<code>View()</code> output) — only <code>Update</code>’s
+inputs/transitions and <code>knowledge.KnowledgeBase</code> calls are in
+scope; the rendered screen itself isn’t logged.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb — command-line and interactive interface for a knowledge base</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb [–db PATH] [–json] VERB [args…]</p>
+<p>kb</p>
+<p>kb help | -h | –help [VERB]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>kb reads and writes a github.com/rsdoiel/knowledge knowledge base:
+projects, observations, concepts, and sources, with full-text search and
+a cross-machine merge tool. Every verb follows the “TOOL VERB
+PARAMETERS” model (the same shape as git and go), so scripts and other
+language-model harnesses can drive it directly, not just people at a
+terminal.</p>
+<p>Run with no verb at all to launch the interactive browser (TUI)
+instead — a read-only view over the same data, for exploring projects,
+observations, and concepts, and running searches, without leaving the
+terminal.</p>
+<h1 id="global-flags">GLOBAL FLAGS</h1>
+<dl>
+<dt>–db PATH</dt>
+<dd>
+path to knowledge.db (default: ./agents/knowledge.db, relative to the
+current directory)
+</dd>
+<dt>–json</dt>
+<dd>
+machine-readable JSON output instead of human-readable text. Applies to
+every verb. Errors always go to stderr, never stdout, in both modes —
+scripts consuming –json output can rely on stdout staying valid JSON
+even when a call fails.
+</dd>
+<dt>–debug</dt>
+<dd>
+write a JSONL trace of every knowledge-base call (and, in the TUI, every
+input event and view change) to ./kb-debug-<timestamp>.jsonl in the
+current directory. The path is printed to stderr once at startup.
+Applies to every verb and the TUI. Omitting –debug costs nothing — no
+file is written and behavior is unchanged.
+</dd>
+</dl>
+<h1 id="verbs">VERBS</h1>
+<dl>
+<dt>project</dt>
+<dd>
+manage projects — see kb-project(1)
+</dd>
+<dt>observation</dt>
+<dd>
+manage observations — see kb-observation(1)
+</dd>
+<dt>concept</dt>
+<dd>
+manage concepts — see kb-concept(1)
+</dd>
+<dt>link</dt>
+<dd>
+link projects/observations to concepts — see kb-link(1)
+</dd>
+<dt>source</dt>
+<dd>
+manage cited sources and retraction checking — see kb-source(1)
+</dd>
+<dt>search, summary, format</dt>
+<dd>
+full-text search and formatted views — see kb-search(1)
+</dd>
+<dt>merge</dt>
+<dd>
+reconcile two knowledge.db files that drifted independently (e.g. across
+machines) into a fresh, deduped output — see kb-merge(1)
+</dd>
+</dl>
+<h1 id="exit-status">EXIT STATUS</h1>
+<dl>
+<dt>0</dt>
+<dd>
+success
+</dd>
+<dt>1</dt>
+<dd>
+the verb ran but failed (database error, not found, etc.)
+</dd>
+<dt>2</dt>
+<dd>
+usage error (bad flags, unknown verb)
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb-project(1), kb-observation(1), kb-concept(1), kb-link(1),
+kb-source(1), kb-search(1), kb-merge(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

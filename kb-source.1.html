@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-source — manage cited sources and retraction checking</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb source add TITLE [–doi D] [–url U] [–authors A] [–published DATE]
+[–publisher P] [–rights R] [–version V]</p>
+<p>kb source list</p>
+<p>kb source show ID</p>
+<p>kb source remove ID</p>
+<p>kb source retract ID NOTE</p>
+<p>kb source link OBS_ID SOURCE_ID [–relationship R]</p>
+<p>kb source check-retractions</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>A source is a cited work (paper, page, dataset) an observation can
+link to via source link, recording the relationship (default:
+cited).</p>
+<dl>
+<dt>add</dt>
+<dd>
+register a source; –doi/–url set its identifier (doi takes priority if
+both are given); adding one whose identifier already exists returns the
+existing source’s id instead of duplicating it
+</dd>
+<dt>remove</dt>
+<dd>
+delete a source — fails if it’s still linked to any observation
+</dd>
+<dt>retract</dt>
+<dd>
+mark a source retracted with a note (does not delete it)
+</dd>
+<dt>check-retractions</dt>
+<dd>
+query the Retraction Watch API for every registered, non-retracted DOI
+source and mark hits as retracted; requires network access
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb-observation(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

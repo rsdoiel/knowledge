@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="knowledge-user-manual">knowledge User Manual</h1>
+<p>A standalone SQLite3-backed knowledge base for tracking projects,
+observations, and concepts across independent experiments.
+<code>cmd/kb</code> is a single <code>kb VERB ARGS</code> binary
+(matching the <code>git</code>/<code>go</code> command model) covering
+the full API, plus a read-mostly interactive TUI.</p>
+<hr />
+<h2 id="quick-start">Quick Start</h2>
+<ol type="1">
+<li><strong><a href="INSTALL.html">Installation</a></strong> — build
+from source or install a release binary</li>
+<li><strong><a href="kb.1.html">Command Reference</a></strong> — the
+primary <code>kb(1)</code> man page: global flags, every verb, exit
+status</li>
+</ol>
+<p>Run <code>kb</code> with no verb to launch the interactive TUI, or
+<code>kb help</code> / <code>kb -h</code> to see this same reference at
+the terminal.</p>
+<hr />
+<h2 id="command-reference">Command Reference</h2>
+<p><code>kb</code> follows the <code>TOOL VERB PARAMETERS</code> model —
+every verb below has its own man page, also reachable via
+<code>kb help VERB</code> or <code>kb VERB -h</code>.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Verb</th>
+<th scope="col">Man page</th>
+<th scope="col">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>project</code></td>
+<td><a href="kb-project.1.html">kb-project(1)</a></td>
+<td>add, list, show projects; list a project’s concepts</td>
+</tr>
+<tr>
+<td><code>observation</code></td>
+<td><a href="kb-observation.1.html">kb-observation(1)</a></td>
+<td>add, list, show observations; list an observation’s sources</td>
+</tr>
+<tr>
+<td><code>concept</code></td>
+<td><a href="kb-concept.1.html">kb-concept(1)</a></td>
+<td>add, list concepts — including scholarly identifiers (DOI, ORCID,
+ROR, Fundref)</td>
+</tr>
+<tr>
+<td><code>link</code></td>
+<td><a href="kb-link.1.html">kb-link(1)</a></td>
+<td>link projects/observations to concepts</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><a href="kb-source.1.html">kb-source(1)</a></td>
+<td>manage cited sources; check DOIs against Retraction Watch</td>
+</tr>
+<tr>
+<td><code>search</code>, <code>summary</code>, <code>format</code></td>
+<td><a href="kb-search.1.html">kb-search(1)</a></td>
+<td>full-text search (FTS5) and assembled Markdown views</td>
+</tr>
+<tr>
+<td><code>merge</code></td>
+<td><a href="kb-merge.1.html">kb-merge(1)</a></td>
+<td>reconcile two <code>knowledge.db</code> files that drifted
+independently (e.g. across machines)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="global-flags">Global flags</h3>
+<ul>
+<li><code>--db PATH</code> — path to <code>knowledge.db</code> (default
+<code>./agents/knowledge.db</code>)</li>
+<li><code>--json</code> — machine-readable output on stdout; errors
+always go to stderr in both modes, so scripts and other language-model
+harnesses can drive <code>kb</code> directly</li>
+<li><code>--debug</code> — write a JSONL trace of every knowledge-base
+call (and, in the TUI, every input event and view change) to
+<code>./kb-debug-&lt;timestamp&gt;.jsonl</code></li>
+</ul>
+<p>Full detail on all three: <a href="kb.1.html">kb(1)</a>, § GLOBAL
+FLAGS.</p>
+<h3 id="interactive-tui">Interactive TUI</h3>
+<p>Bare <code>kb</code> (no verb) launches a read-mostly browser:
+project list → Enter drills into observations →
+<code>c</code>/<code>o</code> toggles to/from concepts → <code>/</code>
+opens a search prompt from any view → <code>esc</code> backs out,
+<code>q</code> quits. See <a href="kb.1.html">kb(1)</a> for the full
+description.</p>
+<hr />
+<h2 id="background-design">Background &amp; Design</h2>
+<p>These documents record why <code>kb</code> is shaped the way it is —
+useful if you’re extending it, not required to use it:</p>
+<ul>
+<li><strong><a href="DECISIONS.html">DECISIONS.md</a></strong> —
+architecture/UX decision log: the module extraction, the CLI/TUI design,
+and the <code>--debug</code> tracing feature, each with rejected
+alternatives and real bugs found along the way</li>
+<li><a
+href="module-extraction-design.html">module-extraction-design.md</a> /
+<a href="module-extraction-plan.html">-plan.md</a> — pulling this module
+out of <code>harvey</code></li>
+<li><a href="cli-tui-design.html">cli-tui-design.md</a> / <a
+href="cli-tui-plan.html">-plan.md</a> — the <code>kb</code> CLI and
+TUI</li>
+<li><a href="debug-logging-design.html">debug-logging-design.md</a> / <a
+href="debug-logging-plan.html">-plan.md</a> — the <code>--debug</code>
+JSONL trace</li>
+</ul>
+<hr />
+<h2 id="cant-find-what-you-need">Can’t Find What You Need?</h2>
+<ul>
+<li>Run <code>kb help &lt;verb&gt;</code> or
+<code>kb &lt;verb&gt; -h</code> for the same reference at the
+terminal</li>
+<li><strong><a href="about.html">About</a></strong> — project metadata,
+license, requirements</li>
+<li><strong><a
+href="https://github.com/rsdoiel/knowledge/issues">Getting Help,
+Reporting Bugs</a></strong></li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
