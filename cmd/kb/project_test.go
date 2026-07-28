@@ -83,6 +83,63 @@ func TestCmdProject_Concepts(t *testing.T) {
 	}
 }
 
+func TestCmdProject_AddWithStatus(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"add", "--status", "concept", "epsilon", "desc"}, &out); err != nil {
+		t.Fatalf("project add --status: %v", err)
+	}
+	p, err := kb.ProjectByName("epsilon")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Status != "concept" {
+		t.Errorf("Status = %q, want %q", p.Status, "concept")
+	}
+}
+
+func TestCmdProject_AddInvalidStatus(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"add", "--status", "bogus", "zeta", "desc"}, &out); err == nil {
+		t.Error("expected an error for an invalid status")
+	}
+}
+
+func TestCmdProject_SetStatus(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("eta", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"set-status", "eta", "paused"}, &out); err != nil {
+		t.Fatalf("project set-status: %v", err)
+	}
+	p, err := kb.ProjectByName("eta")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Status != "paused" {
+		t.Errorf("Status = %q, want %q", p.Status, "paused")
+	}
+}
+
+func TestCmdProject_SetStatusNotFound(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"set-status", "nonexistent", "active"}, &out); err == nil {
+		t.Error("expected an error for a nonexistent project")
+	}
+}
+
+func TestCmdProject_SetStatusMissingArgs(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"set-status", "eta"}, &out); err == nil {
+		t.Error("expected an error for missing STATUS argument")
+	}
+}
+
 func TestCmdProject_UnknownSubcommand(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer

@@ -919,6 +919,77 @@ func TestAddProject_SetsUUIDAndOriginHost(t *testing.T) {
 	}
 }
 
+func TestAddProjectWithStatus(t *testing.T) {
+	kb := openTestKB(t)
+	id, err := kb.AddProjectWithStatus("proj", "a project", "concept")
+	if err != nil {
+		t.Fatalf("AddProjectWithStatus: %v", err)
+	}
+	p, err := kb.projectByID(id)
+	if err != nil {
+		t.Fatalf("projectByID: %v", err)
+	}
+	if p.Status != "concept" {
+		t.Errorf("Status = %q, want %q", p.Status, "concept")
+	}
+}
+
+func TestAddProjectWithStatus_InvalidStatus(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProjectWithStatus("proj", "", "bogus"); err == nil {
+		t.Error("expected an error for an invalid status")
+	}
+}
+
+func TestAddProjectWithStatus_DuplicateNameIgnoresStatus(t *testing.T) {
+	kb := openTestKB(t)
+	id1, err := kb.AddProject("alpha", "first")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	id2, err := kb.AddProjectWithStatus("alpha", "duplicate", "concept")
+	if err != nil {
+		t.Fatalf("AddProjectWithStatus duplicate: %v", err)
+	}
+	if id2 != id1 {
+		t.Errorf("duplicate AddProjectWithStatus returned id=%d, want %d", id2, id1)
+	}
+}
+
+func TestSetProjectStatus(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("proj", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.SetProjectStatus("proj", "paused"); err != nil {
+		t.Fatalf("SetProjectStatus: %v", err)
+	}
+	p, err := kb.ProjectByName("proj")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Status != "paused" {
+		t.Errorf("Status = %q, want %q", p.Status, "paused")
+	}
+}
+
+func TestSetProjectStatus_InvalidStatus(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("proj", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.SetProjectStatus("proj", "bogus"); err == nil {
+		t.Error("expected an error for an invalid status")
+	}
+}
+
+func TestSetProjectStatus_NotFound(t *testing.T) {
+	kb := openTestKB(t)
+	if err := kb.SetProjectStatus("nonexistent", "active"); err == nil {
+		t.Error("expected an error for a nonexistent project")
+	}
+}
+
 func TestAddObservationWithSource_SetsUUIDAndOriginHost(t *testing.T) {
 	kb := openTestKB(t)
 	pid, _ := kb.AddProject("proj", "")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -14,7 +15,7 @@ func init() {
 
 func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: project <add|list|show|concepts> ...")
+		return fmt.Errorf("usage: project <add|list|show|concepts|set-status> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -26,20 +27,37 @@ func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 		return cmdProjectShow(kb, dl, jsonOut, rest, out)
 	case "concepts":
 		return cmdProjectConcepts(kb, dl, jsonOut, rest, out)
+	case "set-status":
+		return cmdProjectSetStatus(kb, dl, jsonOut, rest, out)
 	default:
 		return fmt.Errorf("unknown project subcommand %q", sub)
 	}
 }
 
 func cmdProjectAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: project add NAME [DESCRIPTION]")
+	fs := flag.NewFlagSet("project add", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	status := fs.String("status", "", "concept, active, paused, or concluded (default: active)")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	name := args[0]
-	desc := strings.Join(args[1:], " ")
-	id, err := logKBCall(dl, "AddProject", map[string]any{"name": name, "description": desc}, func() (int64, error) {
-		return kb.AddProject(name, desc)
-	})
+	rest := fs.Args()
+	if len(rest) == 0 {
+		return fmt.Errorf("usage: project add [--status concept|active|paused|concluded] NAME [DESCRIPTION]")
+	}
+	name := rest[0]
+	desc := strings.Join(rest[1:], " ")
+	var id int64
+	var err error
+	if *status != "" {
+		id, err = logKBCall(dl, "AddProjectWithStatus", map[string]any{"name": name, "description": desc, "status": *status}, func() (int64, error) {
+			return kb.AddProjectWithStatus(name, desc, *status)
+		})
+	} else {
+		id, err = logKBCall(dl, "AddProject", map[string]any{"name": name, "description": desc}, func() (int64, error) {
+			return kb.AddProject(name, desc)
+		})
+	}
 	if err != nil {
 		return err
 	}
@@ -50,6 +68,27 @@ func cmdProjectAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 		}{ID: id, Name: name})
 	}
 	fmt.Fprintf(out, "project %q added (id=%d)\n", name, id)
+	return nil
+}
+
+func cmdProjectSetStatus(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: project set-status NAME STATUS")
+	}
+	name, status := args[0], args[1]
+	err := logKBCallErr(dl, "SetProjectStatus", map[string]any{"name": name, "status": status}, func() error {
+		return kb.SetProjectStatus(name, status)
+	})
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		}{Name: name, Status: status})
+	}
+	fmt.Fprintf(out, "project %q status set to %q\n", name, status)
 	return nil
 }
 

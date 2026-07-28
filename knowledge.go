@@ -470,6 +470,45 @@ func (kb *KnowledgeBase) Close() error {
  *   id, err := kb.AddProject("harvey", "Terminal coding agent backed by Ollama")
  */
 func (kb *KnowledgeBase) AddProject(name, description string) (int64, error) {
+	return kb.addProject(name, description, "active")
+}
+
+// validProjectStatuses are the allowed values for projects.status (see
+// kb-schema's "Valid values" table). Not enforced by the database itself
+// (no CHECK constraint), only by AddProjectWithStatus/SetProjectStatus.
+var validProjectStatuses = map[string]bool{
+	"concept":   true,
+	"active":    true,
+	"paused":    true,
+	"concluded": true,
+}
+
+/** AddProjectWithStatus is like AddProject but sets an explicit status
+ * instead of the "active" default. status must be one of concept, active,
+ * paused, or concluded.
+ *
+ * Parameters:
+ *   name        (string) — unique project name.
+ *   description (string) — short human-readable description.
+ *   status      (string) — one of concept, active, paused, concluded.
+ *
+ * Returns:
+ *   int64 — ID of the inserted or existing project. If the project already
+ *           existed, its status is left unchanged (same no-op convention
+ *           as AddProject).
+ *   error — on database failure, or if status is not one of the allowed values.
+ *
+ * Example:
+ *   id, err := kb.AddProjectWithStatus("harvey", "Terminal coding agent", "concept")
+ */
+func (kb *KnowledgeBase) AddProjectWithStatus(name, description, status string) (int64, error) {
+	if !validProjectStatuses[status] {
+		return 0, fmt.Errorf("knowledge: invalid project status %q (want concept, active, paused, or concluded)", status)
+	}
+	return kb.addProject(name, description, status)
+}
+
+func (kb *KnowledgeBase) addProject(name, description, status string) (int64, error) {
 	u, err := uuid.NewV7()
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
@@ -477,10 +516,10 @@ func (kb *KnowledgeBase) AddProject(name, description string) (int64, error) {
 	host, _ := os.Hostname()
 	var id int64
 	err = kb.db.QueryRow(
-		`INSERT INTO projects (name, description, uuid, origin_host) VALUES (?, ?, ?, ?)
+		`INSERT INTO projects (name, description, status, uuid, origin_host) VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
 		 RETURNING id`,
-		name, description, u.String(), host,
+		name, description, status, u.String(), host,
 	).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add project: %w", err)
@@ -494,6 +533,41 @@ func (kb *KnowledgeBase) AddProject(name, description string) (int64, error) {
 			name+" "+description, name, description, id, id)
 	}
 	return id, nil
+}
+
+/** SetProjectStatus updates an existing project's status. status must be
+ * one of concept, active, paused, or concluded.
+ *
+ * Parameters:
+ *   name   (string) — the project's unique name.
+ *   status (string) — one of concept, active, paused, concluded.
+ *
+ * Returns:
+ *   error — if status is invalid, the project does not exist, or on
+ *           database failure.
+ *
+ * Example:
+ *   err := kb.SetProjectStatus("harvey", "paused")
+ */
+func (kb *KnowledgeBase) SetProjectStatus(name, status string) error {
+	if !validProjectStatuses[status] {
+		return fmt.Errorf("knowledge: invalid project status %q (want concept, active, paused, or concluded)", status)
+	}
+	res, err := kb.db.Exec(
+		`UPDATE projects SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?`,
+		status, name,
+	)
+	if err != nil {
+		return fmt.Errorf("knowledge: set project status: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("knowledge: set project status: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("knowledge: project %q not found", name)
+	}
+	return nil
 }
 
 /** Projects returns all projects ordered by creation date.
