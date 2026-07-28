@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.1
+version: 0.0.2
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -26,15 +26,15 @@ keywords:
   - CLI
   - TUI
 
-date_released: 2026-07-27
+date_released: 2026-07-28
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.1
+## knowledge 0.0.2
 
-Proof-of-concept pre-release. Full CRUD API (projects, observations, concepts, sources) with FTS5 search and cross-machine merge; cmd/kb ships a git/go-style CLI with --json output and a read-mostly bubbletea TUI; --debug emits a JSONL trace of every knowledge-base call and TUI event. Extracted from harvey's knowledge.go/knowledge_merge.go.
+Adds project status management: AddProjectWithStatus and SetProjectStatus in the knowledge package, plus a --status flag on `kb project add` and a new `kb project set-status NAME STATUS` verb, all validated against concept/active/paused/concluded. AddProject's default behavior (status defaults to active) is unchanged.
 
 ## Authors
 

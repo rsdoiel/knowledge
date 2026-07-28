@@ -21,18 +21,22 @@
 <h1 id="name">NAME</h1>
 <p>kb-project — manage projects</p>
 <h1 id="synopsis">SYNOPSIS</h1>
-<p>kb project add NAME <a href="#description">DESCRIPTION</a></p>
+<p>kb project add [–status concept|active|paused|concluded] NAME <a
+href="#description">DESCRIPTION</a></p>
 <p>kb project list</p>
 <p>kb project show NAME</p>
 <p>kb project concepts NAME</p>
+<p>kb project set-status NAME STATUS</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>A project is the top-level container observations and concepts attach
 to. Names are unique; adding a project with an existing name is a no-op
-that returns the existing project’s id.</p>
+that returns the existing project’s id (its status, if any, is left
+unchanged).</p>
 <dl>
 <dt>add</dt>
 <dd>
-create a project, or return the id of the existing one with that name
+create a project, or return the id of the existing one with that name.
+–status sets the initial status (default: active).
 </dd>
 <dt>list</dt>
 <dd>
@@ -46,6 +50,11 @@ show a single project by name
 <dt>concepts</dt>
 <dd>
 list the concepts linked to a project
+</dd>
+<dt>set-status</dt>
+<dd>
+change an existing project’s status. STATUS must be one of concept,
+active, paused, concluded.
 </dd>
 </dl>
 <h1 id="see-also">SEE ALSO</h1>
