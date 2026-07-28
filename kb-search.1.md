@@ -1,4 +1,4 @@
-%kb-search(1) user manual | version 0.0.1 ac284fc
+%kb-search(1) user manual | version 0.0.1 69a9de8
 % R. S. Doiel
 % 2026-07-27
 
