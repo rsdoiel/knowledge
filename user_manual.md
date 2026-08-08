@@ -26,6 +26,8 @@ Run `kb` with no verb to launch the interactive TUI, or `kb help` / `kb -h` to s
 | `source` | [kb-source(1)](kb-source.1.md) | manage cited sources; check DOIs against Retraction Watch |
 | `search`, `summary`, `format` | [kb-search(1)](kb-search.1.md) | full-text search (FTS5) and assembled Markdown views |
 | `merge` | [kb-merge(1)](kb-merge.1.md) | reconcile two `knowledge.db` files that drifted independently (e.g. across machines) |
+| `export` | [kb-export(1)](kb-export.1.md) | write a portable JSON-L snapshot — the no-file-access alternative to `merge` |
+| `import` | [kb-import(1)](kb-import.1.md) | apply a JSON-L snapshot (from `export`) to the database |
 
 ### Global flags
 
@@ -45,10 +47,11 @@ Bare `kb` (no verb) launches a read-mostly browser: project list → Enter drill
 
 These documents record why `kb` is shaped the way it is — useful if you're extending it, not required to use it:
 
-- **[DECISIONS.md](DECISIONS.md)** — architecture/UX decision log: the module extraction, the CLI/TUI design, and the `--debug` tracing feature, each with rejected alternatives and real bugs found along the way
+- **[DECISIONS.md](DECISIONS.md)** — architecture/UX decision log: the module extraction, the CLI/TUI design, the `--debug` tracing feature, and the JSON-L export/import format, each with rejected alternatives and real bugs found along the way
 - [module-extraction-design.md](module-extraction-design.md) / [-plan.md](module-extraction-plan.md) — pulling this module out of `harvey`
 - [cli-tui-design.md](cli-tui-design.md) / [-plan.md](cli-tui-plan.md) — the `kb` CLI and TUI
 - [debug-logging-design.md](debug-logging-design.md) / [-plan.md](debug-logging-plan.md) — the `--debug` JSONL trace
+- [jsonl-export-design.md](jsonl-export-design.md) / [-plan.md](jsonl-export-plan.md) — the `export`/`import` JSON-L format and identity/conflict rules
 
 ---
 

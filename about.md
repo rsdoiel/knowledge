@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.2
+version: 0.0.3
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -26,15 +26,15 @@ keywords:
   - CLI
   - TUI
 
-date_released: 2026-07-28
+date_released: 2026-08-08
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.2
+## knowledge 0.0.3
 
-Adds project status management: AddProjectWithStatus and SetProjectStatus in the knowledge package, plus a --status flag on `kb project add` and a new `kb project set-status NAME STATUS` verb, all validated against concept/active/paused/concluded. AddProject's default behavior (status defaults to active) is unchanged.
+Adds JSON-L export/import: ExportJSONL/ImportJSONL in the knowledge package, plus `kb export [-project NAME] [-out PATH]` and `kb import [-in PATH]` verbs. A portable, no-file-access alternative to merge -- the resulting file can be pasted, emailed, or committed to git, then applied elsewhere with import. Projects/concepts are matched by name (existing local rows win), sources by identifier, observations and links by uuid, so re-importing the same file is a no-op.
 
 ## Authors
 

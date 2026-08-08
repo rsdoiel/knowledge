@@ -69,6 +69,11 @@ merge
 : reconcile two knowledge.db files that drifted independently (e.g. across
   machines) into a fresh, deduped output — see kb-merge(1)
 
+export, import
+: write/read a portable JSON-L snapshot of the database — the no-file-access
+  alternative to merge, for syncing over a channel that can only move plain
+  text (paste, email, git) — see kb-export(1) and kb-import(1)
+
 # EXIT STATUS
 
 0
@@ -84,5 +89,5 @@ merge
 
 kb-project(1), kb-observation(1), kb-concept(1),
 kb-link(1), kb-source(1), kb-search(1),
-kb-merge(1)
+kb-merge(1), kb-export(1), kb-import(1)
 

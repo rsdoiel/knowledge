@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	knowledge "github.com/rsdoiel/knowledge"
@@ -61,6 +63,17 @@ func newJSONAuditFixture(t *testing.T) jsonAuditFixture {
 // unlinked source) are covered by their own dedicated tests instead --
 // see source_test.go.
 func TestJSONMode_EveryVerbProducesValidJSON(t *testing.T) {
+	// export/import need real file paths on disk; -out and -in each get a
+	// stable file under a shared temp dir rather than a fresh one per
+	// case, since neither case's content depends on which fixture (text
+	// vs json subtest) is currently running.
+	exportPath := filepath.Join(t.TempDir(), "audit-export.jsonl")
+	importFixturePath := filepath.Join(t.TempDir(), "audit-import-fixture.jsonl")
+	importFixture := `{"type":"project","uuid":"11111111-1111-7111-8111-111111111111","origin_host":"h","name":"json-audit-import","description":"","status":"active","created_at":"2026-01-01T00:00:00Z"}` + "\n"
+	if err := os.WriteFile(importFixturePath, []byte(importFixture), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
 	// args is built per-case against a fresh fixture so ids referenced by
 	// number (observation/concept/source ids) are always valid.
 	cases := []struct {
@@ -96,6 +109,8 @@ func TestJSONMode_EveryVerbProducesValidJSON(t *testing.T) {
 		{"search", func(f jsonAuditFixture) []string { return []string{"search", "fixture"} }},
 		{"summary", func(f jsonAuditFixture) []string { return []string{"summary"} }},
 		{"format", func(f jsonAuditFixture) []string { return []string{"format"} }},
+		{"export", func(f jsonAuditFixture) []string { return []string{"export", "-out", exportPath} }},
+		{"import", func(f jsonAuditFixture) []string { return []string{"import", "-in", importFixturePath} }},
 	}
 
 	for _, c := range cases {
