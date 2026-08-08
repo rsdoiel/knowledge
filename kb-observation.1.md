@@ -1,6 +1,6 @@
-%kb-observation(1) user manual | version 0.0.2 a7871fd
+%kb-observation(1) user manual | version 0.0.3 f716050
 % R. S. Doiel
-% 2026-07-28
+% 2026-08-08
 
 # NAME
 
