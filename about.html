@@ -19,13 +19,15 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.2">knowledge 0.0.2</h2>
-<p>Adds project status management: AddProjectWithStatus and
-SetProjectStatus in the knowledge package, plus a –status flag on
-<code>kb project add</code> and a new
-<code>kb project set-status NAME STATUS</code> verb, all validated
-against concept/active/paused/concluded. AddProject’s default behavior
-(status defaults to active) is unchanged.</p>
+<h2 id="knowledge-0.0.3">knowledge 0.0.3</h2>
+<p>Adds JSON-L export/import: ExportJSONL/ImportJSONL in the knowledge
+package, plus <code>kb export [-project NAME] [-out PATH]</code> and
+<code>kb import [-in PATH]</code> verbs. A portable, no-file-access
+alternative to merge – the resulting file can be pasted, emailed, or
+committed to git, then applied elsewhere with import. Projects/concepts
+are matched by name (existing local rows win), sources by identifier,
+observations and links by uuid, so re-importing the same file is a
+no-op.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

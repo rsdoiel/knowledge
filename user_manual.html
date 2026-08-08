@@ -92,6 +92,18 @@ ROR, Fundref)</td>
 <td>reconcile two <code>knowledge.db</code> files that drifted
 independently (e.g. across machines)</td>
 </tr>
+<tr>
+<td><code>export</code></td>
+<td><a href="kb-export.1.html">kb-export(1)</a></td>
+<td>write a portable JSON-L snapshot — the no-file-access alternative to
+<code>merge</code></td>
+</tr>
+<tr>
+<td><code>import</code></td>
+<td><a href="kb-import.1.html">kb-import(1)</a></td>
+<td>apply a JSON-L snapshot (from <code>export</code>) to the
+database</td>
+</tr>
 </tbody>
 </table>
 <h3 id="global-flags">Global flags</h3>
@@ -121,8 +133,9 @@ useful if you’re extending it, not required to use it:</p>
 <ul>
 <li><strong><a href="DECISIONS.html">DECISIONS.md</a></strong> —
 architecture/UX decision log: the module extraction, the CLI/TUI design,
-and the <code>--debug</code> tracing feature, each with rejected
-alternatives and real bugs found along the way</li>
+the <code>--debug</code> tracing feature, and the JSON-L export/import
+format, each with rejected alternatives and real bugs found along the
+way</li>
 <li><a
 href="module-extraction-design.html">module-extraction-design.md</a> /
 <a href="module-extraction-plan.html">-plan.md</a> — pulling this module
@@ -133,6 +146,10 @@ TUI</li>
 <li><a href="debug-logging-design.html">debug-logging-design.md</a> / <a
 href="debug-logging-plan.html">-plan.md</a> — the <code>--debug</code>
 JSONL trace</li>
+<li><a href="jsonl-export-design.html">jsonl-export-design.md</a> / <a
+href="jsonl-export-plan.html">-plan.md</a> — the
+<code>export</code>/<code>import</code> JSON-L format and
+identity/conflict rules</li>
 </ul>
 <hr />
 <h2 id="cant-find-what-you-need">Can’t Find What You Need?</h2>
