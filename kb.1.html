@@ -89,6 +89,13 @@ full-text search and formatted views — see kb-search(1)
 reconcile two knowledge.db files that drifted independently (e.g. across
 machines) into a fresh, deduped output — see kb-merge(1)
 </dd>
+<dt>export, import</dt>
+<dd>
+write/read a portable JSON-L snapshot of the database — the
+no-file-access alternative to merge, for syncing over a channel that can
+only move plain text (paste, email, git) — see kb-export(1) and
+kb-import(1)
+</dd>
 </dl>
 <h1 id="exit-status">EXIT STATUS</h1>
 <dl>
@@ -107,7 +114,7 @@ usage error (bad flags, unknown verb)
 </dl>
 <h1 id="see-also">SEE ALSO</h1>
 <p>kb-project(1), kb-observation(1), kb-concept(1), kb-link(1),
-kb-source(1), kb-search(1), kb-merge(1)</p>
+kb-source(1), kb-search(1), kb-merge(1), kb-export(1), kb-import(1)</p>
 </section>
 <footer>
 <p>knowledge</p>

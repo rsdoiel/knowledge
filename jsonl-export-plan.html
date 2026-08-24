@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="json-l-exportimport-implementation-plan">JSON-L export/import —
+Implementation Plan</h1>
+<p>See <a href="jsonl-export-design.html">jsonl-export-design.md</a> for
+the full design and confirmed decisions. TDD throughout, per project
+convention: <code>_test.go</code> first, confirm red, then implement.
+Commit after each work item.</p>
+<h2 id="w1-record-types-exportjsonl">W1 — Record types +
+<code>ExportJSONL</code></h2>
+<p><strong>File:</strong> <code>jsonl.go</code>,
+<code>jsonl_test.go</code> (package <code>knowledge</code>)</p>
+<ul>
+<li>Seven record structs (<code>projectRecord</code>,
+<code>conceptRecord</code>, <code>sourceRecord</code>,
+<code>observationRecord</code>, <code>observationConceptRecord</code>,
+<code>projectConceptRecord</code>,
+<code>observationSourceRecord</code>), each with a
+<code>Type string \</code>json:“type”`` field set to a constant on
+construction, plus the fields listed in the design doc (uuid-keyed
+references, no local ids).</li>
+<li><code>ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error</code>:
+whole-db when <code>projectName == ""</code>; scoped per the design
+doc’s reachability rule otherwise. One <code>json.Marshal</code> +
+newline per record, dependency order.</li>
+<li>Tests: whole-db export against a small fixture produces valid,
+ordered JSONL with expected line counts; project-scoped export includes
+only reachable rows (including a concept reachable only via an
+observation, and excluding an unrelated project’s data); empty database
+exports zero lines without error; unknown project name returns an
+error.</li>
+</ul>
+<h2 id="w2-importjsonl">W2 — <code>ImportJSONL</code></h2>
+<p><strong>File:</strong> <code>jsonl.go</code> (continued),
+<code>jsonl_test.go</code> (continued)</p>
+<ul>
+<li><code>type ImportTableSummary struct { Table string; Read, Imported, Skipped int }</code></li>
+<li><code>ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error)</code>:
+buffer all lines by <code>type</code> (unknown <code>type</code> values
+are skipped and counted, not fatal — forward-compat with a future record
+kind), then apply in phase order (projects/concepts/sources →
+observations → the three join types), building
+<code>uuid -&gt; local id</code> maps as each phase completes.</li>
+<li>Tests: round-trip (<code>Export</code> one kb, <code>Import</code>
+into a fresh empty kb, contents match — projects, observations, concept
+links, source links); re-import of the same file is a no-op
+(<code>Skipped</code> counts equal <code>Read</code>,
+<code>Imported</code> all zero, row counts unchanged); importing into a
+kb that already has a same-named project merges observations under the
+local project row (verifies the uuid-mismatch case the design doc calls
+out); a join record whose <code>uuid</code> reference is missing from
+the file is skipped, not fatal; malformed JSON on one line errors out
+with the line number.</li>
+</ul>
+<h2 id="w3-cli-verbs">W3 — CLI verbs</h2>
+<p><strong>File:</strong> <code>cmd/kb/jsonl.go</code>,
+<code>cmd/kb/jsonl_test.go</code></p>
+<ul>
+<li><code>verbs["export"]</code>, <code>verbs["import"]</code>, both
+operating on the ambient <code>kb</code> (no <code>merge</code>-style
+special case in <code>main.go</code>).</li>
+<li><code>export</code>: <code>-project NAME</code> (optional),
+<code>-out PATH</code> (optional, default stdout). <code>--json</code>
+mode wraps the line count in a <code>{"lines_written": N}</code>
+envelope instead of interleaving JSONL with a JSON summary object.</li>
+<li><code>import</code>: <code>-in PATH</code> (optional, default
+stdin). <code>--json</code> mode prints
+<code>[]ImportTableSummary</code> as JSON; text mode prints the same
+table-format summary style as <code>merge</code>’s output.</li>
+<li><code>logKBCall</code>/<code>dl.Log</code> wiring matching every
+other verb.</li>
+<li>Add both to <code>jsonaudit_test.go</code>’s case table (text +
+<code>--json</code>, using the existing fixture; <code>import</code>
+case reads from a small embedded JSONL fixture via <code>-in</code>, not
+stdin, to keep the test hermetic).</li>
+</ul>
+<h2 id="w4-docs-decisions-version">W4 — Docs, decisions, version</h2>
+<ul>
+<li><code>helptext.go</code>: <code>ExportHelpText</code>,
+<code>ImportHelpText</code> consts (man-page style, matching
+<code>MergeHelpText</code>); <code>HelpText</code>’s VERBS section gains
+an entry.</li>
+<li><code>help_dispatch.go</code>: route
+<code>"export"</code>/<code>"import"</code> topics.</li>
+<li><code>Makefile</code>: add <code>export import</code> to
+<code>KB_TOPICS</code> (hand-edited, <strong>not</strong> via
+<code>cmt codemeta.json Makefile</code> — that target is hand-customized
+and <code>cmt</code> would blow away
+<code>KB_TOPICS</code>/<code>kb-topics-help</code>, see the 2026-07-27
+Makefile-regen gotcha in DECISIONS.md).</li>
+<li>Run <code>make kb-topics-help</code> (or the equivalent manual
+<code>./bin/kb export -help &gt; kb-export.1.md</code> / same for
+<code>import</code>) to generate the checked-in <code>.1.md</code>
+sources, then <code>make man</code> if <code>pandoc</code> is available
+locally.</li>
+<li><code>user_manual.md</code>: a section describing
+<code>export</code>/<code>import</code>, mirroring the existing
+<code>merge</code> section.</li>
+<li><code>codemeta.json</code>: bump <code>version</code> (0.0.2 →
+0.0.3) and <code>releaseNotes</code>; run
+<code>cmt codemeta.json version.go CITATION.cff about.md README.md</code>.</li>
+<li><code>DECISIONS.md</code>: entry after everything is verified,
+following the existing format (context/decision/rejected/consequences),
+including any real bugs found along the way.</li>
+<li><code>agents/knowledge.db</code> (Laboratory root): one
+<code>decision</code> observation on the <code>knowledge</code> project
+summarizing the shipped feature, linking the
+<code>cross-machine-sync</code> concept — closes out the step-4 deferred
+item.</li>
+</ul>
+<h2 id="non-goals-for-this-pass">Non-goals for this pass</h2>
+<ul>
+<li>A <code>-format</code> flag or any second export format.</li>
+<li>Streaming import (buffer-then-phase only, per the design doc).</li>
+<li>Compression/encryption of the JSONL file — it’s plain text, same
+trust model as the <code>.db</code> file itself.</li>
+<li>Wiring <code>export</code>/<code>import</code> into harvey’s
+<code>/kb</code> commands — this plan covers the <code>knowledge</code>
+module and its own <code>kb</code> CLI only.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

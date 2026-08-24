@@ -10,7 +10,7 @@ GIT_GROUP = rsdoiel
 
 PROGRAMS = kb
 
-KB_TOPICS = project observation concept link source search merge
+KB_TOPICS = project observation concept link source search merge export import
 
 RELEASE_DATE = $(shell date +%Y-%m-%d)
 

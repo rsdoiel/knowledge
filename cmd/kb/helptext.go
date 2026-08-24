@@ -73,6 +73,11 @@ merge
 : reconcile two knowledge.db files that drifted independently (e.g. across
   machines) into a fresh, deduped output — see {app_name}-merge(1)
 
+export, import
+: write/read a portable JSON-L snapshot of the database — the no-file-access
+  alternative to merge, for syncing over a channel that can only move plain
+  text (paste, email, git) — see {app_name}-export(1) and {app_name}-import(1)
+
 # EXIT STATUS
 
 0
@@ -88,7 +93,7 @@ merge
 
 {app_name}-project(1), {app_name}-observation(1), {app_name}-concept(1),
 {app_name}-link(1), {app_name}-source(1), {app_name}-search(1),
-{app_name}-merge(1)
+{app_name}-merge(1), {app_name}-export(1), {app_name}-import(1)
 
 `
 
@@ -371,5 +376,80 @@ both sides' observations and links survive under one merged entity.
 # SEE ALSO
 
 {app_name}(1)
+
+`
+
+// ExportHelpText is shown by `kb export -h` and `kb help export`.
+// Generates kb-export.1.md.
+const ExportHelpText = `%{app_name}-export(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-export — write a portable JSON-L snapshot of the database
+
+# SYNOPSIS
+
+{app_name} export [-project NAME] [-out PATH]
+
+# DESCRIPTION
+
+export writes the knowledge base (or, with -project, just one project and
+everything reachable from it — its concepts, sources, and observations) as
+newline-delimited JSON to -out, or to stdout when -out is omitted. Every
+line is self-describing via a "type" field (project, concept, source,
+observation, observation_concept, project_concept, observation_source),
+in dependency order.
+
+Unlike merge, export never touches a second database file — the resulting
+file can be pasted, emailed, or committed to git, then applied elsewhere
+with import. This is the no-file-access alternative to merge; when both
+databases are reachable as files, merge is the more thorough tool (it
+also detects and can reconcile name collisions).
+
+With --json, a text confirmation is only meaningful once -out is given
+(the JSON-L stream itself has already gone to stdout otherwise): it
+becomes a {"lines_written": N, "path": "..."} object instead of the plain
+text line.
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-import(1), {app_name}-merge(1)
+
+`
+
+// ImportHelpText is shown by `kb import -h` and `kb help import`.
+// Generates kb-import.1.md.
+const ImportHelpText = `%{app_name}-import(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-import — apply a JSON-L snapshot (from export) to the database
+
+# SYNOPSIS
+
+{app_name} import [-in PATH]
+
+# DESCRIPTION
+
+import reads a JSON-L stream produced by export — from -in, or stdin when
+-in is omitted — and applies it to the already-open --db database.
+Projects and concepts are matched by name (an existing local row always
+wins as-is; a genuinely new one keeps its original uuid, for future
+cross-machine merge compatibility). Sources are matched by identifier when
+one is present. Observations and links are matched by uuid, so re-running
+import against the same file is a no-op the second time.
+
+Unresolvable references (a uuid the file never defines a parent for) and
+unrecognized record types are skipped, not fatal — only malformed JSON
+aborts the import. The returned summary reports, per record type, how many
+lines were read, newly imported, or skipped.
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-export(1), {app_name}-merge(1)
 
 `

@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 %kb(1) user manual | version 0.0.2 a21f85b
+=======
+%kb(1) user manual | version 0.0.3 193fa97
+>>>>>>> 6f81c33478fb839db70903bb8800aa73c795ab0b
 % R. S. Doiel
-% 2026-07-28
+% 2026-08-08
 
 # NAME
 
@@ -69,6 +73,11 @@ merge
 : reconcile two knowledge.db files that drifted independently (e.g. across
   machines) into a fresh, deduped output — see kb-merge(1)
 
+export, import
+: write/read a portable JSON-L snapshot of the database — the no-file-access
+  alternative to merge, for syncing over a channel that can only move plain
+  text (paste, email, git) — see kb-export(1) and kb-import(1)
+
 # EXIT STATUS
 
 0
@@ -84,5 +93,5 @@ merge
 
 kb-project(1), kb-observation(1), kb-concept(1),
 kb-link(1), kb-source(1), kb-search(1),
-kb-merge(1)
+kb-merge(1), kb-export(1), kb-import(1)
 

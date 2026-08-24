@@ -34,15 +34,18 @@ databases that drifted independently, and a read-only interactive TUI
 browser for exploring projects, observations, and concepts.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.1</li>
+<li>version: 0.0.3</li>
 <li>status: concept</li>
-<li>released: 2026-07-27</li>
+<li>released: 2026-08-08</li>
 </ul>
-<p>Proof-of-concept pre-release. Full CRUD API (projects, observations,
-concepts, sources) with FTS5 search and cross-machine merge; cmd/kb
-ships a git/go-style CLI with –json output and a read-mostly bubbletea
-TUI; –debug emits a JSONL trace of every knowledge-base call and TUI
-event. Extracted from harvey’s knowledge.go/knowledge_merge.go.</p>
+<p>Adds JSON-L export/import: ExportJSONL/ImportJSONL in the knowledge
+package, plus <code>kb export [-project NAME] [-out PATH]</code> and
+<code>kb import [-in PATH]</code> verbs. A portable, no-file-access
+alternative to merge – the resulting file can be pasted, emailed, or
+committed to git, then applied elsewhere with import. Projects/concepts
+are matched by name (existing local rows win), sources by identifier,
+observations and links by uuid, so re-importing the same file is a
+no-op.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>

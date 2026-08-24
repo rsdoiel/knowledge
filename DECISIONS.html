@@ -26,6 +26,121 @@ Each entry names the decision, the context that prompted it, the chosen
 approach, the rejected alternatives, and the consequences.</p>
 <hr />
 <h2
+id="json-l-exportimport-the-no-file-access-alternative-to-merge">2026-08-08
+— JSON-L export/import: the no-file-access alternative to
+<code>merge</code></h2>
+<p><strong>Context.</strong> Step 4 of the original cross-machine-sync
+sequencing (<code>knowledge_db_merge_design.md</code> in the Laboratory
+root), deferred when the merge tool shipped 2026-07-27 (see that date’s
+entries below). <code>merge</code> requires <code>ATTACH</code>-ing two
+live <code>.db</code> files; JSON-L export/import instead produces a
+plain-text snapshot that can move over any channel that only carries
+text — paste, email, a git commit. Full audit and confirmed decisions in
+<code>jsonl-export-design.md</code>; phased TDD plan in
+<code>jsonl-export-plan.md</code>.</p>
+<p><strong>Decision.</strong>
+<code>ExportJSONL(kb, w, projectName string) error</code> /
+<code>ImportJSONL(kb, r io.Reader) ([]ImportTableSummary, error)</code>
+in the <code>knowledge</code> package (<code>jsonl.go</code>), plus
+<code>kb export [-project NAME] [-out PATH]</code> /
+<code>kb import [-in PATH]</code> verbs (<code>cmd/kb/jsonl.go</code>).
+One self-describing JSON stream — each line a <code>"type"</code>-tagged
+record (<code>project</code>, <code>concept</code>, <code>source</code>,
+<code>observation</code>, and the three join types), identity carried by
+<code>uuid</code> (already <code>UNIQUE</code>-indexed on every table
+since the 2026-07-26 UUID migration), never by the local autoincrement
+<code>id</code>. Export writes parents before children; import buffers
+the whole stream by type first and applies it in that same phase order
+regardless of the file’s actual line order, so a hand-edited or
+<code>cat</code>-concatenated file doesn’t need to get the interleaving
+right.</p>
+<p>Import’s identity rule differs by table, matching how each already
+resolves identity elsewhere in this package: projects/concepts are
+name-keyed (an existing local row wins as-is, matching
+<code>merge</code>’s own “first write wins” model — a genuinely new row
+keeps its origin <code>uuid</code>, so a later real <code>merge</code>
+between two machines that both imported the same export can still
+recognize it as the same entity); sources are identifier-keyed, matching
+<code>AddSource</code>; observations and joins are uuid-keyed, since
+observations have no natural content key. Unresolvable join references
+and unrecognized <code>"type"</code> values are skipped and counted, not
+fatal — only malformed JSON aborts the import (with the offending line
+number in the error).</p>
+<p><strong>Two real bugs found by the TDD round-trip/re-import tests,
+neither anticipated by the design doc:</strong> - <strong>Sources with
+no identifier broke idempotent re-import</strong>:
+<code>importSource</code> only deduped by
+<code>(identifier_type, identifier_value)</code> when both were set
+(matching <code>AddSource</code>’s existing “always insert new” behavior
+for identifier-less sources) — fine for a single call, but since
+<code>importSource</code> always carries the source’s own
+<code>uuid</code> through, re-importing the same file a second time hit
+the <code>sources.uuid</code> UNIQUE index. Fixed by also checking
+<code>uuid</code> as a fallback before inserting. -
+<strong>Partial/incremental imports silently dropped
+observations</strong>: a JSON-L file containing only
+<code>observation</code>/join records (project already synced by an
+earlier import, so this file doesn’t re-include it) left
+<code>projectLocalID</code> empty for that project, since the map was
+only populated from <code>project</code> records actually present in
+<em>this</em> file — every observation referencing it was silently
+counted as <code>Skipped</code> (unresolvable), losing real data with no
+error surfaced. Fixed with <code>resolveLocalID</code>: check the
+in-memory map first, fall through to a direct
+<code>SELECT id FROM &lt;table&gt; WHERE uuid = ?</code> on a miss
+(correct because a row found this way already exists locally under that
+exact uuid — no identity ambiguity, unlike the name-collision case the
+map exists to handle), caching the result for reuse by later records in
+the same import.</p>
+<p>Also manually verified end-to-end with the real <code>bin/kb</code>
+binary against real data (not just the unit tests): whole-db and
+<code>-project</code>-scoped export; import into a fresh db, including
+that FTS5 search actually finds the imported rows (confirms the
+<code>kb_fts</code> maintenance added to the import path, mirrored from
+<code>AddProject</code>/<code>AddConceptWithIdentifier</code>/
+<code>AddObservationWithSource</code>, works — an easy thing to get
+right in unit tests and still silently miss in the real index); a full
+re-import reporting 100% <code>Skipped</code>; the
+intentionally-adversarial case — two independently-created databases
+both with a project named <code>"harvey"</code> under different
+<code>uuid</code>s — importing one’s export into the other correctly
+attached the observation to the <em>local</em> <code>"harvey"</code> row
+without touching its description or creating a duplicate project; stdin
+as the default <code>import</code> source; and both error paths (unknown
+<code>-project</code>, malformed JSON).</p>
+<p><strong>Rejected.</strong> Update-on-conflict for observations
+(re-importing an edited export overwrites the local row) — would let
+importing an old backup silently revert a local edit; matches
+<code>MergeKnowledgeBases</code>’s existing first-write-wins semantics
+instead. Per-table files (<code>projects.jsonl</code>,
+<code>observations.jsonl</code>, …) — one file is simpler to hand around
+than several, and the <code>"type"</code> field costs one field per
+line. Streaming import (apply each line as read, no buffering) — would
+require the file to already be in dependency order. A
+<code>-format</code> flag for future non-JSONL formats — no second
+format exists yet; <code>search</code>/<code>summary</code>/
+<code>format</code> already establishes the precedent of a narrow,
+format-specific verb name here.</p>
+<p><strong>Consequences.</strong>
+<code>go build</code>/<code>go vet</code>/<code>gofmt</code>/<code>go test</code>
+clean throughout (TDD-first at every phase, red confirmed before each
+fix — both bugs above were caught by tests written <em>before</em> the
+fix, not discovered by manual poking afterward).
+<code>codemeta.json</code> bumped 0.0.2 → 0.0.3;
+<code>version.go</code>/<code>CITATION.cff</code>/<code>about.md</code>/<code>README.md</code>
+regenerated via <code>cmt</code>. <code>Makefile</code>’s
+<code>KB_TOPICS</code> hand-edited to add <code>export import</code>
+(not via <code>cmt codemeta.json Makefile</code> — that target is
+hand-customized, see the 2026-07-27 Makefile-regen gotcha below).
+<code>kb-export.1.md</code>/<code>kb-import.1.md</code> generated via
+<code>kb-topics-help</code> and <code>make man</code> (pandoc available
+on this machine). <code>user_manual.md</code> gained a table row and a
+design-doc link. This closes out step 4 of the original
+cross-machine-sync sequencing —
+<code>knowledge_db_merge_design.md</code>’s deferred item — leaving no
+open items from that plan.</p>
+<hr />
+<h2
 id="kb---debug-nil-safe-jsonl-trace-of-every-knowledge-base-call-and-tui-event">2026-07-27
 — <code>kb --debug</code>: nil-safe JSONL trace of every knowledge-base
 call and TUI event</h2>

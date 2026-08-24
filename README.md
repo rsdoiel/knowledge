@@ -6,11 +6,11 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 
 ## Release Notes
 
-- version: 0.0.1
+- version: 0.0.3
 - status: concept
-- released: 2026-07-27
+- released: 2026-08-08
 
-Proof-of-concept pre-release. Full CRUD API (projects, observations, concepts, sources) with FTS5 search and cross-machine merge; cmd/kb ships a git/go-style CLI with --json output and a read-mostly bubbletea TUI; --debug emits a JSONL trace of every knowledge-base call and TUI event. Extracted from harvey's knowledge.go/knowledge_merge.go.
+Adds JSON-L export/import: ExportJSONL/ImportJSONL in the knowledge package, plus `kb export [-project NAME] [-out PATH]` and `kb import [-in PATH]` verbs. A portable, no-file-access alternative to merge -- the resulting file can be pasted, emailed, or committed to git, then applied elsewhere with import. Projects/concepts are matched by name (existing local rows win), sources by identifier, observations and links by uuid, so re-importing the same file is a no-op.
 
 
 ### Authors
