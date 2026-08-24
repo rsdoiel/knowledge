@@ -1,6 +1,6 @@
 # knowledge — Architecture & UX Decision Log
 
-This file records significant architectural and UX decisions, their rationale, and known trade-offs. New decisions are added at the top. Each entry names the decision, the context that prompted it, the chosen approach, the rejected alternatives, and the consequences.
+This file records significant architectural and UX decisions, their rationale, and known trade-offs. This has been superceded by the content in decisions directory.
 
 ---
 
