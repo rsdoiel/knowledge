@@ -14,24 +14,41 @@ covers, red confirmed first, matching this module's existing practice.
 
 ## Status (2026-08-25)
 
-Nothing implemented **in `kb`**. Four real corpora now exist to test against:
+Nothing implemented **in `kb`**. Five real corpora now exist to test against,
+198 records in total:
 
 | Corpus | Records | Origin | Notes |
 |---|---|---|---|
 | `~/Laboratory/knowledge/decisions/` | 3 | `decisions_split.ts` | this module's own log |
 | `~/WorkLab/clasm/decisions/` | 169 | `decisions_split.ts` | `kind` on all, `trigger` on 70, 2 supersessions, 3 `relates_to`, 2 `phase` |
-| `~/WorkLab/cold/decisions/` | 7 | hand-authored | first corpus with `decisions[]` (3 records), `trigger: design`, `status: proposed`, `phase` on 5 |
-| `~/WorkLab/agents/decisions/` | 2 | hand-authored | the workspace tier; DR-0001 carries the only cross-tier `relates_to` in existence |
+| `~/WorkLab/CMTools/decisions/` | 13 | hand-authored | the richest corpus per record — see below |
+| `~/WorkLab/cold/decisions/` | 7 | hand-authored | first corpus with `decisions[]` (3 records), `trigger: design`, `phase` on 5 |
+| `~/WorkLab/agents/decisions/` | 6 | hand-authored | the workspace tier (`project: ""`); DR-0001 and DR-0002 carry the only cross-tier `relates_to` in existence |
 
-`cold` and `agents/decisions` matter disproportionately for testing: the two
-converted corpora leave `decisions[]`, `session`, `initiative`, `tags`,
-`status: proposed` and `trigger: design` entirely unpopulated, because
-conversion cannot invent what a monolithic log never recorded. The
-hand-authored corpora exercise four of those six.
+The hand-authored corpora matter disproportionately for testing: the two
+converted corpora leave `decisions[]`, `session`, `initiative`, `tags` and
+`trigger: design` unpopulated, because conversion cannot invent what a
+monolithic log never recorded.
+
+**`CMTools` is the strongest single test corpus** (added 2026-08-25) and is
+worth reaching for first in any table test:
+
+- **First `session` values anywhere** — 2 records, plus workspace DR-0006. No
+  other corpus exercises the field.
+- **First `trigger: plan-review` anywhere** — 2 records. The format doc notes
+  this value matched *zero* of `clasm`'s 169 even though such an episode was
+  known to exist, so until now no corpus could test it.
+- A genuine **partial supersession**: DR-0008 `supersedes: ["0003"]` while
+  DR-0003 stays `accepted` with `superseded_by` set — the case the `sup` flag
+  exists for, and the one `clasm:DR-0160` also covers.
+- 6 records with non-empty `decisions[]`, whose entries contain **backticks,
+  double quotes and `~` paths** — the YAML-quoting stress case.
+- `phase` on 9, spanning `"0.0.45"` and `"0.0.46"`; 2 `correction` records;
+  dates spanning 2025-01-09 to 2026-08-25.
 
 Index generation is **already implemented outside `kb`**, by
-`~/WorkLab/decisions_index.ts` (2026-08-25), which currently maintains three
-of the four indexes. W6 supersedes it — see that phase.
+`~/WorkLab/decisions_index.ts` (2026-08-25), which currently maintains all
+five indexes. W6 supersedes it — see that phase.
 
 Every phase below can be verified against real data rather than fixtures
 alone. That is deliberate — the pilot found three format defects that only
@@ -110,9 +127,12 @@ obvious implementation is wrong:
 
 ### Acceptance criteria
 
-- Round-trips every one of the 172 real records: parse then render produces
-  byte-identical output. This is the phase's real test — run it over both
-  corpora in a table test, not over hand-written fixtures.
+- Round-trips every one of the 198 real records: parse then render produces
+  byte-identical output. This is the phase's real test — run it over all five
+  corpora in a table test, not over hand-written fixtures. The 26 hand-authored
+  records carry the optional fields the 172 converted ones leave empty, so a
+  table test over `clasm` alone would pass while rendering `decisions[]`,
+  `session` and `phase` wrongly.
 - A record with `status: accepted` and a non-empty `superseded_by` parses
   and validates (finding 1). A record with `trigger: ""` validates.
 - Titles containing `"`, backticks and `<>` survive the round trip —
@@ -242,8 +262,9 @@ obvious implementation is wrong:
 
 **`kb index` supersedes `~/WorkLab/decisions_index.ts`.** That Deno tool was
 written 2026-08-25 because no index generator existed and `cold` needed one;
-it currently maintains three indexes (`WorkLab/agents/decisions`,
-`WorkLab/cold/decisions`, `WorkLab/clasm/decisions`). One implementation
+it currently maintains all five indexes (`WorkLab/agents/decisions`,
+`WorkLab/CMTools/decisions`, `WorkLab/cold/decisions`,
+`WorkLab/clasm/decisions`, and this module's own). One implementation
 serving both workspaces was this design's original argument for putting
 `index` in `kb`, so the Deno tool is a stopgap and retires when this phase
 ships. Until then it is the live generator and its output is the reference
@@ -266,11 +287,15 @@ behaviour.
   `Generated by decisions_index.ts. Do not hand-edit.`, which `kb index`
   cannot reproduce without lying about itself. Change it to a tool-neutral
   line — `Generated file. Do not hand-edit.` — in `decisions_index.ts` first,
-  regenerate the three live indexes, and have `kb index` emit the same.
+  regenerate the five live indexes, and have `kb index` emit the same.
   Otherwise every index churns on the changeover and the byte-comparison
-  below is impossible to satisfy honestly.
-- Do not write a preamble into `index.md`; directory prose lives in
-  `decisions/README.md`, which is never regenerated.
+  below is impossible to satisfy honestly. (Done: `decisions_index.ts` already
+  emits the neutral line and all five indexes are regenerated.)
+- Do not write a preamble into `index.md`. There is nowhere else for directory
+  prose to go either: `decisions/README.md` was **removed from the format** on
+  2026-08-25 by workspace DR-0006, and a `decisions/` directory now holds
+  records and the generated `index.md` and nothing else. `kb index` must not
+  create one.
 - `kb search` returns `record` rows alongside projects, observations and
   concepts, labelled by `source_type`.
 - TUI: records browsable under a project. Read-only, consistent with the
@@ -279,16 +304,19 @@ behaviour.
 ### Acceptance criteria
 
 - `kb index` output is **byte-identical** to `decisions_index.ts` output for
-  all three live corpora — 169 records for `clasm`, 7 for `cold`, 2 for
-  `agents/decisions` — once both emit the tool-neutral attribution line. This
-  is the real acceptance test for the phase: two independent implementations
-  agreeing on every byte of a 169-row file.
+  all five live corpora — 169 records for `clasm`, 13 for `CMTools`, 7 for
+  `cold`, 6 for `agents/decisions`, 3 for `knowledge` — both emitting the
+  tool-neutral attribution line. This is the real acceptance test for the
+  phase: two independent implementations agreeing on every byte of a 169-row
+  file, and on four smaller files that between them exercise every optional
+  field `clasm` leaves empty.
 - Title at `$7` on every row under `awk` default field splitting, including
   rows with an empty `trigger`. `clasm` has 99 such rows.
 - `clasm:DR-0160` (accepted, partially superseded) renders with the `sup`
   flag; `DR-0148` (wholly superseded) renders `superseded` *and* `sup`.
 - Running twice produces an identical file.
-- `README.md` untouched by `kb index`.
+- `kb index` writes `index.md` and nothing else — in particular it does not
+  create a `README.md` (workspace DR-0006).
 - A search whose top hit is a record body reports it as `record`, with its
   `DR-NNNN`.
 
