@@ -1,12 +1,17 @@
 # Decision records and document ingest — Design
 
-**Status (2026-08-24):** Audit complete; all five decisions below confirmed
-2026-08-24. Ready for a `-plan.md`.
+**Status (2026-08-25):** Audit complete; decisions 1–5 confirmed 2026-08-24,
+decision 6 (cross-tier references) added 2026-08-25. `decision-records-plan.md`
+exists; nothing implemented yet.
 
 **References:**
 - `~/WorkLab/DECISION_RECORD_FORMAT.md` — the file format this design
-  ingests. Settled 2026-08-24; frontmatter schema, vocabularies, and
-  supersession rules are specified there, not here.
+  ingests. Settled 2026-08-24, amended 2026-08-25 with the "Cross-tier
+  references" section; frontmatter schema, vocabularies, supersession rules
+  and the reference grammar are specified there, not here.
+- `~/WorkLab/agents/decisions/` — the workspace tier's own records. DR-0001
+  and DR-0002 both constrain this design: the generated index format, and the
+  cross-tier reference grammar behind decision 6 below.
 - `module-extraction-design.md` — established this module as the owner of
   the knowledge base, with `harvey` as a consumer. The same relationship
   applies to whatever writes decision records.
@@ -138,6 +143,44 @@ Ingest is therefore **two-pass**: pass one upserts every record, pass two
 resolves relations. A record may legitimately reference one that has not
 been read yet.
 
+#### Resolving a reference
+
+A `relates_to` entry is `[<scope>:]<id>` — see `WorkLab/DECISION_RECORD_FORMAT.md`,
+"Cross-tier references", settled by `WorkLab/agents/decisions` DR-0002 on
+2026-08-25. Resolution needs the three values in
+`idx_records_scope_id (project_id, scope, record_id)`, and the entry form
+supplies them:
+
+| Entry | `scope` | `project_id` | `record_id` |
+|---|---|---|---|
+| `0159` | the citing record's | the citing record's | `0159` |
+| `clasm:0160` | `project` | lookup by `projects.name` | `0160` |
+| `workspace:0001` | `workspace` | `NULL` | `0001` |
+
+Split on the first `:` only, and strip an optional leading `DR-` from the id
+part rather than rejecting it. A stray prefix in one cross-reference should
+not fail a run, on the same reasoning as decision 5 below.
+
+`supersedes` and `superseded_by` are **same-tier only**, so their entries are
+always bare ids and inherit the citing record's scope and project. The file
+format forbids the cross-tier case, because writing both sides would mean
+writing into another repository. Ingest does not need to handle it, and should
+report a qualified entry in either field as malformed rather than resolving it.
+
+**An unresolvable reference is reported and skipped, not fatal.** Following
+decision 4 (additive only), a reference to a project or record not present in
+the database leaves the relation unwritten, adds a line to the run summary, and
+lets the rest of the ingest proceed. The overwhelmingly common cause is a
+record that has not been ingested yet — a tree ingested one project at a time,
+or a workspace-tier record read before the project it cites. Failing the run
+would make ingest order significant, which the two-pass design exists
+specifically to avoid.
+
+This does mean a relation can stay unwritten indefinitely if the target never
+arrives. Re-running ingest over the full tree is cheap by design — unchanged
+files are skipped by checksum — so the remedy is to re-run, and the summary
+line is what tells the operator to.
+
 ## Proposed verbs
 
 ### `kb ingest PATH [--dry-run]`
@@ -208,6 +251,17 @@ values in `kb help observation` and `kb help record`; do not reject unknown
 ones. Enforcement in a tool several harnesses write to would turn a typo
 into a failed run rather than a fixable row. *Confirmed 2026-08-24:
 documented, not enforced.*
+
+**6. A cross-tier reference is a qualified `relates_to` entry, and an
+unresolvable one is skipped rather than fatal.** The entry grammar is
+`[<scope>:]<id>`, resolved as tabulated under `record_relations` above;
+supersession stays same-tier, so ingest never has to resolve a cross-repo
+supersession. A reference whose target is absent leaves the relation unwritten
+and adds a line to the run summary. *Confirmed 2026-08-25, deciding the
+question this design had left implicit: `record_relations` could already store
+a cross-tier relation, while the file format had no syntax to express one, so
+ingest could never have populated it. Settled in `WorkLab/agents/decisions`
+DR-0002.*
 
 ## Consequences outside this repo
 

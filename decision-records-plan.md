@@ -2,26 +2,40 @@
 
 ## Source design
 
-`decision-records-design.md` (all five decisions confirmed 2026-08-24) and
+`decision-records-design.md` (decisions 1–5 confirmed 2026-08-24, decision 6
+— cross-tier references — added 2026-08-25) and
 `~/WorkLab/DECISION_RECORD_FORMAT.md` (the file format, amended three times
-during the conversion pilot — see "What the pilot changed" below).
+during the conversion pilot — see "What the pilot changed" below — and again
+on 2026-08-25 with the "Cross-tier references" section and a revised index
+line format).
 
 TDD throughout: write the `*_test.go` file before the implementation it
 covers, red confirmed first, matching this module's existing practice.
 
-## Status (2026-08-24)
+## Status (2026-08-25)
 
-Nothing implemented. Two real corpora already exist to test against, both
-produced by `~/WorkLab/decisions_split.ts`:
+Nothing implemented **in `kb`**. Four real corpora now exist to test against:
 
-| Corpus | Records | Notes |
-|---|---|---|
-| `~/Laboratory/knowledge/decisions/` | 3 | this module's own log |
-| `~/WorkLab/clasm/decisions/` | 169 | `kind` on all, `trigger` on 70, 2 supersessions, 3 `relates_to`, 2 `phase` |
+| Corpus | Records | Origin | Notes |
+|---|---|---|---|
+| `~/Laboratory/knowledge/decisions/` | 3 | `decisions_split.ts` | this module's own log |
+| `~/WorkLab/clasm/decisions/` | 169 | `decisions_split.ts` | `kind` on all, `trigger` on 70, 2 supersessions, 3 `relates_to`, 2 `phase` |
+| `~/WorkLab/cold/decisions/` | 7 | hand-authored | first corpus with `decisions[]` (3 records), `trigger: design`, `status: proposed`, `phase` on 5 |
+| `~/WorkLab/agents/decisions/` | 2 | hand-authored | the workspace tier; DR-0001 carries the only cross-tier `relates_to` in existence |
+
+`cold` and `agents/decisions` matter disproportionately for testing: the two
+converted corpora leave `decisions[]`, `session`, `initiative`, `tags`,
+`status: proposed` and `trigger: design` entirely unpopulated, because
+conversion cannot invent what a monolithic log never recorded. The
+hand-authored corpora exercise four of those six.
+
+Index generation is **already implemented outside `kb`**, by
+`~/WorkLab/decisions_index.ts` (2026-08-25), which currently maintains three
+of the four indexes. W6 supersedes it — see that phase.
 
 Every phase below can be verified against real data rather than fixtures
 alone. That is deliberate — the pilot found three format defects that only
-appeared on real files.
+appeared on real files, and building the index generator found two more.
 
 ## What the pilot changed, that this plan must honour
 
@@ -122,6 +136,19 @@ obvious implementation is wrong:
   reference one not yet read, so a single pass would fail on forward
   references. `superseded_by` in a file is *not* inserted — it is the
   stored relation's inverse.
+- **A `relates_to` entry is `[<scope>:]<id>`** (design decision 6). Split on
+  the first `:` only; strip an optional leading `DR-` from the id rather than
+  rejecting it. A bare id inherits the citing record's `scope` and
+  `project_id`; `clasm:` looks the project up by `projects.name`;
+  `workspace:` is `scope='workspace'` with a null `project_id`. See the
+  resolution table under `record_relations` in the design.
+- `supersedes` / `superseded_by` are **same-tier only**, so their entries are
+  always bare. Treat a qualified entry in either field as malformed: report it
+  and leave the relation unwritten rather than resolving it.
+- **An unresolvable reference is reported and skipped, never fatal.** A
+  reference to a project or record not in the database leaves the relation
+  unwritten and adds a line to the run summary. Failing would make ingest
+  order significant, which the two-pass design exists to avoid.
 - Paths stored **relative to the workspace root**, defaulting to the parent
   of the directory holding the database (so `--db agents/knowledge.db`
   gives a root of `.`), overridable with `--root`. Absolute paths do not
@@ -142,6 +169,12 @@ obvious implementation is wrong:
 - Touching one file's body and re-running reports exactly 1 updated.
 - Forward reference proven: ingest a directory where `0002` supersedes
   `0003` and confirm the relation resolves.
+- Ingesting `~/WorkLab/agents/decisions/` resolves DR-0001's
+  `relates_to: ["clasm:0160"]` to the `clasm` record — the first real
+  cross-tier reference, and the only one that exists at the time of writing.
+- Ingesting `~/WorkLab/agents/decisions/` *before* `clasm/decisions/` leaves
+  that relation unwritten, reports it in the summary, exits 0, and resolves it
+  on a later run once `clasm` has been ingested.
 - `--dry-run` leaves the database byte-identical.
 
 ---
@@ -207,12 +240,35 @@ obvious implementation is wrong:
 
 ## W6 — `kb index` and search surfacing
 
+**`kb index` supersedes `~/WorkLab/decisions_index.ts`.** That Deno tool was
+written 2026-08-25 because no index generator existed and `cold` needed one;
+it currently maintains three indexes (`WorkLab/agents/decisions`,
+`WorkLab/cold/decisions`, `WorkLab/clasm/decisions`). One implementation
+serving both workspaces was this design's original argument for putting
+`index` in `kb`, so the Deno tool is a stopgap and retires when this phase
+ships. Until then it is the live generator and its output is the reference
+behaviour.
+
 ### Work items
 
 - `kb index PATH` — regenerate `decisions/index.md`: one greppable line per
   record, **newest first**, never hand-edited. This preserves the
   `head`/`grep` affordance that top-insertion in a single `DECISIONS.md`
   originally provided.
+- **Match the line format in `DECISION_RECORD_FORMAT.md`, "The index"**, as
+  settled by `WorkLab/agents/decisions` DR-0001: columns are `DR-<id>`,
+  `date`, `status`, `kind`, `trigger`, supersession flag, title. Every column
+  holds a value — an empty one renders as `-`, never as spaces, so the title
+  is always at `$7`. The flag reads `sup` when `superseded_by` is non-empty,
+  `-` otherwise. Sort by `date` then `record_id`, both descending, never by
+  `record_id` alone.
+- **The attribution line names no tool.** `decisions_index.ts` writes
+  `Generated by decisions_index.ts. Do not hand-edit.`, which `kb index`
+  cannot reproduce without lying about itself. Change it to a tool-neutral
+  line — `Generated file. Do not hand-edit.` — in `decisions_index.ts` first,
+  regenerate the three live indexes, and have `kb index` emit the same.
+  Otherwise every index churns on the changeover and the byte-comparison
+  below is impossible to satisfy honestly.
 - Do not write a preamble into `index.md`; directory prose lives in
   `decisions/README.md`, which is never regenerated.
 - `kb search` returns `record` rows alongside projects, observations and
@@ -222,10 +278,28 @@ obvious implementation is wrong:
 
 ### Acceptance criteria
 
-- Regenerating `clasm/decisions/index.md` reproduces the existing file.
+- `kb index` output is **byte-identical** to `decisions_index.ts` output for
+  all three live corpora — 169 records for `clasm`, 7 for `cold`, 2 for
+  `agents/decisions` — once both emit the tool-neutral attribution line. This
+  is the real acceptance test for the phase: two independent implementations
+  agreeing on every byte of a 169-row file.
+- Title at `$7` on every row under `awk` default field splitting, including
+  rows with an empty `trigger`. `clasm` has 99 such rows.
+- `clasm:DR-0160` (accepted, partially superseded) renders with the `sup`
+  flag; `DR-0148` (wholly superseded) renders `superseded` *and* `sup`.
+- Running twice produces an identical file.
 - `README.md` untouched by `kb index`.
 - A search whose top hit is a record body reports it as `record`, with its
   `DR-NNNN`.
+
+### On retiring the Deno tool
+
+Delete `decisions_index.ts`, `decisions_index_test.ts`, its `deno.json` test
+and build entries, and the `bin/decisions_index` build artifact — but only
+after the byte-identical criterion above passes, since that comparison is
+what proves `kb index` is a faithful replacement. `decisions_split.ts` is
+unaffected and stays: it converts monolithic `DECISIONS.md` files, which is
+explicitly out of scope for `kb` (design, "What this design does not cover").
 
 ---
 
