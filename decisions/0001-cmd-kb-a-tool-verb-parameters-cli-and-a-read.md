@@ -4,7 +4,7 @@ title: "`cmd/kb`: a `<TOOL> <VERB> <PARAMETERS>` CLI, and a read-mostly TUI"
 date: "2026-07-27"
 status: accepted
 kind: decision
-trigger: ""
+trigger: request
 project: knowledge
 phase: ""
 supersedes: []
