@@ -39,6 +39,10 @@ func printHelp(out io.Writer, topic string) bool {
 		f(SearchHelpText)
 	case "merge":
 		f(MergeHelpText)
+	case "ingest":
+		f(IngestHelpText)
+	case "record":
+		f(RecordHelpText)
 	case "export":
 		f(ExportHelpText)
 	case "import":

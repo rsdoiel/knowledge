@@ -322,6 +322,10 @@ func Open(dbPath string) (*KnowledgeBase, error) {
 	for _, stmt := range kbSourcesAlterStmts {
 		_, _ = db.Exec(stmt)
 	}
+	if _, err := db.Exec(recordsSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("knowledge: apply records schema: %w", err)
+	}
 	// One-time data migration: promote existing source_doi values into the
 	// sources authority table and link them via observation_sources.
 	_, _ = db.Exec(`

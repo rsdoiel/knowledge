@@ -453,3 +453,174 @@ lines were read, newly imported, or skipped.
 {app_name}(1), {app_name}-export(1), {app_name}-merge(1)
 
 `
+
+// IngestHelpText is the kb-ingest(1) man page.
+const IngestHelpText = `%{app_name}-ingest(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-ingest — index a tree of decision records into the knowledge base
+
+# SYNOPSIS
+
+{app_name} ingest PATH [--dry-run] [--root DIR]
+
+# DESCRIPTION
+
+Walks PATH for decision record files named NNNN-slug.md, parses each one's
+YAML frontmatter, and upserts it into the records table and the full-text
+index. The generated index.md is not a record and is skipped.
+
+A record's identity is its (project, scope, id) triple. Re-ingesting a tree
+is cheap and safe to repeat: a file whose checksum is unchanged is skipped.
+
+Ingest runs in two passes. The first stores every record; the second resolves
+supersedes and relates_to into relations. A record may cite one the walk has
+not reached yet, so a single pass would fail on a forward reference.
+
+A relates_to entry is [SCOPE:]ID — a bare id inherits the citing record's own
+project and scope, clasm:0160 names another project, and workspace:0001 names
+the workspace tier. An optional DR- prefix is stripped. supersedes and
+superseded_by are same-tier only, so a qualified entry in either is reported
+as malformed rather than resolved. superseded_by is never stored directly: it
+is the inverse of the supersedes on the other record.
+
+Nothing about a reference is fatal. A target that is not in the database yet
+leaves the relation unwritten and adds a line to the summary; re-run once it
+has been ingested. Failing instead would make ingest order significant, which
+is what the two passes exist to avoid.
+
+Ingest is additive. A record whose file has vanished stays in the database and
+is reported, never deleted — pruning would destroy data on a partial or
+wrong-directory run. Ingest never writes to a record file; only record does.
+
+# OPTIONS
+
+--dry-run
+: report the same counts and write nothing
+
+--root DIR
+: treat DIR as the workspace root that stored paths are relative to.
+  Defaults to the parent of the directory holding the database, so
+  --db agents/knowledge.db gives a root of the workspace itself. Paths are
+  stored relative because absolute ones do not survive merge between machines.
+
+# EXAMPLES
+
+Index one project's records, then the workspace tier:
+
+~~~shell
+{app_name} ingest clasm/decisions
+{app_name} ingest agents/decisions
+~~~
+
+Preview without writing:
+
+~~~shell
+{app_name} ingest clasm/decisions --dry-run
+~~~
+
+`
+
+// RecordHelpText is the kb-record(1) man page.
+const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-record — read and maintain decision records
+
+# SYNOPSIS
+
+{app_name} record list [--project P] [--workspace] [--status S] [--kind K] [--trigger T] [--initiative I] [--since DATE]
+
+{app_name} record show RECORD_ID [--project P] [--workspace]
+
+{app_name} record set-status RECORD_ID STATUS [--project P] [--workspace] [--root DIR]
+
+{app_name} record supersede NEW OLD [--partial] [--project P] [--workspace] [--root DIR]
+
+# DESCRIPTION
+
+A decision record is one file under a project's decisions/ directory, indexed
+by ingest. Records are listed oldest first, sorted by date and then by id —
+never by id alone, because ids are identity, not chronology: a correction can
+carry a lower id than the record it supersedes.
+
+A record id is not by itself an identity, since two projects may each have a
+DR-0001. Where a bare id is ambiguous, the command reports the candidates and
+asks for --project or --workspace rather than choosing one.
+
+list
+: print matching records, one per line
+
+show
+: print one record with its body and its relations resolved in both
+  directions. Only supersedes is stored; superseded_by is its inverse
+
+set-status
+: set a record's status in both its file and the database. The promotion path
+  from proposed to accepted
+
+supersede
+: write both sides of a supersession — supersedes on NEW, superseded_by on
+  OLD, the relation, and unless --partial, OLD's superseded status. Both
+  files and the database are written together or not at all
+
+set-status and supersede are the only commands that write a record file;
+ingest never does.
+
+# VOCABULARIES
+
+These are the documented values. They are reported against, not enforced: an
+unknown value parses and carries a warning, because a typo in a file several
+harnesses write should be a fixable row, not a failed run.
+
+status
+: proposed, accepted, superseded, rejected
+
+kind
+: decision, correction, refinement
+
+trigger
+: design, plan-review, implementation, live-test, release-review, request,
+  external. May be empty on a record converted from an existing log
+
+# OPTIONS
+
+--project P
+: restrict to, or resolve within, project P
+
+--workspace
+: restrict to, or resolve within, the workspace tier
+
+--partial
+: on supersede, leave OLD accepted instead of marking it superseded. Use when
+  a later record invalidates one decision inside a multi-decision episode
+  while the rest still stand
+
+--root DIR
+: the workspace root that stored record paths are relative to. Defaults to
+  the parent of the directory holding the database
+
+# EXAMPLES
+
+Every correction in one project, and everything since a date:
+
+~~~shell
+{app_name} record list --project clasm --kind correction
+{app_name} record list --project clasm --since 2026-08-01
+~~~
+
+Promote a proposed record, then wholly and partially supersede:
+
+~~~shell
+{app_name} record set-status 0004 accepted --project knowledge
+{app_name} record supersede 0149 0148 --project clasm
+{app_name} record supersede 0159 0160 --project clasm --partial
+~~~
+
+`

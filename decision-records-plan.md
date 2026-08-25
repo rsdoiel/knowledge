@@ -14,8 +14,13 @@ covers, red confirmed first, matching this module's existing practice.
 
 ## Status (2026-08-25)
 
-Nothing implemented **in `kb`**. Five real corpora now exist to test against,
-198 records in total:
+W1–W4 are implemented and green, pending review — `records.go`,
+`recordfile.go`, `cmd/kb/ingest.go` and `cmd/kb/record.go`, 269 tests, none
+skipped. All five corpora ingest end to end: 198 records, 42 relations, 0
+failures, and the cross-tier `agents:DR-0001 → clasm:DR-0160` reference
+resolves. W5 onward is not started. This module's own log gained DR-0004,
+DR-0005 and DR-0006 covering the W1–W3 decisions, all `proposed`. Five real
+corpora exist to test against, 198 records in total (201 with those three):
 
 | Corpus | Records | Origin | Notes |
 |---|---|---|---|
@@ -117,22 +122,46 @@ obvious implementation is wrong:
 
 ### Work items
 
-- Parse with `gopkg.in/yaml.v3` into a flat struct. First real import; run
-  `go mod tidy` to promote it from `// indirect` to a direct requirement.
+- Parse with `gopkg.in/yaml.v3` into a flat struct. `yaml.v3` was **not** in
+  `go.mod` at all, contrary to this plan's original claim that it was there as
+  `// indirect`; adding it was a new direct dependency, approved 2026-08-25.
+- **The struct declaration is the format specification.** Field order is the
+  emitted key order, `,flow` on the five sequence fields satisfies the format's
+  "inline lists only" rule, and a `qstr` string type whose `MarshalYAML`
+  returns a `DoubleQuotedStyle` node pins the seven fields the format requires
+  quoted. Plain `yaml.Marshal` is not sufficient on its own: it emits `title`,
+  `uuid` and `origin_host` bare, and quotes `phase` only when the value happens
+  to resolve as a number — `"20.51"` quoted, `0.0.46` not — which would make
+  the rendering value-dependent.
+- Decoding takes each scalar's node value verbatim, so a bare `id: 0142` still
+  yields `"0142"` with its padding and a bare `date: 2026-08-19` never becomes
+  a timestamp. Rendering is a fixed point.
 - Body is everything after the closing `---` line, stored verbatim.
 - Validation: `id`, `title`, `date`, `status`, `kind`, `project` required;
-  `trigger` may be empty (finding 2); `status` and `kind` must be in the
-  documented vocabularies; unknown *fields* are preserved, not rejected.
+  `trigger` may be empty (finding 2); unknown *fields* are preserved, not
+  rejected.
+- **Vocabularies are reported, not enforced**, resolving a contradiction
+  between this plan (which said `status` and `kind` "must be in the documented
+  vocabularies") and design decision 5 (documented, not enforced). An
+  out-of-vocabulary value parses and is carried with a warning, as does a
+  scalar written without the quoting the format requires. Same temperament as
+  decision 6's unresolvable references: a typo in a file several harnesses
+  write should be a fixable row, not a failed run.
 - `Checksum` over the raw file bytes.
 
 ### Acceptance criteria
 
-- Round-trips every one of the 198 real records: parse then render produces
-  byte-identical output. This is the phase's real test — run it over all five
-  corpora in a table test, not over hand-written fixtures. The 26 hand-authored
-  records carry the optional fields the 172 converted ones leave empty, so a
-  table test over `clasm` alone would pass while rendering `decisions[]`,
-  `session` and `phase` wrongly.
+- Round-trips the 198 real records across all five corpora in one table test,
+  not over hand-written fixtures. The 26 hand-authored records carry the
+  optional fields the 172 converted ones leave empty, so a table test over
+  `clasm` alone would pass while rendering `decisions[]`, `session` and `phase`
+  wrongly.
+- **192 of the 198 render byte-identically.** The 6 exceptions are the CMTools
+  records whose `decisions[]` uses a block sequence — a conformance defect
+  against "inline lists only", normalised by `kb record fmt` in W5. The test
+  asserts that set exactly: a record that changes unexpectedly fails, and so
+  does one of the six that does *not* change. Divergent files must still render
+  to a fixed point, and normalisation must leave the body untouched.
 - A record with `status: accepted` and a non-empty `superseded_by` parses
   and validates (finding 1). A record with `trigger: ""` validates.
 - Titles containing `"`, backticks and `<>` survive the round trip —
@@ -180,6 +209,22 @@ obvious implementation is wrong:
   can see them, but do not delete.
 - `--dry-run` reports the same counts and writes nothing.
 - Ingest **never writes to the record files**. Only `kb record` does.
+- **A project named in frontmatter but absent from the database is created.**
+  The plan did not say, and the alternative — reporting and skipping — would
+  make "ingesting `clasm/decisions/` yields 169 records" unsatisfiable against
+  a database that has never seen `clasm`. Creation is additive and reported.
+- **`initiative` is materialised as a concept link during pass one**, per
+  design decision 3, which the W3 work items had omitted entirely. No live
+  record populates the field (0 of 198), so it is covered by a fixture test
+  rather than a corpus one.
+- **Relations are resolved for skipped records too.** A file unchanged by
+  checksum still has its references re-resolved, because re-running is the
+  documented remedy for a reference whose target had not yet been ingested —
+  if a skip also skipped resolution, that remedy would never work.
+- FTS indexing lives in `AddRecord`, not in ingest, so every writer maintains
+  the index. `records` rows are indexed with `source_type = 'record'`,
+  `label = DR-NNNN` and the title prepended to the body so titles are
+  searchable.
 
 ### Acceptance criteria
 
@@ -221,6 +266,20 @@ obvious implementation is wrong:
   succeed together or not at all.
 - Every verb honours `--json` and routes errors to stderr, per
   `cli-tui-design.md`.
+- **A bare RECORD_ID is not an identity.** Two projects may each have a
+  DR-0001, so `show`/`set-status`/`supersede` resolve a bare id across every
+  tier and report the candidates when more than one matches, rather than
+  picking. `--project P` and `--workspace` qualify it.
+- **The writers re-render canonically rather than editing the status line in
+  place.** One writer, one rule — `RenderRecordFile` — so `record`, `fmt` and
+  anything later cannot drift. In practice this satisfies "leaving every other
+  line untouched" anyway, because 192 of 198 records are already canonical: a
+  fresh whole supersession changes exactly the `status` and `superseded_by`
+  lines and nothing else. Where a file is *not* canonical, the command says so
+  rather than normalising it silently.
+- **`supersede` is idempotent.** Re-running it against an already-superseded
+  pair rewrites nothing, verified against `clasm` DR-0149/DR-0148, which are
+  already in that state in the live corpus.
 
 ### Acceptance criteria
 
@@ -235,10 +294,20 @@ obvious implementation is wrong:
 
 ---
 
-## W5 — `kb record new`
+## W5 — `kb record new` and `kb record fmt`
 
 ### Work items
 
+- `kb record fmt PATH [--dry-run]` — parse each record under `PATH` with W2's
+  `ParseRecordFile` and write back `RenderRecordFile`'s output, bringing a
+  corpus into canonical form. Nearly free once W2 exists, being parse plus
+  render, but it needs to exist as its own verb: W3's rule is that **ingest
+  never writes to record files**, so normalisation cannot be a write-back flag
+  on `ingest`. Report per-file whether anything changed, and honour `--dry-run`.
+  Its first real use is bringing `~/WorkLab/CMTools/decisions/` into line — the
+  six records whose `decisions[]` uses a block sequence, which the format's
+  "inline lists only" rule forbids and which W2 confirmed are the *only* six
+  divergences in the whole 198-record corpus.
 - `kb record new --project P --title T [--kind K] [--trigger G]` — allocate
   the next id for the scope, fill `date`, `uuid`, `origin_host`, `project`,
   set `status: proposed`, and emit **all five body headings** even when
@@ -249,6 +318,9 @@ obvious implementation is wrong:
 
 ### Acceptance criteria
 
+- `record fmt` over `CMTools/decisions/` rewrites exactly 6 files and reports
+  the other 7 unchanged; a second run reports 13 unchanged.
+- `record fmt --dry-run` leaves every file byte-identical.
 - Into `clasm/decisions/` allocates `0170`.
 - Emitted file parses cleanly under W2 and ingests under W3.
 - Omitting `--trigger` is a usage error (exit 2).

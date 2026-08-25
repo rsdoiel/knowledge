@@ -113,8 +113,18 @@ CREATE TABLE IF NOT EXISTS records (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_records_scope_id
-    ON records(project_id, scope, record_id);
+    ON records(IFNULL(project_id, -1), scope, record_id);
 ```
+
+The identity index is expressed over `IFNULL(project_id, -1)` rather than
+`project_id` directly. This design originally specified the plain three-column
+form, which places **no constraint at all on the workspace tier**: those
+records carry a NULL `project_id` — that is how the tier is distinguished —
+and SQLite treats NULLs in a unique index as distinct from one another. Every
+workspace record would be unique to itself, so re-ingesting
+`~/WorkLab/agents/decisions/` would duplicate all six on every run, defeating
+the `checksum` idempotency below for the one tier both workspaces re-ingest.
+Corrected during W1; see `decisions/` DR-0004.
 
 `path` is stored **relative to the workspace root**, not absolute. Absolute
 paths do not survive `merge` between machines, which is the whole point of
