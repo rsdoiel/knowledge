@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-%kb-project(1) user manual | version 0.0.2 a21f85b
-=======
-%kb-project(1) user manual | version 0.0.3 193fa97
->>>>>>> 6f81c33478fb839db70903bb8800aa73c795ab0b
+%kb-project(1) user manual | version 0.0.3 9a0288c
 % R. S. Doiel
 % 2026-08-08
 
