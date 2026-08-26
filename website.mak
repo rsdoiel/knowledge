@@ -8,9 +8,12 @@ PROJECT = knowledge
 
 PANDOC = $(shell which pandoc)
 
-MD_PAGES = $(shell ls -1 *.md)
+# Internal notes, not website pages. Kept out of the build so they stay unpublished.
+NO_PUBLISH = TODO.md
 
-HTML_PAGES = $(shell ls -1 *.md | sed -E 's/\.md/\.html/g')
+MD_PAGES = $(filter-out $(NO_PUBLISH),$(shell ls -1 *.md))
+
+HTML_PAGES = $(patsubst %.md,%.html,$(MD_PAGES))
 
 build: $(HTML_PAGES) $(MD_PAGES) # pagefind
 
