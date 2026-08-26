@@ -2,7 +2,7 @@
 id: "0011"
 title: "A record's identity gains the workspace name, derived from the root rather than stored in frontmatter"
 date: "2026-08-26"
-status: proposed
+status: accepted
 kind: decision
 trigger: design
 project: knowledge

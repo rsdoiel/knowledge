@@ -541,3 +541,51 @@ origin_host: "test"
 		t.Error("a record path escaping the root was written to")
 	}
 }
+
+// ingest stamps a record's workspace from --root, so record must resolve by
+// the same rule. Using the database's own location instead makes every record
+// verb fail whenever the database sits outside the workspace it indexes —
+// which is exactly what a scratch database is.
+func TestCmdRecord_ResolvesByRootNotDatabaseLocation(t *testing.T) {
+	workspace := t.TempDir() // the workspace being indexed
+	elsewhere := t.TempDir() // where the database happens to live
+	dir := filepath.Join(workspace, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Status: "proposed"}.write(t, dir)
+
+	kb, err := knowledge.Open(filepath.Join(elsewhere, "scratch.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { kb.Close() })
+
+	var out bytes.Buffer
+	if err := cmdIngest(kb, nil, false, []string{dir, "--root", workspace}, &out); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	out.Reset()
+	if err := cmdRecord(kb, nil, false,
+		[]string{"set-status", "0001", "accepted", "--project", "clasm", "--root", workspace}, &out); err != nil {
+		t.Fatalf("set-status: %v", err)
+	}
+	if got := frontmatterLine(t, readFixture(t, workspace, "clasm", "0001"), "status"); got != "status: accepted" {
+		t.Errorf("file line = %q, want %q", got, "status: accepted")
+	}
+
+	// And it must have UPDATED the row, not inserted a second one. Writing
+	// back under a different workspace would either duplicate the record or,
+	// where the file carries a uuid, fail the uuid index outright.
+	recs, err := kb.ListRecords(knowledge.RecordFilter{})
+	if err != nil {
+		t.Fatalf("ListRecords: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("records holds %d rows, want 1 — set-status inserted a duplicate", len(recs))
+	}
+	if recs[0].Status != "accepted" {
+		t.Errorf("database status = %q, want accepted", recs[0].Status)
+	}
+	if want := filepath.Base(workspace); recs[0].Workspace != want {
+		t.Errorf("Workspace = %q, want %q — it must follow the root, not the database", recs[0].Workspace, want)
+	}
+}

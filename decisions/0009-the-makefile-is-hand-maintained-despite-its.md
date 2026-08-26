@@ -2,7 +2,7 @@
 id: "0009"
 title: "The Makefile is hand-maintained despite its generated header, and the grounding query was truncating records not filtering them"
 date: "2026-08-26"
-status: proposed
+status: accepted
 kind: correction
 trigger: release-review
 project: knowledge

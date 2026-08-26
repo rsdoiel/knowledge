@@ -2,7 +2,7 @@
 id: "0008"
 title: "kb index builds from files not the database, treats a malformed record as fatal, and search gains source_type"
 date: "2026-08-25"
-status: proposed
+status: accepted
 kind: decision
 trigger: implementation
 project: knowledge

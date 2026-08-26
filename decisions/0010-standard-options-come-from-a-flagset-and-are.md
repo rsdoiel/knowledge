@@ -2,7 +2,7 @@
 id: "0010"
 title: "Standard options come from a FlagSet and are answered before any database exists"
 date: "2026-08-26"
-status: proposed
+status: accepted
 kind: correction
 trigger: implementation
 project: knowledge

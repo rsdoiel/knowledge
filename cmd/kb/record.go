@@ -212,12 +212,19 @@ func dashIfEmpty(s string) string {
 }
 
 // resolveRecord finds the record a bare id names. An id alone is not an
-// identity — two projects may each have a DR-0001 — so an ambiguous id is
-// reported with its candidates rather than silently resolved.
+// identity — two projects may each have a DR-0001, and two workspaces may each
+// have one too — so an ambiguous id is reported with its candidates rather
+// than silently resolved.
+//
+// The workspace comes from the same root the record files are read from, not
+// from where the database happens to live. ingest stamps it that way, so
+// resolving any other way makes every record verb fail whenever the database
+// sits outside the workspace it indexes — which is what a scratch database is.
 func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*knowledge.Record, error) {
+	workspace := filepath.Base(recordRoot(kb, f))
 	switch {
 	case f.workspace:
-		r, err := kb.RecordByIdentity(kb.Workspace(), 0, "workspace", id)
+		r, err := kb.RecordByIdentity(workspace, 0, "workspace", id)
 		if err != nil {
 			return nil, fmt.Errorf("no record DR-%s in the workspace tier", id)
 		}
@@ -227,7 +234,7 @@ func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*know
 		if err != nil || p == nil {
 			return nil, fmt.Errorf("unknown project %q", f.project)
 		}
-		r, err := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", id)
+		r, err := kb.RecordByIdentity(workspace, p.ID, "project", id)
 		if err != nil {
 			return nil, fmt.Errorf("no record DR-%s in project %s", id, f.project)
 		}
@@ -400,8 +407,14 @@ func saveRecordFile(kb *knowledge.KnowledgeBase, root string, rec *knowledge.Rec
 	if err != nil {
 		return rendered, err
 	}
+	// Carry the identity fields the file does not hold. Workspace especially:
+	// leaving it empty makes AddRecord default to the database's own
+	// workspace, which is a *different* identity whenever the database sits
+	// outside the tree being edited — inserting a duplicate row, or failing
+	// the uuid index where the file carries one.
 	updated.Record.ProjectID = rec.ProjectID
 	updated.Record.Path = rec.Path
+	updated.Record.Workspace = rec.Workspace
 	if _, err := kb.AddRecord(updated.Record); err != nil {
 		return rendered, err
 	}
