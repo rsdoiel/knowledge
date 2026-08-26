@@ -14,7 +14,7 @@ version: 0.0.4
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
-  - Go >= 1.26.3
+  - Go >= 1.26.4
 
 keywords:
   - SQLite3
@@ -73,14 +73,14 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 
 ## Programming languages
 
-- Go >= 1.26.3
+- Go >= 1.26.4
 
 
 
 
 ## Software Requirements
 
-- Go >= 1.26.3
+- Go >= 1.26.4
 - gopkg.in/yaml.v3 >= 3.0.1
 
 
