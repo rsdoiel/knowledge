@@ -1,4 +1,4 @@
-%kb-concept(1) user manual | version 0.0.4 b4a092f
+%kb-concept(1) user manual | version 0.0.4 b727417
 % R. S. Doiel
 % 2026-08-26
 

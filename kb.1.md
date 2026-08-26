@@ -1,4 +1,4 @@
-%kb(1) user manual | version 0.0.4 b4a092f
+%kb(1) user manual | version 0.0.4 b727417
 % R. S. Doiel
 % 2026-08-26
 
@@ -8,11 +8,13 @@ kb — command-line and interactive interface for a knowledge base
 
 # SYNOPSIS
 
-kb [--db PATH] [--json] VERB [args...]
+kb [-help|-license|-version]
+
+kb [-db PATH] [-json] [-debug] VERB [PARAMETERS...]
+
+kb help [TOPIC]
 
 kb
-
-kb help | -h | --help [VERB]
 
 # DESCRIPTION
 
@@ -26,19 +28,45 @@ Run with no verb at all to launch the interactive browser (TUI) instead —
 a read-only view over the same data, for exploring projects, observations,
 and concepts, and running searches, without leaving the terminal.
 
-# GLOBAL FLAGS
+# STANDARD OPTIONS
 
---db PATH
+Each is accepted in either dash form: -help and --help are the same option.
+All three are answered and exited immediately, without opening or creating a
+knowledge base.
+
+-help
+: display this help page. "kb help TOPIC" reaches the same text by
+  verb, and "kb VERB -help" prints that verb's page
+
+-license
+: display the license
+
+-version
+: display the program name, version and release hash
+
+The version and license come from version.go, which is regenerated from
+codemeta.json, and every help page carries the version it was generated
+from — so a page naming a different release is a stale artifact rather than
+a difference of opinion.
+
+# GLOBAL OPTIONS
+
+-db PATH
 : path to knowledge.db (default: ./agents/knowledge.db, relative to the
   current directory)
 
---json
+-json
 : machine-readable JSON output instead of human-readable text. Applies to
   every verb. Errors always go to stderr, never stdout, in both modes —
-  scripts consuming --json output can rely on stdout staying valid JSON
+  scripts consuming JSON output can rely on stdout staying valid JSON
   even when a call fails.
 
---debug
+A global option must precede the verb. Parsing stops at the first
+non-option argument, which is what lets a verb's own flags through
+untouched: in "kb -json ingest DIR --dry-run", -json is global and
+--dry-run belongs to ingest.
+
+-debug
 : write a JSONL trace of every knowledge-base call (and, in the TUI,
   every input event and view change) to ./kb-debug-<timestamp>.jsonl in
   the current directory. The path is printed to stderr once at startup.

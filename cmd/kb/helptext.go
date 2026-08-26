@@ -12,11 +12,13 @@ const HelpText = `%{app_name}(1) user manual | version {version} {release_hash}
 
 # SYNOPSIS
 
-{app_name} [--db PATH] [--json] VERB [args...]
+{app_name} [-help|-license|-version]
+
+{app_name} [-db PATH] [-json] [-debug] VERB [PARAMETERS...]
+
+{app_name} help [TOPIC]
 
 {app_name}
-
-{app_name} help | -h | --help [VERB]
 
 # DESCRIPTION
 
@@ -30,19 +32,45 @@ Run with no verb at all to launch the interactive browser (TUI) instead —
 a read-only view over the same data, for exploring projects, observations,
 and concepts, and running searches, without leaving the terminal.
 
-# GLOBAL FLAGS
+# STANDARD OPTIONS
 
---db PATH
+Each is accepted in either dash form: -help and --help are the same option.
+All three are answered and exited immediately, without opening or creating a
+knowledge base.
+
+-help
+: display this help page. "{app_name} help TOPIC" reaches the same text by
+  verb, and "{app_name} VERB -help" prints that verb's page
+
+-license
+: display the license
+
+-version
+: display the program name, version and release hash
+
+The version and license come from version.go, which is regenerated from
+codemeta.json, and every help page carries the version it was generated
+from — so a page naming a different release is a stale artifact rather than
+a difference of opinion.
+
+# GLOBAL OPTIONS
+
+-db PATH
 : path to knowledge.db (default: ./agents/knowledge.db, relative to the
   current directory)
 
---json
+-json
 : machine-readable JSON output instead of human-readable text. Applies to
   every verb. Errors always go to stderr, never stdout, in both modes —
-  scripts consuming --json output can rely on stdout staying valid JSON
+  scripts consuming JSON output can rely on stdout staying valid JSON
   even when a call fails.
 
---debug
+A global option must precede the verb. Parsing stops at the first
+non-option argument, which is what lets a verb's own flags through
+untouched: in "{app_name} -json ingest DIR --dry-run", -json is global and
+--dry-run belongs to ingest.
+
+-debug
 : write a JSONL trace of every knowledge-base call (and, in the TUI,
   every input event and view change) to ./kb-debug-<timestamp>.jsonl in
   the current directory. The path is printed to stderr once at startup.

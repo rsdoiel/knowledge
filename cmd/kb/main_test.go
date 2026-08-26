@@ -8,17 +8,17 @@ import (
 )
 
 func TestParseGlobalFlags_DBAndJSON(t *testing.T) {
-	dbPath, jsonOut, debugOn, rest, err := parseGlobalFlags([]string{"--db", "/tmp/x.db", "--json", "project", "list"})
+	opts, rest, err := parseGlobalFlags([]string{"--db", "/tmp/x.db", "--json", "project", "list"})
 	if err != nil {
 		t.Fatalf("parseGlobalFlags: %v", err)
 	}
-	if dbPath != "/tmp/x.db" {
-		t.Errorf("dbPath = %q, want /tmp/x.db", dbPath)
+	if opts.dbPath != "/tmp/x.db" {
+		t.Errorf("dbPath = %q, want /tmp/x.db", opts.dbPath)
 	}
-	if !jsonOut {
+	if !opts.jsonOut {
 		t.Error("expected jsonOut=true")
 	}
-	if debugOn {
+	if opts.debugOn {
 		t.Error("expected debugOn=false")
 	}
 	if len(rest) != 2 || rest[0] != "project" || rest[1] != "list" {
@@ -27,11 +27,11 @@ func TestParseGlobalFlags_DBAndJSON(t *testing.T) {
 }
 
 func TestParseGlobalFlags_Debug(t *testing.T) {
-	_, _, debugOn, rest, err := parseGlobalFlags([]string{"--debug", "project", "list"})
+	opts, rest, err := parseGlobalFlags([]string{"--debug", "project", "list"})
 	if err != nil {
 		t.Fatalf("parseGlobalFlags: %v", err)
 	}
-	if !debugOn {
+	if !opts.debugOn {
 		t.Error("expected debugOn=true")
 	}
 	if len(rest) != 2 || rest[0] != "project" {
@@ -40,12 +40,12 @@ func TestParseGlobalFlags_Debug(t *testing.T) {
 }
 
 func TestParseGlobalFlags_NoGlobalFlags(t *testing.T) {
-	dbPath, jsonOut, debugOn, rest, err := parseGlobalFlags([]string{"project", "list"})
+	opts, rest, err := parseGlobalFlags([]string{"project", "list"})
 	if err != nil {
 		t.Fatalf("parseGlobalFlags: %v", err)
 	}
-	if dbPath != "" || jsonOut || debugOn {
-		t.Errorf("dbPath=%q jsonOut=%v debugOn=%v, want zero values", dbPath, jsonOut, debugOn)
+	if opts.dbPath != "" || opts.jsonOut || opts.debugOn {
+		t.Errorf("dbPath=%q jsonOut=%v debugOn=%v, want zero values", opts.dbPath, opts.jsonOut, opts.debugOn)
 	}
 	if len(rest) != 2 {
 		t.Errorf("rest = %v, want [project list]", rest)
@@ -53,8 +53,7 @@ func TestParseGlobalFlags_NoGlobalFlags(t *testing.T) {
 }
 
 func TestParseGlobalFlags_MissingDBValue(t *testing.T) {
-	_, _, _, _, err := parseGlobalFlags([]string{"--db"})
-	if err == nil {
+	if _, _, err := parseGlobalFlags([]string{"--db"}); err == nil {
 		t.Error("expected an error for --db with no value")
 	}
 }
