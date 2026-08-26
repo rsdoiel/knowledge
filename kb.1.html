@@ -21,9 +21,10 @@
 <h1 id="name">NAME</h1>
 <p>kb — command-line and interactive interface for a knowledge base</p>
 <h1 id="synopsis">SYNOPSIS</h1>
-<p>kb [–db PATH] [–json] VERB [args…]</p>
+<p>kb [-help|-license|-version]</p>
+<p>kb [-db PATH] [-json] [-debug] VERB [PARAMETERS…]</p>
+<p>kb help [TOPIC]</p>
 <p>kb</p>
-<p>kb help | -h | –help [VERB]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>kb reads and writes a github.com/rsdoiel/knowledge knowledge base:
 projects, observations, concepts, and sources, with full-text search and
@@ -35,21 +36,50 @@ terminal.</p>
 instead — a read-only view over the same data, for exploring projects,
 observations, and concepts, and running searches, without leaving the
 terminal.</p>
-<h1 id="global-flags">GLOBAL FLAGS</h1>
+<h1 id="standard-options">STANDARD OPTIONS</h1>
+<p>Each is accepted in either dash form: -help and –help are the same
+option. All three are answered and exited immediately, without opening
+or creating a knowledge base.</p>
 <dl>
-<dt>–db PATH</dt>
+<dt>-help</dt>
+<dd>
+display this help page. “kb help TOPIC” reaches the same text by verb,
+and “kb VERB -help” prints that verb’s page
+</dd>
+<dt>-license</dt>
+<dd>
+display the license
+</dd>
+<dt>-version</dt>
+<dd>
+display the program name, version and release hash
+</dd>
+</dl>
+<p>The version and license come from version.go, which is regenerated
+from codemeta.json, and every help page carries the version it was
+generated from — so a page naming a different release is a stale
+artifact rather than a difference of opinion.</p>
+<h1 id="global-options">GLOBAL OPTIONS</h1>
+<dl>
+<dt>-db PATH</dt>
 <dd>
 path to knowledge.db (default: ./agents/knowledge.db, relative to the
 current directory)
 </dd>
-<dt>–json</dt>
+<dt>-json</dt>
 <dd>
 machine-readable JSON output instead of human-readable text. Applies to
 every verb. Errors always go to stderr, never stdout, in both modes —
-scripts consuming –json output can rely on stdout staying valid JSON
-even when a call fails.
+scripts consuming JSON output can rely on stdout staying valid JSON even
+when a call fails.
 </dd>
-<dt>–debug</dt>
+</dl>
+<p>A global option must precede the verb. Parsing stops at the first
+non-option argument, which is what lets a verb’s own flags through
+untouched: in “kb -json ingest DIR –dry-run”, -json is global and
+–dry-run belongs to ingest.</p>
+<dl>
+<dt>-debug</dt>
 <dd>
 write a JSONL trace of every knowledge-base call (and, in the TUI, every
 input event and view change) to ./kb-debug-<timestamp>.jsonl in the
@@ -95,6 +125,21 @@ write/read a portable JSON-L snapshot of the database — the
 no-file-access alternative to merge, for syncing over a channel that can
 only move plain text (paste, email, git) — see kb-export(1) and
 kb-import(1)
+</dd>
+<dt>ingest</dt>
+<dd>
+index a tree of decision records into the knowledge base — see
+kb-ingest(1)
+</dd>
+<dt>record</dt>
+<dd>
+read and maintain decision records — list, show, new, set-status,
+supersede, fmt — see kb-record(1)
+</dd>
+<dt>index</dt>
+<dd>
+generate a decisions/index.md from a directory of records — see
+kb-index(1)
 </dd>
 </dl>
 <h1 id="exit-status">EXIT STATUS</h1>

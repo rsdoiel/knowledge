@@ -19,15 +19,50 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.3">knowledge 0.0.3</h2>
-<p>Adds JSON-L export/import: ExportJSONL/ImportJSONL in the knowledge
-package, plus <code>kb export [-project NAME] [-out PATH]</code> and
-<code>kb import [-in PATH]</code> verbs. A portable, no-file-access
-alternative to merge – the resulting file can be pasted, emailed, or
-committed to git, then applied elsewhere with import. Projects/concepts
-are matched by name (existing local rows win), sources by identifier,
-observations and links by uuid, so re-importing the same file is a
-no-op.</p>
+<h2 id="knowledge-0.0.4">knowledge 0.0.4</h2>
+<p>Adds Decision Record support: episode-scoped Markdown files with YAML
+frontmatter, kept in a project’s decisions/ directory, indexed as
+first-class rows so the reasoning behind a decision is retrievable
+rather than living only in files the knowledge base never reads.</p>
+<p>Schema: records and record_relations. A record’s identity is
+(workspace, project, scope, id) – the workspace name is the directory
+name of the workspace root, derived from the path rather than written in
+a file, because every workspace has an agents/decisions/ and two of them
+may each hold a DR-0001. Records are indexed into kb_fts with
+source_type ‘record’. Existing databases migrate lazily on open.</p>
+<p>New verbs: <code>kb ingest PATH</code> walks a tree of NNNN-slug.md
+records and resolves supersedes/relates_to in two passes so forward
+references work;
+<code>kb record list|show|new|set-status|supersede|fmt</code>; and
+<code>kb index PATH</code> generates a decisions/index.md, one greppable
+line per record, newest first. Ingest never writes to a record file and
+<code>record fmt</code> never writes to the database. The TUI browses a
+project’s records read-only.</p>
+<p>New library API: ParseRecordFile/RenderRecordFile, ListRecords,
+RecordByIdentity, RecordsByRecordID, RecordsUnderPath, NewUUID, Today,
+and a SourceType field on KBSearchResult so a hit reports which table it
+came from as well as its own kind.</p>
+<p>The frontmatter struct declaration is the canonical format
+specification – field order, flow-styled sequences, and a double-quoted
+string type for the seven fields the format requires quoted – so every
+writer produces byte-identical output. Verified against 205 real records
+across five corpora, all round-tripping byte-for-byte, and
+<code>kb index</code> output is byte-identical to the Deno generator it
+replaces.</p>
+<p>CLI: adds the standard options -help, -license and -version, which kb
+previously lacked, declared through a flag.FlagSet so each is accepted
+in either dash form. They are answered before any database is opened, as
+are ingest’s help paths and <code>kb index</code>, which builds from the
+record files and never queries a database.</p>
+<p>Vocabularies for record status/kind/trigger are documented and
+reported against, not enforced: in a format several tools write to, a
+typo should be a fixable row and not a failed run. Observation kinds
+remain enforced, which is a deliberate asymmetry.</p>
+<p>Security: a record path read from the database is confined to the
+workspace root before it is read or written, since filepath.Join cleans
+a path without confining it.</p>
+<p>Adds gopkg.in/yaml.v3 as a direct dependency. Man pages for
+kb-ingest(1), kb-record(1) and kb-index(1).</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>
@@ -44,7 +79,13 @@ raw sqlite3 CLI inserts. Ships cmd/kb, a single “kb VERB ARGS” binary
 (matching the git/go command model) covering the full API with both
 human-readable and –json output, a merge verb for reconciling two
 databases that drifted independently, and a read-only interactive TUI
-browser for exploring projects, observations, and concepts.</p>
+browser for exploring projects, observations, and concepts. As of v0.0.4
+it also indexes Decision Records – episode-scoped Markdown files with
+YAML frontmatter, kept in a project’s decisions/ directory – as
+first-class rows, so the reasoning behind a decision is retrievable
+rather than living only in files the knowledge base never reads. Adds a
+records/record_relations schema, a canonical frontmatter parser and
+renderer, and the ingest, record and index verbs.</p>
 <ul>
 <li><a href="https://www.gnu.org/licenses/agpl-3.0.txt">License</a></li>
 <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a>
@@ -55,11 +96,12 @@ Tracker</a></li>
 </ul>
 <h2 id="programming-languages">Programming languages</h2>
 <ul>
-<li>Go &gt;= 1.26.3</li>
+<li>Go &gt;= 1.26.4</li>
 </ul>
 <h2 id="software-requirements">Software Requirements</h2>
 <ul>
-<li>Go &gt;= 1.26.3</li>
+<li>Go &gt;= 1.26.4</li>
+<li>gopkg.in/yaml.v3 &gt;= 3.0.1</li>
 </ul>
 <h2 id="software-suggestions">Software Suggestions</h2>
 <ul>
