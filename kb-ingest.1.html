@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-ingest — index a tree of decision records into the knowledge
+base</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb ingest PATH [–dry-run] [–root DIR]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Walks PATH for decision record files named NNNN-slug.md, parses each
+one’s YAML frontmatter, and upserts it into the records table and the
+full-text index. The generated index.md is not a record and is
+skipped.</p>
+<p>A record’s identity is its (project, scope, id) triple. Re-ingesting
+a tree is cheap and safe to repeat: a file whose checksum is unchanged
+is skipped.</p>
+<p>Ingest runs in two passes. The first stores every record; the second
+resolves supersedes and relates_to into relations. A record may cite one
+the walk has not reached yet, so a single pass would fail on a forward
+reference.</p>
+<p>A relates_to entry is [SCOPE:]ID — a bare id inherits the citing
+record’s own project and scope, clasm:0160 names another project, and
+workspace:0001 names the workspace tier. An optional DR- prefix is
+stripped. supersedes and superseded_by are same-tier only, so a
+qualified entry in either is reported as malformed rather than resolved.
+superseded_by is never stored directly: it is the inverse of the
+supersedes on the other record.</p>
+<p>Nothing about a reference is fatal. A target that is not in the
+database yet leaves the relation unwritten and adds a line to the
+summary; re-run once it has been ingested. Failing instead would make
+ingest order significant, which is what the two passes exist to
+avoid.</p>
+<p>Ingest is additive. A record whose file has vanished stays in the
+database and is reported, never deleted — pruning would destroy data on
+a partial or wrong-directory run. Ingest never writes to a record file;
+only record does.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>–dry-run</dt>
+<dd>
+report the same counts and write nothing
+</dd>
+<dt>–root DIR</dt>
+<dd>
+treat DIR as the workspace root that stored paths are relative to.
+Defaults to the parent of the directory holding the database, so –db
+agents/knowledge.db gives a root of the workspace itself. Paths are
+stored relative because absolute ones do not survive merge between
+machines.
+</dd>
+</dl>
+<h1 id="examples">EXAMPLES</h1>
+<p>Index one project’s records, then the workspace tier:</p>
+<pre class="shell"><code>kb ingest clasm/decisions
+kb ingest agents/decisions</code></pre>
+<p>Preview without writing:</p>
+<pre class="shell"><code>kb ingest clasm/decisions --dry-run</code></pre>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

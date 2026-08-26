@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="decision-records-and-document-ingest-implementation-plan">Decision
+records and document ingest — Implementation Plan</h1>
+<h2 id="source-design">Source design</h2>
+<p><code>decision-records-design.md</code> (decisions 1–5 confirmed
+2026-08-24, decision 6 — cross-tier references — added 2026-08-25) and
+<code>~/WorkLab/DECISION_RECORD_FORMAT.md</code> (the file format,
+amended three times during the conversion pilot — see “What the pilot
+changed” below — and again on 2026-08-25 with the “Cross-tier
+references” section and a revised index line format).</p>
+<p>TDD throughout: write the <code>*_test.go</code> file before the
+implementation it covers, red confirmed first, matching this module’s
+existing practice.</p>
+<h2 id="status-2026-08-26">Status (2026-08-26)</h2>
+<p><strong>All eight phases are implemented and green, pending
+review.</strong> <code>records.go</code>, <code>recordfile.go</code>,
+<code>cmd/kb/ingest.go</code>, <code>cmd/kb/record.go</code>,
+<code>cmd/kb/recordnew.go</code> and <code>cmd/kb/index.go</code>; 322
+tests, none skipped; released as v0.0.4.</p>
+<ul>
+<li><strong>W1–W3</strong> schema, canonical frontmatter parse/render,
+and two-pass ingest.</li>
+<li><strong>W4–W5</strong> the <code>record</code> verbs, plus
+<code>new</code>, <code>fmt</code> and the uuid collision guard.</li>
+<li><strong>W6</strong> <code>kb index</code>, byte-identical to
+<code>decisions_index.ts</code> across all five corpora — which met
+DR-0003’s condition, so that tool has been retired.</li>
+<li><strong>W7</strong> man pages, vocabularies, v0.0.4, and the
+downstream fixes. Two of its premises turned out to be wrong; see
+DR-0009.</li>
+<li><strong>W8</strong> the <code>workspace</code> column. A record’s
+identity is now <code>(workspace, project, scope, record_id)</code>, so
+<code>~/Laboratory</code> can safely have a workspace tier — the last
+thing blocking it.</li>
+</ul>
+<p>Decisions taken along the way are DR-0004 through DR-0011 in
+<code>decisions/</code>. DR-0004..0007 are accepted; DR-0008..0011 are
+still <code>proposed</code>.</p>
+<p>Five corpora, 205 records, all in canonical form and all
+round-tripping byte-identically:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Corpus</th>
+<th scope="col">Records</th>
+<th scope="col">Origin</th>
+<th scope="col">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>~/Laboratory/knowledge/decisions/</code></td>
+<td>11</td>
+<td>3 converted, 8 authored during this effort</td>
+<td>this module’s own log; DR-0004..0011 record the build</td>
+</tr>
+<tr>
+<td><code>~/WorkLab/clasm/decisions/</code></td>
+<td>169</td>
+<td><code>decisions_split.ts</code></td>
+<td><code>kind</code> on all, <code>trigger</code> on 70, 2
+supersessions, 3 <code>relates_to</code>, 2 <code>phase</code></td>
+</tr>
+<tr>
+<td><code>~/WorkLab/CMTools/decisions/</code></td>
+<td>13</td>
+<td>hand-authored</td>
+<td>the richest corpus per record — see below</td>
+</tr>
+<tr>
+<td><code>~/WorkLab/cold/decisions/</code></td>
+<td>7</td>
+<td>hand-authored</td>
+<td>first corpus with <code>decisions[]</code> (3 records),
+<code>trigger: design</code>, <code>phase</code> on 5</td>
+</tr>
+<tr>
+<td><code>~/WorkLab/agents/decisions/</code></td>
+<td>6</td>
+<td>hand-authored</td>
+<td>the workspace tier (<code>project: ""</code>); DR-0001 and DR-0002
+carry the only cross-tier <code>relates_to</code> in existence</td>
+</tr>
+</tbody>
+</table>
+<p>The hand-authored corpora matter disproportionately for testing: the
+two converted corpora leave <code>decisions[]</code>,
+<code>session</code>, <code>initiative</code>, <code>tags</code> and
+<code>trigger: design</code> unpopulated, because conversion cannot
+invent what a monolithic log never recorded.</p>
+<p><strong><code>CMTools</code> is the strongest single test
+corpus</strong> (added 2026-08-25) and is worth reaching for first in
+any table test:</p>
+<ul>
+<li><strong>First <code>session</code> values anywhere</strong> — 2
+records, plus workspace DR-0006. No other corpus exercises the
+field.</li>
+<li><strong>First <code>trigger: plan-review</code> anywhere</strong> —
+2 records. The format doc notes this value matched <em>zero</em> of
+<code>clasm</code>’s 169 even though such an episode was known to exist,
+so until now no corpus could test it.</li>
+<li>A genuine <strong>partial supersession</strong>: DR-0008
+<code>supersedes: ["0003"]</code> while DR-0003 stays
+<code>accepted</code> with <code>superseded_by</code> set — the case the
+<code>sup</code> flag exists for, and the one <code>clasm:DR-0160</code>
+also covers.</li>
+<li>6 records with non-empty <code>decisions[]</code>, whose entries
+contain <strong>backticks, double quotes and <code>~</code>
+paths</strong> — the YAML-quoting stress case.</li>
+<li><code>phase</code> on 9, spanning <code>"0.0.45"</code> and
+<code>"0.0.46"</code>; 2 <code>correction</code> records; dates spanning
+2025-01-09 to 2026-08-25.</li>
+</ul>
+<p>Index generation is <strong>already implemented outside
+<code>kb</code></strong>, by <code>~/WorkLab/decisions_index.ts</code>
+(2026-08-25), which currently maintains all five indexes. W6 supersedes
+it — see that phase.</p>
+<p>Every phase below can be verified against real data rather than
+fixtures alone. That is deliberate — the pilot found three format
+defects that only appeared on real files, and building the index
+generator found two more.</p>
+<h2 id="what-the-pilot-changed-that-this-plan-must-honour">What the
+pilot changed, that this plan must honour</h2>
+<p>Four findings from converting 172 real records. Each is a place where
+the obvious implementation is wrong:</p>
+<ol type="1">
+<li><strong><code>superseded_by</code> does not imply
+<code>status: superseded</code>.</strong> Because the unit is an
+episode, a later record can invalidate one decision inside a
+multi-decision episode while the rest stand. <code>clasm</code> DR-0160
+is <code>accepted</code> <em>and</em> carries
+<code>superseded_by: ["0159"]</code>. Ingest stores what the file says
+and derives neither field from the other.</li>
+<li><strong><code>trigger: ""</code> is valid.</strong> Converted
+records legitimately carry an empty trigger. Validation must not reject
+it.</li>
+<li><strong>Ids are identity, not chronology.</strong> Within a single
+date, real logs are inconsistently ordered, so a correction can carry a
+<em>lower</em> id than the record it supersedes (<code>clasm</code>
+DR-0159 supersedes DR-0160). Every ordered query sorts by
+<code>date</code> then <code>record_id</code>, never
+<code>record_id</code> alone.</li>
+<li><strong><code>id</code>, <code>date</code> and <code>phase</code>
+are quoted scalars.</strong> Bare <code>0142</code> parses as the
+integer 142; bare <code>2026-08-19</code> resolves to a timestamp. The
+Go structs use <code>string</code> for all three.</li>
+</ol>
+<hr />
+<h2 id="w1-schema-and-types">W1 — Schema and types</h2>
+<h3 id="files-to-create">Files to create</h3>
+<ul>
+<li><code>records.go</code> — <code>Record</code> struct,
+<code>RecordRelation</code> struct, CRUD.</li>
+<li><code>records_test.go</code></li>
+</ul>
+<h3 id="work-items">Work items</h3>
+<ul>
+<li>Add <code>recordsSchema</code> (the two
+<code>CREATE TABLE IF NOT EXISTS</code> statements from the design)
+applied in <code>Open()</code> alongside <code>sourcesSchema</code>,
+following the existing lazy-migration precedent. No <code>kb_fts</code>
+migration — its existing columns already accommodate records.</li>
+<li><code>Record</code> struct: <code>RecordID</code>,
+<code>ProjectID</code>, <code>Scope</code>, <code>Path</code>,
+<code>Title</code>, <code>Date</code>, <code>Status</code>,
+<code>Kind</code>, <code>Trigger</code>, <code>Phase</code>,
+<code>Initiative</code>, <code>Session</code>, <code>Body</code>,
+<code>Checksum</code>, <code>UUID</code>, <code>OriginHost</code> —
+<code>Date</code> a <code>string</code>, per finding 4.</li>
+<li><code>AddRecord</code>, <code>RecordByID</code>,
+<code>RecordsByProject</code>, <code>UpdateRecordStatus</code>,
+<code>AddRecordRelation</code>, <code>RelationsFor</code>.</li>
+<li><code>RelationsFor</code> returns both directions: rows where the
+record is <code>from_id</code> (<code>supersedes</code>,
+<code>relates_to</code>) and where it is <code>to_id</code> (rendered to
+the caller as <code>superseded_by</code>). Only one direction is
+stored.</li>
+</ul>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go build</code>/<code>go vet</code>/<code>gofmt</code>/<code>go test</code>
+clean.</li>
+<li>Opening an <em>existing</em> <code>knowledge.db</code> (use a copy
+of <code>~/WorkLab/agents/knowledge.db</code>, 215 observations / 11
+projects) creates the two new tables and leaves every existing row
+untouched.</li>
+<li>Opening a database that already has them is a no-op.</li>
+</ul>
+<hr />
+<h2 id="w2-frontmatter-parsing-and-rendering">W2 — Frontmatter parsing
+and rendering</h2>
+<h3 id="files-to-create-1">Files to create</h3>
+<ul>
+<li><code>recordfile.go</code> — <code>ParseRecordFile</code>,
+<code>RenderRecordFile</code></li>
+<li><code>recordfile_test.go</code></li>
+</ul>
+<h3 id="work-items-1">Work items</h3>
+<ul>
+<li>Parse with <code>gopkg.in/yaml.v3</code> into a flat struct.
+<code>yaml.v3</code> was <strong>not</strong> in <code>go.mod</code> at
+all, contrary to this plan’s original claim that it was there as
+<code>// indirect</code>; adding it was a new direct dependency,
+approved 2026-08-25.</li>
+<li><strong>The struct declaration is the format specification.</strong>
+Field order is the emitted key order, <code>,flow</code> on the five
+sequence fields satisfies the format’s “inline lists only” rule, and a
+<code>qstr</code> string type whose <code>MarshalYAML</code> returns a
+<code>DoubleQuotedStyle</code> node pins the seven fields the format
+requires quoted. Plain <code>yaml.Marshal</code> is not sufficient on
+its own: it emits <code>title</code>, <code>uuid</code> and
+<code>origin_host</code> bare, and quotes <code>phase</code> only when
+the value happens to resolve as a number — <code>"20.51"</code> quoted,
+<code>0.0.46</code> not — which would make the rendering
+value-dependent.</li>
+<li>Decoding takes each scalar’s node value verbatim, so a bare
+<code>id: 0142</code> still yields <code>"0142"</code> with its padding
+and a bare <code>date: 2026-08-19</code> never becomes a timestamp.
+Rendering is a fixed point.</li>
+<li>Body is everything after the closing <code>---</code> line, stored
+verbatim.</li>
+<li>Validation: <code>id</code>, <code>title</code>, <code>date</code>,
+<code>status</code>, <code>kind</code>, <code>project</code> required;
+<code>trigger</code> may be empty (finding 2); unknown <em>fields</em>
+are preserved, not rejected.</li>
+<li><strong>Vocabularies are reported, not enforced</strong>, resolving
+a contradiction between this plan (which said <code>status</code> and
+<code>kind</code> “must be in the documented vocabularies”) and design
+decision 5 (documented, not enforced). An out-of-vocabulary value parses
+and is carried with a warning, as does a scalar written without the
+quoting the format requires. Same temperament as decision 6’s
+unresolvable references: a typo in a file several harnesses write should
+be a fixable row, not a failed run.</li>
+<li><code>Checksum</code> over the raw file bytes.</li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li>Round-trips the 198 real records across all five corpora in one
+table test, not over hand-written fixtures. The 26 hand-authored records
+carry the optional fields the 172 converted ones leave empty, so a table
+test over <code>clasm</code> alone would pass while rendering
+<code>decisions[]</code>, <code>session</code> and <code>phase</code>
+wrongly.</li>
+<li><strong>192 of the 198 render byte-identically.</strong> The 6
+exceptions are the CMTools records whose <code>decisions[]</code> uses a
+block sequence — a conformance defect against “inline lists only”,
+normalised by <code>kb record fmt</code> in W5. The test asserts that
+set exactly: a record that changes unexpectedly fails, and so does one
+of the six that does <em>not</em> change. Divergent files must still
+render to a fixed point, and normalisation must leave the body
+untouched.</li>
+<li>A record with <code>status: accepted</code> and a non-empty
+<code>superseded_by</code> parses and validates (finding 1). A record
+with <code>trigger: ""</code> validates.</li>
+<li>Titles containing <code>"</code>, backticks and
+<code>&lt;&gt;</code> survive the round trip — <code>clasm</code>
+DR-0164’s title embeds escaped quotes.</li>
+</ul>
+<hr />
+<h2 id="w3-kb-ingest">W3 — <code>kb ingest</code></h2>
+<h3 id="files-to-create-2">Files to create</h3>
+<ul>
+<li><code>cmd/kb/ingest.go</code>,
+<code>cmd/kb/ingest_test.go</code></li>
+</ul>
+<h3 id="work-items-2">Work items</h3>
+<ul>
+<li><code>kb ingest PATH [--dry-run] [--root DIR]</code> — walk
+<code>PATH</code>, parse every <code>NNNN-*.md</code>, upsert into
+<code>records</code> and <code>kb_fts</code> with
+<code>source_type = 'record'</code>.</li>
+<li><strong>Two passes.</strong> Pass one upserts every record; pass two
+resolves <code>supersedes</code> / <code>relates_to</code> into
+<code>record_relations</code>. A record may reference one not yet read,
+so a single pass would fail on forward references.
+<code>superseded_by</code> in a file is <em>not</em> inserted — it is
+the stored relation’s inverse.</li>
+<li><strong>A <code>relates_to</code> entry is
+<code>[&lt;scope&gt;:]&lt;id&gt;</code></strong> (design decision 6).
+Split on the first <code>:</code> only; strip an optional leading
+<code>DR-</code> from the id rather than rejecting it. A bare id
+inherits the citing record’s <code>scope</code> and
+<code>project_id</code>; <code>clasm:</code> looks the project up by
+<code>projects.name</code>; <code>workspace:</code> is
+<code>scope='workspace'</code> with a null <code>project_id</code>. See
+the resolution table under <code>record_relations</code> in the
+design.</li>
+<li><code>supersedes</code> / <code>superseded_by</code> are
+<strong>same-tier only</strong>, so their entries are always bare. Treat
+a qualified entry in either field as malformed: report it and leave the
+relation unwritten rather than resolving it.</li>
+<li><strong>An unresolvable reference is reported and skipped, never
+fatal.</strong> A reference to a project or record not in the database
+leaves the relation unwritten and adds a line to the run summary.
+Failing would make ingest order significant, which the two-pass design
+exists to avoid.</li>
+<li>Paths stored <strong>relative to the workspace root</strong>,
+defaulting to the parent of the directory holding the database (so
+<code>--db agents/knowledge.db</code> gives a root of <code>.</code>),
+overridable with <code>--root</code>. Absolute paths do not survive
+<code>merge</code> between machines.</li>
+<li>Skip unchanged files by <code>Checksum</code> — re-ingesting a whole
+tree is cheap and safe to repeat.</li>
+<li>Additive only: a record whose file has vanished stays in the
+database (design decision 4). Report such records in the summary so the
+operator can see them, but do not delete.</li>
+<li><code>--dry-run</code> reports the same counts and writes
+nothing.</li>
+<li>Ingest <strong>never writes to the record files</strong>. Only
+<code>kb record</code> does.</li>
+<li><strong>A project named in frontmatter but absent from the database
+is created.</strong> The plan did not say, and the alternative —
+reporting and skipping — would make “ingesting
+<code>clasm/decisions/</code> yields 169 records” unsatisfiable against
+a database that has never seen <code>clasm</code>. Creation is additive
+and reported.</li>
+<li><strong><code>initiative</code> is materialised as a concept link
+during pass one</strong>, per design decision 3, which the W3 work items
+had omitted entirely. No live record populates the field (0 of 198), so
+it is covered by a fixture test rather than a corpus one.</li>
+<li><strong>Relations are resolved for skipped records too.</strong> A
+file unchanged by checksum still has its references re-resolved, because
+re-running is the documented remedy for a reference whose target had not
+yet been ingested — if a skip also skipped resolution, that remedy would
+never work.</li>
+<li>FTS indexing lives in <code>AddRecord</code>, not in ingest, so
+every writer maintains the index. <code>records</code> rows are indexed
+with <code>source_type = 'record'</code>, <code>label = DR-NNNN</code>
+and the title prepended to the body so titles are searchable.</li>
+</ul>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li>Ingesting <code>~/WorkLab/clasm/decisions/</code> yields 169
+records, 2 <code>supersedes</code> relations and 3
+<code>relates_to</code> relations.</li>
+<li>A second run reports 169 skipped, 0 updated.</li>
+<li>Touching one file’s body and re-running reports exactly 1
+updated.</li>
+<li>Forward reference proven: ingest a directory where <code>0002</code>
+supersedes <code>0003</code> and confirm the relation resolves.</li>
+<li>Ingesting <code>~/WorkLab/agents/decisions/</code> resolves
+DR-0001’s <code>relates_to: ["clasm:0160"]</code> to the
+<code>clasm</code> record — the first real cross-tier reference, and the
+only one that exists at the time of writing.</li>
+<li>Ingesting <code>~/WorkLab/agents/decisions/</code> <em>before</em>
+<code>clasm/decisions/</code> leaves that relation unwritten, reports it
+in the summary, exits 0, and resolves it on a later run once
+<code>clasm</code> has been ingested.</li>
+<li><code>--dry-run</code> leaves the database byte-identical.</li>
+</ul>
+<hr />
+<h2 id="w4-kb-record-read-and-status-verbs">W4 — <code>kb record</code>
+read and status verbs</h2>
+<h3 id="files-to-create-3">Files to create</h3>
+<ul>
+<li><code>cmd/kb/record.go</code>,
+<code>cmd/kb/record_test.go</code></li>
+</ul>
+<h3 id="work-items-3">Work items</h3>
+<ul>
+<li><code>kb record list</code> with <code>--project</code>,
+<code>--status</code>, <code>--kind</code>, <code>--trigger</code>,
+<code>--initiative</code>, <code>--since</code>. <strong>Sorted by
+<code>date</code> then <code>record_id</code></strong> (finding 3).</li>
+<li><code>kb record show RECORD_ID</code> — frontmatter, body, and
+resolved relations in both directions.</li>
+<li><code>kb record set-status RECORD_ID STATUS</code> — writes both the
+database row and the file’s frontmatter, leaving every other line
+untouched.</li>
+<li><code>kb record supersede NEW OLD [--partial]</code> — writes
+<code>supersedes</code> on <code>NEW</code> and
+<code>superseded_by</code> on <code>OLD</code> in both files, plus the
+relation row. Without <code>--partial</code>, also sets
+<code>OLD</code>’s status to <code>superseded</code>; with it,
+<code>OLD</code> stays <code>accepted</code> (finding 1). Both file
+writes and the database write succeed together or not at all.</li>
+<li>Every verb honours <code>--json</code> and routes errors to stderr,
+per <code>cli-tui-design.md</code>.</li>
+<li><strong>A bare RECORD_ID is not an identity.</strong> Two projects
+may each have a DR-0001, so
+<code>show</code>/<code>set-status</code>/<code>supersede</code> resolve
+a bare id across every tier and report the candidates when more than one
+matches, rather than picking. <code>--project P</code> and
+<code>--workspace</code> qualify it.</li>
+<li><strong>The writers re-render canonically rather than editing the
+status line in place.</strong> One writer, one rule —
+<code>RenderRecordFile</code> — so <code>record</code>, <code>fmt</code>
+and anything later cannot drift. In practice this satisfies “leaving
+every other line untouched” anyway, because 192 of 198 records are
+already canonical: a fresh whole supersession changes exactly the
+<code>status</code> and <code>superseded_by</code> lines and nothing
+else. Where a file is <em>not</em> canonical, the command says so rather
+than normalising it silently.</li>
+<li><strong><code>supersede</code> is idempotent.</strong> Re-running it
+against an already-superseded pair rewrites nothing, verified against
+<code>clasm</code> DR-0149/DR-0148, which are already in that state in
+the live corpus.</li>
+</ul>
+<h3 id="acceptance-criteria-3">Acceptance criteria</h3>
+<ul>
+<li><code>record list --kind correction --project clasm</code> returns
+25.</li>
+<li><code>record list --trigger live-test --project clasm</code> returns
+59.</li>
+<li><code>record show 0160</code> reports
+<code>superseded_by: 0159</code> while showing
+<code>status: accepted</code>.</li>
+<li><code>supersede 0149 0148</code> (no flag) leaves 0148
+<code>superseded</code>; <code>supersede 0159 0160 --partial</code>
+leaves 0160 <code>accepted</code>. Verified in the files, not only the
+database.</li>
+<li>A <code>supersede</code> against a non-existent record changes
+nothing on disk.</li>
+</ul>
+<hr />
+<h2
+id="w5-kb-record-new-kb-record-fmt-and-the-identity-collision-guard">W5
+— <code>kb record new</code>, <code>kb record fmt</code>, and the
+identity-collision guard</h2>
+<h3 id="work-items-4">Work items</h3>
+<ul>
+<li><p><strong>Refuse to overwrite a record that is not the same
+record.</strong> Two workspaces each have an
+<code>agents/decisions/</code>, and a workspace-tier record’s identity
+is <code>(NULL project, "workspace", record_id)</code> — unique only
+<em>within one workspace</em>, which nothing states and nothing
+enforces. Ingesting both tiers into one database silently overwrites the
+first with the second, reported as a routine <code>1 updated</code>.
+Demonstrated, not theorised.</p>
+<p>The guard is <code>uuid</code>-based rather than workspace-aware,
+because it needs no registry and generalises beyond this case: when an
+incoming record matches an existing identity but both carry a
+<strong>non-empty and differing <code>uuid</code></strong>, it is a
+different record wearing the same id. Refuse the write, count it as
+failed, report it, and let the rest of the run proceed — a run should
+survive a collision, but data must not be destroyed by one. Where the
+uuids cannot settle it (either is empty) but the stored
+<code>path</code> differs, warn instead: a slug is cosmetic and may be
+regenerated, so a changed path alone is not proof of a collision.</p>
+<p><strong>This is interim.</strong> The real fix is to carry the
+workspace’s actual name, so that a workspace-tier record’s identity is
+complete and <code>workspace:</code> in a reference says which workspace
+it means. That change would also remove the NULL <code>project_id</code>
+and retire DR-0004’s <code>IFNULL</code> index, so it is its own effort.
+The guard exists so the Laboratory workspace tier can be created safely
+before that lands.</p></li>
+<li><p><code>kb record fmt PATH [--dry-run]</code> — parse each record
+under <code>PATH</code> with W2’s <code>ParseRecordFile</code> and write
+back <code>RenderRecordFile</code>’s output, bringing a corpus into
+canonical form. Nearly free once W2 exists, being parse plus render, but
+it needs to exist as its own verb: W3’s rule is that <strong>ingest
+never writes to record files</strong>, so normalisation cannot be a
+write-back flag on <code>ingest</code>. Report per-file whether anything
+changed, and honour <code>--dry-run</code>. Its first real use is
+bringing <code>~/WorkLab/CMTools/decisions/</code> into line — the six
+records whose <code>decisions[]</code> uses a block sequence, which the
+format’s “inline lists only” rule forbids and which W2 confirmed are the
+<em>only</em> six divergences in the whole 198-record corpus.</p></li>
+<li><p><code>kb record new --project P --title T [--kind K] [--trigger G]</code>
+— allocate the next id for the scope, fill <code>date</code>,
+<code>uuid</code>, <code>origin_host</code>, <code>project</code>, set
+<code>status: proposed</code>, and emit <strong>all five body
+headings</strong> even when empty.</p></li>
+<li><p><code>trigger</code> is <strong>required here</strong>, unlike on
+converted records. The empty- trigger concession is for conversion
+only.</p></li>
+<li><p>Writes the file; does not ingest it.</p></li>
+</ul>
+<h3 id="acceptance-criteria-4">Acceptance criteria</h3>
+<ul>
+<li>Ingesting two different workspaces’ <code>agents/decisions/</code>,
+each holding a DR-0001 with its own <code>uuid</code>, into one database
+leaves the first intact, reports the second as a collision, and exits
+0.</li>
+<li>Re-ingesting all five live corpora still reports 0 failed: the guard
+fires on differing uuids, never on a record matching itself.</li>
+<li><code>record fmt</code> over <code>CMTools/decisions/</code>
+rewrites exactly 6 files and reports the other 7 unchanged; a second run
+reports 13 unchanged.</li>
+<li><code>record fmt --dry-run</code> leaves every file
+byte-identical.</li>
+<li>Into <code>clasm/decisions/</code> allocates <code>0170</code>.</li>
+<li>Emitted file parses cleanly under W2 and ingests under W3.</li>
+<li>Omitting <code>--trigger</code> is a usage error (exit 2).</li>
+<li>Scaffolds
+<code>Context</code>/<code>Decision</code>/<code>Rationale</code>/<code>Rejected alternatives</code>/
+<code>Consequences</code> headings. In <code>clasm</code> the latter two
+appear in only 98 and 99 of 169 entries; an empty heading is a cheaper
+prompt than discipline.</li>
+</ul>
+<hr />
+<h2 id="w6-kb-index-and-search-surfacing">W6 — <code>kb index</code> and
+search surfacing</h2>
+<p><strong><code>kb index</code> supersedes
+<code>~/WorkLab/decisions_index.ts</code>.</strong> That Deno tool was
+written 2026-08-25 because no index generator existed and
+<code>cold</code> needed one; it currently maintains all five indexes
+(<code>WorkLab/agents/decisions</code>,
+<code>WorkLab/CMTools/decisions</code>,
+<code>WorkLab/cold/decisions</code>,
+<code>WorkLab/clasm/decisions</code>, and this module’s own). One
+implementation serving both workspaces was this design’s original
+argument for putting <code>index</code> in <code>kb</code>, so the Deno
+tool is a stopgap and retires when this phase ships. Until then it is
+the live generator and its output is the reference behaviour.</p>
+<h3 id="work-items-5">Work items</h3>
+<ul>
+<li><code>kb index PATH</code> — regenerate
+<code>decisions/index.md</code>: one greppable line per record,
+<strong>newest first</strong>, never hand-edited. This preserves the
+<code>head</code>/<code>grep</code> affordance that top-insertion in a
+single <code>DECISIONS.md</code> originally provided.</li>
+<li><strong>Match the line format in
+<code>DECISION_RECORD_FORMAT.md</code>, “The index”</strong>, as settled
+by <code>WorkLab/agents/decisions</code> DR-0001: columns are
+<code>DR-&lt;id&gt;</code>, <code>date</code>, <code>status</code>,
+<code>kind</code>, <code>trigger</code>, supersession flag, title. Every
+column holds a value — an empty one renders as <code>-</code>, never as
+spaces, so the title is always at <code>$7</code>. The flag reads
+<code>sup</code> when <code>superseded_by</code> is non-empty,
+<code>-</code> otherwise. Sort by <code>date</code> then
+<code>record_id</code>, both descending, never by <code>record_id</code>
+alone.</li>
+<li><strong>The attribution line names no tool.</strong>
+<code>decisions_index.ts</code> writes
+<code>Generated by decisions_index.ts. Do not hand-edit.</code>, which
+<code>kb index</code> cannot reproduce without lying about itself.
+Change it to a tool-neutral line —
+<code>Generated file. Do not hand-edit.</code> — in
+<code>decisions_index.ts</code> first, regenerate the five live indexes,
+and have <code>kb index</code> emit the same. Otherwise every index
+churns on the changeover and the byte-comparison below is impossible to
+satisfy honestly. (Done: <code>decisions_index.ts</code> already emits
+the neutral line and all five indexes are regenerated.)</li>
+<li>Do not write a preamble into <code>index.md</code>. There is nowhere
+else for directory prose to go either: <code>decisions/README.md</code>
+was <strong>removed from the format</strong> on 2026-08-25 by workspace
+DR-0006, and a <code>decisions/</code> directory now holds records and
+the generated <code>index.md</code> and nothing else.
+<code>kb index</code> must not create one.</li>
+<li><code>kb search</code> returns <code>record</code> rows alongside
+projects, observations and concepts, labelled by
+<code>source_type</code>.</li>
+<li>TUI: records browsable under a project. Read-only, consistent with
+the TUI’s existing scope.</li>
+</ul>
+<h3 id="acceptance-criteria-5">Acceptance criteria</h3>
+<ul>
+<li><code>kb index</code> output is <strong>byte-identical</strong> to
+<code>decisions_index.ts</code> output for all five live corpora — 169
+records for <code>clasm</code>, 13 for <code>CMTools</code>, 7 for
+<code>cold</code>, 6 for <code>agents/decisions</code>, 3 for
+<code>knowledge</code> — both emitting the tool-neutral attribution
+line. This is the real acceptance test for the phase: two independent
+implementations agreeing on every byte of a 169-row file, and on four
+smaller files that between them exercise every optional field
+<code>clasm</code> leaves empty.</li>
+<li>Title at <code>$7</code> on every row under <code>awk</code> default
+field splitting, including rows with an empty <code>trigger</code>.
+<code>clasm</code> has 99 such rows.</li>
+<li><code>clasm:DR-0160</code> (accepted, partially superseded) renders
+with the <code>sup</code> flag; <code>DR-0148</code> (wholly superseded)
+renders <code>superseded</code> <em>and</em> <code>sup</code>.</li>
+<li>Running twice produces an identical file.</li>
+<li><code>kb index</code> writes <code>index.md</code> and nothing else
+— in particular it does not create a <code>README.md</code> (workspace
+DR-0006).</li>
+<li>A search whose top hit is a record body reports it as
+<code>record</code>, with its <code>DR-NNNN</code>.</li>
+</ul>
+<h3 id="on-retiring-the-deno-tool">On retiring the Deno tool</h3>
+<p>Delete <code>decisions_index.ts</code>,
+<code>decisions_index_test.ts</code>, its <code>deno.json</code> test
+and build entries, and the <code>bin/decisions_index</code> build
+artifact — but only after the byte-identical criterion above passes,
+since that comparison is what proves <code>kb index</code> is a faithful
+replacement. <code>decisions_split.ts</code> is unaffected and stays: it
+converts monolithic <code>DECISIONS.md</code> files, which is explicitly
+out of scope for <code>kb</code> (design, “What this design does not
+cover”).</p>
+<hr />
+<h2 id="w7-documentation-and-downstream">W7 — Documentation and
+downstream</h2>
+<h3 id="work-items-6">Work items</h3>
+<ul>
+<li><code>helptext.go</code>: new <code>kb-record(1)</code> and
+<code>kb-ingest(1)</code> man pages, <code>kb(1)</code> updated to list
+them. Per <code>~/WorkLab/RELEASE_REVIEW.md</code> this is the
+release-review item most likely to go stale.</li>
+<li>Document the <code>kind</code> vocabulary in
+<code>kb help record</code> and the <code>observation</code> vocabulary
+(<code>finding</code>, <code>decision</code>, <code>note</code>,
+<code>release</code>, <code>question</code>) in
+<code>kb help observation</code> — documented, not enforced (design
+decision 5).</li>
+<li><code>make man</code>; regenerate
+<code>README.md</code>/<code>about.md</code>/<code>CITATION.cff</code>
+via <code>cmt</code>; update <code>codemeta.json</code> description,
+<code>version</code>, <code>releaseNotes</code>,
+<code>dateModified</code>, <code>datePublished</code>.</li>
+<li>Log the work in <code>decisions/</code> — using
+<code>kb record new</code>, so the module’s first forward-practice
+records are written by the tool this plan builds.</li>
+</ul>
+<h3 id="acceptance-criteria-6">Acceptance criteria</h3>
+<ul>
+<li><code>make build</code>/<code>make man</code> clean; every new verb
+has a man page.</li>
+<li>Security review and full <code>go test</code> pass before the
+version bump.</li>
+</ul>
+<h3 id="out-of-this-repo-but-blocked-on-it">Out of this repo, but
+blocked on it</h3>
+<p>Both tracked in <code>~/WorkLab/TODO.md</code> and
+<code>~/Laboratory/TODO.md</code>:</p>
+<ul>
+<li><code>CLAUDE.md</code>’s grounding query lists
+<code>source_type</code> values as <code>project</code>,
+<code>observation</code>, <code>concept</code>. It needs
+<code>record</code>, or every automatic grounding query keeps missing
+the richest source in the database.</li>
+<li>The <code>kb-schema</code> skill emits the DDL as Step 0 for other
+skills and must be regenerated; <code>rag-query</code>,
+<code>review-knowledge-base</code>, <code>update-knowledge-base</code>
+and <code>setup-knowledge-base</code> all need review. Their
+<code>scripts/compiled.bash</code>/<code>.ps1</code> must be regenerated
+too, or Harvey and the Ollama models keep running the old logic.</li>
+</ul>
+<hr />
+<h2 id="out-of-scope-here">Out of scope here</h2>
+<ul>
+<li><strong>Ingesting Fountain hand-offs, project notes,
+<code>DESIGN.md</code> or <code>PLAN.md</code>.</strong> 34 hand-off
+files and 13 project notes remain outside the knowledge base. The pilot
+strengthened the case: <code>plan-review</code> was undetectable in
+<code>clasm</code>’s decision log because that evidence lives only in
+the session hand-off. <code>records</code> is shaped generally enough to
+hold them later.</li>
+<li><strong>Converting <code>cold</code>.</strong> It has no
+<code>DECISIONS.md</code> at all, so it needs authoring, not
+conversion.</li>
+<li><strong>Embeddings or vector search.</strong> FTS5 is what
+exists.</li>
+<li><strong>Editing records in the TUI.</strong> Read-mostly by
+design.</li>
+<li><strong><code>~/WorkLab/decisions_split.ts</code>.</strong> The
+one-off converter stays in WorkLab. Note that it re-derives
+<code>kind</code> and <code>trigger</code> on every run, so a
+<code>kind</code> corrected through <code>kb</code> would be overwritten
+if the converter were re-run against the same directory. Once a corpus
+is converted and ingested, the converter should not be run against it
+again.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

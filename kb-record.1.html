@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-record — read and maintain decision records</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb record list [–project P] [–workspace] [–status S] [–kind K]
+[–trigger T] [–initiative I] [–since DATE]</p>
+<p>kb record show RECORD_ID [–project P] [–workspace]</p>
+<p>kb record set-status RECORD_ID STATUS [–project P] [–workspace]
+[–root DIR]</p>
+<p>kb record supersede NEW OLD [–partial] [–project P] [–workspace]
+[–root DIR]</p>
+<p>kb record new –title T –trigger G (–project P | –workspace) [–kind K]
+[–root DIR]</p>
+<p>kb record fmt PATH [–dry-run]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>A decision record is one file under a project’s decisions/ directory,
+indexed by ingest. Records are listed oldest first, sorted by date and
+then by id — never by id alone, because ids are identity, not
+chronology: a correction can carry a lower id than the record it
+supersedes.</p>
+<p>A record id is not by itself an identity, since two projects may each
+have a DR-0001. Where a bare id is ambiguous, the command reports the
+candidates and asks for –project or –workspace rather than choosing
+one.</p>
+<dl>
+<dt>list</dt>
+<dd>
+print matching records, one per line
+</dd>
+<dt>show</dt>
+<dd>
+print one record with its body and its relations resolved in both
+directions. Only supersedes is stored; superseded_by is its inverse
+</dd>
+<dt>set-status</dt>
+<dd>
+set a record’s status in both its file and the database. The promotion
+path from proposed to accepted
+</dd>
+<dt>supersede</dt>
+<dd>
+write both sides of a supersession — supersedes on NEW, superseded_by on
+OLD, the relation, and unless –partial, OLD’s superseded status. Both
+files and the database are written together or not at all
+</dd>
+<dt>new</dt>
+<dd>
+scaffold a record: allocate the next id for the tier, fill the fields a
+tool owns, set status to proposed, and print all five body headings
+whether or not they get filled. Writes the file; does not ingest it.
+–trigger is required here even though a converted record may carry an
+empty one, because on a newly authored record it is cheap and accurate
+to say where the need was discovered
+</dd>
+<dt>fmt</dt>
+<dd>
+rewrite every record under PATH into canonical form. This is the
+normalisation path ingest deliberately lacks, since ingest never writes
+to a record file
+</dd>
+</dl>
+<p>new, set-status, supersede and fmt are the only commands that write a
+record file; ingest never does. A record is written proposed and stays
+proposed: a model may write a record, but only the author accepts
+one.</p>
+<h1 id="vocabularies">VOCABULARIES</h1>
+<p>These are the documented values. They are reported against, not
+enforced: an unknown value parses and carries a warning, because a typo
+in a file several harnesses write should be a fixable row, not a failed
+run.</p>
+<dl>
+<dt>status</dt>
+<dd>
+proposed, accepted, superseded, rejected
+</dd>
+<dt>kind</dt>
+<dd>
+decision, correction, refinement
+</dd>
+<dt>trigger</dt>
+<dd>
+design, plan-review, implementation, live-test, release-review, request,
+external. May be empty on a record converted from an existing log
+</dd>
+</dl>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>–project P</dt>
+<dd>
+restrict to, or resolve within, project P
+</dd>
+<dt>–workspace</dt>
+<dd>
+restrict to, or resolve within, the workspace tier
+</dd>
+<dt>–partial</dt>
+<dd>
+on supersede, leave OLD accepted instead of marking it superseded. Use
+when a later record invalidates one decision inside a multi-decision
+episode while the rest still stand
+</dd>
+<dt>–title T</dt>
+<dd>
+the new record’s title, on new. The filename slug is derived from it,
+lowercased with punctuation stripped; the slug is cosmetic and the id is
+the identity
+</dd>
+<dt>–kind K</dt>
+<dd>
+the new record’s kind, on new. Defaults to decision
+</dd>
+<dt>–dry-run</dt>
+<dd>
+on fmt, report what would change and write nothing
+</dd>
+<dt>–root DIR</dt>
+<dd>
+the workspace root that stored record paths are relative to. Defaults to
+the parent of the directory holding the database
+</dd>
+</dl>
+<h1 id="examples">EXAMPLES</h1>
+<p>Every correction in one project, and everything since a date:</p>
+<pre class="shell"><code>kb record list --project clasm --kind correction
+kb record list --project clasm --since 2026-08-01</code></pre>
+<p>Promote a proposed record, then wholly and partially supersede:</p>
+<pre class="shell"><code>kb record set-status 0004 accepted --project knowledge
+kb record supersede 0149 0148 --project clasm
+kb record supersede 0159 0160 --project clasm --partial</code></pre>
+<p>Start a new record, and bring a corpus into canonical form:</p>
+<pre class="shell"><code>kb record new --project clasm --title &quot;Retry the profile attach&quot; --trigger live-test
+kb record fmt clasm/decisions --dry-run</code></pre>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

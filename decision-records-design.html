@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="decision-records-and-document-ingest-design">Decision records
+and document ingest — Design</h1>
+<p><strong>Status (2026-08-25):</strong> Audit complete; decisions 1–5
+confirmed 2026-08-24, decision 6 (cross-tier references) added
+2026-08-25. <code>decision-records-plan.md</code> exists; nothing
+implemented yet.</p>
+<p><strong>References:</strong> -
+<code>~/WorkLab/DECISION_RECORD_FORMAT.md</code> — the file format this
+design ingests. Settled 2026-08-24, amended 2026-08-25 with the
+“Cross-tier references” section; frontmatter schema, vocabularies,
+supersession rules and the reference grammar are specified there, not
+here. - <code>~/WorkLab/agents/decisions/</code> — the workspace tier’s
+own records. DR-0001 and DR-0002 both constrain this design: the
+generated index format, and the cross-tier reference grammar behind
+decision 6 below. - <code>module-extraction-design.md</code> —
+established this module as the owner of the knowledge base, with
+<code>harvey</code> as a consumer. The same relationship applies to
+whatever writes decision records. - <code>cli-tui-design.md</code> — the
+<code>TOOL VERB PARAMETERS</code> CLI model and the <code>--json</code>
+contract that new verbs below must follow.</p>
+<h2 id="motivation">Motivation</h2>
+<p>The knowledge base is currently a hand-curated summary layer, not an
+index of the workspace’s actual artifacts. Measured against
+<code>~/WorkLab/agents/knowledge.db</code> on 2026-08-24:</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Table</th>
+<th scope="col">Rows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>observations</code></td>
+<td>215</td>
+</tr>
+<tr>
+<td><code>projects</code></td>
+<td>11</td>
+</tr>
+<tr>
+<td><code>concepts</code></td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>sources</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>kb_fts</code> (total)</td>
+<td>234</td>
+</tr>
+</tbody>
+</table>
+<p>Against that, the artifacts those 234 rows are meant to
+represent:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Artifact</th>
+<th scope="col">Size</th>
+<th scope="col">In the knowledge base?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>clasm/DECISIONS.md</code></td>
+<td>169 entries, 9,338 lines</td>
+<td>No — 79 <code>decision</code> observations shadow it</td>
+</tr>
+<tr>
+<td><code>clasm/DESIGN.md</code></td>
+<td>4,501 lines</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>clasm/PLAN.md</code></td>
+<td>7,146 lines</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>agents/hand-off/*.spmd</code></td>
+<td>34 files</td>
+<td>No — 7 observations merely mention hand-offs</td>
+</tr>
+<tr>
+<td><code>agents/project_notes/*.md</code></td>
+<td>13 files</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>Two problems follow. <strong>Drift:</strong> 79
+<code>decision</code>-kind observations are a lossy, hand-written shadow
+of 169 real decisions, and nothing keeps them in step.
+<strong>Unreachability:</strong> the highest-value content in the
+workspace — the reasoning behind five years of decisions — cannot be
+retrieved at all, because it lives in files the knowledge base has never
+read.</p>
+<p>The <code>agents/</code> directory is explicitly shared
+infrastructure for both Claude Code and Harvey’s local Ollama models.
+Retrieval over these artifacts is exactly the kind of grounding a small
+local model can do adequately, so closing this gap is not
+Claude-specific work.</p>
+<h2 id="what-already-works-and-does-not-need-changing">What already
+works, and does not need changing</h2>
+<p>Worth stating, because it narrows the design considerably:</p>
+<ul>
+<li><strong><code>kb_fts</code> accommodates records as-is.</strong> Its
+columns are <code>body</code>, <code>kind</code>, <code>label</code>,
+<code>descr</code>, <code>source_type</code>, <code>source_id</code>,
+<code>project_id</code>. A decision record maps onto them without a
+schema change: <code>label</code> = title, <code>kind</code> = the
+record’s kind, <code>source_type</code> = <code>'record'</code>. No FTS
+migration.</li>
+<li><strong>Lazy migration is an established pattern.</strong>
+<code>Open()</code> applies <code>CREATE TABLE IF NOT EXISTS</code> plus
+the idempotent <code>kbAlterStmts</code>/
+<code>kbSourcesAlterStmts</code> lists. New tables follow that precedent
+directly.</li>
+<li><strong>The CLI contract is already right for this.</strong>
+<code>TOOL VERB PARAMETERS</code>, global
+<code>--db</code>/<code>--json</code>/<code>--debug</code>, errors
+always to stderr. New verbs inherit all of it.</li>
+<li><strong><code>PRAGMA busy_timeout = 5000</code></strong> is already
+set — necessary, since ingest will run concurrently with interactive
+<code>kb</code> use.</li>
+<li><strong><code>uuid</code>/<code>origin_host</code></strong> are
+already on every table for cross-machine <code>merge</code>. Records
+must carry them too, for the same reason.</li>
+</ul>
+<p><code>gopkg.in/yaml.v3</code> is present in <code>go.mod</code> but
+currently marked <code>// indirect</code>; the first real import plus
+<code>go mod tidy</code> promotes it to the direct require block.</p>
+<h2 id="whats-missing-audited-2026-08-24">What’s missing (audited
+2026-08-24)</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Gap</th>
+<th scope="col">Consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No document/record entity</td>
+<td>Files cannot be first-class. <code>sources</code> is for cited
+literature — DOIs, retraction checking — and is the wrong tool for local
+artifacts</td>
+</tr>
+<tr>
+<td>No ingest path</td>
+<td>Everything is hand-entered, so it drifts. This is the root cause of
+the 79-vs-169 gap</td>
+</tr>
+<tr>
+<td>No same-type relations</td>
+<td><code>observation_concepts</code> and <code>project_concepts</code>
+exist, but there is no observation↔︎observation or record↔︎record edge, so
+<code>supersedes</code> cannot be expressed</td>
+</tr>
+<tr>
+<td>Flat <code>projects</code></td>
+<td>No way to express a multi-repo, multi-year initiative such as
+EPrints → Invenio RDM, which spans eight repositories</td>
+</tr>
+<tr>
+<td>Undocumented <code>kind</code> vocabulary</td>
+<td><code>finding</code>/<code>decision</code>/<code>note</code>/<code>release</code>/<code>question</code>
+emerged organically. A model has no way to learn the set;
+<code>kb help observation</code> does not list it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="proposed-schema-additions">Proposed schema additions</h2>
+<h3 id="records"><code>records</code></h3>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode sql"><code class="sourceCode sql"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> <span class="cf">IF</span> <span class="kw">NOT</span> <span class="kw">EXISTS</span> records (</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">id</span>           <span class="dt">INTEGER</span>  <span class="kw">PRIMARY</span> <span class="kw">KEY</span> AUTOINCREMENT,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    record_id    TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span>,                    <span class="co">-- &quot;0142&quot;, zero-padded</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    project_id   <span class="dt">INTEGER</span>  <span class="kw">REFERENCES</span> projects(<span class="kw">id</span>) <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">SET</span> <span class="kw">NULL</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">scope</span>        TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;project&#39;</span>,  <span class="co">-- project | workspace</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    path         TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span>,                    <span class="co">-- relative to workspace root</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    title        TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">date</span>         TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span>,                    <span class="co">-- YYYY-MM-DD</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    status       TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;proposed&#39;</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    kind         TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;decision&#39;</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">trigger</span>      TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    phase        TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    initiative   TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">session</span>      TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">body</span>         TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    checksum     TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    ingested_at  DATETIME <span class="kw">DEFAULT</span> <span class="fu">CURRENT_TIMESTAMP</span>,</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    uuid         TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    origin_host  TEXT     <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>);</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">UNIQUE</span> <span class="kw">INDEX</span> <span class="cf">IF</span> <span class="kw">NOT</span> <span class="kw">EXISTS</span> idx_records_scope_id</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    <span class="kw">ON</span> records(IFNULL(project_id, <span class="op">-</span><span class="dv">1</span>), <span class="kw">scope</span>, record_id);</span></code></pre></div>
+<p>The identity index is expressed over
+<code>IFNULL(project_id, -1)</code> rather than <code>project_id</code>
+directly. This design originally specified the plain three-column form,
+which places <strong>no constraint at all on the workspace
+tier</strong>: those records carry a NULL <code>project_id</code> — that
+is how the tier is distinguished — and SQLite treats NULLs in a unique
+index as distinct from one another. Every workspace record would be
+unique to itself, so re-ingesting
+<code>~/WorkLab/agents/decisions/</code> would duplicate all six on
+every run, defeating the <code>checksum</code> idempotency below for the
+one tier both workspaces re-ingest. Corrected during W1; see
+<code>decisions/</code> DR-0004.</p>
+<p><code>path</code> is stored <strong>relative to the workspace
+root</strong>, not absolute. Absolute paths do not survive
+<code>merge</code> between machines, which is the whole point of
+carrying <code>uuid</code>/<code>origin_host</code>.</p>
+<p><code>checksum</code> makes ingest idempotent: unchanged files are
+skipped, so re-ingesting the whole tree is cheap and safe to run
+repeatedly.</p>
+<h3 id="record_relations"><code>record_relations</code></h3>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode sql"><code class="sourceCode sql"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> <span class="cf">IF</span> <span class="kw">NOT</span> <span class="kw">EXISTS</span> record_relations (</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    from_id      <span class="dt">INTEGER</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">REFERENCES</span> records(<span class="kw">id</span>) <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">CASCADE</span>,</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    to_id        <span class="dt">INTEGER</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">REFERENCES</span> records(<span class="kw">id</span>) <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">CASCADE</span>,</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    relationship TEXT    <span class="kw">NOT</span> <span class="kw">NULL</span>,          <span class="co">-- supersedes | relates_to</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">PRIMARY</span> <span class="kw">KEY</span> (from_id, to_id, relationship)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>);</span></code></pre></div>
+<p>Only one direction is stored. <code>superseded_by</code> is the
+inverse of <code>supersedes</code>, computed on read. The <em>file</em>
+denormalizes and stores both sides, because a human opening a stale
+record must see it is stale without running a query; the database has no
+such need.</p>
+<p>Ingest is therefore <strong>two-pass</strong>: pass one upserts every
+record, pass two resolves relations. A record may legitimately reference
+one that has not been read yet.</p>
+<h4 id="resolving-a-reference">Resolving a reference</h4>
+<p>A <code>relates_to</code> entry is
+<code>[&lt;scope&gt;:]&lt;id&gt;</code> — see
+<code>WorkLab/DECISION_RECORD_FORMAT.md</code>, “Cross-tier references”,
+settled by <code>WorkLab/agents/decisions</code> DR-0002 on 2026-08-25.
+Resolution needs the three values in
+<code>idx_records_scope_id (project_id, scope, record_id)</code>, and
+the entry form supplies them:</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Entry</th>
+<th scope="col"><code>scope</code></th>
+<th scope="col"><code>project_id</code></th>
+<th scope="col"><code>record_id</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0159</code></td>
+<td>the citing record’s</td>
+<td>the citing record’s</td>
+<td><code>0159</code></td>
+</tr>
+<tr>
+<td><code>clasm:0160</code></td>
+<td><code>project</code></td>
+<td>lookup by <code>projects.name</code></td>
+<td><code>0160</code></td>
+</tr>
+<tr>
+<td><code>workspace:0001</code></td>
+<td><code>workspace</code></td>
+<td><code>NULL</code></td>
+<td><code>0001</code></td>
+</tr>
+</tbody>
+</table>
+<p>Split on the first <code>:</code> only, and strip an optional leading
+<code>DR-</code> from the id part rather than rejecting it. A stray
+prefix in one cross-reference should not fail a run, on the same
+reasoning as decision 5 below.</p>
+<p><code>supersedes</code> and <code>superseded_by</code> are
+<strong>same-tier only</strong>, so their entries are always bare ids
+and inherit the citing record’s scope and project. The file format
+forbids the cross-tier case, because writing both sides would mean
+writing into another repository. Ingest does not need to handle it, and
+should report a qualified entry in either field as malformed rather than
+resolving it.</p>
+<p><strong>An unresolvable reference is reported and skipped, not
+fatal.</strong> Following decision 4 (additive only), a reference to a
+project or record not present in the database leaves the relation
+unwritten, adds a line to the run summary, and lets the rest of the
+ingest proceed. The overwhelmingly common cause is a record that has not
+been ingested yet — a tree ingested one project at a time, or a
+workspace-tier record read before the project it cites. Failing the run
+would make ingest order significant, which the two-pass design exists
+specifically to avoid.</p>
+<p>This does mean a relation can stay unwritten indefinitely if the
+target never arrives. Re-running ingest over the full tree is cheap by
+design — unchanged files are skipped by checksum — so the remedy is to
+re-run, and the summary line is what tells the operator to.</p>
+<h2 id="proposed-verbs">Proposed verbs</h2>
+<h3
+id="kb-ingest-path---dry-run"><code>kb ingest PATH [--dry-run]</code></h3>
+<p>Walk a directory tree, parse YAML frontmatter, upsert into
+<code>records</code> and <code>kb_fts</code>, skip unchanged files by
+checksum. Report counts of added, updated, skipped, and failed.</p>
+<p>This is the highest-value single addition in this design. It is also
+what makes the knowledge base genuinely model-agnostic: any harness that
+can run a command and read JSON gets the whole corpus, with no
+Claude-specific integration.</p>
+<p>Handling of a file that disappears between runs is an open question,
+below.</p>
+<h3
+id="kb-record-listshownewsupersedeset-status"><code>kb record list|show|new|supersede|set-status</code></h3>
+<ul>
+<li><code>list</code> — filter on <code>--project</code>,
+<code>--status</code>, <code>--kind</code>, <code>--trigger</code>,
+<code>--initiative</code>, <code>--since</code></li>
+<li><code>show RECORD_ID</code> — full body</li>
+<li><code>new --project P --title T</code> — scaffold a file: allocate
+the next <code>id</code>, fill
+<code>date</code>/<code>uuid</code>/<code>origin_host</code>/<code>project</code>,
+set <code>status: proposed</code>, and print all five recommended body
+headings. Writes the file; does not ingest it</li>
+<li><code>supersede NEW OLD</code> — write both sides of the link, in
+both files, and set <code>OLD</code>’s status to
+<code>superseded</code>. Atomic, so the two sides cannot drift</li>
+<li><code>set-status RECORD_ID STATUS</code> — the promotion path from
+<code>proposed</code> to <code>accepted</code></li>
+</ul>
+<h3 id="kb-index-path"><code>kb index PATH</code></h3>
+<p>Generate <code>decisions/index.md</code> — one greppable line per
+record, newest first, per <code>DECISION_RECORD_FORMAT.md</code>.
+Generated, never hand-edited.</p>
+<p>Placing index generation here rather than in a WorkLab shell script
+keeps one implementation for both <code>~/WorkLab</code> and
+<code>~/Laboratory</code>.</p>
+<h2 id="decisions-confirmed-2026-08-24">Decisions (confirmed
+2026-08-24)</h2>
+<p><strong>1. Frontmatter <code>type:</code> is renamed
+<code>kind:</code>.</strong> Every existing table in this schema uses
+<code>kind</code> (<code>observations.kind</code>), and
+<code>type</code> is awkward in both SQL and Go. Renaming the
+frontmatter field cost nothing — nothing was implemented — and avoids a
+permanent file-to-column mapping. <em>Confirmed 2026-08-24;
+<code>DECISION_RECORD_FORMAT.md</code> updated the same day.</em></p>
+<p><strong>2. Records become authoritative for decisions; existing
+<code>decision</code> observations are left alone.</strong> The 79
+<code>decision</code>-kind observations stay as historical data. New
+decisions go to <code>records</code> only, so the shadow stops growing.
+Ingest never deletes or rewrites an observation. <em>Confirmed
+2026-08-24 — silent deletion of hand-written history is not worth the
+tidiness.</em></p>
+<p><strong>3. Initiatives use <code>concepts</code>, not a new
+table.</strong> <code>project_concepts</code> already links many
+projects to one concept, so an <code>eprints-to-rdm</code> concept
+linked to all eight repositories expresses the grouping today at zero
+schema cost. The <code>initiative</code> frontmatter field is
+materialised as a concept link at ingest. <em>Confirmed 2026-08-24;
+revisit only if the pilot shows concepts cannot carry it.</em></p>
+<p><strong>4. Ingest is additive-only in v1.</strong> A record file
+deleted from disk stays in the database until explicitly removed. The
+alternative — pruning rows whose files vanished — risks destroying data
+on a partial or wrong-directory ingest run. <em>Confirmed 2026-08-24:
+additive-only, with <code>kb record remove</code> as the explicit path;
+reconsider after real use.</em></p>
+<p><strong>5. The <code>kind</code> vocabulary is documented, not
+enforced.</strong> List the known values in
+<code>kb help observation</code> and <code>kb help record</code>; do not
+reject unknown ones. Enforcement in a tool several harnesses write to
+would turn a typo into a failed run rather than a fixable row.
+<em>Confirmed 2026-08-24: documented, not enforced.</em></p>
+<p><strong>6. A cross-tier reference is a qualified
+<code>relates_to</code> entry, and an unresolvable one is skipped rather
+than fatal.</strong> The entry grammar is
+<code>[&lt;scope&gt;:]&lt;id&gt;</code>, resolved as tabulated under
+<code>record_relations</code> above; supersession stays same-tier, so
+ingest never has to resolve a cross-repo supersession. A reference whose
+target is absent leaves the relation unwritten and adds a line to the
+run summary. <em>Confirmed 2026-08-25, deciding the question this design
+had left implicit: <code>record_relations</code> could already store a
+cross-tier relation, while the file format had no syntax to express one,
+so ingest could never have populated it. Settled in
+<code>WorkLab/agents/decisions</code> DR-0002.</em></p>
+<h2 id="consequences-outside-this-repo">Consequences outside this
+repo</h2>
+<ul>
+<li><code>~/WorkLab/CLAUDE.md</code> documents a grounding query against
+<code>kb_fts</code> whose <code>source_type</code> values are listed as
+<code>project</code>, <code>observation</code>, <code>concept</code>.
+Adding <code>record</code> means that text and the
+<code>rag-query</code> skill both need updating, or grounding queries
+will silently keep missing the richest source in the database.</li>
+<li><code>~/WorkLab/agents/skills/</code> has <code>kb-schema</code>,
+whose stated job is to emit the DDL so a model has the schema in context
+without querying. It must be regenerated after these tables land.</li>
+</ul>
+<h2 id="what-this-design-does-not-cover">What this design does
+<em>not</em> cover</h2>
+<ul>
+<li><strong>Ingesting Fountain hand-offs, project notes, DESIGN.md or
+PLAN.md.</strong> All 34 hand-off files and 13 project notes are outside
+the knowledge base today and would benefit from the same treatment, but
+they have no frontmatter and no stable identity. The
+<code>records</code> table is deliberately shaped generally enough to
+hold them later; doing so is its own effort.</li>
+<li><strong>Embeddings or vector search.</strong> FTS5 is what exists
+and what the <code>rag-query</code> skill uses. Semantic retrieval is a
+separate question.</li>
+<li><strong>Writing decision records from within <code>kb</code>’s
+TUI.</strong> The TUI is read-mostly by design; <code>record new</code>
+is a CLI verb.</li>
+<li><strong>The conversion of <code>clasm/DECISIONS.md</code>
+itself.</strong> That is a one-off script in the WorkLab pilot, not a
+<code>kb</code> feature. Its acceptance test — regenerate and diff
+byte-for-byte — is specified in
+<code>DECISION_RECORD_FORMAT.md</code>.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

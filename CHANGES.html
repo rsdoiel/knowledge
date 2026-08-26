@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="changes">Changes</h1>
+<p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
+<code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.4-2026-08-26">v0.0.4 — 2026-08-26</h2>
+<p>Adds Decision Record support: episode-scoped Markdown files with YAML
+frontmatter, kept in a project’s <code>decisions/</code> directory and
+indexed as first-class rows, so the reasoning behind a decision is
+retrievable rather than living only in files the knowledge base never
+reads. The format is specified in
+<code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
+reference implementation.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>Schema</strong>: <code>records</code> and
+<code>record_relations</code>. A record’s identity is
+<code>(workspace, project, scope, id)</code>. The workspace name is the
+directory name of the workspace root, derived from the path rather than
+written in a file, because every workspace has an
+<code>agents/decisions/</code> and two of them may each hold a DR-0001.
+Records are indexed into <code>kb_fts</code> with
+<code>source_type = 'record'</code>. Existing databases migrate lazily
+on open.</li>
+<li><strong><code>kb ingest PATH</code></strong> — walks a tree of
+<code>NNNN-slug.md</code> records and resolves
+<code>supersedes</code>/<code>relates_to</code> in two passes, so
+forward references work. Additive: a record whose file has vanished is
+reported, never deleted. Never writes to a record file.</li>
+<li><strong><code>kb record list|show|new|set-status|supersede|fmt</code></strong>
+— <code>new</code> scaffolds with <code>status: proposed</code>;
+<code>supersede</code> writes both sides and the relation together or
+not at all; <code>fmt</code> normalises a tree and never writes to the
+database.</li>
+<li><strong><code>kb index PATH</code></strong> — generates
+<code>decisions/index.md</code>, one greppable line per record, newest
+first. Byte-identical to the Deno generator it replaces.</li>
+<li><strong>Standard options</strong> <code>-help</code>,
+<code>-license</code> and <code>-version</code>, which <code>kb</code>
+had lacked entirely, declared through a <code>flag.FlagSet</code> so
+each is accepted in either dash form.</li>
+<li><strong><code>kb help topics</code></strong> — the topic index.
+Named <code>topics</code> rather than the conventional
+<code>index</code> because <code>index</code> is a verb here.</li>
+<li><strong>Library</strong>:
+<code>ParseRecordFile</code>/<code>RenderRecordFile</code>,
+<code>ListRecords</code>, <code>RecordByIdentity</code>,
+<code>RecordsByRecordID</code>, <code>RecordsUnderPath</code>,
+<code>NewUUID</code>, <code>Today</code>, and a <code>SourceType</code>
+field on <code>KBSearchResult</code>.</li>
+<li><strong>TUI</strong>: browse a project’s records read-only, with
+<code>r</code>.</li>
+<li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
+<code>kb-index(1)</code>.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>kb search</code> labels a hit by its source table rather than
+its own kind, so a decision record reads <code>[record]</code> rather
+than <code>[decision]</code>.</li>
+<li>Informational commands no longer open or create a database.
+<code>kb index</code> joins <code>kb merge</code> in this, since it
+builds from the record files and never queries one — it had been leaving
+a database in whatever directory it ran in.</li>
+<li>The frontmatter struct declaration is the canonical format
+specification: field order, flow-styled sequences, and a double-quoted
+string type for the seven fields the format requires quoted, so every
+writer produces byte-identical output.</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li>A record path read from the database is confined to the workspace
+root before it is read or written. <code>filepath.Join</code> cleans a
+path without confining it, so a path reaching the database by some route
+other than ingest could otherwise have made <code>set-status</code>
+rewrite an arbitrary file.</li>
+</ul>
+<h3 id="notes">Notes</h3>
+<ul>
+<li>Vocabularies for record
+<code>status</code>/<code>kind</code>/<code>trigger</code> are
+documented and reported against, <strong>not</strong> enforced: in a
+format several tools write to, a typo should be a fixable row and not a
+failed run. Observation kinds remain enforced, which is a deliberate
+asymmetry.</li>
+<li>Adds <code>gopkg.in/yaml.v3</code> as a direct dependency.</li>
+<li>Verified against 205 real records across five corpora, all
+round-tripping byte-for-byte.</li>
+</ul>
+<h2 id="v0.0.3-2026-08-08">v0.0.3 — 2026-08-08</h2>
+<p>Adds JSON-L export/import:
+<code>ExportJSONL</code>/<code>ImportJSONL</code> in the knowledge
+package, plus <code>kb export [-project NAME] [-out PATH]</code> and
+<code>kb import [-in PATH]</code>. A portable, no-file-access
+alternative to <code>merge</code> — the resulting file can be pasted,
+emailed or committed to git, then applied elsewhere with
+<code>import</code>. Projects and concepts are matched by name (existing
+local rows win), sources by identifier, observations and links by uuid,
+so re-importing the same file is a no-op.</p>
+<h2 id="v0.0.2-2026-07-28">v0.0.2 — 2026-07-28</h2>
+<p>Adds project status management: <code>AddProjectWithStatus</code> and
+<code>SetProjectStatus</code>, plus a <code>--status</code> flag on
+<code>kb project add</code> and a
+<code>kb project set-status NAME STATUS</code> verb, all validated
+against
+<code>concept</code>/<code>active</code>/<code>paused</code>/<code>concluded</code>.
+<code>AddProject</code>’s default behaviour is unchanged.</p>
+<h2 id="v0.0.1-2026-07-27">v0.0.1 — 2026-07-27</h2>
+<p>Proof-of-concept pre-release. Full CRUD API (projects, observations,
+concepts, sources) with FTS5 search and cross-machine merge;
+<code>cmd/kb</code> ships a git/go-style CLI with <code>--json</code>
+output and a read-mostly bubbletea TUI; <code>--debug</code> emits a
+JSONL trace of every knowledge-base call and TUI event. Extracted from
+harvey’s <code>knowledge.go</code>/<code>knowledge_merge.go</code>.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
