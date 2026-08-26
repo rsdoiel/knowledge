@@ -25,6 +25,10 @@ func printHelp(out io.Writer, topic string) bool {
 	switch topic {
 	case "":
 		f(HelpText)
+	case "topics":
+		// The conventional spelling is "help index", but index is a verb here
+		// and `kb help index` must stay its manual page. See RELEASE_REVIEW.md.
+		f(TopicsHelpText)
 	case "project":
 		f(ProjectHelpText)
 	case "observation":

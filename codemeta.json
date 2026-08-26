@@ -15,10 +15,10 @@
   "copyrightYear": 2026,
   "copyrightHolder": "R. S. Doiel",
   "programmingLanguage": [
-    "Go >= 1.26.3"
+    "Go >= 1.26.4"
   ],
   "softwareRequirements": [
-    "Go >= 1.26.3",
+    "Go >= 1.26.4",
     "gopkg.in/yaml.v3 >= 3.0.1"
   ],
   "softwareSuggestions": [

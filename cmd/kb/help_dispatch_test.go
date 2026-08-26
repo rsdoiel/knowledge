@@ -85,11 +85,24 @@ func TestMakefile_KBTopicsCoversEveryVerb(t *testing.T) {
 	for _, alias := range []string{"summary", "format"} {
 		listed[alias] = true
 	}
-	for verb := range verbs {
-		if !listed[verb] {
-			t.Errorf("verb %q is registered but missing from the Makefile's KB_TOPICS, so make man will not generate its page", verb)
+	// Every topic needs a page, not only every verb: RELEASE_REVIEW.md asks
+	// that each topic be renderable as a man page, and "topics" -- the topic
+	// index itself -- is not a verb.
+	for _, topic := range helpTopicNames() {
+		if !listed[topic] {
+			t.Errorf("topic %q has a help page but is missing from the Makefile's KB_TOPICS, so make man will not generate it", topic)
 		}
 	}
+}
+
+// helpTopicNames returns every topic printHelp recognises: the registered
+// verbs plus the non-verb topics.
+func helpTopicNames() []string {
+	names := []string{"topics"}
+	for verb := range verbs {
+		names = append(names, verb)
+	}
+	return names
 }
 
 func TestPrintHelp_UnknownTopicReturnsFalse(t *testing.T) {
@@ -237,4 +250,49 @@ origin_host: "test"
 
 **Context.** probe
 `
+}
+
+// RELEASE_REVIEW.md: "The help guide system should support 'help index' which
+// lists all the available topics."
+//
+// kb cannot use that spelling: index is a verb, so `kb help index` is the
+// kb-index(1) page and must stay that way. `kb help topics` is the topic
+// index instead — harvey accepts both spellings, and only this one is free
+// here.
+func TestPrintHelp_TopicsListsEveryTopic(t *testing.T) {
+	var out bytes.Buffer
+	if !printHelp(&out, "topics") {
+		t.Fatal("kb help topics is not recognized")
+	}
+	page := out.String()
+	for verb := range verbs {
+		if !strings.Contains(page, verb) {
+			t.Errorf("verb %q is missing from the topic index", verb)
+		}
+	}
+	// Every name it advertises must actually resolve.
+	for _, line := range strings.Split(page, "\n") {
+		name, _, found := strings.Cut(strings.TrimSpace(line), " ")
+		if !found || name == "" || strings.HasPrefix(name, "#") || strings.HasPrefix(name, "%") {
+			continue
+		}
+		if _, known := verbs[name]; !known {
+			continue
+		}
+		var probe bytes.Buffer
+		if !printHelp(&probe, name) {
+			t.Errorf("topic index advertises %q but printHelp does not recognize it", name)
+		}
+	}
+}
+
+// index is a verb, so this spelling must keep resolving to its manual.
+func TestPrintHelp_IndexIsTheVerbPageNotTheTopicIndex(t *testing.T) {
+	var out bytes.Buffer
+	if !printHelp(&out, "index") {
+		t.Fatal("kb help index is not recognized")
+	}
+	if !strings.Contains(out.String(), "kb-index(1)") {
+		t.Errorf("kb help index should be the verb's manual page:\n%s", out.String()[:200])
+	}
 }
