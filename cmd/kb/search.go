@@ -34,13 +34,20 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return nil
 	}
 	for _, r := range results {
+		// The bracket shows which table the hit came from, not the hit's own
+		// kind. A record's kind is "decision" or "correction", which would be
+		// indistinguishable in this column from a decision-kind observation.
+		label := r.SourceType
+		if label == "" {
+			label = r.Kind
+		}
 		switch {
 		case r.Label != "" && r.Snippet != "":
-			fmt.Fprintf(out, "[%-10s] %s — %s\n", r.Kind, r.Label, r.Snippet)
+			fmt.Fprintf(out, "[%-10s] %s — %s\n", label, r.Label, r.Snippet)
 		case r.Label != "":
-			fmt.Fprintf(out, "[%-10s] %s\n", r.Kind, r.Label)
+			fmt.Fprintf(out, "[%-10s] %s\n", label, r.Label)
 		default:
-			fmt.Fprintf(out, "[%-10s] %s\n", r.Kind, r.Snippet)
+			fmt.Fprintf(out, "[%-10s] %s\n", label, r.Snippet)
 		}
 	}
 	return nil
