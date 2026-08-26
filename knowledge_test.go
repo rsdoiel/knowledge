@@ -990,6 +990,212 @@ func TestSetProjectStatus_NotFound(t *testing.T) {
 	}
 }
 
+func TestSetProjectDescription(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("proj", "names DESIGN_DECIDE_PLAN.md"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.SetProjectDescription("proj", "names DESIGN_REVIEW_PLAN_IMPLEMENT.md"); err != nil {
+		t.Fatalf("SetProjectDescription: %v", err)
+	}
+	p, err := kb.ProjectByName("proj")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "names DESIGN_REVIEW_PLAN_IMPLEMENT.md" {
+		t.Errorf("Description = %q, want the corrected filename", p.Description)
+	}
+}
+
+// The status must survive a description edit: the two setters write the same
+// row, and a description correction is not a lifecycle change.
+func TestSetProjectDescription_PreservesStatus(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProjectWithStatus("proj", "old", "paused"); err != nil {
+		t.Fatalf("AddProjectWithStatus: %v", err)
+	}
+	if err := kb.SetProjectDescription("proj", "new"); err != nil {
+		t.Fatalf("SetProjectDescription: %v", err)
+	}
+	p, err := kb.ProjectByName("proj")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Status != "paused" {
+		t.Errorf("Status = %q, want it left at %q", p.Status, "paused")
+	}
+}
+
+// A description is grounding context precisely because kb search returns it,
+// so a stale FTS row would keep handing the old text to sessions even after
+// the projects row was corrected.
+func TestSetProjectDescription_RefreshesFTS(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("proj", "mentions zzstalezz"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.SetProjectDescription("proj", "mentions zzfreshzz"); err != nil {
+		t.Fatalf("SetProjectDescription: %v", err)
+	}
+	stale, err := kb.Search("zzstalezz")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(stale) != 0 {
+		t.Errorf("the replaced description is still searchable: %+v", stale)
+	}
+	fresh, err := kb.Search("zzfreshzz")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(fresh) != 1 {
+		t.Fatalf("Search for the new description returned %d results, want 1", len(fresh))
+	}
+	if fresh[0].Snippet != "mentions zzfreshzz" {
+		t.Errorf("Snippet = %q, want the new description", fresh[0].Snippet)
+	}
+}
+
+// Only one kb_fts row per project, or bm25 ranking double-counts it and
+// search reports the same project twice.
+func TestSetProjectDescription_LeavesOneFTSRow(t *testing.T) {
+	kb := openTestKB(t)
+	id, err := kb.AddProject("proj", "first")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.SetProjectDescription("proj", "second"); err != nil {
+		t.Fatalf("SetProjectDescription: %v", err)
+	}
+	var n int
+	if err := kb.db.QueryRow(
+		`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'project' AND source_id = ?`, id,
+	).Scan(&n); err != nil {
+		t.Fatalf("count kb_fts rows: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("kb_fts holds %d rows for the project, want 1", n)
+	}
+}
+
+// updated_at is what a later last-writer-wins reconciliation will key on, so
+// the setter has to move it even though nothing reads it yet.
+func TestSetProjectDescription_TouchesUpdatedAt(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("proj", "old"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	// CURRENT_TIMESTAMP has one-second granularity, so back-date the row
+	// rather than racing it.
+	if _, err := kb.db.Exec(
+		`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'proj'`,
+	); err != nil {
+		t.Fatalf("back-date updated_at: %v", err)
+	}
+	if err := kb.SetProjectDescription("proj", "new"); err != nil {
+		t.Fatalf("SetProjectDescription: %v", err)
+	}
+	var updated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM projects WHERE name = 'proj'`,
+	).Scan(&updated); err != nil {
+		t.Fatalf("read updated_at: %v", err)
+	}
+	if updated == "2000-01-01 00:00:00" {
+		t.Error("updated_at was not touched by SetProjectDescription")
+	}
+}
+
+// Clearing is explicit here in a way it is not on concept add, so an empty
+// DESCRIPTION is honoured rather than rejected.
+func TestSetProjectDescription_EmptyClears(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("proj", "something"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.SetProjectDescription("proj", ""); err != nil {
+		t.Fatalf("SetProjectDescription: %v", err)
+	}
+	p, err := kb.ProjectByName("proj")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "" {
+		t.Errorf("Description = %q, want it cleared", p.Description)
+	}
+}
+
+func TestSetProjectDescription_NotFound(t *testing.T) {
+	kb := openTestKB(t)
+	if err := kb.SetProjectDescription("nonexistent", "whatever"); err == nil {
+		t.Error("expected an error for a nonexistent project")
+	}
+}
+
+// AddConcept's ON CONFLICT clause updated the description unconditionally,
+// so `kb concept add name` with no DESCRIPTION wiped the stored one. The
+// identifier columns were already guarded this way; the description was not.
+func TestAddConcept_EmptyDescriptionPreservesExisting(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("WAL", "write-ahead logging"); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.AddConcept("WAL", ""); err != nil {
+		t.Fatalf("AddConcept re-add: %v", err)
+	}
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	for _, c := range concepts {
+		if c.Name == "WAL" && c.Description != "write-ahead logging" {
+			t.Errorf("Description = %q, want it preserved", c.Description)
+		}
+	}
+}
+
+// The FTS row has to agree with the concepts row after a no-description
+// re-add, or search starts returning a description the database no longer has.
+func TestAddConcept_EmptyDescriptionPreservesFTS(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("WAL", "mentions zzkeptzz"); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.AddConcept("WAL", ""); err != nil {
+		t.Fatalf("AddConcept re-add: %v", err)
+	}
+	results, err := kb.Search("zzkeptzz")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Search returned %d results, want the preserved description to still match", len(results))
+	}
+	if results[0].Snippet != "mentions zzkeptzz" {
+		t.Errorf("Snippet = %q, want the preserved description", results[0].Snippet)
+	}
+}
+
+// A non-empty description is still a deliberate correction and must land.
+func TestAddConcept_NonEmptyDescriptionUpdates(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("WAL", "old"); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.AddConcept("WAL", "new"); err != nil {
+		t.Fatalf("AddConcept re-add: %v", err)
+	}
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	for _, c := range concepts {
+		if c.Name == "WAL" && c.Description != "new" {
+			t.Errorf("Description = %q, want %q", c.Description, "new")
+		}
+	}
+}
+
 func TestAddObservationWithSource_SetsUUIDAndOriginHost(t *testing.T) {
 	kb := openTestKB(t)
 	pid, _ := kb.AddProject("proj", "")

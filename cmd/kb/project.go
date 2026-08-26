@@ -15,7 +15,7 @@ func init() {
 
 func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: project <add|list|show|concepts|set-status> ...")
+		return fmt.Errorf("usage: project <add|list|show|concepts|set-status|set-description> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -29,6 +29,8 @@ func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 		return cmdProjectConcepts(kb, dl, jsonOut, rest, out)
 	case "set-status":
 		return cmdProjectSetStatus(kb, dl, jsonOut, rest, out)
+	case "set-description":
+		return cmdProjectSetDescription(kb, dl, jsonOut, rest, out)
 	default:
 		return fmt.Errorf("unknown project subcommand %q", sub)
 	}
@@ -89,6 +91,31 @@ func cmdProjectSetStatus(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool
 		}{Name: name, Status: status})
 	}
 	fmt.Fprintf(out, "project %q status set to %q\n", name, status)
+	return nil
+}
+
+// Trailing words are joined the way project add joins them, so an unquoted
+// description works the same in both places. A bare NAME is a usage error
+// rather than a clear: clearing takes an explicit empty string.
+func cmdProjectSetDescription(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: project set-description NAME DESCRIPTION")
+	}
+	name := args[0]
+	desc := strings.Join(args[1:], " ")
+	err := logKBCallErr(dl, "SetProjectDescription", map[string]any{"name": name, "description": desc}, func() error {
+		return kb.SetProjectDescription(name, desc)
+	})
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		}{Name: name, Description: desc})
+	}
+	fmt.Fprintf(out, "project %q description updated\n", name)
 	return nil
 }
 

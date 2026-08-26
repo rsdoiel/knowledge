@@ -140,6 +140,119 @@ func TestCmdProject_SetStatusMissingArgs(t *testing.T) {
 	}
 }
 
+func TestCmdProject_SetDescription(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("theta", "names DESIGN_DECIDE_PLAN.md"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{
+		"set-description", "theta", "names", "DESIGN_REVIEW_PLAN_IMPLEMENT.md",
+	}, &out); err != nil {
+		t.Fatalf("project set-description: %v", err)
+	}
+	p, err := kb.ProjectByName("theta")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	// Trailing words join with a space, as project add already does.
+	if p.Description != "names DESIGN_REVIEW_PLAN_IMPLEMENT.md" {
+		t.Errorf("Description = %q, want the joined corrected text", p.Description)
+	}
+}
+
+func TestCmdProject_SetDescriptionJSON(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("iota", "old"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, true, []string{"set-description", "iota", "new"}, &out); err != nil {
+		t.Fatalf("project set-description: %v", err)
+	}
+	assertValidJSON(t, out.Bytes())
+	var got struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output not valid JSON: %v (%q)", err, out.String())
+	}
+	if got.Name != "iota" || got.Description != "new" {
+		t.Errorf("got = %+v, want Name=iota Description=new", got)
+	}
+}
+
+// `set-description NAME ""` is how a description gets cleared; bare
+// `set-description NAME` is a usage error, so the clear stays deliberate.
+func TestCmdProject_SetDescriptionEmptyString(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("kappa", "something"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"set-description", "kappa", ""}, &out); err != nil {
+		t.Fatalf("project set-description: %v", err)
+	}
+	p, err := kb.ProjectByName("kappa")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "" {
+		t.Errorf("Description = %q, want it cleared", p.Description)
+	}
+}
+
+func TestCmdProject_SetDescriptionMissingArgs(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("lambda", "keep me"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"set-description", "lambda"}, &out); err == nil {
+		t.Error("expected an error for a missing DESCRIPTION argument")
+	}
+	p, err := kb.ProjectByName("lambda")
+	if err != nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "keep me" {
+		t.Errorf("Description = %q, want the usage error to leave it alone", p.Description)
+	}
+}
+
+func TestCmdProject_SetDescriptionNotFound(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"set-description", "nonexistent", "x"}, &out); err == nil {
+		t.Error("expected an error for a nonexistent project")
+	}
+}
+
+// Every project subcommand has to appear in the verb's own usage line, or it
+// is undiscoverable from the error you get by running the verb bare.
+func TestCmdProject_UsageListsEverySubcommand(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	err := cmdProject(kb, nil, false, nil, &out)
+	if err == nil {
+		t.Fatal("expected a usage error for a bare project verb")
+	}
+	for _, sub := range []string{"add", "list", "show", "concepts", "set-status", "set-description"} {
+		if !strings.Contains(err.Error(), sub) {
+			t.Errorf("usage %q does not mention subcommand %q", err.Error(), sub)
+		}
+	}
+}
+
+// kb-project(1) is generated from ProjectHelpText, so a subcommand missing
+// from it never reaches the man page.
+func TestProjectHelpText_DocumentsSetDescription(t *testing.T) {
+	if !strings.Contains(ProjectHelpText, "set-description") {
+		t.Error("ProjectHelpText does not document set-description")
+	}
+}
+
 func TestCmdProject_UnknownSubcommand(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer

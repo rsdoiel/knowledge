@@ -159,11 +159,14 @@ const ProjectHelpText = `%{app_name}-project(1) user manual | version {version} 
 
 {app_name} project set-status NAME STATUS
 
+{app_name} project set-description NAME DESCRIPTION
+
 # DESCRIPTION
 
 A project is the top-level container observations and concepts attach to.
 Names are unique; adding a project with an existing name is a no-op that
-returns the existing project's id (its status, if any, is left unchanged).
+returns the existing project's id (its status and description are left
+unchanged) -- use set-status and set-description to change either.
 
 add
 : create a project, or return the id of the existing one with that name.
@@ -183,9 +186,25 @@ set-status
 : change an existing project's status. STATUS must be one of concept,
   active, paused, concluded.
 
+set-description
+: replace an existing project's description, reindexing it for
+  {app_name}-search(1). A description is grounding context -- it is what
+  show prints and what search returns -- so this is how one that has gone
+  stale gets corrected. Trailing words are joined with a space, as in add;
+  pass an explicit empty string to clear the description entirely.
+
+# CAVEATS
+
+A description edited on two machines does not yet reconcile. Both
+{app_name}-merge(1) and {app_name}-import(1) resolve a conflict in favour of
+the row already present, without consulting timestamps, so a merge keeps one
+edit and drops the other. set-description records updated_at against a later
+last-writer-wins pass, but nothing reads it across machines today.
+
 # SEE ALSO
 
-{app_name}-observation(1), {app_name}-link(1), {app_name}-search(1)
+{app_name}-observation(1), {app_name}-link(1), {app_name}-search(1),
+{app_name}-merge(1)
 
 `
 
@@ -253,6 +272,13 @@ const ConceptHelpText = `%{app_name}-concept(1) user manual | version {version} 
 
 A concept is a named idea or term that can be linked to projects and
 observations (see {app_name}-link(1)). Names are unique.
+
+add on an existing name updates that concept rather than creating a second
+one, which is also how a concept's description is corrected -- there is no
+separate set-description here, unlike {app_name}-project(1). An omitted or
+empty DESCRIPTION preserves the stored one rather than clearing it, so
+running add just to assert a concept exists cannot lose text. The same holds
+for --identifier-type and --identifier-value.
 
 A concept may also represent a scholarly entity — a paper, person,
 institution, or funder — by setting --identifier-type (e.g. doi, orcid,

@@ -560,15 +560,27 @@ func (kb *KnowledgeBase) addProject(name, description, status string) (int64, er
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add project: %w", err)
 	}
-	if kb.ftsAvailable {
-		_, _ = kb.db.Exec(
-			`DELETE FROM kb_fts WHERE source_type = 'project' AND source_id = ?`, id)
-		_, _ = kb.db.Exec(
-			`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
-			 VALUES (?, 'project', ?, ?, 'project', ?, ?)`,
-			name+" "+description, name, description, id, id)
-	}
+	kb.refreshProjectFTS(id, name, description)
 	return id, nil
+}
+
+// refreshProjectFTS replaces the project's kb_fts row so search reflects the
+// current name and description. Delete-then-insert rather than update, since
+// kb_fts is an external-content-free FTS5 table with no unique key to upsert
+// against; skipping the delete would leave a second row behind and let bm25
+// count the same project twice. A no-op when FTS5 is not compiled in, and
+// deliberately silent on failure — search is an index over the real tables,
+// so a failed reindex must not fail the write that already succeeded.
+func (kb *KnowledgeBase) refreshProjectFTS(id int64, name, description string) {
+	if !kb.ftsAvailable {
+		return
+	}
+	_, _ = kb.db.Exec(
+		`DELETE FROM kb_fts WHERE source_type = 'project' AND source_id = ?`, id)
+	_, _ = kb.db.Exec(
+		`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
+		 VALUES (?, 'project', ?, ?, 'project', ?, ?)`,
+		name+" "+description, name, description, id, id)
 }
 
 /** SetProjectStatus updates an existing project's status. status must be
@@ -603,6 +615,49 @@ func (kb *KnowledgeBase) SetProjectStatus(name, status string) error {
 	if n == 0 {
 		return fmt.Errorf("knowledge: project %q not found", name)
 	}
+	return nil
+}
+
+/** SetProjectDescription replaces an existing project's description and
+ * reindexes it for search. A description is grounding context — it is what
+ * ProjectByName reports and what Search returns as a snippet — so this is
+ * how a description that has gone stale gets corrected without hand-written
+ * SQL against the database.
+ *
+ * An empty description is honoured rather than rejected: clearing one here is
+ * explicit, unlike on AddConcept, where an omitted description is far more
+ * likely to be an accident than an instruction.
+ *
+ * updated_at is touched. Nothing reads it across machines yet — MergeKnowledgeBases
+ * and ImportJSONL both resolve a conflict in favour of the row already present,
+ * without consulting it — but recording it now is what makes a later
+ * last-writer-wins reconciliation possible at all.
+ *
+ * Parameters:
+ *   name        (string) — the project's unique name.
+ *   description (string) — the replacement description; "" clears it.
+ *
+ * Returns:
+ *   error — if the project does not exist, or on database failure.
+ *
+ * Example:
+ *   err := kb.SetProjectDescription("dev-process", "names DESIGN_REVIEW_PLAN_IMPLEMENT.md")
+ */
+func (kb *KnowledgeBase) SetProjectDescription(name, description string) error {
+	var id int64
+	err := kb.db.QueryRow(
+		`UPDATE projects SET description = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE name = ?
+		 RETURNING id`,
+		description, name,
+	).Scan(&id)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("knowledge: project %q not found", name)
+	}
+	if err != nil {
+		return fmt.Errorf("knowledge: set project description: %w", err)
+	}
+	kb.refreshProjectFTS(id, name, description)
 	return nil
 }
 
@@ -792,13 +847,19 @@ func (kb *KnowledgeBase) ObservationByID(id int64) (*Observation, error) {
 // ─── Concepts ────────────────────────────────────────────────────────────────
 
 /** AddConcept inserts a new concept or, if a concept with the same name exists,
- * returns its ID unchanged. It is equivalent to calling AddConceptWithIdentifier
- * with identifierType = identifierValue = "", which leaves any identifier
- * already recorded for an existing concept untouched.
+ * updates it and returns its existing ID. It is equivalent to calling
+ * AddConceptWithIdentifier with identifierType = identifierValue = "", which
+ * leaves any identifier already recorded for an existing concept untouched.
+ *
+ * Since names are unique, this doubles as the correction path for a concept's
+ * description — there is no SetConceptDescription, unlike SetProjectDescription
+ * on projects. An empty description preserves the stored one; see
+ * AddConceptWithIdentifier.
  *
  * Parameters:
  *   name        (string) — unique concept name.
- *   description (string) — human-readable explanation of the concept.
+ *   description (string) — human-readable explanation of the concept; "" preserves
+ *                          the stored description on an existing concept.
  *
  * Returns:
  *   int64 — ID of the inserted or existing concept.
@@ -814,13 +875,18 @@ func (kb *KnowledgeBase) AddConcept(name, description string) (int64, error) {
 /** AddConceptWithIdentifier inserts a new concept, or updates an existing
  * concept with the same name, optionally recording a scholarly identifier
  * (e.g. a paper's DOI, a person's ORCID, an institution's ROR) that the
- * concept represents. If identifierType or identifierValue is "" on an
- * update, the existing stored value (if any) is preserved rather than
- * cleared.
+ * concept represents.
+ *
+ * On an update, an empty description, identifierType or identifierValue
+ * preserves the stored value rather than clearing it. That matters most for
+ * the description: calling this with a name alone is a legitimate way to
+ * assert a concept exists, and clearing its description on the way would be
+ * silent data loss. Pass a non-empty description to correct one.
  *
  * Parameters:
  *   name            (string) — unique concept name.
- *   description     (string) — human-readable explanation of the concept.
+ *   description     (string) — human-readable explanation of the concept, or "" to
+ *                              preserve the stored one.
  *   identifierType  (string) — one of the IdentifierType values (e.g. "doi", "orcid"), or "".
  *   identifierValue (string) — normalized (extended) identifier value, or "".
  *
@@ -838,20 +904,25 @@ func (kb *KnowledgeBase) AddConceptWithIdentifier(name, description, identifierT
 		return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
 	}
 	host, _ := os.Hostname()
-	res, err := kb.db.Exec(
+	// The description is guarded the same way the identifier columns are: an
+	// omitted one preserves what is stored rather than clearing it. Without the
+	// guard, `kb concept add NAME` — a legitimate way to check for or re-assert
+	// a concept — silently wiped the description of an existing row. RETURNING
+	// then reports the description that actually landed, which is what kb_fts
+	// has to be indexed on; the pre-conflict argument may not be it.
+	var id int64
+	var stored string
+	err = kb.db.QueryRow(
 		`INSERT INTO concepts (name, description, identifier_type, identifier_value, uuid, origin_host) VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET
-		     description = excluded.description,
+		     description = CASE WHEN excluded.description = '' THEN concepts.description ELSE excluded.description END,
 		     identifier_type = CASE WHEN excluded.identifier_type = '' THEN concepts.identifier_type ELSE excluded.identifier_type END,
-		     identifier_value = CASE WHEN excluded.identifier_value = '' THEN concepts.identifier_value ELSE excluded.identifier_value END`,
+		     identifier_value = CASE WHEN excluded.identifier_value = '' THEN concepts.identifier_value ELSE excluded.identifier_value END
+		 RETURNING id, description`,
 		name, description, identifierType, identifierValue, u.String(), host,
-	)
+	).Scan(&id, &stored)
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add concept: %w", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil || id == 0 {
-		kb.db.QueryRow(`SELECT id FROM concepts WHERE name = ?`, name).Scan(&id)
 	}
 	if kb.ftsAvailable {
 		_, _ = kb.db.Exec(
@@ -859,7 +930,7 @@ func (kb *KnowledgeBase) AddConceptWithIdentifier(name, description, identifierT
 		_, _ = kb.db.Exec(
 			`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
 			 VALUES (?, 'concept', ?, ?, 'concept', ?, 0)`,
-			name+" "+description, name, description, id)
+			name+" "+stored, name, stored, id)
 	}
 	return id, nil
 }
