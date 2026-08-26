@@ -10,5 +10,12 @@ bin
 testout
 dist
 man
+# SQLite does not version well in git -- a fresh binary blob per commit and
+# no readable diff -- and `kb` with no --db creates ./agents/knowledge.db in
+# whatever directory it is run from, so running it inside this repo silently
+# leaves an untracked database that `git add -A` would sweep into a commit.
+# The WAL siblings were already ignored here; the database itself was not.
+*.db
 *.db-shm
 *.db-wal
+*.db.pre-*
