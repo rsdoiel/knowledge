@@ -294,9 +294,33 @@ obvious implementation is wrong:
 
 ---
 
-## W5 — `kb record new` and `kb record fmt`
+## W5 — `kb record new`, `kb record fmt`, and the identity-collision guard
 
 ### Work items
+
+- **Refuse to overwrite a record that is not the same record.** Two workspaces
+  each have an `agents/decisions/`, and a workspace-tier record's identity is
+  `(NULL project, "workspace", record_id)` — unique only *within one
+  workspace*, which nothing states and nothing enforces. Ingesting both
+  tiers into one database silently overwrites the first with the second,
+  reported as a routine `1 updated`. Demonstrated, not theorised.
+
+  The guard is `uuid`-based rather than workspace-aware, because it needs no
+  registry and generalises beyond this case: when an incoming record matches an
+  existing identity but both carry a **non-empty and differing `uuid`**, it is a
+  different record wearing the same id. Refuse the write, count it as failed,
+  report it, and let the rest of the run proceed — a run should survive a
+  collision, but data must not be destroyed by one. Where the uuids cannot
+  settle it (either is empty) but the stored `path` differs, warn instead:
+  a slug is cosmetic and may be regenerated, so a changed path alone is not
+  proof of a collision.
+
+  **This is interim.** The real fix is to carry the workspace's actual name, so
+  that a workspace-tier record's identity is complete and `workspace:` in a
+  reference says which workspace it means. That change would also remove the
+  NULL `project_id` and retire DR-0004's `IFNULL` index, so it is its own
+  effort. The guard exists so the Laboratory workspace tier can be created
+  safely before that lands.
 
 - `kb record fmt PATH [--dry-run]` — parse each record under `PATH` with W2's
   `ParseRecordFile` and write back `RenderRecordFile`'s output, bringing a
@@ -318,6 +342,11 @@ obvious implementation is wrong:
 
 ### Acceptance criteria
 
+- Ingesting two different workspaces' `agents/decisions/`, each holding a
+  DR-0001 with its own `uuid`, into one database leaves the first intact,
+  reports the second as a collision, and exits 0.
+- Re-ingesting all five live corpora still reports 0 failed: the guard fires on
+  differing uuids, never on a record matching itself.
 - `record fmt` over `CMTools/decisions/` rewrites exactly 6 files and reports
   the other 7 unchanged; a second run reports 13 unchanged.
 - `record fmt --dry-run` leaves every file byte-identical.

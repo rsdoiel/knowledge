@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -518,6 +519,28 @@ func copyFile(t *testing.T, src, dst string) {
 	}
 }
 
+// dropRecordTables removes the decision-record tables from a database file, so
+// that a copy of a database which has already been migrated can be used to
+// exercise the migration again. Operates on the given path only; callers pass
+// a copy.
+func dropRecordTables(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open %s: %v", path, err)
+	}
+	defer db.Close()
+	for _, stmt := range []string{
+		`DROP TABLE IF EXISTS record_relations`,
+		`DROP TABLE IF EXISTS records`,
+		`DELETE FROM kb_fts WHERE source_type = 'record'`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "no such table") {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+}
+
 // userTableCounts returns a row count per user table, read without applying
 // this package's migrations.
 func userTableCounts(t *testing.T, path string) map[string]int {
@@ -570,12 +593,17 @@ func TestOpen_ExistingKnowledgeBaseIsUnharmed(t *testing.T) {
 	copyFile(t, src+"-wal", dst+"-wal")
 	copyFile(t, src+"-shm", dst+"-shm")
 
+	// The real database has had records ingested into it since this test was
+	// written, so the copy is returned to a genuine pre-migration state before
+	// the migration is exercised. Dropping from the copy, never the source.
+	dropRecordTables(t, dst)
+
 	before := userTableCounts(t, dst)
 	if before["observations"] == 0 || before["projects"] == 0 {
 		t.Fatalf("legacy database at %s looks empty: %v", src, before)
 	}
 	if _, ok := before["records"]; ok {
-		t.Fatalf("legacy database already has a records table; this test cannot prove the migration")
+		t.Fatalf("dropping the record tables from the copy did not take effect")
 	}
 
 	kb, err := Open(dst)

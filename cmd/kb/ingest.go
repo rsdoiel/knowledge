@@ -225,6 +225,18 @@ func (ing *ingester) upsertAll(files []string) {
 
 		rec := &ingestedRecord{file: rf, projectID: projectID}
 		existing, err := ing.kb.RecordByIdentity(projectID, rf.Record.Scope, rf.Record.RecordID)
+		if err == nil {
+			if problem := identityCollision(existing, &rf.Record, name); problem != "" {
+				ing.summary.Failed++
+				ing.summary.Errors = append(ing.summary.Errors, problem)
+				continue
+			}
+			if existing.Path != rf.Record.Path {
+				ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+					"%s: DR-%s was stored at %s; a slug may have been regenerated, or two files may claim one id",
+					name, rf.Record.RecordID, existing.Path))
+			}
+		}
 		switch {
 		case err == nil && existing.Checksum == rf.Record.Checksum:
 			ing.summary.Skipped++
@@ -249,6 +261,34 @@ func (ing *ingester) upsertAll(files []string) {
 		ing.byIdent[identityKey{rf.ProjectName, rf.Record.Scope, rf.Record.RecordID}] = rec
 		ing.order = append(ing.order, rec)
 	}
+}
+
+// identityCollision reports whether an incoming record is a *different*
+// record wearing an identity that is already taken, in which case storing it
+// would destroy the existing one.
+//
+// The case this exists for is the workspace tier. Every workspace has an
+// agents/decisions/, and a workspace-tier record's identity is
+// (NULL project, "workspace", record_id) — unique only within one workspace.
+// Ingesting two workspaces' tiers into one database would otherwise overwrite
+// the first with the second and report it as a routine update.
+//
+// uuid is what settles it: it is a record's stable identity across machines,
+// so two non-empty and differing uuids mean two records. Where either uuid is
+// empty the check cannot conclude anything and stays silent; the caller warns
+// on a changed path instead, since a slug is cosmetic and may be regenerated.
+//
+// This is interim. The real fix is to carry the workspace's own name so that a
+// workspace-tier identity is complete, which would also retire the NULL
+// project_id this works around.
+func identityCollision(existing, incoming *knowledge.Record, name string) string {
+	if existing.UUID == "" || incoming.UUID == "" || existing.UUID == incoming.UUID {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%s: DR-%s already exists with a different uuid (%s stored at %s, incoming %s); "+
+			"refusing to overwrite it, since two records cannot share one identity",
+		name, incoming.RecordID, existing.UUID, existing.Path, incoming.UUID)
 }
 
 // projectID resolves a frontmatter project name to a row, creating the

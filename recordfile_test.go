@@ -452,14 +452,17 @@ func corpusDirs(t *testing.T) []string {
 	return out
 }
 
-// normalizesOnRender lists the records known to differ from canonical form:
-// six CMTools records whose decisions[] use a block sequence, which
-// DECISION_RECORD_FORMAT.md forbids ("inline lists only"). Every other record
-// in every corpus must round-trip byte-identically.
-var normalizesOnRender = map[string]bool{
-	"CMTools/0003": true, "CMTools/0005": true, "CMTools/0006": true,
-	"CMTools/0008": true, "CMTools/0011": true, "CMTools/0012": true,
-}
+// normalizesOnRender lists records known to differ from canonical form. It is
+// deliberately empty: it once held the six CMTools records whose decisions[]
+// used a block sequence, which DECISION_RECORD_FORMAT.md forbids ("inline
+// lists only"), and `kb record fmt` normalised them in W5. Every record in
+// every corpus now round-trips byte-identically.
+//
+// The map stays rather than being inlined as a zero check, because it is the
+// mechanism that made the normalisation visible: the test asserts this set
+// exactly, so a record that starts diverging fails, and so does one listed
+// here that stops.
+var normalizesOnRender = map[string]bool{}
 
 // The phase's real acceptance test: parse then render every live record and
 // compare bytes.
@@ -531,43 +534,10 @@ func TestParseRecordFile_RoundTripsEveryLiveRecord(t *testing.T) {
 	t.Logf("round-tripped %d records; %d normalized as expected", total, len(diverged))
 }
 
-// The six normalizing records must differ only in how decisions[] is written.
-func TestParseRecordFile_NormalizationOnlyTouchesDecisions(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skipf("no home directory: %v", err)
-	}
-	dir := filepath.Join(home, "WorkLab", "CMTools", "decisions")
-	if _, err := os.Stat(dir); err != nil {
-		t.Skipf("no CMTools corpus at %s", dir)
-	}
-
-	files, _ := filepath.Glob(filepath.Join(dir, "[0-9]*.md"))
-	for _, path := range files {
-		if !normalizesOnRender["CMTools/"+filepath.Base(path)[:4]] {
-			continue
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("reading %s: %v", path, err)
-		}
-		rf, err := ParseRecord(raw, path)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
-		}
-		out, err := RenderRecordFile(rf)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
-		}
-		if !strings.Contains(string(out), `decisions: ["`) {
-			t.Errorf("%s: decisions was not inlined", filepath.Base(path))
-		}
-		// Body must be untouched by normalization.
-		if got, want := bodyOf(string(out)), bodyOf(string(raw)); got != want {
-			t.Errorf("%s: normalization altered the body", filepath.Base(path))
-		}
-	}
-}
+// The record-level assertion that normalisation inlines decisions[] without
+// touching the body now lives in TestCmdRecord_FmtNormalisesAndReports, which
+// uses a fixture. The corpus-based version that stood here became vacuous once
+// kb record fmt normalised CMTools in W5 and left nothing divergent to check.
 
 // bodyOf returns everything after the second --- fence.
 func bodyOf(s string) string {

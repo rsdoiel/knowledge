@@ -543,6 +543,10 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record supersede NEW OLD [--partial] [--project P] [--workspace] [--root DIR]
 
+{app_name} record new --title T --trigger G (--project P | --workspace) [--kind K] [--root DIR]
+
+{app_name} record fmt PATH [--dry-run]
+
 # DESCRIPTION
 
 A decision record is one file under a project's decisions/ directory, indexed
@@ -570,8 +574,22 @@ supersede
   OLD, the relation, and unless --partial, OLD's superseded status. Both
   files and the database are written together or not at all
 
-set-status and supersede are the only commands that write a record file;
-ingest never does.
+new
+: scaffold a record: allocate the next id for the tier, fill the fields a
+  tool owns, set status to proposed, and print all five body headings whether
+  or not they get filled. Writes the file; does not ingest it. --trigger is
+  required here even though a converted record may carry an empty one,
+  because on a newly authored record it is cheap and accurate to say where
+  the need was discovered
+
+fmt
+: rewrite every record under PATH into canonical form. This is the
+  normalisation path ingest deliberately lacks, since ingest never writes to
+  a record file
+
+new, set-status, supersede and fmt are the only commands that write a record
+file; ingest never does. A record is written proposed and stays proposed: a
+model may write a record, but only the author accepts one.
 
 # VOCABULARIES
 
@@ -602,6 +620,17 @@ trigger
   a later record invalidates one decision inside a multi-decision episode
   while the rest still stand
 
+--title T
+: the new record's title, on new. The filename slug is derived from it,
+  lowercased with punctuation stripped; the slug is cosmetic and the id is
+  the identity
+
+--kind K
+: the new record's kind, on new. Defaults to decision
+
+--dry-run
+: on fmt, report what would change and write nothing
+
 --root DIR
 : the workspace root that stored record paths are relative to. Defaults to
   the parent of the directory holding the database
@@ -621,6 +650,13 @@ Promote a proposed record, then wholly and partially supersede:
 {app_name} record set-status 0004 accepted --project knowledge
 {app_name} record supersede 0149 0148 --project clasm
 {app_name} record supersede 0159 0160 --project clasm --partial
+~~~
+
+Start a new record, and bring a corpus into canonical form:
+
+~~~shell
+{app_name} record new --project clasm --title "Retry the profile attach" --trigger live-test
+{app_name} record fmt clasm/decisions --dry-run
 ~~~
 
 `

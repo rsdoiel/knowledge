@@ -48,7 +48,9 @@ type recordFlags struct {
 	initiative string
 	since      string
 	root       string
+	title      string
 	partial    bool
+	dryRun     bool
 	args       []string
 }
 
@@ -75,7 +77,7 @@ type recordFlags struct {
  */
 func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("record requires a subverb: list, show, set-status or supersede")
+		return fmt.Errorf("record requires a subverb: list, show, new, set-status, supersede or fmt")
 	}
 	flags, err := parseRecordFlags(args[1:])
 	if err != nil {
@@ -92,8 +94,12 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return recordSetStatus(kb, jsonOut, flags, out)
 	case "supersede":
 		return recordSupersede(kb, jsonOut, flags, out)
+	case "fmt":
+		return recordFmt(kb, jsonOut, flags, out)
+	case "new":
+		return recordNew(kb, jsonOut, flags, out)
 	default:
-		return fmt.Errorf("unknown record subverb %q; want list, show, set-status or supersede", args[0])
+		return fmt.Errorf("unknown record subverb %q; want list, show, new, set-status, supersede or fmt", args[0])
 	}
 }
 
@@ -103,7 +109,7 @@ func parseRecordFlags(args []string) (recordFlags, error) {
 	strFlags := map[string]*string{
 		"--project": &f.project, "--status": &f.status, "--kind": &f.kind,
 		"--trigger": &f.trigger, "--initiative": &f.initiative,
-		"--since": &f.since, "--root": &f.root,
+		"--since": &f.since, "--root": &f.root, "--title": &f.title,
 	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -120,6 +126,8 @@ func parseRecordFlags(args []string) (recordFlags, error) {
 			f.workspace = true
 		case "--partial":
 			f.partial = true
+		case "--dry-run":
+			f.dryRun = true
 		default:
 			if strings.HasPrefix(arg, "-") {
 				return f, fmt.Errorf("unknown flag %q", arg)

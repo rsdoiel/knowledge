@@ -667,3 +667,36 @@ func (kb *KnowledgeBase) RelationsFor(id int64) ([]RelatedRecord, error) {
 	}
 	return out, rows.Err()
 }
+
+/** NewUUID returns a fresh UUID v7, the identity every record and row in this
+ * schema carries so that `merge` can reconcile writes made on different
+ * machines.
+ *
+ * Returns:
+ *   string — the UUID in its canonical hyphenated form.
+ *   error  — if the system entropy source fails.
+ *
+ * Example:
+ *   id, err := NewUUID() // "01a03b46-e5e0-7461-a74c-ac096492f96d"
+ */
+func NewUUID() (string, error) {
+	u, err := uuid.NewV7()
+	if err != nil {
+		return "", fmt.Errorf("knowledge: generate uuid: %w", err)
+	}
+	return u.String(), nil
+}
+
+/** Today returns the current date as YYYY-MM-DD, the form the record format
+ * requires. It is a string rather than a time.Time because a bare date in YAML
+ * resolves to a timestamp, and the format quotes it to prevent exactly that.
+ *
+ * Returns:
+ *   string — today's date, e.g. "2026-08-25".
+ *
+ * Example:
+ *   date := Today() // "2026-08-25"
+ */
+func Today() string {
+	return time.Now().Format("2006-01-02")
+}
