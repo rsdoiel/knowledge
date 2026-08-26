@@ -1090,9 +1090,15 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 /** KBSearchResult holds one row returned by Search.
  *
  * Fields:
- *   Kind    (string) — observation kind ("note", "finding", etc.) or "project" / "concept".
- *   Label   (string) — project name for observations; entity name for projects and concepts.
- *   Snippet (string) — observation body; or description for projects and concepts.
+ *   Kind       (string) — observation kind ("note", "finding", etc.), a record's
+ *                        own kind ("decision", "correction"), or "project" / "concept".
+ *   Label      (string) — project name for observations; "DR-NNNN" for records;
+ *                        entity name for projects and concepts.
+ *   Snippet    (string) — observation body; title for records; description for
+ *                        projects and concepts.
+ *   SourceType (string) — which table the hit came from: "observation",
+ *                        "project", "concept" or "record". Kind alone cannot
+ *                        say, since a record's kind is its own vocabulary.
  *
  * Example:
  *   results, _ := kb.Search("WAL mode")
@@ -1101,9 +1107,10 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
  *   }
  */
 type KBSearchResult struct {
-	Kind    string
-	Label   string
-	Snippet string
+	Kind       string
+	Label      string
+	Snippet    string
+	SourceType string
 }
 
 /** Search performs a full-text search across observations, projects, and concepts
@@ -1135,7 +1142,8 @@ func (kb *KnowledgeBase) Search(term string) ([]KBSearchResult, error) {
 		       CASE WHEN kb_fts.source_type = 'observation'
 		            THEN COALESCE(p.name, '') ELSE kb_fts.label END,
 		       CASE WHEN kb_fts.source_type = 'observation'
-		            THEN kb_fts.body ELSE kb_fts.descr END
+		            THEN kb_fts.body ELSE kb_fts.descr END,
+		       kb_fts.source_type
 		FROM   kb_fts
 		LEFT JOIN projects p ON kb_fts.source_type = 'observation'
 		                     AND p.id = kb_fts.project_id
@@ -1150,7 +1158,7 @@ func (kb *KnowledgeBase) Search(term string) ([]KBSearchResult, error) {
 	var out []KBSearchResult
 	for rows.Next() {
 		var r KBSearchResult
-		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet); err != nil {
+		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet, &r.SourceType); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

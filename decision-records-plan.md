@@ -14,9 +14,12 @@ covers, red confirmed first, matching this module's existing practice.
 
 ## Status (2026-08-25)
 
-W1–W4 are implemented and green, pending review — `records.go`,
-`recordfile.go`, `cmd/kb/ingest.go` and `cmd/kb/record.go`, 269 tests, none
-skipped. All five corpora ingest end to end: 198 records, 42 relations, 0
+W1–W6 are implemented and green, pending review — `records.go`,
+`recordfile.go`, `cmd/kb/ingest.go`, `cmd/kb/record.go`, `cmd/kb/recordnew.go`
+and `cmd/kb/index.go`, 303 tests, none skipped. `kb index` is byte-identical to
+`decisions_index.ts` across all five corpora, so DR-0003's deletion condition
+is met; the Deno tool has **not** yet been removed. W7 (documentation and
+downstream) is not started. All five corpora ingest end to end: 198 records, 42 relations, 0
 failures, and the cross-tier `agents:DR-0001 → clasm:DR-0160` reference
 resolves. W5 onward is not started. This module's own log gained DR-0004,
 DR-0005 and DR-0006 covering the W1–W3 decisions, all `proposed`. Five real

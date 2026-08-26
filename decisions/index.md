@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0008  2026-08-25  proposed     decision     implementation   -     kb index builds from files not the database, treats a malformed record as fatal, and search gains source_type
 DR-0007  2026-08-25  accepted     decision     implementation   -     Record ids are not identities, writers re-render canonically, and a uuid guard blocks cross-workspace collisions
 DR-0006  2026-08-25  accepted     decision     implementation   -     Ingest creates unknown projects, links `initiative` as a concept, and re-resolves references for skipped records
 DR-0005  2026-08-25  accepted     decision     plan-review      -     The frontmatter struct declaration is the format specification, and the corpus is normalised to it

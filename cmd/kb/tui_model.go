@@ -18,6 +18,7 @@ const (
 	viewObservations
 	viewConcepts
 	viewSearch
+	viewRecords
 )
 
 // projectItem, observationItem, conceptItem, and searchResultItem each
@@ -38,6 +39,21 @@ type observationItem struct{ o knowledge.Observation }
 func (i observationItem) Title() string       { return fmt.Sprintf("[%s] %s", i.o.Kind, i.o.Body) }
 func (i observationItem) Description() string { return i.o.CreatedAt.Format("2006-01-02 15:04") }
 func (i observationItem) FilterValue() string { return i.o.Body }
+
+// recordItem wraps a decision record for the list. The record's status, kind
+// and supersession are what a reader scans for, so they lead the description
+// rather than the date.
+type recordItem struct{ r knowledge.Record }
+
+func (i recordItem) Title() string { return fmt.Sprintf("DR-%s  %s", i.r.RecordID, i.r.Title) }
+func (i recordItem) Description() string {
+	trigger := i.r.Trigger
+	if trigger == "" {
+		trigger = "-"
+	}
+	return fmt.Sprintf("%s  %s  %s  %s", i.r.Date, i.r.Status, i.r.Kind, trigger)
+}
+func (i recordItem) FilterValue() string { return i.r.RecordID + " " + i.r.Title }
 
 type conceptItem struct{ c knowledge.Concept }
 
@@ -65,6 +81,7 @@ type tuiModel struct {
 	observationList list.Model
 	conceptList     list.Model
 	searchList      list.Model
+	recordList      list.Model
 	searchInput     textinput.Model
 	searching       bool
 
@@ -101,6 +118,7 @@ func newTUIModel(kb *knowledge.KnowledgeBase, dl *DebugLog) (*tuiModel, error) {
 		// its methods before list.New has run panics.
 		observationList: list.New(nil, list.NewDefaultDelegate(), 0, 0),
 		conceptList:     list.New(nil, list.NewDefaultDelegate(), 0, 0),
+		recordList:      list.New(nil, list.NewDefaultDelegate(), 0, 0),
 		searchList:      list.New(nil, list.NewDefaultDelegate(), 0, 0),
 		searchInput:     ti,
 	}, nil
@@ -115,6 +133,7 @@ var viewStateNames = map[viewState]string{
 	viewObservations: "viewObservations",
 	viewConcepts:     "viewConcepts",
 	viewSearch:       "viewSearch",
+	viewRecords:      "viewRecords",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -165,6 +184,8 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConcepts(msg)
 		case viewSearch:
 			return m.updateSearchResults(msg)
+		case viewRecords:
+			return m.updateRecords(msg)
 		default:
 			return m.updateProjects(msg)
 		}
@@ -213,6 +234,13 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.setState(viewConcepts)
 		return m, nil
+	case "r":
+		if err := m.loadRecords(); err != nil {
+			m.setErr(err)
+			return m, nil
+		}
+		m.setState(viewRecords)
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.observationList, cmd = m.observationList.Update(msg)
@@ -229,12 +257,48 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		m.setState(viewObservations)
 		return m, nil
+	case "r":
+		if err := m.loadRecords(); err != nil {
+			m.setErr(err)
+			return m, nil
+		}
+		m.setState(viewRecords)
+		return m, nil
 	case "/":
 		m.startSearch()
 		return m, nil
 	}
 	var cmd tea.Cmd
 	m.conceptList, cmd = m.conceptList.Update(msg)
+	return m, cmd
+}
+
+// updateRecords handles the records view. Read-only: no key here writes,
+// consistent with the TUI's existing scope. record new, set-status and
+// supersede are CLI verbs.
+func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.setState(viewProjects)
+		return m, nil
+	case "o":
+		m.setState(viewObservations)
+		return m, nil
+	case "c":
+		if err := m.loadConcepts(); err != nil {
+			m.setErr(err)
+			return m, nil
+		}
+		m.setState(viewConcepts)
+		return m, nil
+	case "/":
+		m.startSearch()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.recordList, cmd = m.recordList.Update(msg)
 	return m, cmd
 }
 
@@ -300,6 +364,29 @@ func (m *tuiModel) loadObservations() error {
 	return nil
 }
 
+// loadRecords fills the records list for the selected project, newest first.
+// RecordsByProject returns them oldest first, sorted by date then id, so the
+// slice is reversed rather than re-sorted — the ordering rule lives in one
+// place, and ids are identity rather than chronology, so re-sorting here on
+// id alone would be wrong.
+func (m *tuiModel) loadRecords() error {
+	pid := m.selectedProject.ID
+	records, err := logKBCall(m.dl, "RecordsByProject", map[string]any{"project_id": pid}, func() ([]knowledge.Record, error) {
+		return m.kb.RecordsByProject(pid)
+	})
+	if err != nil {
+		return err
+	}
+	items := make([]list.Item, len(records))
+	for i, r := range records {
+		items[len(records)-1-i] = recordItem{r}
+	}
+	l := list.New(items, list.NewDefaultDelegate(), m.width, m.height)
+	l.Title = fmt.Sprintf("Records — %s", m.selectedProject.Name)
+	m.recordList = l
+	return nil
+}
+
 func (m *tuiModel) loadConcepts() error {
 	pid := m.selectedProject.ID
 	concepts, err := logKBCall(m.dl, "ProjectConcepts", map[string]any{"project_id": pid}, func() ([]knowledge.Concept, error) {
@@ -349,6 +436,8 @@ func (m *tuiModel) View() string {
 		return m.conceptList.View()
 	case viewSearch:
 		return m.searchList.View()
+	case viewRecords:
+		return m.recordList.View()
 	default:
 		return m.projectList.View()
 	}

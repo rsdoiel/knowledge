@@ -43,6 +43,8 @@ func printHelp(out io.Writer, topic string) bool {
 		f(IngestHelpText)
 	case "record":
 		f(RecordHelpText)
+	case "index":
+		f(IndexHelpText)
 	case "export":
 		f(ExportHelpText)
 	case "import":
