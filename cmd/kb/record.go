@@ -344,9 +344,32 @@ func recordRoot(kb *knowledge.KnowledgeBase, f recordFlags) string {
 	return defaultIngestRoot(kb.Path())
 }
 
+// resolveWithinRoot joins a stored, workspace-relative record path onto the
+// root and refuses any result that escapes it.
+//
+// filepath.Join cleans a path but does not confine it — Join("/a/b",
+// "../../etc/x") is "/etc/x" — so without this check a path value that reached
+// the database by some route other than ingest could make set-status and
+// supersede read and write anywhere the user can. Ingest itself cannot store
+// such a path (relativeTo falls back to the base name), but a hand-edited
+// database, a direct SQL insert, or a merge from another machine could.
+func resolveWithinRoot(root, rel string) (string, error) {
+	joined := filepath.Join(root, rel)
+	inside, err := filepath.Rel(root, joined)
+	if err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf(
+			"record path %q resolves outside the workspace root %s; refusing to read or write it",
+			rel, root)
+	}
+	return joined, nil
+}
+
 // loadRecordFile reads and parses the file backing a record.
 func loadRecordFile(root string, rec *knowledge.Record) (*knowledge.RecordFile, []byte, error) {
-	path := filepath.Join(root, rec.Path)
+	path, err := resolveWithinRoot(root, rec.Path)
+	if err != nil {
+		return nil, nil, err
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading DR-%s at %s: %w", rec.RecordID, path, err)
@@ -366,7 +389,10 @@ func saveRecordFile(kb *knowledge.KnowledgeBase, root string, rec *knowledge.Rec
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(root, rec.Path)
+	path, err := resolveWithinRoot(root, rec.Path)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.WriteFile(path, rendered, 0o644); err != nil {
 		return nil, fmt.Errorf("writing %s: %w", path, err)
 	}

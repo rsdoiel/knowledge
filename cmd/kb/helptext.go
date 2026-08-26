@@ -78,6 +78,18 @@ export, import
   alternative to merge, for syncing over a channel that can only move plain
   text (paste, email, git) — see {app_name}-export(1) and {app_name}-import(1)
 
+ingest
+: index a tree of decision records into the knowledge base — see
+  {app_name}-ingest(1)
+
+record
+: read and maintain decision records — list, show, new, set-status,
+  supersede, fmt — see {app_name}-record(1)
+
+index
+: generate a decisions/index.md from a directory of records — see
+  {app_name}-index(1)
+
 # EXIT STATUS
 
 0

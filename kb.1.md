@@ -1,6 +1,6 @@
-%kb(1) user manual | version 0.0.3 f12a59b
+%kb(1) user manual | version 0.0.4 180b04c
 % R. S. Doiel
-% 2026-08-08
+% 2026-08-26
 
 # NAME
 
@@ -73,6 +73,18 @@ export, import
 : write/read a portable JSON-L snapshot of the database — the no-file-access
   alternative to merge, for syncing over a channel that can only move plain
   text (paste, email, git) — see kb-export(1) and kb-import(1)
+
+ingest
+: index a tree of decision records into the knowledge base — see
+  kb-ingest(1)
+
+record
+: read and maintain decision records — list, show, new, set-status,
+  supersede, fmt — see kb-record(1)
+
+index
+: generate a decisions/index.md from a directory of records — see
+  kb-index(1)
 
 # EXIT STATUS
 

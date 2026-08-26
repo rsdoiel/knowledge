@@ -1,7 +1,7 @@
 ---
 title: knowledge
 abstract: |-
-  A standalone SQLite3-backed knowledge base for tracking projects, observations, and concepts across independent experiments in the rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent's knowledge.go, this module provides a typed CRUD API (Open, AddProject, AddObservationWithSource, AddConceptWithIdentifier, Search, and related methods) plus UUID-based row identity and a SQL/ATTACH-based cross-machine merge tool, so other experiments and language-model harnesses can read and write structured observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb, a single "kb VERB ARGS" binary (matching the git/go command model) covering the full API with both human-readable and --json output, a merge verb for reconciling two databases that drifted independently, and a read-only interactive TUI browser for exploring projects, observations, and concepts.
+  A standalone SQLite3-backed knowledge base for tracking projects, observations, and concepts across independent experiments in the rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent's knowledge.go, this module provides a typed CRUD API (Open, AddProject, AddObservationWithSource, AddConceptWithIdentifier, Search, and related methods) plus UUID-based row identity and a SQL/ATTACH-based cross-machine merge tool, so other experiments and language-model harnesses can read and write structured observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb, a single "kb VERB ARGS" binary (matching the git/go command model) covering the full API with both human-readable and --json output, a merge verb for reconciling two databases that drifted independently, and a read-only interactive TUI browser for exploring projects, observations, and concepts. As of v0.0.4 it also indexes Decision Records -- episode-scoped Markdown files with YAML frontmatter, kept in a project's decisions/ directory -- as first-class rows, so the reasoning behind a decision is retrievable rather than living only in files the knowledge base never reads. Adds a records/record_relations schema, a canonical frontmatter parser and renderer, and the ingest, record and index verbs.
 authors:
   - family_name: Doiel
     given_name: R. S.
@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.3
+version: 0.0.4
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -25,16 +25,20 @@ keywords:
   - cross-machine sync
   - CLI
   - TUI
+  - decision records
+  - ADR
+  - provenance
+  - full-text search
 
-date_released: 2026-08-08
+date_released: 2026-08-26
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.3
+## knowledge 0.0.4
 
-Adds JSON-L export/import: ExportJSONL/ImportJSONL in the knowledge package, plus `kb export [-project NAME] [-out PATH]` and `kb import [-in PATH]` verbs. A portable, no-file-access alternative to merge -- the resulting file can be pasted, emailed, or committed to git, then applied elsewhere with import. Projects/concepts are matched by name (existing local rows win), sources by identifier, observations and links by uuid, so re-importing the same file is a no-op.
+Adds Decision Record support. New schema: records and record_relations, with records indexed into kb_fts as source_type 'record'. New library API: ParseRecordFile/RenderRecordFile, ListRecords, RecordByIdentity, RecordsByRecordID, RecordsUnderPath, and a SourceType field on KBSearchResult. New verbs: `kb ingest PATH` walks a tree of NNNN-slug.md records and resolves their cross-references in two passes so forward references work; `kb record list|show|new|set-status|supersede|fmt`; and `kb index PATH` generates a decisions/index.md, one greppable line per record, newest first. The frontmatter struct declaration is the canonical format specification -- field order, flow-styled sequences, and a double-quoted string type for the seven fields the format requires quoted -- so every writer produces byte-identical output. Verified against 202 real records across five corpora, all round-tripping byte-for-byte, and `kb index` output is byte-identical to the Deno generator it replaces. Vocabularies for record status/kind/trigger are documented and reported against, not enforced: a typo should be a fixable row, not a failed run. Note that observation kinds remain enforced, which is a deliberate asymmetry rather than an oversight. Ingest is additive -- a record whose file has vanished is reported, never deleted -- and never writes to a record file; only the record verb does. Adds gopkg.in/yaml.v3 as a direct dependency.
 
 ## Authors
 
@@ -45,7 +49,7 @@ Adds JSON-L export/import: ExportJSONL/ImportJSONL in the knowledge package, plu
 
 
 
-A standalone SQLite3-backed knowledge base for tracking projects, observations, and concepts across independent experiments in the rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent's knowledge.go, this module provides a typed CRUD API (Open, AddProject, AddObservationWithSource, AddConceptWithIdentifier, Search, and related methods) plus UUID-based row identity and a SQL/ATTACH-based cross-machine merge tool, so other experiments and language-model harnesses can read and write structured observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb, a single "kb VERB ARGS" binary (matching the git/go command model) covering the full API with both human-readable and --json output, a merge verb for reconciling two databases that drifted independently, and a read-only interactive TUI browser for exploring projects, observations, and concepts.
+A standalone SQLite3-backed knowledge base for tracking projects, observations, and concepts across independent experiments in the rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent's knowledge.go, this module provides a typed CRUD API (Open, AddProject, AddObservationWithSource, AddConceptWithIdentifier, Search, and related methods) plus UUID-based row identity and a SQL/ATTACH-based cross-machine merge tool, so other experiments and language-model harnesses can read and write structured observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb, a single "kb VERB ARGS" binary (matching the git/go command model) covering the full API with both human-readable and --json output, a merge verb for reconciling two databases that drifted independently, and a read-only interactive TUI browser for exploring projects, observations, and concepts. As of v0.0.4 it also indexes Decision Records -- episode-scoped Markdown files with YAML frontmatter, kept in a project's decisions/ directory -- as first-class rows, so the reasoning behind a decision is retrievable rather than living only in files the knowledge base never reads. Adds a records/record_relations schema, a canonical frontmatter parser and renderer, and the ingest, record and index verbs.
 
 - [License](https://www.gnu.org/licenses/agpl-3.0.txt)
 - [Code Repository](https://github.com/rsdoiel/knowledge)
@@ -61,6 +65,7 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 ## Software Requirements
 
 - Go >= 1.26.3
+- gopkg.in/yaml.v3 >= 3.0.1
 
 
 ## Software Suggestions

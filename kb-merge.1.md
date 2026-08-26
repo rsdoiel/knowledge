@@ -1,6 +1,6 @@
-%kb-merge(1) user manual | version 0.0.3 f12a59b
+%kb-merge(1) user manual | version 0.0.4 180b04c
 % R. S. Doiel
-% 2026-08-08
+% 2026-08-26
 
 # NAME
 

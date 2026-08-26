@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0009  2026-08-26  proposed     correction   release-review   -     The Makefile is hand-maintained despite its generated header, and the grounding query was truncating records not filtering them
 DR-0008  2026-08-25  proposed     decision     implementation   -     kb index builds from files not the database, treats a malformed record as fatal, and search gains source_type
 DR-0007  2026-08-25  accepted     decision     implementation   -     Record ids are not identities, writers re-render canonically, and a uuid guard blocks cross-workspace collisions
 DR-0006  2026-08-25  accepted     decision     implementation   -     Ingest creates unknown projects, links `initiative` as a concept, and re-resolves references for skipped records

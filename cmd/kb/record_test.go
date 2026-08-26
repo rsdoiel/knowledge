@@ -472,3 +472,72 @@ func TestCmdRecord_LiveShowPartialSupersession(t *testing.T) {
 		t.Errorf("show 0160 = %q, want status accepted reported alongside it", out)
 	}
 }
+
+// A record's path comes from the database, and filepath.Join cleans but does
+// not confine: Join("/a/b", "../../etc/x") is "/etc/x". Ingest cannot store an
+// escaping path — relativeTo falls back to the basename — but a hand-edited or
+// merged database could, which would turn set-status into an arbitrary-file
+// writer. Defence in depth.
+func TestCmdRecord_RejectsPathEscapingTheRoot(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	// A *valid* record, so that a parse failure cannot stand in for the
+	// confinement check this test is actually about.
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	sentinel := `---
+id: "0001"
+title: "Outside the root"
+date: "2026-08-26"
+status: proposed
+kind: decision
+trigger: design
+project: clasm
+phase: ""
+supersedes: []
+superseded_by: []
+relates_to: []
+initiative: ""
+session: ""
+decisions: []
+tags: []
+uuid: "66666666-6666-7666-8666-666666666666"
+origin_host: "test"
+---
+
+**Context.** do not touch
+`
+	if err := os.WriteFile(outside, []byte(sentinel), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	rel, err := filepath.Rel(root, outside)
+	if err != nil {
+		t.Fatalf("Rel: %v", err)
+	}
+	if !strings.HasPrefix(rel, "..") {
+		t.Skipf("temp dirs are nested (%s); this test needs a sibling", rel)
+	}
+
+	pid, err := kb.AddProject("clasm", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := kb.AddRecord(knowledge.Record{
+		RecordID: "0001", ProjectID: pid, Scope: "project", Path: rel,
+		Title: "Escapes the root", Date: "2026-08-26",
+		Status: "proposed", Kind: "decision", Body: "b",
+	}); err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+
+	var out bytes.Buffer
+	err = cmdRecord(kb, nil, false, []string{"set-status", "0001", "accepted", "--project", "clasm"}, &out)
+	if err == nil {
+		t.Error("set-status accepted a path outside the workspace root")
+	}
+	after, readErr := os.ReadFile(outside)
+	if readErr != nil {
+		t.Fatalf("ReadFile: %v", readErr)
+	}
+	if string(after) != sentinel {
+		t.Error("a record path escaping the root was written to")
+	}
+}
