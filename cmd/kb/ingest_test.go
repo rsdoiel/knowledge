@@ -220,11 +220,11 @@ func TestCmdIngest_ForwardReferenceResolves(t *testing.T) {
 	}
 
 	p, _ := kb.ProjectByName("clasm")
-	newer, err := kb.RecordByIdentity(p.ID, "project", "0002")
+	newer, err := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0002")
 	if err != nil {
 		t.Fatalf("RecordByIdentity 0002: %v", err)
 	}
-	older, err := kb.RecordByIdentity(p.ID, "project", "0003")
+	older, err := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0003")
 	if err != nil {
 		t.Fatalf("RecordByIdentity 0003: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestCmdIngest_SupersededByIsNotStoredDirectly(t *testing.T) {
 	runIngest(t, kb, dir)
 
 	p, _ := kb.ProjectByName("clasm")
-	newer, _ := kb.RecordByIdentity(p.ID, "project", "0002")
+	newer, _ := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0002")
 	rels, _ := kb.RelationsFor(newer.ID)
 	if len(rels) != 1 {
 		t.Errorf("relations for 0002 = %+v, want exactly one (the stored supersedes)", rels)
@@ -265,7 +265,7 @@ func TestCmdIngest_DoesNotDeriveStatusFromSupersession(t *testing.T) {
 	runIngest(t, kb, dir)
 
 	p, _ := kb.ProjectByName("clasm")
-	older, _ := kb.RecordByIdentity(p.ID, "project", "0160")
+	older, _ := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0160")
 	if older.Status != "accepted" {
 		t.Errorf("status = %q, want accepted — ingest stores what the file says", older.Status)
 	}
@@ -287,7 +287,7 @@ func TestCmdIngest_CrossTierRelatesToResolves(t *testing.T) {
 		t.Fatalf("summary = %+v, want 1 relates_to resolved across tiers", s)
 	}
 
-	ws, err := kb.RecordByIdentity(0, "workspace", "0001")
+	ws, err := kb.RecordByIdentity(kb.Workspace(), 0, "workspace", "0001")
 	if err != nil {
 		t.Fatalf("RecordByIdentity workspace 0001: %v", err)
 	}
@@ -614,7 +614,7 @@ func TestCmdIngest_LiveCrossTierReference(t *testing.T) {
 		t.Errorf("RelatesTo = %d, want at least the clasm:0160 reference", s.RelatesTo)
 	}
 
-	ws, err := kb.RecordByIdentity(0, "workspace", "0001")
+	ws, err := kb.RecordByIdentity(kb.Workspace(), 0, "workspace", "0001")
 	if err != nil {
 		t.Fatalf("RecordByIdentity workspace 0001: %v", err)
 	}
@@ -626,7 +626,7 @@ func TestCmdIngest_LiveCrossTierReference(t *testing.T) {
 	if err != nil || clasm == nil {
 		t.Fatalf("ProjectByName: %v", err)
 	}
-	target, err := kb.RecordByIdentity(clasm.ID, "project", "0160")
+	target, err := kb.RecordByIdentity(kb.Workspace(), clasm.ID, "project", "0160")
 	if err != nil {
 		t.Fatalf("RecordByIdentity clasm 0160: %v", err)
 	}

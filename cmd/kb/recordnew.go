@@ -185,6 +185,7 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 			Body:       scaffoldBody,
 			UUID:       uuidValue,
 			OriginHost: host,
+			Workspace:  filepath.Base(root),
 		},
 		ProjectName: f.project,
 	}

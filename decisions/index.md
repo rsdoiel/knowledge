@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0011  2026-08-26  proposed     decision     design           -     A record's identity gains the workspace name, derived from the root rather than stored in frontmatter
 DR-0010  2026-08-26  proposed     correction   implementation   -     Standard options come from a FlagSet and are answered before any database exists
 DR-0009  2026-08-26  proposed     correction   release-review   -     The Makefile is hand-maintained despite its generated header, and the grounding query was truncating records not filtering them
 DR-0008  2026-08-25  proposed     decision     implementation   -     kb index builds from files not the database, treats a malformed record as fatal, and search gains source_type

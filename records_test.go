@@ -49,8 +49,11 @@ func TestOpen_CreatesRecordTables(t *testing.T) {
 			t.Errorf("Open did not create table %q", name)
 		}
 	}
-	if !tableExists(t, kb, "index", "idx_records_scope_id") {
-		t.Error("Open did not create unique index idx_records_scope_id")
+	// idx_records_identity, not the pre-W8 idx_records_scope_id: the identity
+	// gained a workspace column, and the index was renamed so that
+	// CREATE INDEX IF NOT EXISTS could not silently keep the narrower one.
+	if !tableExists(t, kb, "index", "idx_records_identity") {
+		t.Error("Open did not create unique index idx_records_identity")
 	}
 }
 
@@ -632,5 +635,161 @@ func TestOpen_ExistingKnowledgeBaseIsUnharmed(t *testing.T) {
 	}
 	if n := after["records"]; n != 0 {
 		t.Errorf("records table holds %d rows on a fresh migration, want 0", n)
+	}
+}
+
+// ─── W8: the workspace name ──────────────────────────────────────────────────
+
+// A workspace-tier record's identity was (NULL project, "workspace",
+// record_id), which is unique only within one workspace. The workspace name
+// completes it. It is derived from the database's own location rather than
+// stored in frontmatter, so no record file changes.
+func TestOpen_AddsWorkspaceColumnAndIdentityIndex(t *testing.T) {
+	kb := openTestKB(t)
+	var col int
+	if err := kb.db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('records') WHERE name = 'workspace'`,
+	).Scan(&col); err != nil {
+		t.Fatalf("pragma_table_info: %v", err)
+	}
+	if col != 1 {
+		t.Error("records has no workspace column")
+	}
+	if !tableExists(t, kb, "index", "idx_records_identity") {
+		t.Error("idx_records_identity was not created")
+	}
+	if tableExists(t, kb, "index", "idx_records_scope_id") {
+		t.Error("the old idx_records_scope_id survived; it does not include workspace")
+	}
+}
+
+func TestWorkspace_DerivedFromDatabasePath(t *testing.T) {
+	root := t.TempDir()
+	kb, err := Open(DefaultPath(root))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer kb.Close()
+	if got, want := kb.Workspace(), filepath.Base(root); got != want {
+		t.Errorf("Workspace() = %q, want %q — the parent of the directory holding the database", got, want)
+	}
+}
+
+func TestAddRecord_DefaultsWorkspaceFromTheDatabase(t *testing.T) {
+	root := t.TempDir()
+	kb, err := Open(DefaultPath(root))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer kb.Close()
+
+	id, err := kb.AddRecord(newTestRecord("0001", "No workspace supplied", "2026-08-26"))
+	if err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+	got, err := kb.RecordByID(id)
+	if err != nil {
+		t.Fatalf("RecordByID: %v", err)
+	}
+	if got.Workspace != filepath.Base(root) {
+		t.Errorf("Workspace = %q, want %q", got.Workspace, filepath.Base(root))
+	}
+}
+
+// The defect this phase exists to close: two workspaces each have an
+// agents/decisions/, and both may hold a DR-0001. Before the workspace column
+// the second silently overwrote the first.
+func TestAddRecord_TwoWorkspacesMayShareAnIdentity(t *testing.T) {
+	kb := openTestKB(t)
+
+	wl := newTestRecord("0001", "WorkLab side", "2026-08-25")
+	wl.Scope, wl.Workspace, wl.UUID = "workspace", "WorkLab", "11111111-1111-7111-8111-111111111111"
+	lab := newTestRecord("0001", "Laboratory side", "2026-08-25")
+	lab.Scope, lab.Workspace, lab.UUID = "workspace", "Laboratory", "22222222-2222-7222-8222-222222222222"
+
+	first, err := kb.AddRecord(wl)
+	if err != nil {
+		t.Fatalf("AddRecord WorkLab: %v", err)
+	}
+	second, err := kb.AddRecord(lab)
+	if err != nil {
+		t.Fatalf("AddRecord Laboratory: %v", err)
+	}
+	if first == second {
+		t.Fatal("the second workspace's DR-0001 overwrote the first")
+	}
+	if n := countRecords(t, kb); n != 2 {
+		t.Errorf("records holds %d rows, want 2", n)
+	}
+
+	for _, tc := range []struct{ workspace, title string }{
+		{"WorkLab", "WorkLab side"},
+		{"Laboratory", "Laboratory side"},
+	} {
+		got, err := kb.RecordByIdentity(tc.workspace, 0, "workspace", "0001")
+		if err != nil {
+			t.Fatalf("RecordByIdentity(%s): %v", tc.workspace, err)
+		}
+		if got.Title != tc.title {
+			t.Errorf("%s DR-0001 title = %q, want %q", tc.workspace, got.Title, tc.title)
+		}
+	}
+}
+
+// Re-adding the same record in the same workspace still updates in place.
+func TestAddRecord_SameWorkspaceIdentityStillUpdatesInPlace(t *testing.T) {
+	kb := openTestKB(t)
+	r := newTestRecord("0001", "Original", "2026-08-25")
+	r.Scope, r.Workspace = "workspace", "WorkLab"
+
+	first, err := kb.AddRecord(r)
+	if err != nil {
+		t.Fatalf("first AddRecord: %v", err)
+	}
+	r.Title = "Revised"
+	second, err := kb.AddRecord(r)
+	if err != nil {
+		t.Fatalf("second AddRecord: %v", err)
+	}
+	if first != second {
+		t.Errorf("re-adding within one workspace created row %d instead of updating %d", second, first)
+	}
+	if n := countRecords(t, kb); n != 1 {
+		t.Errorf("records holds %d rows, want 1", n)
+	}
+}
+
+// An existing database predates the column, and its rows all belong to the
+// workspace the database itself sits in — which is exactly why backfilling
+// from its own path is correct.
+func TestOpen_BackfillsWorkspaceOnAnExistingDatabase(t *testing.T) {
+	root := t.TempDir()
+	path := DefaultPath(root)
+
+	kb, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, err := kb.AddRecord(newTestRecord("0001", "Predates the column", "2026-08-25")); err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+	// Simulate a pre-W8 row.
+	if _, err := kb.db.Exec(`UPDATE records SET workspace = ''`); err != nil {
+		t.Fatalf("blanking workspace: %v", err)
+	}
+	kb.Close()
+
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+
+	var got string
+	if err := reopened.db.QueryRow(`SELECT workspace FROM records WHERE record_id = '0001'`).Scan(&got); err != nil {
+		t.Fatalf("reading workspace: %v", err)
+	}
+	if got != filepath.Base(root) {
+		t.Errorf("workspace = %q after reopen, want %q backfilled from the database's own path", got, filepath.Base(root))
 	}
 }

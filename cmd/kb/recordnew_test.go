@@ -77,7 +77,7 @@ func TestCmdIngest_DifferentUUIDSameIdentityIsRefused(t *testing.T) {
 	}
 
 	// The first workspace's record must survive intact.
-	rec, err := kb.RecordByIdentity(0, "workspace", "0001")
+	rec, err := kb.RecordByIdentity(kb.Workspace(), 0, "workspace", "0001")
 	if err != nil {
 		t.Fatalf("RecordByIdentity: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestCmdIngest_SameUUIDIsNotACollision(t *testing.T) {
 	if s.Updated != 1 || s.Failed != 0 {
 		t.Errorf("summary = %+v, want 1 updated and no failure", s)
 	}
-	rec, _ := kb.RecordByIdentity(0, "workspace", "0001")
+	rec, _ := kb.RecordByIdentity(kb.Workspace(), 0, "workspace", "0001")
 	if rec.Title != "Revised" {
 		t.Errorf("title = %q, want the update applied", rec.Title)
 	}

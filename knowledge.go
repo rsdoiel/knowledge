@@ -128,11 +128,39 @@ CREATE VIRTUAL TABLE IF NOT EXISTS kb_fts USING fts5(
 type KnowledgeBase struct {
 	db           *sql.DB
 	path         string // absolute path to the SQLite file
+	workspace    string // name of the workspace this database belongs to
 	ftsAvailable bool   // true when the FTS5 virtual table was successfully created
 }
 
 // Path returns the absolute path of the open knowledge base file.
 func (kb *KnowledgeBase) Path() string { return kb.path }
+
+/** Workspace returns the name of the workspace this database belongs to: the
+ * base name of the workspace root, which is the parent of the directory
+ * holding the database. A database at ~/WorkLab/agents/knowledge.db reports
+ * "WorkLab".
+ *
+ * It is derived from the path rather than configured or stored in a record
+ * file, so there is nothing to keep in sync and nothing to get wrong.
+ *
+ * Returns:
+ *   string — the workspace name.
+ *
+ * Example:
+ *   kb, _ := Open("/home/u/WorkLab/agents/knowledge.db")
+ *   fmt.Println(kb.Workspace()) // "WorkLab"
+ */
+func (kb *KnowledgeBase) Workspace() string { return kb.workspace }
+
+// workspaceFromDBPath returns the workspace a database belongs to: the base
+// name of the parent of the directory holding it.
+func workspaceFromDBPath(dbPath string) string {
+	abs, err := filepath.Abs(dbPath)
+	if err != nil {
+		abs = dbPath
+	}
+	return filepath.Base(filepath.Dir(filepath.Dir(abs)))
+}
 
 /** Project represents a single project row in the knowledge base.
  *
@@ -326,6 +354,10 @@ func Open(dbPath string) (*KnowledgeBase, error) {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: apply records schema: %w", err)
 	}
+	if err := applyRecordsMigration(db, workspaceFromDBPath(dbPath)); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("knowledge: migrate records: %w", err)
+	}
 	// One-time data migration: promote existing source_doi values into the
 	// sources authority table and link them via observation_sources.
 	_, _ = db.Exec(`
@@ -344,7 +376,7 @@ func Open(dbPath string) (*KnowledgeBase, error) {
 		}
 		_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_` + t + `_uuid ON ` + t + `(uuid)`)
 	}
-	kb := &KnowledgeBase{db: db, path: dbPath}
+	kb := &KnowledgeBase{db: db, path: dbPath, workspace: workspaceFromDBPath(dbPath)}
 	if err := migrateExperimentsToProjects(kb); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: migrate experiments: %w", err)

@@ -59,12 +59,15 @@ type identityKey struct {
 
 // ingester carries one run's state across both passes.
 type ingester struct {
-	kb      *knowledge.KnowledgeBase
-	root    string
-	dryRun  bool
-	summary ingestSummary
-	byIdent map[identityKey]*ingestedRecord
-	order   []*ingestedRecord
+	kb   *knowledge.KnowledgeBase
+	root string
+	// workspace is the base name of root, not of the database's location:
+	// --root may name a workspace other than the one the database sits in.
+	workspace string
+	dryRun    bool
+	summary   ingestSummary
+	byIdent   map[identityKey]*ingestedRecord
+	order     []*ingestedRecord
 }
 
 /** cmdIngest implements `kb ingest PATH [--dry-run] [--root DIR]`: it walks a
@@ -112,11 +115,12 @@ func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	}
 
 	ing := &ingester{
-		kb:      kb,
-		root:    absRoot,
-		dryRun:  dryRun,
-		byIdent: map[identityKey]*ingestedRecord{},
-		summary: ingestSummary{Root: absRoot, Path: absPath, DryRun: dryRun},
+		kb:        kb,
+		root:      absRoot,
+		workspace: filepath.Base(absRoot),
+		dryRun:    dryRun,
+		byIdent:   map[identityKey]*ingestedRecord{},
+		summary:   ingestSummary{Root: absRoot, Path: absPath, DryRun: dryRun},
 	}
 
 	files, err := collectRecordFiles(absPath)
@@ -222,9 +226,10 @@ func (ing *ingester) upsertAll(files []string) {
 			continue
 		}
 		rf.Record.ProjectID = projectID
+		rf.Record.Workspace = ing.workspace
 
 		rec := &ingestedRecord{file: rf, projectID: projectID}
-		existing, err := ing.kb.RecordByIdentity(projectID, rf.Record.Scope, rf.Record.RecordID)
+		existing, err := ing.kb.RecordByIdentity(ing.workspace, projectID, rf.Record.Scope, rf.Record.RecordID)
 		if err == nil {
 			if problem := identityCollision(existing, &rf.Record, name); problem != "" {
 				ing.summary.Failed++
@@ -448,7 +453,10 @@ func (ing *ingester) lookup(key identityKey) (int64, bool) {
 		}
 		projectID = p.ID
 	}
-	r, err := ing.kb.RecordByIdentity(projectID, key.scope, key.recordID)
+	// A reference resolves within the citing record's own workspace;
+	// cross-workspace references are deliberately not expressible, for the
+	// same reason supersession is same-tier only.
+	r, err := ing.kb.RecordByIdentity(ing.workspace, projectID, key.scope, key.recordID)
 	if err != nil {
 		return 0, false
 	}

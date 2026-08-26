@@ -244,7 +244,7 @@ func TestCmdRecord_SetStatusWritesFileAndDatabase(t *testing.T) {
 		t.Errorf("file line = %q, want %q", got, "status: accepted")
 	}
 	p, _ := kb.ProjectByName("clasm")
-	rec, err := kb.RecordByIdentity(p.ID, "project", "0001")
+	rec, err := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0001")
 	if err != nil {
 		t.Fatalf("RecordByIdentity: %v", err)
 	}
@@ -321,8 +321,8 @@ func TestCmdRecord_SupersedeWritesBothSides(t *testing.T) {
 	}
 
 	p, _ := kb.ProjectByName("clasm")
-	newerRec, _ := kb.RecordByIdentity(p.ID, "project", "0149")
-	olderRec, _ := kb.RecordByIdentity(p.ID, "project", "0148")
+	newerRec, _ := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0149")
+	olderRec, _ := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0148")
 	rels, err := kb.RelationsFor(newerRec.ID)
 	if err != nil {
 		t.Fatalf("RelationsFor: %v", err)
@@ -355,7 +355,7 @@ func TestCmdRecord_SupersedePartialLeavesStatusAccepted(t *testing.T) {
 	}
 
 	p, _ := kb.ProjectByName("clasm")
-	olderRec, _ := kb.RecordByIdentity(p.ID, "project", "0160")
+	olderRec, _ := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0160")
 	if olderRec.Status != "accepted" {
 		t.Errorf("database status = %q, want accepted under --partial", olderRec.Status)
 	}

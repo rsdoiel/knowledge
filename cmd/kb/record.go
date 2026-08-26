@@ -217,7 +217,7 @@ func dashIfEmpty(s string) string {
 func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*knowledge.Record, error) {
 	switch {
 	case f.workspace:
-		r, err := kb.RecordByIdentity(0, "workspace", id)
+		r, err := kb.RecordByIdentity(kb.Workspace(), 0, "workspace", id)
 		if err != nil {
 			return nil, fmt.Errorf("no record DR-%s in the workspace tier", id)
 		}
@@ -227,7 +227,7 @@ func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*know
 		if err != nil || p == nil {
 			return nil, fmt.Errorf("unknown project %q", f.project)
 		}
-		r, err := kb.RecordByIdentity(p.ID, "project", id)
+		r, err := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", id)
 		if err != nil {
 			return nil, fmt.Errorf("no record DR-%s in project %s", id, f.project)
 		}

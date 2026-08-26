@@ -12,13 +12,9 @@ import (
 
 // recordsSchema creates the decision-record tables. Applied after
 // sourcesSchema; CREATE TABLE IF NOT EXISTS is idempotent, following the same
-// lazy-migration pattern as the rest of the schema.
-//
-// The identity index is expressed over IFNULL(project_id, -1) rather than
-// project_id directly. Workspace-tier records carry a NULL project_id, and
-// SQLite treats NULLs in a UNIQUE index as distinct from one another, so a
-// plain UNIQUE(project_id, scope, record_id) would place no constraint at all
-// on the workspace tier and let a re-ingest duplicate every one of its rows.
+// lazy-migration pattern as the rest of the schema. The identity index is
+// created separately, in applyRecordsMigration, because on a pre-W8 database
+// the workspace column it spans does not exist until the ALTER has run.
 const recordsSchema = `
 CREATE TABLE IF NOT EXISTS records (
     id           INTEGER  PRIMARY KEY AUTOINCREMENT,
@@ -38,11 +34,9 @@ CREATE TABLE IF NOT EXISTS records (
     checksum     TEXT     NOT NULL DEFAULT '',
     ingested_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     uuid         TEXT     NOT NULL DEFAULT '',
-    origin_host  TEXT     NOT NULL DEFAULT ''
+    origin_host  TEXT     NOT NULL DEFAULT '',
+    workspace    TEXT     NOT NULL DEFAULT ''
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_records_scope_id
-    ON records(IFNULL(project_id, -1), scope, record_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_records_uuid
     ON records(uuid);
@@ -54,6 +48,54 @@ CREATE TABLE IF NOT EXISTS record_relations (
     PRIMARY KEY (from_id, to_id, relationship)
 );
 `
+
+// recordsAlterStmts are lazy-migration statements for the records table.
+// SQLite reports "duplicate column name" on a second run, which the caller
+// ignores, matching kbAlterStmts.
+var recordsAlterStmts = []string{
+	`ALTER TABLE records ADD COLUMN workspace TEXT NOT NULL DEFAULT ''`,
+}
+
+// recordsIdentityIndex is the unique index defining a record's identity.
+//
+// Two things about it are deliberate. It spans workspace because every
+// workspace has an agents/decisions/ and both may hold a DR-0001: without the
+// column, ingesting two workspaces' tiers into one database silently
+// overwrote the first with the second. And it is expressed over
+// IFNULL(project_id, -1) rather than project_id, because workspace-tier
+// records carry a NULL project_id and SQLite treats NULLs in a unique index as
+// distinct from one another, which would leave that tier unconstrained.
+//
+// The name differs from the pre-W8 idx_records_scope_id on purpose: CREATE
+// UNIQUE INDEX IF NOT EXISTS would not replace an existing index of the same
+// name, so the old one is dropped by name and the new one created beside it.
+const recordsIdentityIndex = `
+DROP INDEX IF EXISTS idx_records_scope_id;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_records_identity
+    ON records(workspace, IFNULL(project_id, -1), scope, record_id);
+`
+
+// applyRecordsMigration adds the workspace column to a pre-W8 database,
+// backfills it, and installs the identity index.
+//
+// Backfilling every existing row with this database's own workspace is
+// correct precisely because of the defect that motivated the column: a
+// database could only ever hold one workspace's records, since a second
+// workspace's would have overwritten the first. There is therefore no
+// ambiguity about which workspace the existing rows belong to.
+func applyRecordsMigration(db *sql.DB, workspace string) error {
+	for _, stmt := range recordsAlterStmts {
+		_, _ = db.Exec(stmt)
+	}
+	if _, err := db.Exec(
+		`UPDATE records SET workspace = ? WHERE workspace = ''`, workspace,
+	); err != nil {
+		return err
+	}
+	_, err := db.Exec(recordsIdentityIndex)
+	return err
+}
 
 /** Record represents one decision record: a single file under a project's
  * decisions/ directory, parsed into its frontmatter fields plus its body.
@@ -87,6 +129,9 @@ CREATE TABLE IF NOT EXISTS record_relations (
  *   IngestedAt  (time.Time) — when the row was last written.
  *   UUID        (string)    — stable identity for cross-machine merge.
  *   OriginHost  (string)    — host that first wrote the record.
+ *   Workspace   (string)    — the workspace the record belongs to, the base
+ *                             name of the workspace root. Part of the record's
+ *                             identity: two workspaces may each have a DR-0001.
  *
  * Example:
  *   recs, err := kb.RecordsByProject(projectID)
@@ -113,6 +158,7 @@ type Record struct {
 	IngestedAt time.Time
 	UUID       string
 	OriginHost string
+	Workspace  string
 }
 
 /** RelatedRecord is one edge of the record graph, described from the point of
@@ -139,7 +185,7 @@ type RelatedRecord struct {
 // scanRecord expects.
 const recordColumns = `id, record_id, IFNULL(project_id, 0), scope, path, title,
 	date, status, kind, "trigger", phase, initiative, session, body, checksum,
-	ingested_at, uuid, origin_host`
+	ingested_at, uuid, origin_host, workspace`
 
 // rowScanner is satisfied by both *sql.Row and *sql.Rows.
 type rowScanner interface {
@@ -152,7 +198,8 @@ func scanRecord(s rowScanner) (Record, error) {
 	var ingestedAt sql.NullString
 	err := s.Scan(&r.ID, &r.RecordID, &r.ProjectID, &r.Scope, &r.Path, &r.Title,
 		&r.Date, &r.Status, &r.Kind, &r.Trigger, &r.Phase, &r.Initiative,
-		&r.Session, &r.Body, &r.Checksum, &ingestedAt, &r.UUID, &r.OriginHost)
+		&r.Session, &r.Body, &r.Checksum, &ingestedAt, &r.UUID, &r.OriginHost,
+		&r.Workspace)
 	if err != nil {
 		return Record{}, err
 	}
@@ -215,11 +262,16 @@ func (kb *KnowledgeBase) AddRecord(r Record) (int64, error) {
 	if r.Kind == "" {
 		r.Kind = "decision"
 	}
+	// A record with no workspace belongs to the one this database sits in.
+	if r.Workspace == "" {
+		r.Workspace = kb.workspace
+	}
 
 	var existing int64
 	err := kb.db.QueryRow(
-		`SELECT id FROM records WHERE IFNULL(project_id, -1) = ? AND scope = ? AND record_id = ?`,
-		projectKey(r.ProjectID), r.Scope, r.RecordID,
+		`SELECT id FROM records
+		 WHERE workspace = ? AND IFNULL(project_id, -1) = ? AND scope = ? AND record_id = ?`,
+		r.Workspace, projectKey(r.ProjectID), r.Scope, r.RecordID,
 	).Scan(&existing)
 	switch {
 	case err == nil:
@@ -253,11 +305,11 @@ func (kb *KnowledgeBase) AddRecord(r Record) (int64, error) {
 	res, err := kb.db.Exec(
 		`INSERT INTO records (record_id, project_id, scope, path, title, date,
 		        status, kind, "trigger", phase, initiative, session, body,
-		        checksum, uuid, origin_host)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		        checksum, uuid, origin_host, workspace)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.RecordID, projectValue(r.ProjectID), r.Scope, r.Path, r.Title, r.Date,
 		r.Status, r.Kind, r.Trigger, r.Phase, r.Initiative, r.Session, r.Body,
-		r.Checksum, r.UUID, r.OriginHost,
+		r.Checksum, r.UUID, r.OriginHost, r.Workspace,
 	)
 	if err != nil {
 		return 0, err
@@ -287,11 +339,16 @@ func (kb *KnowledgeBase) indexRecordFTS(id int64, r Record) {
 }
 
 /** RecordByIdentity returns the record with the given identity — the
- * (project, scope, record_id) triple the identity index is built over. This is
- * how a reference in a record file is resolved to a row, since a file cites
- * "0160" or "clasm:0160", never a primary key.
+ * (workspace, project, scope, record_id) tuple the identity index is built
+ * over. This is how a reference in a record file is resolved to a row, since a
+ * file cites "0160" or "clasm:0160", never a primary key.
+ *
+ * The workspace is explicit rather than taken from the database, because
+ * ingest's --root may name a workspace other than the one the database sits
+ * in. Pass kb.Workspace() for the database's own.
  *
  * Parameters:
+ *   workspace (string) — the workspace name, e.g. "WorkLab".
  *   projectID (int64)  — the owning project; pass 0 for the workspace tier.
  *   scope     (string) — "project" or "workspace".
  *   recordID  (string) — zero-padded record number, e.g. "0160".
@@ -301,14 +358,15 @@ func (kb *KnowledgeBase) indexRecordFTS(id int64, r Record) {
  *   error   — sql.ErrNoRows when no such record exists.
  *
  * Example:
- *   r, err := kb.RecordByIdentity(projectID, "project", "0160")
- *   ws, err := kb.RecordByIdentity(0, "workspace", "0001")
+ *   r, err := kb.RecordByIdentity(kb.Workspace(), projectID, "project", "0160")
+ *   ws, err := kb.RecordByIdentity("WorkLab", 0, "workspace", "0001")
  */
-func (kb *KnowledgeBase) RecordByIdentity(projectID int64, scope, recordID string) (*Record, error) {
+func (kb *KnowledgeBase) RecordByIdentity(workspace string, projectID int64, scope, recordID string) (*Record, error) {
 	r, err := scanRecord(kb.db.QueryRow(
 		`SELECT `+recordColumns+`
-		 FROM records WHERE IFNULL(project_id, -1) = ? AND scope = ? AND record_id = ?`,
-		projectKey(projectID), scope, recordID,
+		 FROM records
+		 WHERE workspace = ? AND IFNULL(project_id, -1) = ? AND scope = ? AND record_id = ?`,
+		workspace, projectKey(projectID), scope, recordID,
 	))
 	if err != nil {
 		return nil, err
@@ -345,7 +403,8 @@ type RecordFilter struct {
 // recordColumnsQ is recordColumns qualified for a join against projects.
 const recordColumnsQ = `r.id, r.record_id, IFNULL(r.project_id, 0), r.scope, r.path,
 	r.title, r.date, r.status, r.kind, r."trigger", r.phase, r.initiative,
-	r.session, r.body, r.checksum, r.ingested_at, r.uuid, r.origin_host`
+	r.session, r.body, r.checksum, r.ingested_at, r.uuid, r.origin_host,
+	r.workspace`
 
 /** ListRecords returns the records matching a filter, oldest first, sorted by
  * date and then record_id — never by record_id alone, since a correction can

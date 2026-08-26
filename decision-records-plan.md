@@ -12,22 +12,31 @@ line format).
 TDD throughout: write the `*_test.go` file before the implementation it
 covers, red confirmed first, matching this module's existing practice.
 
-## Status (2026-08-25)
+## Status (2026-08-26)
 
-W1–W6 are implemented and green, pending review — `records.go`,
+**All eight phases are implemented and green, pending review.** `records.go`,
 `recordfile.go`, `cmd/kb/ingest.go`, `cmd/kb/record.go`, `cmd/kb/recordnew.go`
-and `cmd/kb/index.go`, 303 tests, none skipped. `kb index` is byte-identical to
-`decisions_index.ts` across all five corpora, so DR-0003's deletion condition
-is met; the Deno tool has **not** yet been removed. W7 (documentation and
-downstream) is not started. All five corpora ingest end to end: 198 records, 42 relations, 0
-failures, and the cross-tier `agents:DR-0001 → clasm:DR-0160` reference
-resolves. W5 onward is not started. This module's own log gained DR-0004,
-DR-0005 and DR-0006 covering the W1–W3 decisions, all `proposed`. Five real
-corpora exist to test against, 198 records in total (201 with those three):
+and `cmd/kb/index.go`; 322 tests, none skipped; released as v0.0.4.
+
+- **W1–W3** schema, canonical frontmatter parse/render, and two-pass ingest.
+- **W4–W5** the `record` verbs, plus `new`, `fmt` and the uuid collision guard.
+- **W6** `kb index`, byte-identical to `decisions_index.ts` across all five
+  corpora — which met DR-0003's condition, so that tool has been retired.
+- **W7** man pages, vocabularies, v0.0.4, and the downstream fixes. Two of its
+  premises turned out to be wrong; see DR-0009.
+- **W8** the `workspace` column. A record's identity is now
+  `(workspace, project, scope, record_id)`, so `~/Laboratory` can safely have a
+  workspace tier — the last thing blocking it.
+
+Decisions taken along the way are DR-0004 through DR-0011 in `decisions/`.
+DR-0004..0007 are accepted; DR-0008..0011 are still `proposed`.
+
+Five corpora, 205 records, all in canonical form and all round-tripping
+byte-identically:
 
 | Corpus | Records | Origin | Notes |
 |---|---|---|---|
-| `~/Laboratory/knowledge/decisions/` | 3 | `decisions_split.ts` | this module's own log |
+| `~/Laboratory/knowledge/decisions/` | 11 | 3 converted, 8 authored during this effort | this module's own log; DR-0004..0011 record the build |
 | `~/WorkLab/clasm/decisions/` | 169 | `decisions_split.ts` | `kind` on all, `trigger` on 70, 2 supersessions, 3 `relates_to`, 2 `phase` |
 | `~/WorkLab/CMTools/decisions/` | 13 | hand-authored | the richest corpus per record — see below |
 | `~/WorkLab/cold/decisions/` | 7 | hand-authored | first corpus with `decisions[]` (3 records), `trigger: design`, `phase` on 5 |
