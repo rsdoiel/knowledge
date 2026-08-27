@@ -1,4 +1,4 @@
-%kb-link(1) user manual | version 0.0.4 2b27b6d
+%kb-link(1) user manual | version 0.0.4 0fe99a8
 % R. S. Doiel
 % 2026-08-26
 
