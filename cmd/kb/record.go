@@ -48,6 +48,7 @@ type recordFlags struct {
 	initiative string
 	since      string
 	root       string
+	dir        string
 	title      string
 	partial    bool
 	dryRun     bool
@@ -109,7 +110,7 @@ func parseRecordFlags(args []string) (recordFlags, error) {
 	strFlags := map[string]*string{
 		"--project": &f.project, "--status": &f.status, "--kind": &f.kind,
 		"--trigger": &f.trigger, "--initiative": &f.initiative,
-		"--since": &f.since, "--root": &f.root, "--title": &f.title,
+		"--since": &f.since, "--root": &f.root, "--dir": &f.dir, "--title": &f.title,
 	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]

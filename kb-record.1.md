@@ -1,4 +1,4 @@
-%kb-record(1) user manual | version 0.0.4 0fe99a8
+%kb-record(1) user manual | version 0.0.4 922ae87
 % R. S. Doiel
 % 2026-08-26
 
@@ -16,16 +16,18 @@ kb record set-status RECORD_ID STATUS [--project P] [--workspace] [--root DIR]
 
 kb record supersede NEW OLD [--partial] [--project P] [--workspace] [--root DIR]
 
-kb record new --title T --trigger G (--project P | --workspace) [--kind K] [--root DIR]
+kb record new --title T --trigger G (--project P | --workspace) [--kind K] [--dir DIR] [--root DIR]
 
 kb record fmt PATH [--dry-run]
 
 # DESCRIPTION
 
-A decision record is one file under a project's decisions/ directory, indexed
-by ingest. Records are listed oldest first, sorted by date and then by id —
-never by id alone, because ids are identity, not chronology: a correction can
-carry a lower id than the record it supersedes.
+A decision record is one file, indexed by ingest. new writes a project-scoped
+record to agents/projects/PROJECT/decisions/ by default (--dir overrides
+this) and a workspace-scoped one to agents/decisions/. Records are listed
+oldest first, sorted by date and then by id — never by id alone, because ids
+are identity, not chronology: a correction can carry a lower id than the
+record it supersedes.
 
 A record id is not by itself an identity, since two projects may each have a
 DR-0001. Where a bare id is ambiguous, the command reports the candidates and
@@ -101,6 +103,11 @@ trigger
 --kind K
 : the new record's kind, on new. Defaults to decision
 
+--dir DIR
+: on new, write to DIR instead of the default (agents/projects/PROJECT/decisions,
+  or agents/decisions on --workspace). Relative to --root, like every other
+  stored record path
+
 --dry-run
 : on fmt, report what would change and write nothing
 
@@ -129,6 +136,7 @@ Start a new record, and bring a corpus into canonical form:
 
 ~~~shell
 kb record new --project clasm --title "Retry the profile attach" --trigger live-test
+kb record new --project clasm --title "Filed under the old layout" --trigger request --dir clasm/decisions
 kb record fmt clasm/decisions --dry-run
 ~~~
 

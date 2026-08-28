@@ -53,6 +53,8 @@ func printHelp(out io.Writer, topic string) bool {
 		f(ExportHelpText)
 	case "import":
 		f(ImportHelpText)
+	case "init":
+		f(InitHelpText)
 	default:
 		return false
 	}

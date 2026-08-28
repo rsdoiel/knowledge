@@ -50,36 +50,32 @@
   problem — it is written through a different path (`record supersede` writes
   both sides together), so it may not.
 
-- [ ] `kb record new` run from *inside* a project directory silently creates a
-  nested corpus instead of finding the existing one. Found 2026-08-27, same
-  session: run from `~/WorkLab/clasm`, `kb record new --title "…" --trigger
-  request --kind decision --project clasm` reported `DR-0001 written to
-  clasm/decisions/0001-….md` — having created `~/WorkLab/clasm/clasm/decisions/`
-  and allocated id 0001, rather than seeing the 169 records already sitting in
-  `~/WorkLab/clasm/decisions/`. `--root` defaults to the cwd and the path is
-  built as `<root>/<project>/decisions`, so the command is behaving as
-  specified; the problem is that the wrong invocation is indistinguishable
-  from the right one in its output, and the failure mode is a duplicate
-  corpus with colliding ids rather than an error. Re-running from
-  `~/WorkLab` allocated DR-0170 correctly. Options: resolve the root by
-  walking up for a directory whose name matches `--project` (or that contains
-  a `<project>/decisions`), or refuse to allocate id 0001 into a
-  `decisions/` directory that did not already exist without an explicit
-  `--root`. The stray directory was removed by hand. Same root cause seen
-  again the same day from a different verb: `kb observation add --project
-  clasm ...` run from inside `~/WorkLab/clasm` failed with `project "clasm"
-  not found` (it resolves `agents/knowledge.db` from the cwd, which inside a
-  project is the wrong workspace) *and* left an empty `clasm/agents/`
-  directory behind on the way out. Whatever the fix is, it wants to be at the
-  path-resolution layer rather than per-verb: either walk up to the workspace
-  root, or fail before creating anything.
-
 - [ ] `kb search` exits 0 when it finds nothing. The workspace convention for
   search-style tools is exit 1 on no match (see `~/Laboratory/CLAUDE.md`),
   though that section is written for the Deno tools and may not be intended
   to bind `kb`. Worth a decision either way, since scripts branch on it.
 
 ## Done
+
+- [x] `kb record new`'s default write path moved to `agents/projects/<project>/decisions/`
+  for project scope (`agents/decisions/` unchanged for `--workspace`), plus a
+  `--dir` override. See `agents-projects-layout-feature-request.md` (filed
+  2026-08-28), `DR-0021` and `DR-0022`, and
+  `record-layout-and-workspace-init-plan.md`. Migrating existing corpora
+  under the old shape (`clasm/decisions/`, `cold/decisions/`,
+  `agents/decisions/caltechauthors/`) and whether `kb` should index `plans/`
+  or `feature_requests/` at all are both explicitly out of scope, not
+  overlooked — see `DR-0021`'s Consequences.
+
+- [x] `kb record new` (and `kb observation add`) run from *inside* a project
+  directory no longer silently creates a stray nested corpus or an empty
+  ambient `agents/`. Fixed at the path-resolution layer, as this item itself
+  suggested: `cmd/kb/main.go`'s ambient `--db` resolution now refuses to open
+  (and so auto-create) a database that doesn't exist, naming `kb init` and
+  `kb import -in FILE` instead — a wrong-cwd invocation fails loudly rather
+  than fabricating a workspace where it happens to stand. See `DR-0021` item 4
+  and `DR-0022` (the guard applies only to the true ambient default, not an
+  explicit `--db PATH`).
 
 - [x] `kb project set-description NAME DESCRIPTION` — projects had no way to
   correct a description after `add`, `set-status` being the only in-place

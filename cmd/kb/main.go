@@ -111,13 +111,15 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	}
 	defer dl.Close()
 
-	// merge and index never touch the ambient --db database: merge operates on
-	// explicit -a/-b/-out paths, and index builds from the record files so it
-	// works in a checkout that has never been ingested (DR-0008). Opening --
-	// and so auto-creating -- an unrelated ./agents/knowledge.db for either
-	// would be a pointless, surprising side effect. It is not hypothetical:
-	// kb index left a 127KB database in whatever directory it ran in.
-	if rest[0] == "merge" || rest[0] == "index" {
+	// merge, index and init never touch the ambient --db database: merge
+	// operates on explicit -a/-b/-out paths, index builds from the record
+	// files so it works in a checkout that has never been ingested (DR-0008),
+	// and init resolves and creates its own target path (DR-0021). Opening --
+	// and so auto-creating -- an unrelated ./agents/knowledge.db for any of
+	// them would be a pointless, surprising side effect. It is not
+	// hypothetical: kb index left a 127KB database in whatever directory it
+	// ran in.
+	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" {
 		return dispatch(verbs, nil, dl, jsonOut, rest, out, errOut)
 	}
 
@@ -126,6 +128,24 @@ func mainRun(args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "kb: %v\n", err)
 		return 1
 	}
+
+	// The ambient-open guard (DR-0021 item 4, narrowed by DR-0022): a verb
+	// resolved through the true ambient default -- dbPath == "", no --db was
+	// given at all -- must not silently create a workspace wherever it
+	// happens to be run from. An explicit --db PATH is the opposite case, the
+	// caller said exactly where to open, so it keeps today's open-or-create
+	// behavior unconditionally. import is carved out here too: unlike
+	// merge/index/init it has no path handling of its own and depends
+	// entirely on this branch for its create-capability, which the
+	// workspace:DR-0002 rebuild recipe (rm agents/knowledge.db && kb import
+	// -in agents/knowledge.jsonl) relies on.
+	if dbPath == "" && rest[0] != "import" {
+		if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+			fmt.Fprintf(errOut, "kb: no %s here; run \"kb init\" to start a new workspace, or \"kb import -in FILE\" to rebuild one from an export\n", resolvedPath)
+			return 1
+		}
+	}
+
 	kb, err := knowledge.Open(resolvedPath)
 	if err != nil {
 		fmt.Fprintf(errOut, "kb: open %s: %v\n", resolvedPath, err)

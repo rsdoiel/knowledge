@@ -1,4 +1,4 @@
-%kb(1) user manual | version 0.0.4 0fe99a8
+%kb(1) user manual | version 0.0.4 922ae87
 % R. S. Doiel
 % 2026-08-26
 
@@ -114,6 +114,9 @@ index
 : generate a decisions/index.md from a directory of records — see
   kb-index(1)
 
+init
+: create a new, empty workspace — see kb-init(1)
+
 # EXIT STATUS
 
 0
@@ -129,5 +132,6 @@ index
 
 kb-project(1), kb-observation(1), kb-concept(1),
 kb-link(1), kb-source(1), kb-search(1),
-kb-merge(1), kb-export(1), kb-import(1)
+kb-merge(1), kb-export(1), kb-import(1),
+kb-init(1)
 

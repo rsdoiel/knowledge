@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -88,6 +89,70 @@ func TestMainRun_UnknownVerbOpensDBAndReturnsUsageError(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "bogus") {
 		t.Errorf("errOut = %q, want it to mention the unknown verb", errOut.String())
+	}
+}
+
+// TestMainRun_AmbientOpenGuardsMissingWorkspace is DR-0021 item 4 / DR-0022:
+// a verb resolved through the ambient default (no --db) must not silently
+// create agents/knowledge.db in whatever directory it happens to run from --
+// it fails and names both kb init and kb import as the ways to get one.
+func TestMainRun_AmbientOpenGuardsMissingWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	var out, errOut bytes.Buffer
+	code := mainRun([]string{"project", "list"}, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1; stderr=%s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "kb init") {
+		t.Errorf("errOut = %q, want it to mention kb init", errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "kb import") {
+		t.Errorf("errOut = %q, want it to mention kb import", errOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "agents", "knowledge.db")); err == nil {
+		t.Errorf("the guard should not have created agents/knowledge.db")
+	}
+}
+
+// TestMainRun_ExplicitDBPathStillAutoCreates is DR-0022: an explicit --db
+// PATH is not "ambient" -- the caller said exactly where to open -- so it
+// keeps today's open-or-create behavior even when the guard is active.
+func TestMainRun_ExplicitDBPathStillAutoCreates(t *testing.T) {
+	t.Chdir(t.TempDir()) // cwd has no workspace of its own
+	dbPath := filepath.Join(t.TempDir(), "agents", "knowledge.db")
+
+	var out, errOut bytes.Buffer
+	code := mainRun([]string{"--db", dbPath, "project", "list"}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%s", code, errOut.String())
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Errorf("expected explicit --db path to be auto-created: %v", err)
+	}
+}
+
+// TestMainRun_ImportBypassesGuardOnAmbientPath is DR-0021 item 5: import has
+// no path handling of its own (unlike merge/index/init), so it depends on the
+// ambient-open branch for its create-capability -- the guard must not block
+// it, or the documented rebuild recipe (workspace:DR-0002) breaks.
+func TestMainRun_ImportBypassesGuardOnAmbientPath(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	seed := filepath.Join(dir, "empty.jsonl")
+	if err := os.WriteFile(seed, nil, 0o644); err != nil {
+		t.Fatalf("writing seed file: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	code := mainRun([]string{"import", "-in", seed}, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%s", code, errOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "agents", "knowledge.db")); err != nil {
+		t.Errorf("expected import to create the ambient db: %v", err)
 	}
 }
 

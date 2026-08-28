@@ -234,14 +234,59 @@ func TestCmdRecord_FmtReportsUnparsableFile(t *testing.T) {
 
 // ─── record new ──────────────────────────────────────────────────────────────
 
+// recordNewDefaultDir is where `record new --project P` writes by default:
+// agents/projects/P/decisions (DR-0021 item 1).
+func recordNewDefaultDir(root, project string) string {
+	return filepath.Join(root, "agents", "projects", project, "decisions")
+}
+
+func TestCmdRecord_NewDefaultsToProjectFirstLayout(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	runRecord(t, kb, "new", "--project", "clasm", "--title", "Default layout",
+		"--trigger", "design", "--root", root)
+
+	dir := recordNewDefaultDir(root, "clasm")
+	matches, _ := filepath.Glob(filepath.Join(dir, "0001-*.md"))
+	if len(matches) != 1 {
+		t.Fatalf("expected the default target to be %s, found %v", dir, matches)
+	}
+}
+
+func TestCmdRecord_NewDirOverridesDefaultPath(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	// --dir, like the default it replaces, is relative to --root -- the same
+	// convention every other stored record path already follows.
+	runRecord(t, kb, "new", "--project", "clasm", "--title", "Overridden location",
+		"--trigger", "design", "--root", root, "--dir", filepath.Join("somewhere", "else"))
+
+	overrideDir := filepath.Join(root, "somewhere", "else")
+	matches, _ := filepath.Glob(filepath.Join(overrideDir, "0001-*.md"))
+	if len(matches) != 1 {
+		t.Fatalf("expected --dir to override the default target, found %v", matches)
+	}
+	defaultMatches, _ := filepath.Glob(filepath.Join(recordNewDefaultDir(root, "clasm"), "*.md"))
+	if len(defaultMatches) != 0 {
+		t.Errorf("--dir should replace the default target, but found files there too: %v", defaultMatches)
+	}
+
+	rf, err := knowledge.ParseRecordFile(matches[0])
+	if err != nil {
+		t.Fatalf("ParseRecordFile: %v", err)
+	}
+	if rf.ProjectName != "clasm" {
+		t.Errorf("project attribution = %q, want clasm — attribution is frontmatter-driven, not path-driven", rf.ProjectName)
+	}
+}
+
 func TestCmdRecord_NewAllocatesNextID(t *testing.T) {
-	kb, root := fixtureWorkspace(t, "clasm",
-		testRecord{ID: "0001"}, testRecord{ID: "0002"})
+	kb, root := openWorkspaceKB(t)
+	dir := recordNewDefaultDir(root, "clasm")
+	testRecord{ID: "0001"}.write(t, dir)
+	testRecord{ID: "0002"}.write(t, dir)
 
 	runRecord(t, kb, "new", "--project", "clasm", "--title", "A new decision",
 		"--trigger", "design", "--root", root)
 
-	dir := filepath.Join(root, "clasm", "decisions")
 	matches, _ := filepath.Glob(filepath.Join(dir, "0003-*.md"))
 	if len(matches) != 1 {
 		names, _ := filepath.Glob(filepath.Join(dir, "*.md"))
@@ -250,11 +295,13 @@ func TestCmdRecord_NewAllocatesNextID(t *testing.T) {
 }
 
 func TestCmdRecord_NewScaffoldsAllFiveHeadings(t *testing.T) {
-	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001"})
+	kb, root := openWorkspaceKB(t)
+	dir := recordNewDefaultDir(root, "clasm")
+	testRecord{ID: "0001"}.write(t, dir)
 	runRecord(t, kb, "new", "--project", "clasm", "--title", "Scaffolded",
 		"--trigger", "design", "--root", root)
 
-	matches, _ := filepath.Glob(filepath.Join(root, "clasm", "decisions", "0002-*.md"))
+	matches, _ := filepath.Glob(filepath.Join(dir, "0002-*.md"))
 	body, err := os.ReadFile(matches[0])
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
@@ -269,11 +316,13 @@ func TestCmdRecord_NewScaffoldsAllFiveHeadings(t *testing.T) {
 
 // A model may write a record but may not accept one.
 func TestCmdRecord_NewIsProposedAndParses(t *testing.T) {
-	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001"})
+	kb, root := openWorkspaceKB(t)
+	dir := recordNewDefaultDir(root, "clasm")
+	testRecord{ID: "0001"}.write(t, dir)
 	runRecord(t, kb, "new", "--project", "clasm", "--title", "Proposed by default",
 		"--trigger", "plan-review", "--root", root)
 
-	matches, _ := filepath.Glob(filepath.Join(root, "clasm", "decisions", "0002-*.md"))
+	matches, _ := filepath.Glob(filepath.Join(dir, "0002-*.md"))
 	rf, err := knowledge.ParseRecordFile(matches[0])
 	if err != nil {
 		t.Fatalf("the scaffold does not parse: %v", err)
@@ -303,11 +352,15 @@ func TestCmdRecord_NewIsProposedAndParses(t *testing.T) {
 }
 
 func TestCmdRecord_NewThenIngests(t *testing.T) {
-	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001"})
+	kb, root := openWorkspaceKB(t)
+	dir := recordNewDefaultDir(root, "clasm")
+	testRecord{ID: "0001"}.write(t, dir)
+	runIngest(t, kb, dir)
+
 	runRecord(t, kb, "new", "--project", "clasm", "--title", "Ingest me",
 		"--trigger", "design", "--root", root)
 
-	s := runIngest(t, kb, filepath.Join(root, "clasm", "decisions"))
+	s := runIngest(t, kb, dir)
 	if s.Added != 1 || s.Failed != 0 {
 		t.Errorf("summary = %+v, want the scaffold ingested cleanly", s)
 	}
@@ -356,12 +409,14 @@ func TestCmdRecord_NewWorkspaceTier(t *testing.T) {
 }
 
 func TestCmdRecord_NewSlugIsDerivedFromTitle(t *testing.T) {
-	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001"})
+	kb, root := openWorkspaceKB(t)
+	dir := recordNewDefaultDir(root, "clasm")
+	testRecord{ID: "0001"}.write(t, dir)
 	runRecord(t, kb, "new", "--project", "clasm",
 		"--title", "`kb index`: a Generated Index, Never Hand-Edited!",
 		"--trigger", "design", "--root", root)
 
-	matches, _ := filepath.Glob(filepath.Join(root, "clasm", "decisions", "0002-*.md"))
+	matches, _ := filepath.Glob(filepath.Join(dir, "0002-*.md"))
 	if len(matches) != 1 {
 		t.Fatalf("expected one scaffold, found %v", matches)
 	}

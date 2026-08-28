@@ -148,10 +148,13 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 	}
 
 	scope := "project"
-	dir := filepath.Join(f.project, "decisions")
+	dir := filepath.Join("agents", "projects", f.project, "decisions")
 	if f.workspace {
 		scope = "workspace"
 		dir = filepath.Join("agents", "decisions")
+	}
+	if f.dir != "" {
+		dir = f.dir
 	}
 	root := recordRoot(kb, f)
 	absDir := filepath.Join(root, dir)

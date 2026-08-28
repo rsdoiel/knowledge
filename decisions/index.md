@@ -3,6 +3,8 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0022  2026-08-28  accepted     decision     plan-review      -     DR-0021's ambient-open guard applies only when --db is not given; explicit --db PATH keeps today's auto-create behavior
+DR-0021  2026-08-28  accepted     decision     request          -     kb record new defaults to the project-first agents/projects/<project>/ layout; kb requires an initialized workspace rather than silently creating one
 DR-0020  2026-08-28  accepted     decision     implementation   -     W5/W6 records portability: decisionRecord/decisionRecordRelation naming, project resolved by name, relation endpoints by same-import uuid cache
 DR-0019  2026-08-28  accepted     decision     plan-review      -     A project-scoped JSON-L export excludes workspace-tier records; only an unscoped export carries them
 DR-0018  2026-08-27  accepted     decision     implementation   -     A record's project is matched across databases by name, and a divergence is reported on the path that aborts as well as the one that succeeds

@@ -118,6 +118,9 @@ index
 : generate a decisions/index.md from a directory of records — see
   {app_name}-index(1)
 
+init
+: create a new, empty workspace — see {app_name}-init(1)
+
 # EXIT STATUS
 
 0
@@ -133,7 +136,8 @@ index
 
 {app_name}-project(1), {app_name}-observation(1), {app_name}-concept(1),
 {app_name}-link(1), {app_name}-source(1), {app_name}-search(1),
-{app_name}-merge(1), {app_name}-export(1), {app_name}-import(1)
+{app_name}-merge(1), {app_name}-export(1), {app_name}-import(1),
+{app_name}-init(1)
 
 `
 
@@ -644,16 +648,18 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record supersede NEW OLD [--partial] [--project P] [--workspace] [--root DIR]
 
-{app_name} record new --title T --trigger G (--project P | --workspace) [--kind K] [--root DIR]
+{app_name} record new --title T --trigger G (--project P | --workspace) [--kind K] [--dir DIR] [--root DIR]
 
 {app_name} record fmt PATH [--dry-run]
 
 # DESCRIPTION
 
-A decision record is one file under a project's decisions/ directory, indexed
-by ingest. Records are listed oldest first, sorted by date and then by id —
-never by id alone, because ids are identity, not chronology: a correction can
-carry a lower id than the record it supersedes.
+A decision record is one file, indexed by ingest. new writes a project-scoped
+record to agents/projects/PROJECT/decisions/ by default (--dir overrides
+this) and a workspace-scoped one to agents/decisions/. Records are listed
+oldest first, sorted by date and then by id — never by id alone, because ids
+are identity, not chronology: a correction can carry a lower id than the
+record it supersedes.
 
 A record id is not by itself an identity, since two projects may each have a
 DR-0001. Where a bare id is ambiguous, the command reports the candidates and
@@ -729,6 +735,11 @@ trigger
 --kind K
 : the new record's kind, on new. Defaults to decision
 
+--dir DIR
+: on new, write to DIR instead of the default (agents/projects/PROJECT/decisions,
+  or agents/decisions on --workspace). Relative to --root, like every other
+  stored record path
+
 --dry-run
 : on fmt, report what would change and write nothing
 
@@ -757,6 +768,7 @@ Start a new record, and bring a corpus into canonical form:
 
 ~~~shell
 {app_name} record new --project clasm --title "Retry the profile attach" --trigger live-test
+{app_name} record new --project clasm --title "Filed under the old layout" --trigger request --dir clasm/decisions
 {app_name} record fmt clasm/decisions --dry-run
 ~~~
 
@@ -826,6 +838,52 @@ decisions/README.md, so one is never created.
 
 `
 
+// InitHelpText is the kb-init(1) man page.
+const InitHelpText = `%{app_name}-init(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-init — create a new, empty workspace
+
+# SYNOPSIS
+
+{app_name} init [PATH]
+
+# DESCRIPTION
+
+Creates a schema-only PATH/agents/knowledge.db — no data, the same shape as
+git init. PATH defaults to the current directory.
+
+Every other {app_name} verb that opens the ambient database (no --db given)
+requires one to already exist, and fails toward "{app_name} init" or
+"{app_name} import -in FILE" rather than silently creating one in whatever
+directory it happens to be run from. init is how a genuinely new workspace,
+with no prior agents/knowledge.jsonl to seed from, gets that first database.
+
+A workspace being rebuilt or bootstrapped from an existing export is a
+different case: "{app_name} import -in agents/knowledge.jsonl" already
+creates a missing target database on its own, so init has nothing to add
+there — see {app_name}-import(1).
+
+init is idempotent. Run again against an already-initialized workspace, it
+reports that and leaves the existing database untouched; it never truncates
+or overwrites data.
+
+# OPTIONS
+
+None beyond the standard options.
+
+# EXAMPLES
+
+~~~shell
+{app_name} init
+{app_name} init ~/NewWorkspace
+~~~
+
+`
+
 // TopicsHelpText is the topic index: kb help topics.
 //
 // Named "topics" rather than the conventional "index" because index is a verb
@@ -884,6 +942,9 @@ record
 
 index
 : generate a decisions/index.md from a directory of records
+
+init
+: create a new, empty workspace
 
 # NOTES
 

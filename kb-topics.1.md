@@ -1,4 +1,4 @@
-%kb-topics(1) user manual | version 0.0.4 0fe99a8
+%kb-topics(1) user manual | version 0.0.4 922ae87
 % R. S. Doiel
 % 2026-08-26
 
@@ -51,6 +51,9 @@ record
 
 index
 : generate a decisions/index.md from a directory of records
+
+init
+: create a new, empty workspace
 
 # NOTES
 
