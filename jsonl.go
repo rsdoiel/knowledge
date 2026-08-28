@@ -19,6 +19,8 @@ const (
 	recObservationConcept = "observation_concept"
 	recProjectConcept     = "project_concept"
 	recObservationSource  = "observation_source"
+	recRecord             = "record"
+	recRecordRelation     = "record_relation"
 )
 
 // projectRecord is the JSON-L shape of one projects row. Identity travels
@@ -100,6 +102,53 @@ type observationSourceRecord struct {
 	Relationship    string `json:"relationship"`
 }
 
+// decisionRecord is the JSON-L shape of one records row -- named to avoid
+// the recordRecord collision with the domain Record type (records.go) and
+// with this file's own use of "record" for a JSON-L line in general (see
+// records-portability-plan.md, W5). ProjectName carries the owning
+// project's name rather than its uuid: DR-0018 established that a record's
+// project must be matched across databases by name, since project_id is a
+// local autoincrement key and the project's own uuid is order-dependent on
+// reconciliation. Empty ProjectName means the workspace tier, which has no
+// project at all.
+type decisionRecord struct {
+	Type        string `json:"type"`
+	UUID        string `json:"uuid"`
+	OriginHost  string `json:"origin_host"`
+	Workspace   string `json:"workspace"`
+	ProjectName string `json:"project_name"`
+	RecordID    string `json:"record_id"`
+	Scope       string `json:"scope"`
+	Path        string `json:"path"`
+	Title       string `json:"title"`
+	Date        string `json:"date"`
+	Status      string `json:"status"`
+	Kind        string `json:"kind"`
+	Trigger     string `json:"trigger"`
+	Phase       string `json:"phase"`
+	Initiative  string `json:"initiative"`
+	Session     string `json:"session"`
+	Body        string `json:"body"`
+	Checksum    string `json:"checksum"`
+	IngestedAt  string `json:"ingested_at"`
+}
+
+// decisionRecordRelation is the JSON-L shape of one record_relations row.
+// Endpoints travel by the record's own uuid, resolved the same way every
+// other join line resolves its endpoints: against a same-import cache built
+// while decisionRecord lines were processed (see importRecord), which
+// already carries the right local id whether the record was freshly
+// inserted or matched an existing one by identity. That is what makes a
+// uuid-keyed reference safe here even though two machines' ingest of "the
+// same" record mint different uuids for it (DR-0018) -- the resolution
+// never leaves this one buffered import pass.
+type decisionRecordRelation struct {
+	Type         string `json:"type"`
+	FromUUID     string `json:"from_uuid"`
+	ToUUID       string `json:"to_uuid"`
+	Relationship string `json:"relationship"`
+}
+
 /** ExportJSONL writes the knowledge base (or, when projectName is
  * non-empty, just the reachable subset of one project) as a stream of
  * newline-delimited JSON records to w -- one project/concept/source/
@@ -143,6 +192,9 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 	if err := exportProjects(kb, enc, scoped, projectID); err != nil {
 		return err
 	}
+	if err := exportRecords(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
 	if err := exportConcepts(kb, enc, scoped, projectID); err != nil {
 		return err
 	}
@@ -159,6 +211,9 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 		return err
 	}
 	if err := exportObservationSources(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
+	if err := exportRecordRelations(kb, enc, scoped, projectID); err != nil {
 		return err
 	}
 	return nil
@@ -185,6 +240,78 @@ func exportProjects(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID
 		}
 		if err := enc.Encode(r); err != nil {
 			return fmt.Errorf("knowledge: export projects: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+// exportRecords writes every records row reachable under scope. A scoped
+// export's WHERE clause names r.project_id directly, which excludes every
+// workspace-tier record (project_id IS NULL never matches "= ?") without a
+// separate tier check -- that is DR-0019 falling out of the query itself
+// rather than being special-cased.
+func exportRecords(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT r.uuid, r.origin_host, r.workspace, IFNULL(p.name, ''), r.record_id,
+	                 r.scope, r.path, r.title, r.date, r.status, r.kind, r."trigger",
+	                 r.phase, r.initiative, r.session, r.body, r.checksum, r.ingested_at
+	          FROM records r
+	          LEFT JOIN projects p ON p.id = r.project_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE r.project_id = ?`
+		args = append(args, projectID)
+	}
+	query += ` ORDER BY r.date, r.record_id`
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export records: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ingestedAt sql.NullString
+		r := decisionRecord{Type: recRecord}
+		if err := rows.Scan(&r.UUID, &r.OriginHost, &r.Workspace, &r.ProjectName, &r.RecordID,
+			&r.Scope, &r.Path, &r.Title, &r.Date, &r.Status, &r.Kind, &r.Trigger,
+			&r.Phase, &r.Initiative, &r.Session, &r.Body, &r.Checksum, &ingestedAt); err != nil {
+			return fmt.Errorf("knowledge: export records: %w", err)
+		}
+		if ingestedAt.Valid {
+			r.IngestedAt = ingestedAt.String
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export records: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+// exportRecordRelations writes every record_relations row whose endpoints
+// both survive scope. Scoped requires both ends to belong to projectID, so
+// a relation crossing out of the scoped project (to another project or to
+// the workspace tier) is excluded along with the record on the far side of
+// it -- see the "no relations crossing out of them" clause of DR-0019.
+func exportRecordRelations(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT rf.uuid, rt.uuid, j.relationship
+	          FROM record_relations j
+	          JOIN records rf ON rf.id = j.from_id
+	          JOIN records rt ON rt.id = j.to_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE rf.project_id = ? AND rt.project_id = ?`
+		args = append(args, projectID, projectID)
+	}
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export record_relations: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := decisionRecordRelation{Type: recRecordRelation}
+		if err := rows.Scan(&r.FromUUID, &r.ToUUID, &r.Relationship); err != nil {
+			return fmt.Errorf("knowledge: export record_relations: %w", err)
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export record_relations: %w", err)
 		}
 	}
 	return rows.Err()
@@ -410,13 +537,15 @@ type ImportTableSummary struct {
  */
 func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 	var (
-		projects     []projectRecord
-		concepts     []conceptRecord
-		sources      []sourceRecord
-		observations []observationRecord
-		obsConcepts  []observationConceptRecord
-		projConcepts []projectConceptRecord
-		obsSources   []observationSourceRecord
+		projects        []projectRecord
+		concepts        []conceptRecord
+		sources         []sourceRecord
+		observations    []observationRecord
+		obsConcepts     []observationConceptRecord
+		projConcepts    []projectConceptRecord
+		obsSources      []observationSourceRecord
+		records         []decisionRecord
+		recordRelations []decisionRecordRelation
 	)
 	readCount := map[string]int{}
 	var typeOrder []string // first-seen order, so unknown types get a stable summary order too
@@ -484,6 +613,18 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
 			}
 			obsSources = append(obsSources, rec)
+		case recRecord:
+			var rec decisionRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			records = append(records, rec)
+		case recRecordRelation:
+			var rec decisionRecordRelation
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			recordRelations = append(recordRelations, rec)
 		default:
 			// Unknown type: counted (readCount above) but nothing to buffer.
 		}
@@ -544,6 +685,28 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 			return nil, fmt.Errorf("knowledge: import source %q: %w", rec.Title, err)
 		}
 		sourceLocalID[rec.UUID] = localID
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	projectByName := map[string]int64{} // project name -> local id, for records (DR-0018)
+	recordLocalID := map[string]int64{} // incoming record uuid -> local id, for relations
+
+	s = summaryFor(recRecord)
+	for _, rec := range records {
+		localProjectID, ok := resolveProjectByName(kb, projectByName, rec.ProjectName)
+		if !ok {
+			s.Skipped++
+			continue
+		}
+		localID, isNew, err := importRecord(kb, rec, localProjectID)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import record %q: %w", rec.RecordID, err)
+		}
+		recordLocalID[rec.UUID] = localID
 		if isNew {
 			s.Imported++
 		} else {
@@ -618,6 +781,25 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship) VALUES (?, ?, ?)`, obsID, sourceID, rec.Relationship)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import observation_source: %w", err)
+		}
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recRecordRelation)
+	for _, rec := range recordRelations {
+		fromID, ok := resolveLocalID(kb, recordLocalID, "records", rec.FromUUID)
+		toID, tok := resolveLocalID(kb, recordLocalID, "records", rec.ToUUID)
+		if !ok || !tok {
+			s.Skipped++
+			continue
+		}
+		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO record_relations (from_id, to_id, relationship) VALUES (?, ?, ?)`, fromID, toID, rec.Relationship)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import record_relation: %w", err)
 		}
 		if isNew {
 			s.Imported++
@@ -785,6 +967,56 @@ func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID 
 	return true, nil
 }
 
+// importRecord resolves rec's identity the same way AddRecord does --
+// (workspace, project, scope, record_id) via RecordByIdentity, with
+// localProjectID already resolved by name (DR-0018) rather than by rec's own
+// uuid. An existing local record wins as-is: unlike observations, a record
+// held by two machines is essentially always an identity collision, because
+// each machine's ingest mints its own uuid for the same file, so
+// already-present-wins is the normal case here, not the exception (DR-0018).
+func importRecord(kb *KnowledgeBase, rec decisionRecord, localProjectID int64) (localID int64, isNew bool, err error) {
+	existing, err := kb.RecordByIdentity(rec.Workspace, localProjectID, rec.Scope, rec.RecordID)
+	if err == nil {
+		return existing.ID, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, false, err
+	}
+	id, err := kb.AddRecord(Record{
+		RecordID: rec.RecordID, ProjectID: localProjectID, Scope: rec.Scope,
+		Path: rec.Path, Title: rec.Title, Date: rec.Date, Status: rec.Status,
+		Kind: rec.Kind, Trigger: rec.Trigger, Phase: rec.Phase,
+		Initiative: rec.Initiative, Session: rec.Session, Body: rec.Body,
+		Checksum: rec.Checksum, UUID: rec.UUID, OriginHost: rec.OriginHost,
+		Workspace: rec.Workspace,
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	return id, true, nil
+}
+
+// resolveProjectByName looks up a project's local id by name -- the
+// identity key DR-0018 requires a record's project be matched by, in place
+// of project_id (a local autoincrement key) or the project's own uuid
+// (order-dependent on reconciliation). An empty name is the workspace tier,
+// which has no project at all and always resolves to 0, matching
+// projectKey's convention for a NULL project_id.
+func resolveProjectByName(kb *KnowledgeBase, cache map[string]int64, name string) (int64, bool) {
+	if name == "" {
+		return 0, true
+	}
+	if id, ok := cache[name]; ok {
+		return id, true
+	}
+	var id int64
+	if err := kb.db.QueryRow(`SELECT id FROM projects WHERE name = ?`, name).Scan(&id); err != nil {
+		return 0, false
+	}
+	cache[name] = id
+	return id, true
+}
+
 // resolveLocalID looks up a row's local id by its uuid in table, checking
 // cache first when non-nil. A cache miss falls through to a direct
 // database lookup rather than failing outright: the JSON-L file being
@@ -792,8 +1024,9 @@ func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID 
 // a project that was already synced in an earlier import, so this file
 // never re-includes the project record itself) whose parent nonetheless
 // already exists locally under that exact uuid. Table must be one of
-// "projects", "concepts", "sources", or "observations" -- every one of
-// them carries a UNIQUE-indexed uuid column (see Open's backfillUUIDs).
+// "projects", "concepts", "sources", "observations", or "records" --
+// every one of them carries a UNIQUE-indexed uuid column (see Open's
+// backfillUUIDs and idx_records_uuid).
 // A successful database-fallback lookup is written back into cache so
 // later records in the same import reuse it instead of re-querying.
 func resolveLocalID(kb *KnowledgeBase, cache map[string]int64, table, uuid string) (int64, bool) {

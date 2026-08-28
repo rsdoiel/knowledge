@@ -20,6 +20,16 @@ cross-machine merge compatibility). Sources are matched by identifier when
 one is present. Observations and links are matched by uuid, so re-running
 import against the same file is a no-op the second time.
 
+Decision records are matched by identity — workspace, project, scope and
+record id — the same tuple AddRecord and merge use, not by uuid: two
+machines' ingest of the same file mint different uuids for it, so a
+uuid-keyed match would treat that as new every time and duplicate the
+record. An existing local record wins as-is. A record's project is
+resolved by name for the same reason. Record relations are matched by
+their endpoints' uuids, resolved against the records just imported in this
+same run — that stays safe even though records themselves aren't uuid-keyed,
+because the cache is built fresh from this file's own uuids on the way in.
+
 Unresolvable references (a uuid the file never defines a parent for) and
 unrecognized record types are skipped, not fatal — only malformed JSON
 aborts the import. The returned summary reports, per record type, how many

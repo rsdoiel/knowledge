@@ -1006,6 +1006,68 @@ func TestMergeKnowledgeBases_RecordsAreSearchableAfterMerge(t *testing.T) {
 	}
 }
 
+// TestMergeKnowledgeBases_RecordsAcceptance is the acceptance test named in
+// records-portability-plan.md's W6 (DR-0013): two databases, each holding
+// records the other lacks, one of them workspace-tier, merge into the union
+// with the workspace-tier record surviving and every record reachable via
+// Search from either side.
+func TestMergeKnowledgeBases_RecordsAcceptance(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	aid, _ := a.AddProject("harvey", "")
+	bid, _ := b.AddProject("harvey", "")
+	shareProjectUUID(t, a, aid, b, bid)
+	aWorkspace := a.Workspace()
+
+	addTestRecord(t, a, Record{RecordID: "0001", ProjectID: aid, Scope: "project",
+		Title: "a only project record", Body: "body a1"})
+	addTestRecord(t, a, Record{RecordID: "0001", Scope: "workspace",
+		Title: "a only workspace record", Body: "body a-ws"})
+	addTestRecord(t, b, Record{RecordID: "0002", ProjectID: bid, Scope: "project",
+		Title: "b only project record", Body: "body b2"})
+
+	merged := openMergedTestKB(t, a, b)
+	got := recordTitles(t, merged)
+	want := map[string]bool{
+		"a only project record": true, "a only workspace record": true, "b only project record": true,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("merged records = %v, want %v", got, want)
+	}
+	for _, title := range got {
+		if !want[title] {
+			t.Errorf("unexpected merged record %q", title)
+		}
+	}
+
+	// The workspace-tier record specifically must survive -- it has no
+	// project, so it is the case most likely to be dropped by a join that
+	// assumes every record has one.
+	ws, err := merged.RecordByIdentity(aWorkspace, 0, "workspace", "0001")
+	if err != nil {
+		t.Fatalf("RecordByIdentity workspace-tier after merge: %v", err)
+	}
+	if ws.Title != "a only workspace record" {
+		t.Errorf("workspace-tier record after merge = %+v, want the surviving a-side record", ws)
+	}
+
+	for _, term := range []string{"a only project record", "a only workspace record", "b only project record"} {
+		results, err := merged.Search(term)
+		if err != nil {
+			t.Fatalf("Search(%q): %v", term, err)
+		}
+		found := false
+		for _, r := range results {
+			if r.SourceType == "record" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("Search(%q) found no record hit; every record from both sides must be reachable after a merge", term)
+		}
+	}
+}
+
 // A record that arrived by merge and one that arrived by ingest must be
 // indistinguishable to search. The rebuild path and indexRecordFTS write the
 // same row or they do not, and a difference here would show up as a record

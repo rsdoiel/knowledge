@@ -3,6 +3,8 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0020  2026-08-28  accepted     decision     implementation   -     W5/W6 records portability: decisionRecord/decisionRecordRelation naming, project resolved by name, relation endpoints by same-import uuid cache
+DR-0019  2026-08-28  accepted     decision     plan-review      -     A project-scoped JSON-L export excludes workspace-tier records; only an unscoped export carries them
 DR-0018  2026-08-27  accepted     decision     implementation   -     A record's project is matched across databases by name, and a divergence is reported on the path that aborts as well as the one that succeeds
 DR-0017  2026-08-27  accepted     decision     implementation   -     The record FTS shape is written twice and held together by a test, rather than extracted into a shared writer
 DR-0016  2026-08-27  accepted     decision     implementation   -     A record with a broken project reference is skipped rather than silently retiered, and a name collision still orphans the losing side's records

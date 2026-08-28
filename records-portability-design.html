@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="records-portability-teaching-merge-export-and-import-about-decision-records">Records
+portability: teaching <code>merge</code>, <code>export</code> and
+<code>import</code> about decision records</h1>
+<p>Design brief. Nothing here is agreed — this is input to a design
+review.</p>
+<h2 id="problem">Problem</h2>
+<p><code>agents/knowledge.db</code> has nine real tables. All three
+portability paths carry seven of them:</p>
+<table>
+<thead>
+<tr>
+<th scope="col">Table</th>
+<th scope="col"><code>merge</code></th>
+<th scope="col"><code>export</code> / <code>import</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>projects</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>concepts</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>sources</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>observations</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>observation_concepts</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>project_concepts</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>observation_sources</code></td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>records</code></td>
+<td><strong>no</strong></td>
+<td><strong>no</strong></td>
+</tr>
+<tr>
+<td><code>record_relations</code></td>
+<td><strong>no</strong></td>
+<td><strong>no</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The cause is ordering, not disagreement. <code>merge</code> landed
+2026-07-26..28 and JSON-L export/import was decided in DR-0003 on
+2026-08-08; decision records arrived afterwards, DR-0004 through DR-0011
+on 2026-08-25..26. Nothing went back to close the loop.</p>
+<p>Two consequences, both live today:</p>
+<p><strong><code>kb merge</code> loses decision records while reporting
+success.</strong> The seven merged tables are hardcoded in
+<code>knowledge_merge.go:246</code>, and <code>records</code> is not
+among them — nor is it in the per-table summary, so the output says
+nothing about the table it dropped. The merged file is created by
+<code>Open()</code>, so it has a <code>records</code> table; that table
+is simply empty. Merging this machine’s database today would silently
+discard all 13 records.</p>
+<p><strong>Export is not the thing DR-0003 says it is.</strong> That
+record positions JSON-L export/import as “the no-file-access alternative
+to <code>merge</code>”. An export that omits <code>records</code> cannot
+round-trip a database that has them, so the alternative is not
+equivalent to the thing it is an alternative to.</p>
+<p>The workaround — re-run <code>kb ingest</code> against each
+<code>decisions/</code> directory after a merge — happens to work,
+because records derive from Markdown files under git. It is not a fix.
+It requires file access, which is exactly what DR-0003 says one of these
+paths must not require, and it depends on the operator knowing about a
+data loss the tool did not report.</p>
+<h2 id="constraints">Constraints</h2>
+<p><strong>DR-0003 parity.</strong> <code>merge</code> and
+<code>export</code>/<code>import</code> are two routes to one outcome.
+Whatever identity, conflict and ordering rules records get, both routes
+must implement the same ones, or the two paths diverge in a way the next
+cross-machine sync discovers the hard way.</p>
+<p><strong>The existing conflict policy is already recorded and should
+not be re-litigated here.</strong> A knowledge-base observation notes
+that <code>kb merge</code> and <code>kb import</code> both resolve
+conflicts in favour of the row already present and never consult
+<code>updated_at</code> — deterministic A-wins, not arbitrary. Records
+should follow that policy by default. Changing it is a separate decision
+affecting two code paths and a migration.</p>
+<p><strong>The ingest/format write boundary holds.</strong>
+<code>kb ingest</code> never writes to a record file and
+<code>kb record fmt</code> never writes to the database. A portability
+path that carries records becomes a third writer of the
+<code>records</code> table; it must write only the database, never a
+<code>decisions/*.md</code> file, even when it holds a record body that
+disagrees with the file on disk.</p>
+<p><strong>Records must travel without their files.</strong> The
+<code>records</code> row carries <code>body</code> and
+<code>checksum</code>, so the database is already self-sufficient.
+Nothing in this work should reintroduce a file dependency.</p>
+<h2 id="technical-findings-that-shape-the-approach">Technical findings
+that shape the approach</h2>
+<p><strong>Records have two unique keys, not one.</strong>
+<code>idx_records_uuid</code> on <code>uuid</code>, and
+<code>idx_records_identity</code> on
+<code>(workspace, IFNULL(project_id,-1), scope, record_id)</code>. That
+is structurally the same situation as <code>projects.name</code> and
+<code>concepts.name</code> — two rows that are the same record logically
+but arrived at different uuids on different machines. <code>merge</code>
+already has machinery for exactly this shape:
+<code>CollisionReport</code> plus <code>ReconcileCollisions</code>
+behind <code>-force</code>. Extending that machinery to a third table
+looks cheaper than inventing a records-specific path, but the identity
+tuple is four columns rather than a single <code>name</code>, so
+<code>NameCollision</code> would need to generalise.</p>
+<p><strong>A naive copy of the <code>observations</code> pattern would
+drop workspace-tier records.</strong> <code>merge</code> moves
+observations with an inner join through <code>projects</code>, which is
+correct there because <code>observations.project_id</code> is always
+populated. <code>records.project_id</code> is nullable by design — a
+workspace-tier record has no project — and this machine’s database has
+one such record today (<code>agents/decisions/</code>, DR-0001). An
+inner join silently drops it. Records need a left join plus explicit
+NULL handling, and a test that fails on the inner-join version
+specifically.</p>
+<p><strong><code>record_relations</code> is a pure id-keyed join
+table</strong> — <code>(from_id, to_id, relationship)</code>, both
+endpoints referencing <code>records(id)</code>. It remaps through record
+uuids exactly the way <code>observation_concepts</code> remaps through
+observation and concept uuids. No new pattern needed; it does need the
+same unresolvable-reference-is-skipped semantics the other join tables
+have.</p>
+<p><strong>Rows landing in the table is not enough — they must land in
+<code>kb_fts</code>.</strong> <code>kb_fts</code> has no triggers; it is
+maintained by explicit inserts at each write site, with
+<code>rebuildFTSIfNeeded</code> as a backstop that fires only when the
+index is empty. <code>merge</code> depends entirely on that backstop,
+and the backstop indexes observations, projects and concepts only. So a
+merge that correctly unions <code>records</code> would still produce a
+database where <code>kb search</code> cannot see them —
+<code>source_type = 'record'</code> rows would be missing.
+<code>import</code> inserts FTS rows explicitly per type and would need
+the same addition. This is not a follow-up; without it the feature does
+not do what a user would check.</p>
+<p><strong>Naming hazard in the JSON-L layer.</strong>
+<code>jsonl.go</code> already uses “record” to mean “one JSON-L line” —
+<code>projectRecord</code>, <code>observationRecord</code>,
+<code>recProject</code>. Decision records need a type discriminator too,
+and the mechanical name (<code>recordRecord</code>,
+<code>recRecord</code>) is unreadable. Worth settling deliberately
+rather than by whatever the first patch types.</p>
+<h2 id="proposed-approach">Proposed approach</h2>
+<p>Four pieces of work, TDD throughout, each with a failing test written
+first:</p>
+<ol type="1">
+<li><strong>Generalise the collision machinery</strong> from
+<code>projects</code>/<code>concepts</code> name collisions to include
+records under their four-column identity, so
+<code>CollisionReport</code> and <code>-force</code> reconciliation
+cover the new table.</li>
+<li><strong>Union <code>records</code> and <code>record_relations</code>
+in <code>MergeKnowledgeBases</code></strong>, with the left join for
+nullable <code>project_id</code>, and add both tables to the summary so
+the operator sees the counts.</li>
+<li><strong>Add both tables to JSON-L export and import</strong>,
+matching the merge semantics exactly, with a round-trip test that a
+database containing project-tier and workspace-tier records exports and
+re-imports unchanged.</li>
+<li><strong>Index records into <code>kb_fts</code> on both
+paths</strong>, including in <code>rebuildFTSIfNeeded</code>, with a
+test that asserts <code>kb search</code> finds a record that arrived via
+merge and one that arrived via import.</li>
+</ol>
+<p>An end-to-end test worth having regardless of the above shape: merge
+two databases where each side holds records the other lacks, then assert
+the merged database has the union and <code>kb search</code> reaches all
+of them. That is the scenario that motivated this work and it currently
+has no coverage.</p>
+<h2 id="open-questions">Open questions</h2>
+<ol type="1">
+<li><p><strong>Does the <code>-force</code> semantics change meaning for
+records?</strong> For projects and concepts, <code>-force</code>
+reconciles b’s identity to a’s so both sides’ child rows survive under
+one parent. Records have a <code>checksum</code> and a
+<code>body</code>, so the two sides can be <em>known</em> to differ in
+content rather than merely suspected. Should a checksum mismatch on an
+otherwise-identical identity be reported differently from a plain uuid
+collision — or even block the merge — given that a decision record’s
+text is the artifact?</p></li>
+<li><p><strong>What is the right JSON-L type discriminator
+name</strong>, given <code>jsonl.go</code> already spends the word
+“record” on its line envelopes? <code>"record"</code> as the wire value
+matches <code>kb_fts.source_type</code> and <code>kb search</code>
+output, which argues for keeping it on the wire and solving the
+collision only in the Go identifier.</p></li>
+<li><p><strong>Should <code>merge</code> refuse to run against a
+database whose schema it does not fully cover</strong>, rather than
+relying on this fix being complete? A version or table-set guard would
+have turned this silent loss into an error message. That generalises
+beyond records and may deserve its own record.</p></li>
+<li><p><strong>Does <code>sources</code> belong in
+<code>rebuildFTSIfNeeded</code> too?</strong> It is absent today and no
+<code>source_type = 'source'</code> rows exist in this machine’s index,
+so sources are unsearchable. Pre-existing and unrelated to records —
+flagged here only because the fix touches the same function, and the
+decision to leave it alone should be deliberate.</p></li>
+<li><p><strong>Is there a schema-coverage test worth adding</strong>
+that enumerates <code>sqlite_master</code> and fails when a table is
+added without appearing in the merge and export paths? That would
+prevent the next feature from silently repeating this. It would also
+need an explicit opt-out list for tables that genuinely should not
+travel, such as the <code>kb_fts</code> shadow tables.</p></li>
+</ol>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

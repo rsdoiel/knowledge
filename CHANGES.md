@@ -3,6 +3,39 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+Decision records now travel on every portability path — `merge`, `export`,
+`import` — not just `ingest`. Before this, `records` and `record_relations`
+were invisible to all three, so running `merge` (or an export/import round
+trip) discarded every decision record while reporting success (DR-0013).
+
+### Added
+
+- `kb merge` carries `records`/`record_relations` in its union, reports a
+  record collision keyed by identity (workspace, project, scope, record id)
+  rather than by `project_id` or a project's own uuid, and reports a
+  **content divergence** — same record, different text — without blocking
+  the merge on it. `--json` gains `content_divergences` alongside
+  `collisions_reconciled` and the per-table `tables` summary.
+- `kb export`/`kb import` carry `record`/`record_relation` JSON-L lines. A
+  `-project`-scoped export carries only that project's records; a
+  workspace-tier record, having no project, appears only in an unscoped
+  export (DR-0019). Import matches a record by identity, not uuid — two
+  machines' ingest of the same file mint different uuids for it, so
+  identity is the normal case for "already present," not the exception
+  (DR-0018) — and resolves its project by name for the same reason.
+- `CollisionReport`/`ReconcileCollisions`/`DivergenceReport`,
+  `NormalizeForMerge` (migrates a merge scratch copy to the current schema
+  before ATTACHing, so a database predating a table still merges).
+- Every table `merge` carries now appears in its per-table summary, so a
+  table that would lose rows says so.
+
+### Notes
+
+- DR-0013 through DR-0019 cover this effort's design and implementation
+  decisions; see `knowledge/decisions/index.md`.
+
 ## v0.0.4 — 2026-08-26
 
 Adds Decision Record support: episode-scoped Markdown files with YAML

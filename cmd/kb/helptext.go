@@ -427,7 +427,13 @@ const MergeHelpText = `%{app_name}-merge(1) user manual | version {version} {rel
 merge reads two knowledge.db files (e.g. from two machines that have
 drifted independently) read-only and writes their deduped union to a
 fresh -out file, which must not already exist. It never modifies -a or
--b; placing the merged file into position is left to you.
+-b; placing the merged file into position is left to you. Every table
+travels — projects, concepts, sources, observations, decision records and
+record relations, plus the four join tables — so a table that would lose
+rows says so in the per-table summary rather than merging quietly short.
+Each side is copied to a scratch file and brought up to the current schema
+before ATTACHing, so a database predating decision records (or any other
+table) still merges instead of failing outright.
 
 Unlike every other verb, merge operates entirely on the explicit -a/-b/-out
 paths — it ignores --db and never opens (or creates) the ambient
@@ -437,11 +443,22 @@ If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a
 database's identifiers were established), merge aborts and lists them
 unless -force is given, in which case b's identity is reconciled to a's so
-both sides' observations and links survive under one merged entity.
+both sides' observations and links survive under one merged entity. A
+decision record collides the same way, keyed by its identity — workspace,
+project, scope and record id — rather than by project_id or the project's
+own uuid.
+
+A record held by both files under the same identity but different text is
+reported as a content divergence (same record, different prose) even when
+it is not also a collision: the merge keeps a's copy and never blocks on
+this, but prints the diverging record ids and checksums so the operator
+knows which Markdown files to reconcile by hand. With --json, divergences
+appear as content_divergences alongside collisions_reconciled and the
+per-table tables summary, instead of the plain-text report.
 
 # SEE ALSO
 
-{app_name}(1)
+{app_name}(1), {app_name}-export(1), {app_name}-import(1)
 
 `
 
@@ -462,11 +479,19 @@ const ExportHelpText = `%{app_name}-export(1) user manual | version {version} {r
 # DESCRIPTION
 
 export writes the knowledge base (or, with -project, just one project and
-everything reachable from it — its concepts, sources, and observations) as
-newline-delimited JSON to -out, or to stdout when -out is omitted. Every
-line is self-describing via a "type" field (project, concept, source,
-observation, observation_concept, project_concept, observation_source),
-in dependency order.
+everything reachable from it — its concepts, sources, observations and
+decision records) as newline-delimited JSON to -out, or to stdout when
+-out is omitted. Every line is self-describing via a "type" field
+(project, concept, source, observation, observation_concept,
+project_concept, observation_source, record, record_relation), in
+dependency order.
+
+A -project export carries only that project's decision records — a
+workspace-tier record belongs to no project, so it has no principled claim
+on a scoped export, and appears only in an unscoped one. A record relation
+crossing out of the scoped project (to another project, or to the
+workspace tier) is likewise excluded along with the record on the far side
+of it.
 
 Unlike merge, export never touches a second database file — the resulting
 file can be pasted, emailed, or committed to git, then applied elsewhere
@@ -508,6 +533,16 @@ wins as-is; a genuinely new one keeps its original uuid, for future
 cross-machine merge compatibility). Sources are matched by identifier when
 one is present. Observations and links are matched by uuid, so re-running
 import against the same file is a no-op the second time.
+
+Decision records are matched by identity — workspace, project, scope and
+record id — the same tuple AddRecord and merge use, not by uuid: two
+machines' ingest of the same file mint different uuids for it, so a
+uuid-keyed match would treat that as new every time and duplicate the
+record. An existing local record wins as-is. A record's project is
+resolved by name for the same reason. Record relations are matched by
+their endpoints' uuids, resolved against the records just imported in this
+same run — that stays safe even though records themselves aren't uuid-keyed,
+because the cache is built fresh from this file's own uuids on the way in.
 
 Unresolvable references (a uuid the file never defines a parent for) and
 unrecognized record types are skipped, not fatal — only malformed JSON

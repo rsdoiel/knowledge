@@ -15,7 +15,13 @@ kb merge -a PATH -b PATH -out PATH [-force]
 merge reads two knowledge.db files (e.g. from two machines that have
 drifted independently) read-only and writes their deduped union to a
 fresh -out file, which must not already exist. It never modifies -a or
--b; placing the merged file into position is left to you.
+-b; placing the merged file into position is left to you. Every table
+travels — projects, concepts, sources, observations, decision records and
+record relations, plus the four join tables — so a table that would lose
+rows says so in the per-table summary rather than merging quietly short.
+Each side is copied to a scratch file and brought up to the current schema
+before ATTACHing, so a database predating decision records (or any other
+table) still merges instead of failing outright.
 
 Unlike every other verb, merge operates entirely on the explicit -a/-b/-out
 paths — it ignores --db and never opens (or creates) the ambient
@@ -25,9 +31,20 @@ If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a
 database's identifiers were established), merge aborts and lists them
 unless -force is given, in which case b's identity is reconciled to a's so
-both sides' observations and links survive under one merged entity.
+both sides' observations and links survive under one merged entity. A
+decision record collides the same way, keyed by its identity — workspace,
+project, scope and record id — rather than by project_id or the project's
+own uuid.
+
+A record held by both files under the same identity but different text is
+reported as a content divergence (same record, different prose) even when
+it is not also a collision: the merge keeps a's copy and never blocks on
+this, but prints the diverging record ids and checksums so the operator
+knows which Markdown files to reconcile by hand. With --json, divergences
+appear as content_divergences alongside collisions_reconciled and the
+per-table tables summary, instead of the plain-text report.
 
 # SEE ALSO
 
-kb(1)
+kb(1), kb-export(1), kb-import(1)
 
