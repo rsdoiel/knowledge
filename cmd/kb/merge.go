@@ -46,17 +46,34 @@ func cmdMerge(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 	if jsonOut {
 		progressOut = io.Discard
 	}
-	summary, reconciled, err := runMerge(dl, *aPath, *bPath, *outPath, *force, progressOut)
+	summary, reconciled, divergences, err := runMerge(dl, *aPath, *bPath, *outPath, *force, progressOut)
 	if err != nil {
 		return err
 	}
 	if jsonOut {
 		return printJSON(out, struct {
 			CollisionsReconciled int                           `json:"collisions_reconciled"`
+			ContentDivergences   []knowledge.ContentDivergence `json:"content_divergences"`
 			Tables               []knowledge.MergeTableSummary `json:"tables"`
-		}{CollisionsReconciled: reconciled, Tables: summary})
+		}{CollisionsReconciled: reconciled, ContentDivergences: divergences, Tables: summary})
 	}
 	return nil
+}
+
+// formatDivergences renders the content-divergence report. It is written to
+// out on a successful run and folded into the error message on an aborted
+// one: a divergence does not block a merge, so when something else does, the
+// divergence is still true and still the operator's to reconcile.
+func formatDivergences(w io.Writer, divergences []knowledge.ContentDivergence) {
+	if len(divergences) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%d content divergence(s) found — same record, different text; a's copy is kept:\n",
+		len(divergences))
+	for _, d := range divergences {
+		fmt.Fprintf(w, "  %-10s %-30s %s vs %s\n", d.Table, d.Label, d.ChecksumA, d.ChecksumB)
+	}
+	fmt.Fprintln(w, "reconcile the differing decision record files yourself; the merge does not choose between them.")
 }
 
 // runMerge does the actual merge work. On a collision abort (no -force),
@@ -66,25 +83,47 @@ func cmdMerge(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 // text-mode "kb: <message>" line and the JSON-mode {"error": "<message>"}
 // envelope (see printError), so this is the one place collision detail
 // can go that works correctly in both output modes.
-func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Writer) (summary []knowledge.MergeTableSummary, reconciled int, err error) {
+func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Writer) (summary []knowledge.MergeTableSummary, reconciled int, divergences []knowledge.ContentDivergence, err error) {
 	scratch, err := os.MkdirTemp("", "kbmerge-")
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	defer os.RemoveAll(scratch)
 
 	scratchA := filepath.Join(scratch, "a.db")
 	scratchB := filepath.Join(scratch, "b.db")
 	if err := checkpointAndCopy(aPath, scratchA); err != nil {
-		return nil, 0, fmt.Errorf("checkpoint+copy %s: %w", aPath, err)
+		return nil, 0, nil, fmt.Errorf("checkpoint+copy %s: %w", aPath, err)
 	}
 	if err := checkpointAndCopy(bPath, scratchB); err != nil {
-		return nil, 0, fmt.Errorf("checkpoint+copy %s: %w", bPath, err)
+		return nil, 0, nil, fmt.Errorf("checkpoint+copy %s: %w", bPath, err)
+	}
+
+	// Bring both copies up to the current schema before anything ATTACHes
+	// them, so a machine whose database predates a table can still be merged.
+	// The workspace name comes from the original path, not the copy's -- the
+	// copy is under a temp directory and deriving from it would relabel every
+	// record that predates the workspace column (DR-0014).
+	if err := knowledge.NormalizeForMerge(scratchA, aPath); err != nil {
+		return nil, 0, nil, err
+	}
+	if err := knowledge.NormalizeForMerge(scratchB, bPath); err != nil {
+		return nil, 0, nil, err
 	}
 
 	collisions, err := knowledge.CollisionReport(scratchA, scratchB)
 	if err != nil {
-		return nil, 0, fmt.Errorf("collision report: %w", err)
+		return nil, 0, nil, fmt.Errorf("collision report: %w", err)
+	}
+	// Divergences are read before any reconciliation, but the order does not
+	// matter: reconciling rewrites uuids, and a divergence is about identity
+	// and checksum, neither of which it touches.
+	divergences, err = knowledge.DivergenceReport(scratchA, scratchB)
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("divergence report: %w", err)
+	}
+	if len(divergences) > 0 {
+		dl.Log("merge_divergence", map[string]any{"a": aPath, "b": bPath, "count": len(divergences)})
 	}
 	if len(collisions) > 0 {
 		dl.Log("merge_collision", map[string]any{"a": aPath, "b": bPath, "count": len(collisions), "force": force})
@@ -92,26 +131,30 @@ func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Wri
 			var msg strings.Builder
 			fmt.Fprintf(&msg, "%d name/uuid collision(s) found:\n", len(collisions))
 			for _, c := range collisions {
-				fmt.Fprintf(&msg, "  %-10s %-30s %s vs %s\n", c.Table, c.Name, c.UUIDA, c.UUIDB)
+				fmt.Fprintf(&msg, "  %-10s %-30s %s vs %s\n", c.Table, c.Label, c.UUIDA, c.UUIDB)
 			}
+			formatDivergences(&msg, divergences)
 			msg.WriteString("aborting: resolve collisions or pass -force to reconcile b's identity to a's for each one")
-			return nil, 0, errors.New(msg.String())
+			return nil, 0, divergences, errors.New(msg.String())
 		}
 		fmt.Fprintf(out, "%d name/uuid collision(s) found:\n", len(collisions))
 		for _, c := range collisions {
-			fmt.Fprintf(out, "  %-10s %-30s %s vs %s\n", c.Table, c.Name, c.UUIDA, c.UUIDB)
+			fmt.Fprintf(out, "  %-10s %-30s %s vs %s\n", c.Table, c.Label, c.UUIDA, c.UUIDB)
 		}
 		if err := knowledge.ReconcileCollisions(scratchB, collisions); err != nil {
-			return nil, 0, fmt.Errorf("reconcile collisions: %w", err)
+			return nil, 0, divergences, fmt.Errorf("reconcile collisions: %w", err)
 		}
 		reconciled = len(collisions)
 		dl.Log("merge_reconciled", map[string]any{"count": reconciled})
 		fmt.Fprintf(out, "-force set: reconciled %d collision(s) — b's rows now share a's identity, so their observations/links merge normally instead of being dropped\n", reconciled)
 	}
+	// A divergence never blocks, so it is reported on the way through rather
+	// than gating anything.
+	formatDivergences(out, divergences)
 
 	summary, err = knowledge.MergeKnowledgeBases(scratchA, scratchB, outPath)
 	if err != nil {
-		return nil, reconciled, fmt.Errorf("merge: %w", err)
+		return nil, reconciled, divergences, fmt.Errorf("merge: %w", err)
 	}
 	dl.Log("merge_summary", map[string]any{"a": aPath, "b": bPath, "out": outPath, "reconciled": reconciled, "tables": summary})
 
@@ -121,7 +164,7 @@ func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Wri
 	}
 	fmt.Fprintf(out, "\nmerged knowledge base written to %s\n", outPath)
 	fmt.Fprintln(out, "review it, then copy it into place over each machine's agents/knowledge.db yourself.")
-	return summary, reconciled, nil
+	return summary, reconciled, divergences, nil
 }
 
 // checkpointAndCopy checkpoints srcPath's WAL (so all committed data is in

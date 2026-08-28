@@ -3,6 +3,12 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0018  2026-08-27  accepted     decision     implementation   -     A record's project is matched across databases by name, and a divergence is reported on the path that aborts as well as the one that succeeds
+DR-0017  2026-08-27  accepted     decision     implementation   -     The record FTS shape is written twice and held together by a test, rather than extracted into a shared writer
+DR-0016  2026-08-27  accepted     decision     implementation   -     A record with a broken project reference is skipped rather than silently retiered, and a name collision still orphans the losing side's records
+DR-0015  2026-08-27  accepted     correction   implementation   -     kb index indexes the directory it is given, and a live corpus is asserted by property rather than by remembered count
+DR-0014  2026-08-27  accepted     decision     plan-review      -     merge normalises throwaway copies of its inputs, and the workspace name travels from the original path rather than the temp directory
+DR-0013  2026-08-27  accepted     decision     design           -     Decision records travel on every portability path, workspace tier included, and a diverged body is reported not silently resolved
 DR-0012  2026-08-26  accepted     decision     request          -     A project description is correctable in place; a concept description is not clobbered by an empty one
 DR-0011  2026-08-26  accepted     decision     design           -     A record's identity gains the workspace name, derived from the root rather than stored in frontmatter
 DR-0010  2026-08-26  accepted     correction   implementation   -     Standard options come from a FlagSet and are answered before any database exists

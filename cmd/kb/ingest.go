@@ -182,6 +182,30 @@ func defaultIngestRoot(dbPath string) string {
 	return filepath.Dir(filepath.Dir(dbPath))
 }
 
+// collectRecordFilesIn returns the record files directly in dir, sorted, and
+// does not descend into subdirectories. A directory holding records is a
+// corpus and owns exactly one index.md, so `kb index` indexes the directory it
+// is pointed at: ~/WorkLab/agents/decisions gained a nested caltechauthors/
+// corpus, and recursing folded its DR-0001..0005 into the workspace tier's
+// index beside the workspace tier's own. ingest keeps the recursive walk
+// below, which is right for it -- it fills one database from a whole tree
+// rather than writing one file per directory.
+func collectRecordFilesIn(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", dir, err)
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() || !recordFilePattern.MatchString(e.Name()) {
+			continue
+		}
+		files = append(files, filepath.Join(dir, e.Name()))
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
 // collectRecordFiles walks dir and returns every record file, sorted, so that
 // a run is deterministic.
 func collectRecordFiles(dir string) ([]string, error) {

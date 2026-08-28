@@ -1,0 +1,11 @@
+# Decision Records — index
+
+Generated file. Do not hand-edit.
+
+```
+DR-0005  2026-05-25  accepted     decision     live-test        sup   Accepted and partially superseded at once, which the sup flag exists for
+DR-0004  2026-04-20  accepted     decision     plan-review      -     The superseding side of the pair, carrying an initiative
+DR-0003  2026-03-15  superseded   decision     implementation   sup   A title carrying `backticks` and "double quotes", which YAML must survive
+DR-0002  2026-02-10  accepted     correction   -                -     An empty trigger renders as the placeholder, not as spaces
+DR-0001  2026-01-05  accepted     decision     design           -     A plain accepted decision, the ordinary case
+```

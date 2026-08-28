@@ -573,27 +573,45 @@ func liveCorpus(t *testing.T, parts ...string) string {
 	return dir
 }
 
+// The value of this corpus is its size and its age -- 172 records and
+// climbing, hand-written over years, exercising frontmatter shapes no fixture
+// would think to produce. Its exact contents are not this repository's to
+// pin: it gained three records between 2026-08-25 and 2026-08-27, which broke
+// the counts this test used to hardcode without anything being wrong. Assert
+// the properties instead, counting the corpus rather than remembering it.
 func TestCmdIngest_ClasmCorpus(t *testing.T) {
 	dir := liveCorpus(t, "clasm", "decisions")
 	kb, _ := openWorkspaceKB(t)
 
+	onDisk, err := collectRecordFiles(dir)
+	if err != nil {
+		t.Fatalf("collectRecordFiles: %v", err)
+	}
+	want := len(onDisk)
+	if want < 100 {
+		t.Fatalf("found %d record files in %s, expected the large live corpus", want, dir)
+	}
+
 	s := runIngest(t, kb, dir)
-	if s.Added != 169 {
-		t.Errorf("Added = %d, want 169", s.Added)
+	if s.Added != want {
+		t.Errorf("Added = %d, want %d (one per record file on disk)", s.Added, want)
 	}
 	if s.Failed != 0 {
 		t.Errorf("Failed = %d (%v), want 0", s.Failed, s.Errors)
 	}
-	if s.Supersedes != 2 {
-		t.Errorf("Supersedes = %d, want 2", s.Supersedes)
+	// This corpus is the only one carrying real supersessions, including the
+	// partial supersession the sup flag exists for. The exact counts grow;
+	// that they are non-zero is why this corpus is here.
+	if s.Supersedes < 2 {
+		t.Errorf("Supersedes = %d, want at least 2", s.Supersedes)
 	}
-	if s.RelatesTo != 3 {
-		t.Errorf("RelatesTo = %d, want 3", s.RelatesTo)
+	if s.RelatesTo < 3 {
+		t.Errorf("RelatesTo = %d, want at least 3", s.RelatesTo)
 	}
 
 	again := runIngest(t, kb, dir)
-	if again.Skipped != 169 || again.Updated != 0 {
-		t.Errorf("second run = %+v, want 169 skipped and 0 updated", again)
+	if again.Skipped != want || again.Updated != 0 {
+		t.Errorf("second run = %+v, want %d skipped and 0 updated", again, want)
 	}
 }
 

@@ -324,6 +324,16 @@ func DefaultPath(root string) string {
  *   defer kb.Close()
  */
 func Open(dbPath string) (*KnowledgeBase, error) {
+	return openWithWorkspace(dbPath, workspaceFromDBPath(dbPath))
+}
+
+// openWithWorkspace is Open with the workspace name supplied rather than
+// derived. Everywhere the database is where it came from, the path is the
+// evidence and Open's derivation is correct. A merge scratch copy is the one
+// place it is not: the copy lives under a temp directory, so deriving from it
+// would backfill records.workspace with a temp name (DR-0014). Only
+// NormalizeForMerge passes a workspace that is not this file's own.
+func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("knowledge: create directory for %s: %w", dbPath, err)
 	}
@@ -354,7 +364,7 @@ func Open(dbPath string) (*KnowledgeBase, error) {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: apply records schema: %w", err)
 	}
-	if err := applyRecordsMigration(db, workspaceFromDBPath(dbPath)); err != nil {
+	if err := applyRecordsMigration(db, workspace); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: migrate records: %w", err)
 	}
@@ -376,7 +386,7 @@ func Open(dbPath string) (*KnowledgeBase, error) {
 		}
 		_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_` + t + `_uuid ON ` + t + `(uuid)`)
 	}
-	kb := &KnowledgeBase{db: db, path: dbPath, workspace: workspaceFromDBPath(dbPath)}
+	kb := &KnowledgeBase{db: db, path: dbPath, workspace: workspace}
 	if err := migrateExperimentsToProjects(kb); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: migrate experiments: %w", err)
@@ -1165,6 +1175,10 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 	kb.db.QueryRow(`SELECT COUNT(*) FROM observations`).Scan(&total)
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM projects`, total).Scan(&total)
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM concepts`, total).Scan(&total)
+	// records counts towards the total as well as being indexed below, so a
+	// database holding only records still triggers the rebuild. A merged
+	// knowledge base can be exactly that.
+	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM records`, total).Scan(&total)
 	if total == 0 {
 		return nil
 	}
@@ -1185,6 +1199,21 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 		FROM concepts`); err != nil {
 		return fmt.Errorf("fts rebuild concepts: %w", err)
 	}
+	// The column shape here must match indexRecordFTS exactly, or a record
+	// found by merge would read differently from the same record found by
+	// ingest. char(10) is the newline that separates title from body there.
+	// A merge relies on this rebuild entirely: it writes rows straight into
+	// the merged database and kb_fts has no triggers to notice (DR-0013).
+	if _, err := kb.db.Exec(`
+		INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
+		SELECT title || char(10) || body, kind, 'DR-' || record_id, title,
+		       'record', id, IFNULL(project_id, 0)
+		FROM records`); err != nil {
+		return fmt.Errorf("fts rebuild records: %w", err)
+	}
+	// sources is deliberately absent, not overlooked: DR-0013 left it out as
+	// a pre-existing gap unrelated to records, so that what a source's
+	// searchable text should be stays its own decision.
 	return nil
 }
 

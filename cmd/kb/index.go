@@ -87,7 +87,7 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 		return fmt.Errorf("%s is not a directory", dir)
 	}
 
-	files, err := collectRecordFiles(abs)
+	files, err := collectRecordFilesIn(abs)
 	if err != nil {
 		return err
 	}
