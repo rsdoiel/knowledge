@@ -21,7 +21,7 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
-<h2 id="unreleased">Unreleased</h2>
+<h2 id="v0.0.5-2026-08-28">v0.0.5 — 2026-08-28</h2>
 <p>Decision records now travel on every portability path —
 <code>merge</code>, <code>export</code>, <code>import</code> — not just
 <code>ingest</code>. Before this, <code>records</code> and
@@ -54,10 +54,45 @@ merges).</li>
 <li>Every table <code>merge</code> carries now appears in its per-table
 summary, so a table that would lose rows says so.</li>
 </ul>
+<p><code>kb record new</code>’s default write location for
+project-scoped records moves to
+<code>agents/projects/&lt;project&gt;/decisions/</code> (was
+<code>&lt;project&gt;/decisions/</code>), part of a workspace-wide
+reorganisation moving process artifacts out of project repositories
+(DR-0021). <code>kb</code> also stops silently creating an ambient
+<code>agents/knowledge.db</code> in whatever directory it happens to be
+run from — a new <code>kb init</code> verb is now the explicit way to
+start a workspace (DR-0021, DR-0022).</p>
+<h3 id="added-1">Added</h3>
+<ul>
+<li><code>kb init [PATH]</code>: creates a schema-only, idempotent
+<code>agents/knowledge.db</code>, the same shape as
+<code>git init</code>. Documented at <code>kb-init(1)</code>.</li>
+<li><code>kb record new --dir DIR</code>: overrides the default write
+location for a new record, relative to <code>--root</code> like every
+other stored record path.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>kb record new --project P</code> (no <code>--dir</code>) now
+writes to <code>agents/projects/P/decisions/</code> instead of
+<code>P/decisions/</code>. <code>--workspace</code> scope is unchanged
+(<code>agents/decisions/</code>). Existing corpora under the old layout
+are not migrated by this change.</li>
+<li>Any verb resolved through the ambient default (no <code>--db</code>
+given) now fails with a message pointing at <code>kb init</code> or
+<code>kb import -in FILE</code> if <code>agents/knowledge.db</code>
+doesn’t already exist, instead of silently creating one — fixes
+<code>kb record new</code>/<code>kb observation add</code>, run from
+inside a project directory, building a stray nested workspace. An
+explicit <code>--db PATH</code> and <code>kb import</code> keep today’s
+open-or-create behavior unchanged.</li>
+</ul>
 <h3 id="notes">Notes</h3>
 <ul>
-<li>DR-0013 through DR-0019 cover this effort’s design and
-implementation decisions; see
+<li>DR-0013 through DR-0019 cover the records-portability effort’s
+design and implementation decisions; DR-0021 and DR-0022 cover the
+record layout and workspace-init change. See
 <code>knowledge/decisions/index.md</code>.</li>
 </ul>
 <h2 id="v0.0.4-2026-08-26">v0.0.4 — 2026-08-26</h2>
@@ -68,7 +103,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -110,7 +145,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather

@@ -29,14 +29,15 @@
 <p>kb record supersede NEW OLD [–partial] [–project P] [–workspace]
 [–root DIR]</p>
 <p>kb record new –title T –trigger G (–project P | –workspace) [–kind K]
-[–root DIR]</p>
+[–dir DIR] [–root DIR]</p>
 <p>kb record fmt PATH [–dry-run]</p>
 <h1 id="description">DESCRIPTION</h1>
-<p>A decision record is one file under a project’s decisions/ directory,
-indexed by ingest. Records are listed oldest first, sorted by date and
-then by id — never by id alone, because ids are identity, not
-chronology: a correction can carry a lower id than the record it
-supersedes.</p>
+<p>A decision record is one file, indexed by ingest. new writes a
+project-scoped record to agents/projects/PROJECT/decisions/ by default
+(–dir overrides this) and a workspace-scoped one to agents/decisions/.
+Records are listed oldest first, sorted by date and then by id — never
+by id alone, because ids are identity, not chronology: a correction can
+carry a lower id than the record it supersedes.</p>
 <p>A record id is not by itself an identity, since two projects may each
 have a DR-0001. Where a bare id is ambiguous, the command reports the
 candidates and asks for –project or –workspace rather than choosing
@@ -128,6 +129,12 @@ the identity
 <dd>
 the new record’s kind, on new. Defaults to decision
 </dd>
+<dt>–dir DIR</dt>
+<dd>
+on new, write to DIR instead of the default
+(agents/projects/PROJECT/decisions, or agents/decisions on –workspace).
+Relative to –root, like every other stored record path
+</dd>
 <dt>–dry-run</dt>
 <dd>
 on fmt, report what would change and write nothing
@@ -148,6 +155,7 @@ kb record supersede 0149 0148 --project clasm
 kb record supersede 0159 0160 --project clasm --partial</code></pre>
 <p>Start a new record, and bring a corpus into canonical form:</p>
 <pre class="shell"><code>kb record new --project clasm --title &quot;Retry the profile attach&quot; --trigger live-test
+kb record new --project clasm --title &quot;Filed under the old layout&quot; --trigger request --dir clasm/decisions
 kb record fmt clasm/decisions --dry-run</code></pre>
 </section>
 <footer>
