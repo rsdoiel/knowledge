@@ -77,6 +77,31 @@
   record files as authoritative for content but lets the database keep
   something the files no longer say.
 
+  **The downstream remediation advice is actively dangerous, and that is the
+  more urgent half.** Found later the same day, ingesting `agents/decisions`
+  after moving the `caltechauthors` corpus to
+  `agents/projects/caltechauthors/decisions/`. Because the five rows still
+  carried their pre-move paths, `reportMissing` concluded the files were gone
+  and printed, once per record:
+
+  ```
+  missing: DR-0004 (agents/decisions/caltechauthors/0004-...md) is in the
+  database but its file is gone; use kb record remove to drop it
+  ```
+
+  The files were not gone — they were one directory away, and the database
+  held exactly five correctly-scoped rows for them. Following the instruction
+  would have deleted five live records, and `record_relations` cascades on
+  delete, so the edges would go with them. A move is the *expected* operation
+  under the `agents/projects/<project>/` layout, which means the tool now
+  recommends a destructive fix for a problem that only exists because of the
+  bug above. Fixing the path update removes most of this, but `reportMissing`
+  should probably also stop asserting a cause it cannot distinguish: a record
+  whose file is genuinely deleted and one whose file moved look identical from
+  a stale row. Checking whether the record's `uuid` or `(project, scope, id)`
+  turns up elsewhere in the ingested tree would tell them apart, and the
+  message could then say "moved" rather than proposing deletion.
+
 - [ ] `kb search` exits 0 when it finds nothing. The workspace convention for
   search-style tools is exit 1 on no match (see `~/Laboratory/CLAUDE.md`),
   though that section is written for the Deno tools and may not be intended
