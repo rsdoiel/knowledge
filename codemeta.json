@@ -1,31 +1,20 @@
 {
   "@context": "https://w3id.org/codemeta/3.0",
   "type": "SoftwareSourceCode",
-  "name": "knowledge",
-  "description": "A standalone SQLite3-backed knowledge base for tracking projects, observations, and concepts across independent experiments in the rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent's knowledge.go, this module provides a typed CRUD API (Open, AddProject, AddObservationWithSource, AddConceptWithIdentifier, Search, and related methods) plus UUID-based row identity and a SQL/ATTACH-based cross-machine merge tool, so other experiments and language-model harnesses can read and write structured observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb, a single \"kb VERB ARGS\" binary (matching the git/go command model) covering the full API with both human-readable and --json output, a merge verb for reconciling two databases that drifted independently, and a read-only interactive TUI browser for exploring projects, observations, and concepts. As of v0.0.4 it also indexes Decision Records -- episode-scoped Markdown files with YAML frontmatter, kept in a project's decisions/ directory -- as first-class rows, so the reasoning behind a decision is retrievable rather than living only in files the knowledge base never reads. Adds a records/record_relations schema, a canonical frontmatter parser and renderer, and the ingest, record and index verbs.",
   "codeRepository": "https://github.com/rsdoiel/knowledge",
-  "issueTracker": "https://github.com/rsdoiel/knowledge/issues",
-  "license": "https://www.gnu.org/licenses/agpl-3.0.txt",
-  "version": "0.0.5",
-  "developmentStatus": "concept",
-  "releaseNotes": "Decision records now travel on every portability path -- merge, export, import -- not just ingest. Before this, records and record_relations were invisible to all three, so running merge (or an export/import round trip) discarded every decision record while reporting success (DR-0013).\n\n`kb merge` carries records/record_relations in its union, reports a record collision keyed by identity (workspace, project, scope, record id) rather than by project_id or a project's own uuid, and reports a content divergence -- same record, different text -- without blocking the merge on it. --json gains content_divergences alongside collisions_reconciled and the per-table tables summary.\n\n`kb export`/`kb import` carry record/record_relation JSON-L lines. A -project-scoped export carries only that project's records; a workspace-tier record, having no project, appears only in an unscoped export (DR-0019). Import matches a record by identity, not uuid -- two machines' ingest of the same file mint different uuids for it, so identity is the normal case for \"already present,\" not the exception (DR-0018) -- and resolves its project by name for the same reason. New: CollisionReport/ReconcileCollisions/DivergenceReport, and NormalizeForMerge, which migrates a merge scratch copy to the current schema before ATTACHing so a database predating a table still merges.\n\n`kb record new`'s default write location for project-scoped records moves to agents/projects/<project>/decisions/ (was <project>/decisions/), part of a workspace-wide reorganisation moving process artifacts out of project repositories -- overridable with a new --dir flag (DR-0021). kb also stops silently creating an ambient agents/knowledge.db in whatever directory it happens to be run from: a new `kb init` verb is now the explicit way to start a workspace, and any other verb resolved through the ambient default (no --db given) fails toward `kb init` or `kb import -in FILE` instead of fabricating one. An explicit --db PATH and `kb import` keep today's open-or-create behavior unchanged, so the documented rebuild recipe (rm agents/knowledge.db && kb import -in agents/knowledge.jsonl) still works (DR-0021, DR-0022).\n\nDR-0013 through DR-0019 cover the records-portability effort's design and implementation decisions; DR-0021 and DR-0022 cover the record layout and workspace-init change. See knowledge/decisions/index.md.",
+  "author": [
+    {
+      "id": "https://orcid.org/0000-0003-0900-6903",
+      "type": "Person",
+      "givenName": "R. S.",
+      "familyName": "Doiel",
+      "email": "rsdoiel@gmail.com"
+    }
+  ],
   "dateCreated": "2026-07-27",
   "dateModified": "2026-08-28",
   "datePublished": "2026-08-28",
-  "copyrightYear": 2026,
-  "copyrightHolder": "R. S. Doiel",
-  "programmingLanguage": [
-    "Go >= 1.26.4"
-  ],
-  "softwareRequirements": [
-    "Go >= 1.26.4",
-    "gopkg.in/yaml.v3 >= 3.0.1"
-  ],
-  "softwareSuggestions": [
-    "CMTools >= 0.0.45b",
-    "Pandoc >= 3.9",
-    "GNU Make >= 3"
-  ],
+  "description": "A standalone SQLite3-backed knowledge base for tracking projects, observations, and concepts across independent experiments in the rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent's knowledge.go, this module provides a typed CRUD API (Open, AddProject, AddObservationWithSource, AddConceptWithIdentifier, Search, and related methods) plus UUID-based row identity and a SQL/ATTACH-based cross-machine merge tool, so other experiments and language-model harnesses can read and write structured observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb, a single \"kb VERB ARGS\" binary (matching the git/go command model) covering the full API with both human-readable and --json output, a merge verb for reconciling two databases that drifted independently, and a read-only interactive TUI browser for exploring projects, observations, and concepts. It also indexes Decision Records -- episode-scoped Markdown files with YAML frontmatter, kept in a project's decisions/ directory -- as first-class rows, so the reasoning behind a decision is retrievable rather than living only in files the knowledge base never reads. Adds a records/record_relations schema, a canonical frontmatter parser and renderer, and the ingest, record and index verbs.",
   "keywords": [
     "SQLite3",
     "knowledge base",
@@ -40,13 +29,24 @@
     "provenance",
     "full-text search"
   ],
-  "author": [
-    {
-      "id": "https://orcid.org/0000-0003-0900-6903",
-      "type": "Person",
-      "givenName": "R. S.",
-      "familyName": "Doiel",
-      "email": "rsdoiel@gmail.com"
-    }
-  ]
+  "name": "knowledge",
+  "license": "https://www.gnu.org/licenses/agpl-3.0.txt",
+  "programmingLanguage": [
+    "Go >= 1.26.4"
+  ],
+  "softwareRequirements": [
+    "Go >= 1.26.4",
+    "gopkg.in/yaml.v3 >= 3.0.1"
+  ],
+  "softwareSuggestions": [
+    "CMTools >= 0.0.45b",
+    "Pandoc >= 3.9",
+    "GNU Make >= 3"
+  ],
+  "version": "0.0.5",
+  "developmentStatus": "concept",
+  "issueTracker": "https://github.com/rsdoiel/knowledge/issues",
+  "releaseNotes": "Decision records now travel on every portability path -- merge, export, import -- not just ingest. Before this, records and record_relations were invisible to all three, so running merge (or an export/import round trip) discarded every decision record while reporting success (DR-0013).\n\n`kb merge` carries records/record_relations in its union, reports a record collision keyed by identity (workspace, project, scope, record id) rather than by project_id or a project's own uuid, and reports a content divergence -- same record, different text -- without blocking the merge on it. --json gains content_divergences alongside collisions_reconciled and the per-table tables summary.\n\n`kb export`/`kb import` carry record/record_relation JSON-L lines. A -project-scoped export carries only that project's records; a workspace-tier record, having no project, appears only in an unscoped export (DR-0019). Import matches a record by identity, not uuid -- two machines' ingest of the same file mint different uuids for it, so identity is the normal case for \"already present,\" not the exception (DR-0018) -- and resolves its project by name for the same reason. New: CollisionReport/ReconcileCollisions/DivergenceReport, and NormalizeForMerge, which migrates a merge scratch copy to the current schema before ATTACHing so a database predating a table still merges.\n\n`kb record new`'s default write location for project-scoped records moves to agents/projects/<project>/decisions/ (was <project>/decisions/), part of a workspace-wide reorganisation moving process artifacts out of project repositories -- overridable with a new --dir flag (DR-0021). kb also stops silently creating an ambient agents/knowledge.db in whatever directory it happens to be run from: a new `kb init` verb is now the explicit way to start a workspace, and any other verb resolved through the ambient default (no --db given) fails toward `kb init` or `kb import -in FILE` instead of fabricating one. An explicit --db PATH and `kb import` keep today's open-or-create behavior unchanged, so the documented rebuild recipe (rm agents/knowledge.db && kb import -in agents/knowledge.jsonl) still works (DR-0021, DR-0022).\n\nDR-0013 through DR-0019 cover the records-portability effort's design and implementation decisions; DR-0021 and DR-0022 cover the record layout and workspace-init change. See knowledge/decisions/index.md.",
+  "copyrightYear": 2026,
+  "copyrightHolder": "R. S. Doiel"
 }
