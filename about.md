@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.4
+version: 0.0.5
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -30,31 +30,23 @@ keywords:
   - provenance
   - full-text search
 
-date_released: 2026-08-26
+date_released: 2026-08-28
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.4
+## knowledge 0.0.5
 
-Adds Decision Record support: episode-scoped Markdown files with YAML frontmatter, kept in a project's decisions/ directory, indexed as first-class rows so the reasoning behind a decision is retrievable rather than living only in files the knowledge base never reads.
+Decision records now travel on every portability path -- merge, export, import -- not just ingest. Before this, records and record_relations were invisible to all three, so running merge (or an export/import round trip) discarded every decision record while reporting success (DR-0013).
 
-Schema: records and record_relations. A record's identity is (workspace, project, scope, id) -- the workspace name is the directory name of the workspace root, derived from the path rather than written in a file, because every workspace has an agents/decisions/ and two of them may each hold a DR-0001. Records are indexed into kb_fts with source_type 'record'. Existing databases migrate lazily on open.
+`kb merge` carries records/record_relations in its union, reports a record collision keyed by identity (workspace, project, scope, record id) rather than by project_id or a project's own uuid, and reports a content divergence -- same record, different text -- without blocking the merge on it. --json gains content_divergences alongside collisions_reconciled and the per-table tables summary.
 
-New verbs: `kb ingest PATH` walks a tree of NNNN-slug.md records and resolves supersedes/relates_to in two passes so forward references work; `kb record list|show|new|set-status|supersede|fmt`; and `kb index PATH` generates a decisions/index.md, one greppable line per record, newest first. Ingest never writes to a record file and `record fmt` never writes to the database. The TUI browses a project's records read-only.
+`kb export`/`kb import` carry record/record_relation JSON-L lines. A -project-scoped export carries only that project's records; a workspace-tier record, having no project, appears only in an unscoped export (DR-0019). Import matches a record by identity, not uuid -- two machines' ingest of the same file mint different uuids for it, so identity is the normal case for "already present," not the exception (DR-0018) -- and resolves its project by name for the same reason. New: CollisionReport/ReconcileCollisions/DivergenceReport, and NormalizeForMerge, which migrates a merge scratch copy to the current schema before ATTACHing so a database predating a table still merges.
 
-New library API: ParseRecordFile/RenderRecordFile, ListRecords, RecordByIdentity, RecordsByRecordID, RecordsUnderPath, NewUUID, Today, and a SourceType field on KBSearchResult so a hit reports which table it came from as well as its own kind.
+`kb record new`'s default write location for project-scoped records moves to agents/projects/<project>/decisions/ (was <project>/decisions/), part of a workspace-wide reorganisation moving process artifacts out of project repositories -- overridable with a new --dir flag (DR-0021). kb also stops silently creating an ambient agents/knowledge.db in whatever directory it happens to be run from: a new `kb init` verb is now the explicit way to start a workspace, and any other verb resolved through the ambient default (no --db given) fails toward `kb init` or `kb import -in FILE` instead of fabricating one. An explicit --db PATH and `kb import` keep today's open-or-create behavior unchanged, so the documented rebuild recipe (rm agents/knowledge.db && kb import -in agents/knowledge.jsonl) still works (DR-0021, DR-0022).
 
-The frontmatter struct declaration is the canonical format specification -- field order, flow-styled sequences, and a double-quoted string type for the seven fields the format requires quoted -- so every writer produces byte-identical output. Verified against 205 real records across five corpora, all round-tripping byte-for-byte, and `kb index` output is byte-identical to the Deno generator it replaces.
-
-CLI: adds the standard options -help, -license and -version, which kb previously lacked, declared through a flag.FlagSet so each is accepted in either dash form. They are answered before any database is opened, as are ingest's help paths and `kb index`, which builds from the record files and never queries a database.
-
-Vocabularies for record status/kind/trigger are documented and reported against, not enforced: in a format several tools write to, a typo should be a fixable row and not a failed run. Observation kinds remain enforced, which is a deliberate asymmetry.
-
-Security: a record path read from the database is confined to the workspace root before it is read or written, since filepath.Join cleans a path without confining it.
-
-Adds gopkg.in/yaml.v3 as a direct dependency. Man pages for kb-ingest(1), kb-record(1) and kb-index(1).
+DR-0013 through DR-0019 cover the records-portability effort's design and implementation decisions; DR-0021 and DR-0022 cover the record layout and workspace-init change. See knowledge/decisions/index.md.
 
 ## Authors
 

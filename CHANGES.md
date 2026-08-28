@@ -3,7 +3,7 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased
+## v0.0.5 — 2026-08-28
 
 Decision records now travel on every portability path — `merge`, `export`,
 `import` — not just `ingest`. Before this, `records` and `record_relations`
@@ -31,10 +31,39 @@ trip) discarded every decision record while reporting success (DR-0013).
 - Every table `merge` carries now appears in its per-table summary, so a
   table that would lose rows says so.
 
+`kb record new`'s default write location for project-scoped records moves to
+`agents/projects/<project>/decisions/` (was `<project>/decisions/`), part of
+a workspace-wide reorganisation moving process artifacts out of project
+repositories (DR-0021). `kb` also stops silently creating an ambient
+`agents/knowledge.db` in whatever directory it happens to be run from — a new
+`kb init` verb is now the explicit way to start a workspace (DR-0021,
+DR-0022).
+
+### Added
+
+- `kb init [PATH]`: creates a schema-only, idempotent `agents/knowledge.db`,
+  the same shape as `git init`. Documented at `kb-init(1)`.
+- `kb record new --dir DIR`: overrides the default write location for a new
+  record, relative to `--root` like every other stored record path.
+
+### Changed
+
+- `kb record new --project P` (no `--dir`) now writes to
+  `agents/projects/P/decisions/` instead of `P/decisions/`. `--workspace`
+  scope is unchanged (`agents/decisions/`). Existing corpora under the old
+  layout are not migrated by this change.
+- Any verb resolved through the ambient default (no `--db` given) now fails
+  with a message pointing at `kb init` or `kb import -in FILE` if
+  `agents/knowledge.db` doesn't already exist, instead of silently creating
+  one — fixes `kb record new`/`kb observation add`, run from inside a
+  project directory, building a stray nested workspace. An explicit `--db
+  PATH` and `kb import` keep today's open-or-create behavior unchanged.
+
 ### Notes
 
-- DR-0013 through DR-0019 cover this effort's design and implementation
-  decisions; see `knowledge/decisions/index.md`.
+- DR-0013 through DR-0019 cover the records-portability effort's design and
+  implementation decisions; DR-0021 and DR-0022 cover the record layout and
+  workspace-init change. See `knowledge/decisions/index.md`.
 
 ## v0.0.4 — 2026-08-26
 
