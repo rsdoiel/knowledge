@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-init — create a new, empty workspace</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb init [PATH]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Creates a schema-only PATH/agents/knowledge.db — no data, the same
+shape as git init. PATH defaults to the current directory.</p>
+<p>Every other kb verb that opens the ambient database (no –db given)
+requires one to already exist, and fails toward “kb init” or “kb import
+-in FILE” rather than silently creating one in whatever directory it
+happens to be run from. init is how a genuinely new workspace, with no
+prior agents/knowledge.jsonl to seed from, gets that first database.</p>
+<p>A workspace being rebuilt or bootstrapped from an existing export is
+a different case: “kb import -in agents/knowledge.jsonl” already creates
+a missing target database on its own, so init has nothing to add there —
+see kb-import(1).</p>
+<p>init is idempotent. Run again against an already-initialized
+workspace, it reports that and leaves the existing database untouched;
+it never truncates or overwrites data.</p>
+<h1 id="options">OPTIONS</h1>
+<p>None beyond the standard options.</p>
+<h1 id="examples">EXAMPLES</h1>
+<pre class="shell"><code>kb init
+kb init ~/NewWorkspace</code></pre>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

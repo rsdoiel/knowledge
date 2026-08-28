@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="kb-record-layout-and-workspace-init-implementation-plan">kb
+record layout and workspace init — Implementation Plan</h1>
+<h2 id="source-design">Source design</h2>
+<p><strong>DR-0021</strong> (accepted 2026-08-28) and
+<strong>DR-0022</strong> (accepted 2026-08-28, a plan-review correction
+narrowing DR-0021 item 4 to <code>dbPath == ""</code>). Both are
+project-tier records in <code>knowledge/decisions/</code>.</p>
+<p>Originating feature request:
+<code>agents-projects-layout-feature-request.md</code> (filed
+2026-08-28, not itself a design cycle — DR-0021/DR-0022 are). Related
+<code>TODO.md</code> items: “Move kb’s record-writing default to the
+<code>agents/projects/&lt;project&gt;/</code> layout” (Requested
+features), and “<code>kb record new</code> run from inside a project
+directory silently creates a nested corpus” (Noticed in passing) — both
+closed by this plan.</p>
+<p>Out of scope, per DR-0021 Consequences: migrating existing corpora
+(<code>clasm/decisions/</code>, <code>cold/decisions/</code>,
+<code>CMTools/decisions/</code>,
+<code>agents/decisions/caltechauthors/</code>);
+<code>PROJECT_CYCLE.md</code> /
+<code>DISCUSS_REVIEW_PLAN_IMPLEMENT.md</code> updates; any
+<code>kb</code> support for <code>plans/</code> or
+<code>feature_requests/</code> beyond decisions.</p>
+<p>TDD throughout: the failing test lands before the code that satisfies
+it, matching this module’s existing practice (see
+<code>records-portability-plan.md</code>).</p>
+<h2 id="a-finding-from-writing-this-plan">A finding from writing this
+plan</h2>
+<p><code>index_test.go</code>’s roughly fourteen fixtures building paths
+like <code>filepath.Join(root, "clasm", "decisions")</code> (flagged in
+the feature request as encoding the old layout) turn out
+<strong>not</strong> to need changing. <code>kb index</code> takes an
+explicit directory and walks whatever it’s given — the fixtures are
+realistic sample data for that directory-walking behavior, not a
+hardcoded assumption in <code>index.go</code> itself. Since migrating
+existing corpora is out of scope, those fixtures correctly continue to
+mirror the layout the real corpora are still in. Nothing in this plan
+touches <code>index_test.go</code>.</p>
+<h2 id="w1-kb-init-path-dr-0021-item-3">W1 — <code>kb init [PATH]</code>
+(DR-0021 item 3)</h2>
+<p>New verb, schema-only, idempotent, default <code>PATH</code> is cwd —
+same shape as <code>git init</code>.</p>
+<ul>
+<li><code>cmd/kb/init_test.go</code> (red first): <code>kb init</code>
+in an empty temp dir creates <code>agents/knowledge.db</code> with the
+schema applied and zero rows in <code>projects</code>; running it a
+second time succeeds and reports “already initialized” rather than
+erroring or truncating existing data; <code>kb init PATH</code> targets
+<code>PATH/agents/knowledge.db</code> rather than cwd.</li>
+<li><code>cmd/kb/init.go</code>:
+<code>cmdInit(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error</code>.
+<code>kb</code> arrives <code>nil</code> (see below) — <code>init</code>
+resolves its own target path from <code>args[0]</code> (or cwd),
+computes <code>knowledge.DefaultPath(root)</code>, checks existence
+first (to decide the “already initialized” message), then calls
+<code>knowledge.Open</code> — which already does exactly the
+create-schema work <code>init</code> needs — and closes it immediately.
+<code>verbs["init"] = cmdInit</code> registered via the package’s
+<code>init()</code> pattern, matching
+<code>jsonl.go</code>/<code>merge.go</code>/<code>index.go</code>.</li>
+<li><code>cmd/kb/main.go:120</code>: add <code>"init"</code> to the
+bypass list
+(<code>rest[0] == "merge" || rest[0] == "index" || rest[0] == "init"</code>),
+so <code>init</code> — like <code>merge</code> and <code>index</code> —
+never triggers the ambient <code>--db</code> open before it gets to run
+its own path logic. This is also a prerequisite for W2:
+<code>init</code> must reach <code>cmdInit</code> before any existence
+guard could apply to it.</li>
+<li>Docs (see W4) and <code>Makefile</code> <code>KB_TOPICS</code> (see
+W4) — <code>TestPrintHelp_ EveryRegisteredVerbHasATopic</code> and
+<code>TestHelpText_ListsEveryRegisteredVerb</code>
+(<code>help_dispatch_test.go</code>) fail the moment <code>init</code>
+is registered without them, so in practice this step happens inside W1,
+not deferred to W4.</li>
+</ul>
+<h2 id="w2-ambient-open-guard-dr-0021-items-45-dr-0022">W2 —
+ambient-open guard (DR-0021 items 4–5, DR-0022)</h2>
+<ul>
+<li><code>cmd/kb/main_test.go</code> (red first): running a normal verb
+(e.g. <code>project list</code>) with no <code>--db</code> in a temp cwd
+that has no <code>agents/knowledge.db</code> exits 1 with a message
+naming both <code>kb init</code> and <code>kb import -in FILE</code>,
+and does <strong>not</strong> create the file. Running the same verb
+with <code>--db &lt;nonexistent-path&gt;</code> still auto-creates and
+proceeds (unchanged — this is exactly
+<code>TestMainRun_UnknownVerbOpensDBAndReturnsUsageError</code>, which
+stays as-is per DR-0022 and needs no edit). Running
+<code>kb import -in FILE</code> with no <code>--db</code> in that same
+empty temp cwd still succeeds and creates the db (DR-0021 item 5).</li>
+<li><code>cmd/kb/main.go</code> (~line 124, the ambient-open branch):
+before the existing <code>resolveDBPath</code> + <code>Open</code> call,
+when <code>dbPath == ""</code> <strong>and</strong>
+<code>rest[0] != "import"</code>, <code>os.Stat</code> the resolved
+path; on <code>os.IsNotExist</code>, print the guard error and return 1
+without calling <code>Open</code>. <code>import</code> is carved out
+here specifically because — unlike
+<code>merge</code>/<code>index</code>/<code>init</code> — it has no path
+handling of its own; it relies entirely on this same ambient-open branch
+to get an open (and, for the rebuild recipe, freshly-created)
+<code>*KnowledgeBase</code> passed in. <code>dbPath != ""</code>
+(explicit <code>--db PATH</code>, any verb) is untouched.</li>
+</ul>
+<h2 id="w3-recordnew-default-path---dir-override-dr-0021-items-12">W3 —
+<code>recordNew</code> default path + <code>--dir</code> override
+(DR-0021 items 1–2)</h2>
+<ul>
+<li><code>cmd/kb/recordnew_test.go</code> (red first):
+<code>kb record new --project foo --title T --trigger request</code>
+writes under <code>agents/projects/foo/decisions/</code>;
+<code>--workspace</code> still writes under
+<code>agents/decisions/</code> (unchanged);
+<code>--dir SOME/PATH --project foo ...</code> writes under
+<code>SOME/PATH</code> instead of the default, ignoring
+<code>--project</code> for path purposes (project attribution stays
+frontmatter-driven, per the feature request’s own “what’s already
+fine”).</li>
+<li><code>cmd/kb/recordnew.go:151</code>:
+<code>dir := filepath.Join(f.project, "decisions")</code> becomes
+<code>dir := filepath.Join("agents", "projects", f.project, "decisions")</code>;
+then <code>if f.dir != "" { dir = f.dir }</code> before
+<code>absDir := filepath.Join(root, dir)</code>. The
+<code>f.workspace</code> branch (line 152–155) is unchanged.</li>
+<li><code>cmd/kb/record.go</code>: add <code>dir string</code> to
+<code>recordFlags</code> (line ~50, alongside <code>root</code>) and
+<code>"--dir": &amp;f.dir</code> to the <code>strFlags</code> map in
+<code>parseRecordFlags</code> (line ~112).</li>
+</ul>
+<h2 id="w4-docs-dr-0021-item-6">W4 — docs (DR-0021 item 6)</h2>
+<ul>
+<li><code>cmd/kb/helptext.go</code>:
+<ul>
+<li><code>RecordHelpText</code> SYNOPSIS (line 647): add
+<code>[--dir DIR]</code> to the <code>record new</code> line.</li>
+<li><code>RecordHelpText</code> DESCRIPTION (line 653): “A decision
+record is one file under a project’s <code>decisions/</code> directory”
+→ describe the new default
+(<code>agents/projects/&lt;project&gt;/decisions/</code>, workspace tier
+unchanged at <code>agents/decisions/</code>).</li>
+<li><code>RecordHelpText</code> OPTIONS (~line 735, alongside
+<code>--root DIR</code>): new <code>--dir DIR</code> entry — overrides
+the default <code>--project</code> target directory.</li>
+<li>New <code>InitHelpText</code> const, same shape as
+<code>IndexHelpText</code>/<code>MergeHelpText</code>: NAME/SYNOPSIS
+(<code>{app_name} init [PATH]</code>)/DESCRIPTION (idempotent,
+schema-only, defaults to cwd)/EXAMPLES.</li>
+<li><code>TopicsHelpText</code> (~line 886): add an <code>init</code>
+entry, alphabetically consistent with the existing list’s
+verb-introduction order.</li>
+<li><code>HelpText</code> (kb(1), the main page): mention
+<code>init</code> somewhere in prose — required by
+<code>TestHelpText_ListsEveryRegisteredVerb</code>, which asserts every
+registered verb’s name appears on this page.</li>
+<li><code>cmd/kb/help_dispatch.go</code>:
+<code>case "init": f(InitHelpText)</code>.</li>
+</ul></li>
+<li><code>Makefile</code>: add <code>init</code> to
+<code>KB_TOPICS</code> (line 13) — otherwise
+<code>TestMakefile_KBTopicsCoversEveryVerb</code> fails and
+<code>make man</code> silently skips <code>kb-init.1.md</code>.</li>
+<li><code>TODO.md</code>: remove the “Move kb’s record-writing default…”
+item from Requested features (done, modulo the migration question it
+already called out as open, which stays out of scope per DR-0021);
+strike the “<code>kb record new</code> run from inside a project
+directory…” item from Noticed in passing, noting it’s closed by W2’s
+guard.</li>
+</ul>
+<h2 id="verification">Verification</h2>
+<ul>
+<li><code>go test ./...</code>, <code>go vet ./...</code> clean.</li>
+<li><code>make kb-topics-help man</code> regenerates
+<code>kb-init.1.md</code>, <code>kb-record.1.md</code>, and
+<code>kb.1.md</code> from the updated <code>helptext.go</code>.</li>
+<li>Manual smoke test:
+<code>kb init /tmp/kb-smoke &amp;&amp; cd /tmp/kb-smoke &amp;&amp; kb record new --project demo --title "smoke test" --trigger request</code>
+lands at
+<code>/tmp/kb-smoke/agents/projects/demo/decisions/0001-....md</code>;
+<code>kb project list</code> in a fresh empty dir with no
+<code>agents/knowledge.db</code> fails with the guard message;
+<code>rm agents/knowledge.db &amp;&amp; kb import -in agents/knowledge.jsonl</code>
+(the <code>workspace:DR-0002</code> recipe) still works unmodified in
+this workspace itself.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

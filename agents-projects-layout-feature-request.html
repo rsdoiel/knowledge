@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="agentsprojectsproject-layout-feature-request"><code>agents/projects/&lt;project&gt;/</code>
+layout — Feature Request</h1>
+<blockquote>
+<p><strong>2026-08-28: Filed.</strong> Captured from a design
+conversation with RSDOIEL about reorganising where language-model
+process artifacts live across <code>~/WorkLab</code>. No
+design/decide/plan cycle has been run on the <code>kb</code> side yet.
+This document preserves the context for that cycle — it proposes a
+shape, not a committed design. Treat every “would”/“should” below as a
+starting point to confirm or revise.</p>
+</blockquote>
+<h2 id="motivation">Motivation</h2>
+<p>Colleagues in Digital Library Development have objected to the number
+of files committed at the root of the shared project repositories. The
+response, agreed in discussion on 2026-08-28, is that feature requests,
+design briefs, plans and decision records move <strong>out of the
+project repositories</strong> and into the <code>~/WorkLab</code>
+workspace under <code>agents/</code>.</p>
+<p><code>agents/decisions/caltechauthors/</code> already set a partial
+precedent — DR-0004 in that corpus argued for keeping records outside
+the repository they govern, and it works because record attribution is
+driven by frontmatter rather than by filepath. What that precedent did
+not settle is where the <em>other</em> artifact types go. Decisions were
+the only kind that had a home.</p>
+<p>The layout chosen is <strong>project-first</strong>:</p>
+<pre><code>agents/projects/&lt;project&gt;/
+    decisions/
+    plans/
+    feature_requests/
+    design/</code></pre>
+<p>The alternative considered was type-first —
+<code>agents/decisions/&lt;project&gt;/</code>,
+<code>agents/plans/&lt;project&gt;/</code>, and so on, which is the
+shape the existing <code>agents/decisions/caltechauthors/</code>
+implies. It was rejected because it splits one project’s paper trail
+across three or four sibling trees, making “show me everything about
+<code>cold</code>” a multi-directory question. Project-first keeps a
+project’s history in one place, which is how it is actually read.</p>
+<p>This is a workspace-layout decision that <code>kb</code> currently
+contradicts.</p>
+<h2 id="what-kb-assumes-today">What <code>kb</code> assumes today</h2>
+<p>One place hardcodes the layout: <code>recordNew</code> in
+<code>cmd/kb/recordnew.go</code>.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>scope <span class="op">:=</span> <span class="st">&quot;project&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>dir <span class="op">:=</span> filepath<span class="op">.</span>Join<span class="op">(</span>f<span class="op">.</span>project<span class="op">,</span> <span class="st">&quot;decisions&quot;</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> f<span class="op">.</span>workspace <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    scope <span class="op">=</span> <span class="st">&quot;workspace&quot;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    dir <span class="op">=</span> filepath<span class="op">.</span>Join<span class="op">(</span><span class="st">&quot;agents&quot;</span><span class="op">,</span> <span class="st">&quot;decisions&quot;</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>So <code>kb record new --project cold</code> writes to
+<code>&lt;root&gt;/cold/decisions/</code> — inside the repository — and
+<code>--workspace</code> writes to
+<code>&lt;root&gt;/agents/decisions/</code>. Neither target survives the
+reorganisation.</p>
+<p><code>cmd/kb/index_test.go</code> encodes the same assumption in
+roughly fourteen places, building fixture paths as
+<code>filepath.Join(root, "clasm", "decisions")</code> and
+<code>filepath.Join(root, "agents", "decisions")</code>.</p>
+<p><code>helptext.go</code> describes the convention in prose in at
+least four places (“a decision record is one file under a project’s
+<code>decisions/</code> directory”).</p>
+<h2 id="what-is-already-fine">What is already fine</h2>
+<ul>
+<li><strong><code>kb ingest</code> takes an explicit path</strong>
+(<code>kb ingest clasm/decisions</code>), so it ingests whatever
+directory it is pointed at. It also recurses. Nothing about the new
+layout breaks it.</li>
+<li><strong>Attribution is frontmatter-driven, not path-driven.</strong>
+A record’s project comes from its own frontmatter, which is why
+<code>agents/decisions/caltechauthors/</code> works at all. Records can
+move without being rewritten.</li>
+<li><strong><code>RecordsUnderPath</code></strong> is already
+parameterised by path.</li>
+</ul>
+<p>The change is therefore narrow: it is about where <code>kb</code>
+<em>writes</em> and what it <em>documents</em>, not how it reads.</p>
+<h2 id="proposal">Proposal</h2>
+<ol type="1">
+<li><code>recordNew</code> computes
+<code>agents/projects/&lt;project&gt;/decisions</code> for project
+scope. Workspace scope keeps <code>agents/decisions/</code> — a
+workspace-tier record governs the workspace itself and has no project to
+nest under.</li>
+<li>The path becomes overridable rather than hardcoded, so the layout is
+a default and not a constraint. A <code>--dir</code> flag, a config
+value, or both.</li>
+<li><code>index_test.go</code> fixtures follow.</li>
+<li><code>helptext.go</code> and the <code>kb-record(1)</code> page
+describe the new location.</li>
+<li>Consider whether <code>record new</code> should grow a
+<code>--kind</code> beyond decisions — if plans and feature requests are
+to live alongside records under the same project directory, there is a
+question about whether <code>kb</code> should scaffold those too, or
+whether they stay hand-authored Markdown that <code>kb</code> merely
+indexes. <strong>Not decided.</strong></li>
+</ol>
+<h2 id="open-questions-for-the-design-cycle">Open questions for the
+design cycle</h2>
+<ul>
+<li><strong>Migration of existing corpora.</strong>
+<code>clasm/decisions/</code> (169 records),
+<code>cold/decisions/</code> (7), <code>CMTools/decisions/</code> (13)
+and <code>agents/decisions/caltechauthors/</code> all exist today under
+the old shape. Moving them is a <code>git mv</code> plus a re-ingest,
+but <code>clasm</code> and <code>CMTools</code> are outside the cleanup
+scope agreed on 2026-08-28 (clasm is not in <code>Projects.md</code>;
+CMTools is deprecated). Do their corpora move anyway for consistency, or
+does the workspace end up with two layouts?</li>
+<li><strong><code>agents/decisions/caltechauthors/</code></strong> is
+the closest thing to a precedent and it is type-first. Does it move to
+<code>agents/projects/caltechauthors/decisions/</code>?</li>
+<li><strong>Does <code>kb</code> need to know about <code>plans/</code>
+and <code>feature_requests/</code> at all,</strong> or is indexing
+decisions sufficient and the rest is just files on disk?</li>
+<li><strong>Should the default be discoverable</strong> — i.e. should
+<code>kb</code> find an existing <code>decisions/</code> directory for a
+project wherever it sits, rather than assuming one location?</li>
+</ul>
+<h2 id="related">Related</h2>
+<ul>
+<li>Workspace reorganisation discussion, 2026-08-28 (WorkLab).</li>
+<li><code>agents/decisions/caltechauthors/</code> DR-0004 — keeping a
+corpus outside the repository it governs.</li>
+<li><code>~/WorkLab/PROJECT_CYCLE.md</code> and
+<code>DISCUSS_REVIEW_PLAN_IMPLEMENT.md</code>, both of which need
+revising for the same change and currently state that records live in
+the repository they govern.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
