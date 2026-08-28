@@ -50,6 +50,33 @@
   problem — it is written through a different path (`record supersede` writes
   both sides together), so it may not.
 
+- [ ] `kb ingest` never updates `records.path` when a record file moves but
+  its body is unchanged. Found 2026-08-28 migrating `clasm`'s 173-record
+  corpus from `clasm/decisions/` to `agents/projects/clasm/decisions/` under
+  the new workspace layout. `kb ingest agents/projects/clasm/decisions`
+  reported `0 added, 0 updated, 172 skipped, 0 failed` and every one of the
+  172 rows kept its old `clasm/decisions/...` path; a second run behaved
+  identically. The cause is in `upsertAll` (`cmd/kb/ingest.go`): the
+  checksum-match branch does `ing.summary.Skipped++` and
+  `rec.dbID = existing.ID`, and the only write is guarded by
+  `if !ing.dryRun && rec.dbID == 0`, so a skip can never write. A pure move
+  doesn't touch the body, so the checksum always matches and the path is
+  never revisited. Ingest already *detects* the move — the
+  `existing.Path != rf.Record.Path` warning fires for all 172, naming both
+  the old and new path — and then does nothing about it. This matters more
+  now that `kb export` covers the records tables: `agents/knowledge.jsonl`
+  was left holding 172 stale paths and zero current ones, and that is the
+  versioned artifact. Fix is presumably to treat a changed path as its own
+  reason to update — either widen the skip test to require
+  `existing.Path == rf.Record.Path` as well as a matching checksum, or write
+  the path on the skip branch. Worth deciding at the same time whether the
+  warning should still fire once a move is handled as an ordinary update; as
+  worded ("a slug may have been regenerated, or two files may claim one id")
+  it reads like a possible id collision, which a plain move is not. Related
+  to the relation-pruning item above: both are cases where ingest treats the
+  record files as authoritative for content but lets the database keep
+  something the files no longer say.
+
 - [ ] `kb search` exits 0 when it finds nothing. The workspace convention for
   search-style tools is exit 1 on no match (see `~/Laboratory/CLAUDE.md`),
   though that section is written for the Deno tools and may not be intended
