@@ -3,6 +3,17 @@
 
 ## Requested features
 
+- [ ] `[[double-bracket]]` inline concept tagging when ingesting Markdown
+  record bodies, beyond formal frontmatter. See
+  `wikilink-tagging-feature-request.md` (filed 2026-09-08) — inspired by
+  [Build a digitally sovereign second brain](https://www.raspberrypi.com/news/build-a-digitally-sovereign-second-brain/)
+  (Raspberry Pi magazine). Decided at filing: resolves to concepts only,
+  auto-creates a missing concept, and scoped to `kb ingest` (records) for a
+  first pass — `kb observation add` bodies are explicitly out of scope until
+  this proves useful on records. Open questions (where the links land, name
+  normalization, interaction with the unused `Tags` frontmatter field) are in
+  the linked document.
+
 - [ ] Cross-machine reconciliation of an edited description. Deferred out of
   the `set-description` work (see DR-0012) because it is a policy inversion
   rather than a column touch. Today `MergeKnowledgeBases` is `INSERT OR
