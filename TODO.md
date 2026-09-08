@@ -14,6 +14,15 @@
   normalization, interaction with the unused `Tags` frontmatter field) are in
   the linked document.
 
+- [ ] Concept-tag-based retrieval query (concept names → linked
+  observations/records), consumed by harvey's `UnifiedMemory.Recall` as a
+  cheap, embedder-free first pass ahead of RAG — motivated by small/CPU-only
+  model context budgets. See `concept-tag-retrieval-feature-request.md`
+  (filed 2026-09-08). Depends loosely on the `[[wikilink]]` tagging feature
+  above for link density, but is useful against today's sparse `kb link`
+  data too. Open questions (where name-matching logic lives, ranking beyond
+  match count, whether it covers records) are in the linked document.
+
 - [ ] Cross-machine reconciliation of an edited description. Deferred out of
   the `set-description` work (see DR-0012) because it is a policy inversion
   rather than a column touch. Today `MergeKnowledgeBases` is `INSERT OR
