@@ -420,6 +420,74 @@ func TestMergeKnowledgeBases_RecordConceptsSurvive(t *testing.T) {
 	}
 }
 
+func TestMergeKnowledgeBases_DocumentsAndSectionsSurvive(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	pid, err := a.AddProject("proj", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	docID, err := a.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	if err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	if _, err := a.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "gist", SummaryBody: "a gist"}); err != nil {
+		t.Fatalf("AddDocumentSection: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	var count int
+	if err := merged.db.QueryRow(`
+		SELECT COUNT(*) FROM document_sections s
+		JOIN documents d ON d.id = s.document_id
+		WHERE d.title = 'A Story' AND s.summary_body = 'a gist'`,
+	).Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 document_sections row in merged db, got %d", count)
+	}
+}
+
+func TestMergeKnowledgeBases_DocumentSectionConceptsSurvive(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	pid, err := a.AddProject("proj", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	docID, err := a.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	if err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	secID, err := a.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	if err != nil {
+		t.Fatalf("AddDocumentSection: %v", err)
+	}
+	cid, err := a.AddConcept("concept", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := a.LinkDocumentSectionConcept(secID, cid); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	var count int
+	if err := merged.db.QueryRow(`
+		SELECT COUNT(*) FROM document_section_concepts j
+		JOIN document_sections s ON s.id = j.section_id
+		JOIN documents         d ON d.id = s.document_id
+		JOIN concepts          c ON c.id = j.concept_id
+		WHERE d.title = 'A Story' AND c.name = 'concept'`,
+	).Scan(&count); err != nil {
+		t.Fatalf("count link: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 document_section_concepts link in merged db, got %d", count)
+	}
+}
+
 func TestMergeKnowledgeBases_ObservationSourcesSurvive(t *testing.T) {
 	a := openTestKB(t)
 	b := openTestKB(t)
@@ -917,13 +985,16 @@ func TestMergeKnowledgeBases_SummaryIncludesRecordTables(t *testing.T) {
 	}
 	// A table absent from the summary is a table whose loss goes unreported,
 	// which is how records came to be dropped silently in the first place.
-	for _, want := range []string{"records", "record_relations", "record_concepts"} {
+	for _, want := range []string{
+		"records", "record_relations", "record_concepts",
+		"documents", "document_sections", "document_section_concepts",
+	} {
 		if !seen[want] {
 			t.Errorf("summary omits %s: %v", want, seen)
 		}
 	}
-	if len(summary) != 10 {
-		t.Errorf("summary covers %d tables, want 10 (every table that travels)", len(summary))
+	if len(summary) != 13 {
+		t.Errorf("summary covers %d tables, want 13 (every table that travels)", len(summary))
 	}
 }
 

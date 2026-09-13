@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -305,5 +306,317 @@ func TestDocumentIngest_JSONOutput(t *testing.T) {
 	}
 	if summary.Action != "added" {
 		t.Errorf("summary = %+v, want Action=added", summary)
+	}
+}
+
+// ─── W4: concept tagging ─────────────────────────────────────────────────────
+
+func TestDocumentIngest_WikilinkInSectionBodyBecomesConcept(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nSee [[Foo]] for background.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var section knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "section" {
+			section = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(section.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("concepts = %+v, want one concept named Foo", concepts)
+	}
+}
+
+func TestDocumentIngest_GistTaggedFromWholeDocumentText(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\n[[Foo]]\n# Two\n[[Bar]]\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var gist knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "gist" {
+			gist = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(gist.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	names := map[string]bool{}
+	for _, c := range concepts {
+		names[c.Name] = true
+	}
+	if len(concepts) != 2 || !names["Foo"] || !names["Bar"] {
+		t.Errorf("gist concepts = %+v, want Foo and Bar from both sections", concepts)
+	}
+}
+
+func TestDocumentIngest_FrontmatterKeywordsBecomeGistConcepts(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "post.md", antennaFixture)
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var gist knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "gist" {
+			gist = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(gist.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	found := false
+	for _, c := range concepts {
+		if c.Name == "chunking" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("gist concepts = %+v, want the frontmatter keyword chunking", concepts)
+	}
+}
+
+func TestDocumentIngest_TagDensityReflectsMatchConceptNamesCount(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	if _, err := kb.AddConcept("Foo", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nMentions Foo here.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	for _, s := range sections {
+		if s.Level == "section" && s.TagDensity != 1 {
+			t.Errorf("section TagDensity = %d, want 1 (matches existing concept Foo)", s.TagDensity)
+		}
+	}
+}
+
+// Regression: found via manual smoke test, not a unit test. TagDensity must
+// be computed after tagging, not before -- otherwise a concept the document
+// introduces for the first time via its own [[wikilink]] doesn't exist yet
+// when density is computed, and the gist (or a section whose own wikilink
+// names the concept) undercounts its own tag.
+func TestDocumentIngest_GistDensityCountsSelfIntroducedConcept(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	// No concept named Foo exists anywhere before this ingest -- the
+	// [[Foo]] wikilink is what creates it.
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nSee [[Foo]] for background.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	for _, s := range sections {
+		if s.TagDensity != 1 {
+			t.Errorf("section (level=%s) TagDensity = %d, want 1 -- density must see the concept this document just introduced", s.Level, s.TagDensity)
+		}
+	}
+}
+
+func TestDocumentIngest_ReingestUnchangedDoesNotDuplicateLinks(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nSee [[Foo]].\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("first ingest: %v", err)
+	}
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("second ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	for _, s := range sections {
+		if s.Level == "section" {
+			concepts, err := kb.DocumentSectionConcepts(s.ID)
+			if err != nil {
+				t.Fatalf("DocumentSectionConcepts: %v", err)
+			}
+			if len(concepts) != 1 {
+				t.Errorf("concepts = %+v, want exactly 1 after re-ingesting an unchanged file", concepts)
+			}
+		}
+	}
+}
+
+// ─── W5: review workflow CLI ─────────────────────────────────────────────────
+
+func seedIngestedSection(t *testing.T, kb *knowledge.KnowledgeBase, root string) int64 {
+	t.Helper()
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "a.txt", "some notes\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, err := kb.DocumentByPath(path)
+	if err != nil || d == nil {
+		t.Fatalf("DocumentByPath: %v", err)
+	}
+	sections, err := kb.DocumentSections(d.ID)
+	if err != nil || len(sections) == 0 {
+		t.Fatalf("DocumentSections: %v", err)
+	}
+	return sections[0].ID
+}
+
+func TestDocumentDraft_SetsStatusAndClearsStale(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	secID := seedIngestedSection(t, kb, root)
+	out, err := runDocument(t, kb, false, "draft", fmt.Sprint(secID), "a drafted summary", "--by", "human", "--confidence", "0.9")
+	if err != nil {
+		t.Fatalf("document draft: %v", err)
+	}
+	if !strings.Contains(out, "drafted") {
+		t.Errorf("out = %q, want confirmation", out)
+	}
+}
+
+func TestDocumentDraft_RejectsConfidenceOutOfRange(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	secID := seedIngestedSection(t, kb, root)
+	_, err := runDocument(t, kb, false, "draft", fmt.Sprint(secID), "a summary", "--by", "human", "--confidence", "1.5")
+	if err == nil {
+		t.Fatal("expected an error for confidence out of [0,1]")
+	}
+}
+
+func TestDocumentReviewPromote_IndexesInFTS(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	secID := seedIngestedSection(t, kb, root)
+	if _, err := runDocument(t, kb, false, "draft", fmt.Sprint(secID), "a distinctive promoted summary", "--by", "human"); err != nil {
+		t.Fatalf("document draft: %v", err)
+	}
+	out, err := runDocument(t, kb, false, "review", "promote", fmt.Sprint(secID))
+	if err != nil {
+		t.Fatalf("document review promote: %v", err)
+	}
+	if !strings.Contains(out, "reviewed") {
+		t.Errorf("out = %q, want confirmation", out)
+	}
+	results, err := kb.Search("distinctive promoted summary")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("expected the promoted summary to be searchable")
+	}
+}
+
+func TestDocumentReviewPromote_RequiresDraftedFirst(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	secID := seedIngestedSection(t, kb, root)
+	_, err := runDocument(t, kb, false, "review", "promote", fmt.Sprint(secID))
+	if err == nil {
+		t.Fatal("expected an error promoting an unsummarized section")
+	}
+}
+
+func TestDocumentReviewList_ShowsUnsummarizedAndDrafted(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	secID := seedIngestedSection(t, kb, root)
+	out, err := runDocument(t, kb, false, "review", "list", "--project", "alpha")
+	if err != nil {
+		t.Fatalf("document review list: %v", err)
+	}
+	if !strings.Contains(out, fmt.Sprint(secID)) {
+		t.Errorf("out = %q, want the unsummarized section listed", out)
+	}
+}
+
+func TestDocumentReviewList_JSONOutput(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	seedIngestedSection(t, kb, root)
+	out, err := runDocument(t, kb, true, "review", "list", "--project", "alpha")
+	if err != nil {
+		t.Fatalf("document review list: %v", err)
+	}
+	var items []knowledge.DocumentReviewItem
+	if jerr := json.Unmarshal([]byte(out), &items); jerr != nil {
+		t.Fatalf("decoding %s: %v", out, jerr)
+	}
+	if len(items) == 0 {
+		t.Error("expected at least one review item")
+	}
+}
+
+// ─── W8: kb document list / show ─────────────────────────────────────────────
+
+func TestDocumentList_ShowsIngestedDocument(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	seedIngestedSection(t, kb, root)
+	out, err := runDocument(t, kb, false, "list", "--project", "alpha")
+	if err != nil {
+		t.Fatalf("document list: %v", err)
+	}
+	if !strings.Contains(out, "a.txt") {
+		t.Errorf("out = %q, want the ingested document listed", out)
+	}
+}
+
+func TestDocumentList_JSONOutput(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	seedIngestedSection(t, kb, root)
+	out, err := runDocument(t, kb, true, "list", "--project", "alpha")
+	if err != nil {
+		t.Fatalf("document list: %v", err)
+	}
+	var docs []knowledge.Document
+	if jerr := json.Unmarshal([]byte(out), &docs); jerr != nil {
+		t.Fatalf("decoding %s: %v", out, jerr)
+	}
+	if len(docs) != 1 {
+		t.Errorf("docs = %+v, want 1", docs)
+	}
+}
+
+func TestDocumentShow_IncludesSectionsAndConcepts(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nSee [[Foo]].\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, err := kb.DocumentByPath(path)
+	if err != nil || d == nil {
+		t.Fatalf("DocumentByPath: %v", err)
+	}
+	out, err := runDocument(t, kb, false, "show", fmt.Sprint(d.ID))
+	if err != nil {
+		t.Fatalf("document show: %v", err)
+	}
+	if !strings.Contains(out, "One") {
+		t.Errorf("out = %q, want the section heading", out)
+	}
+	if !strings.Contains(out, "Foo") {
+		t.Errorf("out = %q, want the linked concept", out)
+	}
+}
+
+func TestDocumentShow_UnknownIDErrors(t *testing.T) {
+	kb, _ := openWorkspaceKB(t)
+	_, err := runDocument(t, kb, false, "show", "9999")
+	if err == nil {
+		t.Fatal("expected an error for an unknown document id")
 	}
 }

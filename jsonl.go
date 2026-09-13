@@ -12,16 +12,19 @@ import (
 // Record type discriminators used by the "type" field of every JSON-L line.
 // See jsonl-export-design.md for the full format rationale.
 const (
-	recProject            = "project"
-	recConcept            = "concept"
-	recSource             = "source"
-	recObservation        = "observation"
-	recObservationConcept = "observation_concept"
-	recProjectConcept     = "project_concept"
-	recObservationSource  = "observation_source"
-	recRecord             = "record"
-	recRecordRelation     = "record_relation"
-	recRecordConcept      = "record_concept"
+	recProject                = "project"
+	recConcept                = "concept"
+	recSource                 = "source"
+	recObservation            = "observation"
+	recObservationConcept     = "observation_concept"
+	recProjectConcept         = "project_concept"
+	recObservationSource      = "observation_source"
+	recRecord                 = "record"
+	recRecordRelation         = "record_relation"
+	recRecordConcept          = "record_concept"
+	recDocument               = "document"
+	recDocumentSection        = "document_section"
+	recDocumentSectionConcept = "document_section_concept"
 )
 
 // projectRecord is the JSON-L shape of one projects row. Identity travels
@@ -98,6 +101,56 @@ type projectConceptRecord struct {
 type recordConceptRecord struct {
 	Type        string `json:"type"`
 	RecordUUID  string `json:"record_uuid"`
+	ConceptUUID string `json:"concept_uuid"`
+}
+
+// documentRecord is the JSON-L shape of one documents row. Project travels
+// by name, not uuid, same as decisionRecord (DR-0018): a document is
+// matched to a local project by name, so two independently-created "same
+// project" rows need not share a uuid before reconciliation.
+type documentRecord struct {
+	Type          string `json:"type"`
+	UUID          string `json:"uuid"`
+	OriginHost    string `json:"origin_host"`
+	ProjectName   string `json:"project_name"`
+	Title         string `json:"title"`
+	Format        string `json:"format"`
+	Path          string `json:"path"`
+	Author        string `json:"author"`
+	PublishedDate string `json:"published_date"`
+	Checksum      string `json:"checksum"`
+	IngestedAt    string `json:"ingested_at"`
+}
+
+// documentSectionRecord is the JSON-L shape of one document_sections row.
+// The owning document travels by its own uuid, resolved against a
+// same-import cache built while documentRecord lines were processed (see
+// importDocumentSection), the same way decisionRecordRelation resolves
+// record endpoints.
+type documentSectionRecord struct {
+	Type          string   `json:"type"`
+	UUID          string   `json:"uuid"`
+	OriginHost    string   `json:"origin_host"`
+	DocumentUUID  string   `json:"document_uuid"`
+	Level         string   `json:"level"`
+	Seq           int      `json:"seq"`
+	Heading       string   `json:"heading"`
+	Body          string   `json:"body"`
+	SummaryBody   string   `json:"summary_body"`
+	SummaryStatus string   `json:"summary_status"`
+	SummaryStale  bool     `json:"summary_stale"`
+	SourceSize    int      `json:"source_size"`
+	TagDensity    int      `json:"tag_density"`
+	Confidence    *float64 `json:"confidence,omitempty"`
+	GeneratedBy   string   `json:"generated_by"`
+	CreatedAt     string   `json:"created_at"`
+}
+
+// documentSectionConceptRecord is the JSON-L shape of one
+// document_section_concepts join row.
+type documentSectionConceptRecord struct {
+	Type        string `json:"type"`
+	SectionUUID string `json:"section_uuid"`
 	ConceptUUID string `json:"concept_uuid"`
 }
 
@@ -227,6 +280,15 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 	if err := exportRecordConcepts(kb, enc, scoped, projectID); err != nil {
 		return err
 	}
+	if err := exportDocuments(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
+	if err := exportDocumentSections(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
+	if err := exportDocumentSectionConcepts(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -350,6 +412,106 @@ func exportRecordConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, pro
 		}
 		if err := enc.Encode(r); err != nil {
 			return fmt.Errorf("knowledge: export record_concepts: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+// exportDocuments writes every documents row reachable under scope, project
+// travelling by name like decisionRecord (DR-0018).
+func exportDocuments(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT d.uuid, d.origin_host, IFNULL(p.name, ''), d.title, d.format, d.path,
+	                 d.author, d.published_date, d.checksum, d.ingested_at
+	          FROM documents d
+	          LEFT JOIN projects p ON p.id = d.project_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE d.project_id = ?`
+		args = append(args, projectID)
+	}
+	query += ` ORDER BY d.id`
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export documents: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := documentRecord{Type: recDocument}
+		if err := rows.Scan(&r.UUID, &r.OriginHost, &r.ProjectName, &r.Title, &r.Format, &r.Path,
+			&r.Author, &r.PublishedDate, &r.Checksum, &r.IngestedAt); err != nil {
+			return fmt.Errorf("knowledge: export documents: %w", err)
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export documents: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+// exportDocumentSections writes every document_sections row whose owning
+// document survives scope.
+func exportDocumentSections(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT s.uuid, s.origin_host, d.uuid, s.level, s.seq, s.heading, s.body,
+	                 s.summary_body, s.summary_status, s.summary_stale, s.source_size,
+	                 s.tag_density, s.confidence, s.generated_by, s.created_at
+	          FROM document_sections s
+	          JOIN documents d ON d.id = s.document_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE d.project_id = ?`
+		args = append(args, projectID)
+	}
+	query += ` ORDER BY s.id`
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export document_sections: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var stale int
+		var confidence sql.NullFloat64
+		r := documentSectionRecord{Type: recDocumentSection}
+		if err := rows.Scan(&r.UUID, &r.OriginHost, &r.DocumentUUID, &r.Level, &r.Seq, &r.Heading, &r.Body,
+			&r.SummaryBody, &r.SummaryStatus, &stale, &r.SourceSize, &r.TagDensity, &confidence,
+			&r.GeneratedBy, &r.CreatedAt); err != nil {
+			return fmt.Errorf("knowledge: export document_sections: %w", err)
+		}
+		r.SummaryStale = stale != 0
+		if confidence.Valid {
+			v := confidence.Float64
+			r.Confidence = &v
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export document_sections: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+// exportDocumentSectionConcepts writes every document_section_concepts join
+// row whose section's document survives scope.
+func exportDocumentSectionConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT s.uuid, c.uuid
+	          FROM document_section_concepts dsc
+	          JOIN document_sections s ON s.id = dsc.section_id
+	          JOIN concepts c ON c.id = dsc.concept_id`
+	args := []any{}
+	if scoped {
+		query += ` JOIN documents d ON d.id = s.document_id WHERE d.project_id = ?`
+		args = append(args, projectID)
+	}
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export document_section_concepts: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := documentSectionConceptRecord{Type: recDocumentSectionConcept}
+		if err := rows.Scan(&r.SectionUUID, &r.ConceptUUID); err != nil {
+			return fmt.Errorf("knowledge: export document_section_concepts: %w", err)
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export document_section_concepts: %w", err)
 		}
 	}
 	return rows.Err()
@@ -575,16 +737,19 @@ type ImportTableSummary struct {
  */
 func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 	var (
-		projects        []projectRecord
-		concepts        []conceptRecord
-		sources         []sourceRecord
-		observations    []observationRecord
-		obsConcepts     []observationConceptRecord
-		projConcepts    []projectConceptRecord
-		obsSources      []observationSourceRecord
-		records         []decisionRecord
-		recordRelations []decisionRecordRelation
-		recordConcepts  []recordConceptRecord
+		projects                []projectRecord
+		concepts                []conceptRecord
+		sources                 []sourceRecord
+		observations            []observationRecord
+		obsConcepts             []observationConceptRecord
+		projConcepts            []projectConceptRecord
+		obsSources              []observationSourceRecord
+		records                 []decisionRecord
+		recordRelations         []decisionRecordRelation
+		recordConcepts          []recordConceptRecord
+		documents               []documentRecord
+		documentSections        []documentSectionRecord
+		documentSectionConcepts []documentSectionConceptRecord
 	)
 	readCount := map[string]int{}
 	var typeOrder []string // first-seen order, so unknown types get a stable summary order too
@@ -670,6 +835,24 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
 			}
 			recordConcepts = append(recordConcepts, rec)
+		case recDocument:
+			var rec documentRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			documents = append(documents, rec)
+		case recDocumentSection:
+			var rec documentSectionRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			documentSections = append(documentSections, rec)
+		case recDocumentSectionConcept:
+			var rec documentSectionConceptRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			documentSectionConcepts = append(documentSectionConcepts, rec)
 		default:
 			// Unknown type: counted (readCount above) but nothing to buffer.
 		}
@@ -737,8 +920,9 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		}
 	}
 
-	projectByName := map[string]int64{} // project name -> local id, for records (DR-0018)
-	recordLocalID := map[string]int64{} // incoming record uuid -> local id, for relations
+	projectByName := map[string]int64{}   // project name -> local id, for records (DR-0018)
+	recordLocalID := map[string]int64{}   // incoming record uuid -> local id, for relations
+	documentLocalID := map[string]int64{} // incoming document uuid -> local id, for sections
 
 	s = summaryFor(recRecord)
 	for _, rec := range records {
@@ -752,6 +936,43 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 			return nil, fmt.Errorf("knowledge: import record %q: %w", rec.RecordID, err)
 		}
 		recordLocalID[rec.UUID] = localID
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recDocument)
+	for _, rec := range documents {
+		localProjectID, ok := resolveProjectByName(kb, projectByName, rec.ProjectName)
+		if !ok {
+			s.Skipped++
+			continue
+		}
+		localID, isNew, err := importDocument(kb, rec, localProjectID)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import document %q: %w", rec.Path, err)
+		}
+		documentLocalID[rec.UUID] = localID
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recDocumentSection)
+	for _, rec := range documentSections {
+		localDocumentID, ok := resolveLocalID(kb, documentLocalID, "documents", rec.DocumentUUID)
+		if !ok {
+			s.Skipped++
+			continue
+		}
+		isNew, err := importDocumentSection(kb, rec, localDocumentID)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import document_section: %w", err)
+		}
 		if isNew {
 			s.Imported++
 		} else {
@@ -864,6 +1085,25 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO record_concepts (record_id, concept_id) VALUES (?, ?)`, recID, conceptID)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import record_concept: %w", err)
+		}
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recDocumentSectionConcept)
+	for _, rec := range documentSectionConcepts {
+		sectionID, ok := resolveLocalID(kb, nil, "document_sections", rec.SectionUUID)
+		conceptID, cok := resolveLocalID(kb, conceptLocalID, "concepts", rec.ConceptUUID)
+		if !ok || !cok {
+			s.Skipped++
+			continue
+		}
+		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO document_section_concepts (section_id, concept_id) VALUES (?, ?)`, sectionID, conceptID)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import document_section_concept: %w", err)
 		}
 		if isNew {
 			s.Imported++
@@ -1058,6 +1298,52 @@ func importRecord(kb *KnowledgeBase, rec decisionRecord, localProjectID int64) (
 		return 0, false, err
 	}
 	return id, true, nil
+}
+
+// importDocument upserts one documents row, deduped by uuid like every
+// other JSON-L importer (observations, records) rather than by path -- path
+// is the natural key kb document ingest itself uses, but uuid is what
+// keeps a reimported, unchanged stream idempotent across every table.
+func importDocument(kb *KnowledgeBase, rec documentRecord, localProjectID int64) (localID int64, isNew bool, err error) {
+	var existingID int64
+	err = kb.db.QueryRow(`SELECT id FROM documents WHERE uuid = ?`, rec.UUID).Scan(&existingID)
+	if err == nil {
+		return existingID, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, false, err
+	}
+	id, err := kb.AddDocument(Document{
+		ProjectID: localProjectID, Title: rec.Title, Format: rec.Format, Path: rec.Path,
+		Author: rec.Author, PublishedDate: rec.PublishedDate, Checksum: rec.Checksum,
+		UUID: rec.UUID, OriginHost: rec.OriginHost,
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	return id, true, nil
+}
+
+// importDocumentSection upserts one document_sections row, deduped by uuid.
+func importDocumentSection(kb *KnowledgeBase, rec documentSectionRecord, localDocumentID int64) (isNew bool, err error) {
+	var existingID int64
+	err = kb.db.QueryRow(`SELECT id FROM document_sections WHERE uuid = ?`, rec.UUID).Scan(&existingID)
+	if err == nil {
+		return false, nil
+	}
+	if err != sql.ErrNoRows {
+		return false, err
+	}
+	_, err = kb.AddDocumentSection(DocumentSection{
+		DocumentID: localDocumentID, Level: rec.Level, Seq: rec.Seq, Heading: rec.Heading, Body: rec.Body,
+		SummaryBody: rec.SummaryBody, SummaryStatus: rec.SummaryStatus, SummaryStale: rec.SummaryStale,
+		SourceSize: rec.SourceSize, TagDensity: rec.TagDensity, Confidence: rec.Confidence,
+		GeneratedBy: rec.GeneratedBy, UUID: rec.UUID, OriginHost: rec.OriginHost,
+	})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // resolveProjectByName looks up a project's local id by name -- the

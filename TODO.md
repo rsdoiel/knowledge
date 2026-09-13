@@ -29,17 +29,27 @@
   Consuming this from harvey's `UnifiedMemory.Recall` is separate,
   harvey-side work, not done here.
 
-- [ ] Ingest narratives/stories (Markdown, Fountain, PDF) and articles/posts
-  (Markdown, text, PDF) as a new `documents` entity, stored/indexed at
-  graduated abstraction levels (gist, section/scene summary, full text)
-  rather than as one flat body — motivated by small-model context budgets,
-  same as the retrieval item above, but for whole documents rather than
-  observations. See `narrative-documents-feature-request.md` (filed
-  2026-09-13). Embedder-based retrieval is explicitly deferred; this is
-  scoped to work on top of the concept-tag graph from the two feature
-  requests above. Open questions (schema shape for the levels, who generates
-  summaries, PDF extraction tooling, whether full text is FTS-indexed at
-  all) are in the linked document.
+- [x] Ingest narratives/stories (Markdown, Fountain) and articles/posts
+  (Markdown, text) as a new `documents` entity, stored/indexed at graduated
+  abstraction levels (gist, section/scene, one row each) rather than as one
+  flat body. Filed as `narrative-documents-feature-request.md`
+  (2026-09-13); implemented 2026-09-13, see `narrative-documents-design.md`
+  and `narrative-documents-plan.md` (W1-W8). PDF is a documented, reserved
+  format value but explicitly not ingestible yet — no extraction tooling
+  exists anywhere in the workspace. Fountain segmentation uses
+  `github.com/rsdoiel/fountain` directly (the same module harvey already
+  depends on), not a second parser. Tagging/tag_density reuse
+  wikilink-tagging and concept-tag-retrieval verbatim — the first real
+  validation that those two features' shapes generalize to a second
+  consumer. Review workflow (`unsummarized` → `drafted` → `reviewed`)
+  mirrors decision records' propose/accept split; only a reviewed summary
+  is ever FTS-indexed or returned as trustworthy content from
+  `RecallByConceptNames`, which widened to a third merged source. Re-ingest
+  matches sections by heading and flags a changed one `summary_stale`
+  rather than discarding its summary. Portability (merge + JSON-L) covers
+  all three new tables. Consuming any of this from harvey's
+  `UnifiedMemory.Recall`, and building an eventual interactive/dialogic
+  re-ingest mode in harvey, remain explicitly out of scope here.
 
 - [ ] Cross-machine reconciliation of an edited description. Deferred out of
   the `set-description` work (see DR-0012) because it is a policy inversion

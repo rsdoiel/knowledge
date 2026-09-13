@@ -295,11 +295,14 @@ type MergeTableSummary struct {
  * UNIQUE constraint, and for records by their four-column identity). aPath and
  * bPath are opened read-only via ATTACH; neither is modified.
  *
- * All ten tables that travel are carried: projects, concepts, sources,
- * observations and records, plus the five join tables. Every one appears in
- * the returned summary, so a table that loses rows says so — records were once
- * absent from both the merge and the summary, and a merge that dropped them
- * reported success (DR-0013).
+ * All thirteen tables that travel are carried: projects, concepts, sources,
+ * observations, records and documents, plus the seven join/child tables
+ * (record_relations, record_concepts, document_sections,
+ * document_section_concepts, observation_concepts, project_concepts,
+ * observation_sources). Every one appears in the returned summary, so a
+ * table that loses rows says so — records were once absent from both the
+ * merge and the summary, and a merge that dropped them reported success
+ * (DR-0013).
  *
  * Both sources must already carry the current schema. This function names
  * every table directly, so a database predating one of them fails the query
@@ -400,6 +403,42 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		}
 	}
 
+	// Documents hang off projects the same way records do -- project_id is
+	// nullable, same LEFT JOIN and leniency rule as records above.
+	const documentCols = `title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host`
+	for _, src := range []string{"a", "b"} {
+		if _, err := db.Exec(fmt.Sprintf(`
+			INSERT OR IGNORE INTO documents (project_id, %s)
+			SELECT mp.id, d.title, d.format, d.path, d.author, d.published_date,
+			       d.checksum, d.ingested_at, d.uuid, d.origin_host
+			FROM %s.documents d
+			LEFT JOIN %s.projects sp ON sp.id = d.project_id
+			LEFT JOIN projects mp ON mp.uuid = sp.uuid
+			WHERE d.project_id IS NULL OR mp.id IS NOT NULL`,
+			documentCols, src, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge documents from %s: %w", src, err)
+		}
+	}
+
+	const documentSectionCols = `level, seq, heading, body, summary_body, summary_status,
+		summary_stale, source_size, tag_density, confidence, generated_by,
+		created_at, uuid, origin_host`
+	for _, src := range []string{"a", "b"} {
+		if _, err := db.Exec(fmt.Sprintf(`
+			INSERT OR IGNORE INTO document_sections (document_id, %s)
+			SELECT md.id, s.level, s.seq, s.heading, s.body, s.summary_body, s.summary_status,
+			       s.summary_stale, s.source_size, s.tag_density, s.confidence, s.generated_by,
+			       s.created_at, s.uuid, s.origin_host
+			FROM %s.document_sections s
+			JOIN %s.documents sd ON sd.id = s.document_id
+			JOIN documents md ON md.uuid = sd.uuid`,
+			documentSectionCols, src, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge document_sections from %s: %w", src, err)
+		}
+	}
+
 	for _, src := range []string{"a", "b"} {
 		if _, err := db.Exec(fmt.Sprintf(`
 			INSERT OR IGNORE INTO record_relations (from_id, to_id, relationship)
@@ -456,6 +495,19 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		}
 
 		if _, err := db.Exec(fmt.Sprintf(`
+			INSERT OR IGNORE INTO document_section_concepts (section_id, concept_id)
+			SELECT ms.id, mc.id
+			FROM %s.document_section_concepts j
+			JOIN %s.document_sections ss ON ss.id = j.section_id
+			JOIN %s.concepts         sc ON sc.id = j.concept_id
+			JOIN document_sections ms ON ms.uuid = ss.uuid
+			JOIN concepts          mc ON mc.uuid = sc.uuid`,
+			src, src, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge document_section_concepts from %s: %w", src, err)
+		}
+
+		if _, err := db.Exec(fmt.Sprintf(`
 			INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship)
 			SELECT mo.id, ms.id, j.relationship
 			FROM %s.observation_sources j
@@ -477,6 +529,7 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		"projects", "concepts", "sources", "observations", "records",
 		"observation_concepts", "project_concepts", "observation_sources",
 		"record_relations", "record_concepts",
+		"documents", "document_sections", "document_section_concepts",
 	}
 	var summary []MergeTableSummary
 	for _, table := range allTables {

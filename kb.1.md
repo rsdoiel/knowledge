@@ -1,4 +1,4 @@
-%kb(1) user manual | version 0.0.5 59c5f8f
+%kb(1) user manual | version 0.0.5 86e779f
 % R. S. Doiel
 % 2026-08-28
 
@@ -111,8 +111,8 @@ record
   supersede, fmt — see kb-record(1)
 
 document
-: ingest narrative documents (Markdown, Fountain, text) at graduated
-  abstraction levels — see kb-document(1)
+: ingest, review and draft summaries for narrative documents (Markdown,
+  Fountain, text) at graduated abstraction levels — see kb-document(1)
 
 index
 : generate a decisions/index.md from a directory of records — see

@@ -647,6 +647,131 @@ func TestImportJSONL_RecordConcepts_UnresolvableEndpointSkippedNotFatal(t *testi
 	}
 }
 
+func TestImportJSONL_Documents_RoundTrip(t *testing.T) {
+	src := openTestKBAt(t, "ws1")
+	pid, err := src.AddProject("proj", "a project")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	docID, err := src.AddDocument(Document{
+		ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt",
+		Author: "R. S. Doiel", PublishedDate: "2026-09-13", Checksum: "abc123",
+	})
+	if err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	secID, err := src.AddDocumentSection(DocumentSection{
+		DocumentID: docID, Level: "gist", SummaryBody: "a gist", SummaryStatus: "drafted",
+	})
+	if err != nil {
+		t.Fatalf("AddDocumentSection: %v", err)
+	}
+	conceptID, err := src.AddConcept("Foo", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := src.LinkDocumentSectionConcept(secID, conceptID); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	dst := openTestKB(t)
+	summary, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	if s := byTable["document"]; s.Imported != 1 || s.Skipped != 0 {
+		t.Errorf("document summary = %+v, want Imported=1 Skipped=0", s)
+	}
+	if s := byTable["document_section"]; s.Imported != 1 || s.Skipped != 0 {
+		t.Errorf("document_section summary = %+v, want Imported=1 Skipped=0", s)
+	}
+	if s := byTable["document_section_concept"]; s.Imported != 1 || s.Skipped != 0 {
+		t.Errorf("document_section_concept summary = %+v, want Imported=1 Skipped=0", s)
+	}
+
+	d, err := dst.DocumentByPath("a.txt")
+	if err != nil || d == nil {
+		t.Fatalf("DocumentByPath: %v", err)
+	}
+	if d.Title != "A Story" || d.Author != "R. S. Doiel" {
+		t.Errorf("d = %+v, want fields preserved", d)
+	}
+	sections, err := dst.DocumentSections(d.ID)
+	if err != nil {
+		t.Fatalf("DocumentSections: %v", err)
+	}
+	if len(sections) != 1 || sections[0].SummaryBody != "a gist" {
+		t.Errorf("sections = %+v, want the gist preserved", sections)
+	}
+	concepts, err := dst.DocumentSectionConcepts(sections[0].ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("concepts = %+v, want Foo preserved", concepts)
+	}
+}
+
+func TestImportJSONL_Documents_ReimportIsNoOp(t *testing.T) {
+	src := openTestKBAt(t, "ws1")
+	pid, err := src.AddProject("proj", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	docID, err := src.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	if err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	if _, err := src.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "gist"}); err != nil {
+		t.Fatalf("AddDocumentSection: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+	dst := openTestKB(t)
+	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("first ImportJSONL: %v", err)
+	}
+	summary, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("second ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	if s := byTable["document"]; s.Imported != 0 || s.Skipped != s.Read {
+		t.Errorf("re-import document summary = %+v, want Imported=0 Skipped=Read", s)
+	}
+	if s := byTable["document_section"]; s.Imported != 0 || s.Skipped != s.Read {
+		t.Errorf("re-import document_section summary = %+v, want Imported=0 Skipped=Read", s)
+	}
+}
+
+func TestImportJSONL_DocumentSectionConcepts_UnresolvableEndpointSkippedNotFatal(t *testing.T) {
+	dst := openTestKB(t)
+	input := `{"type":"document","uuid":"11111111-1111-7111-8111-111111111111","origin_host":"h","project_name":"","title":"t","format":"text","path":"a.txt","author":"","published_date":"","checksum":"c","ingested_at":""}
+{"type":"document_section","uuid":"22222222-2222-7222-8222-222222222222","origin_host":"h","document_uuid":"11111111-1111-7111-8111-111111111111","level":"gist","seq":0,"heading":"","body":"","summary_body":"","summary_status":"unsummarized","summary_stale":false,"source_size":0,"tag_density":0,"generated_by":"","created_at":""}
+{"type":"document_section_concept","section_uuid":"22222222-2222-7222-8222-222222222222","concept_uuid":"does-not-exist"}
+`
+	summary, err := ImportJSONL(dst, strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	dsc := byTable["document_section_concept"]
+	if dsc.Read != 1 || dsc.Imported != 0 || dsc.Skipped != 1 {
+		t.Errorf("document_section_concept summary = %+v, want Read=1 Imported=0 Skipped=1", dsc)
+	}
+	if d, err := dst.DocumentByPath("a.txt"); err != nil || d == nil {
+		t.Errorf("DocumentByPath = %+v, err=%v, want the document itself to still import", d, err)
+	}
+}
+
 func TestImportJSONL_Records_ReimportIsNoOp(t *testing.T) {
 	src, _, _, _ := newJSONLRecordsFixture(t)
 	var buf bytes.Buffer

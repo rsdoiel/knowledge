@@ -37,6 +37,46 @@ func TestAddDocumentSection_CreatesRow(t *testing.T) {
 	}
 }
 
+// Required for JSON-L import to preserve cross-machine identity, the same
+// way AddRecord already does: a given non-empty UUID must survive, not be
+// silently overwritten by a freshly generated one.
+func TestAddDocument_PreservesGivenUUID(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, err := kb.AddDocument(Document{
+		ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt", UUID: "given-uuid",
+	})
+	if err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	d, err := kb.DocumentByPath("a.txt")
+	if err != nil {
+		t.Fatalf("DocumentByPath: %v", err)
+	}
+	if d.UUID != "given-uuid" {
+		t.Errorf("UUID = %q, want the given uuid preserved", d.UUID)
+	}
+	_ = docID
+}
+
+func TestAddDocumentSection_PreservesGivenUUID(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	if _, err := kb.AddDocumentSection(DocumentSection{
+		DocumentID: docID, Level: "section", UUID: "given-section-uuid",
+	}); err != nil {
+		t.Fatalf("AddDocumentSection: %v", err)
+	}
+	sections, err := kb.DocumentSections(docID)
+	if err != nil {
+		t.Fatalf("DocumentSections: %v", err)
+	}
+	if len(sections) != 1 || sections[0].UUID != "given-section-uuid" {
+		t.Errorf("sections = %+v, want the given uuid preserved", sections)
+	}
+}
+
 func TestDocumentSections_OrdersGistFirstThenBySeq(t *testing.T) {
 	kb := openTestKB(t)
 	pid, _ := kb.AddProject("alpha", "")
@@ -89,6 +129,30 @@ func TestDocumentByPath_UnknownPathReturnsNotFound(t *testing.T) {
 	}
 	if d != nil {
 		t.Errorf("DocumentByPath = %+v, want nil for an unknown path", d)
+	}
+}
+
+func TestDocumentByID_FindsExisting(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	d, err := kb.DocumentByID(docID)
+	if err != nil {
+		t.Fatalf("DocumentByID: %v", err)
+	}
+	if d == nil || d.Title != "A Story" {
+		t.Errorf("DocumentByID = %+v, want the seeded document", d)
+	}
+}
+
+func TestDocumentByID_UnknownIDReturnsNotFound(t *testing.T) {
+	kb := openTestKB(t)
+	d, err := kb.DocumentByID(9999)
+	if err != nil {
+		t.Fatalf("DocumentByID: %v", err)
+	}
+	if d != nil {
+		t.Errorf("DocumentByID = %+v, want nil for an unknown id", d)
 	}
 }
 
@@ -377,15 +441,32 @@ func TestUpdateDocumentSectionBody_UpdatesBodyAndStale(t *testing.T) {
 	pid, _ := kb.AddProject("alpha", "")
 	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
 	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section", Body: "old body"})
-	if err := kb.UpdateDocumentSectionBody(secID, "new body", 2, true); err != nil {
+	if err := kb.UpdateDocumentSectionBody(secID, "new body", 2, 3, true); err != nil {
 		t.Fatalf("UpdateDocumentSectionBody: %v", err)
 	}
 	sections, err := kb.DocumentSections(docID)
 	if err != nil {
 		t.Fatalf("DocumentSections: %v", err)
 	}
-	if len(sections) != 1 || sections[0].Body != "new body" || sections[0].SourceSize != 2 || !sections[0].SummaryStale {
-		t.Errorf("sections = %+v, want updated body/size/stale", sections)
+	if len(sections) != 1 || sections[0].Body != "new body" || sections[0].SourceSize != 2 || sections[0].TagDensity != 3 || !sections[0].SummaryStale {
+		t.Errorf("sections = %+v, want updated body/size/density/stale", sections)
+	}
+}
+
+func TestUpdateDocumentSectionTagDensity_UpdatesDensityOnly(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "gist", SummaryBody: "a gist", SummaryStatus: "drafted"})
+	if err := kb.UpdateDocumentSectionTagDensity(secID, 5); err != nil {
+		t.Fatalf("UpdateDocumentSectionTagDensity: %v", err)
+	}
+	sections, err := kb.DocumentSections(docID)
+	if err != nil {
+		t.Fatalf("DocumentSections: %v", err)
+	}
+	if len(sections) != 1 || sections[0].TagDensity != 5 || sections[0].SummaryBody != "a gist" {
+		t.Errorf("sections = %+v, want density updated and summary untouched", sections)
 	}
 }
 
@@ -403,5 +484,272 @@ func TestMarkDocumentSectionStale_SetsStaleWithoutTouchingBody(t *testing.T) {
 	}
 	if len(sections) != 1 || !sections[0].SummaryStale || sections[0].SummaryBody != "a gist" {
 		t.Errorf("sections = %+v, want stale=true and SummaryBody untouched", sections)
+	}
+}
+
+// ─── W4: document_section_concepts ──────────────────────────────────────────
+
+func TestLinkDocumentSectionConcept_CreatesLink(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkDocumentSectionConcept(secID, conceptID); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+	concepts, err := kb.DocumentSectionConcepts(secID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("concepts = %+v, want one concept named Foo", concepts)
+	}
+}
+
+func TestLinkDocumentSectionConcept_DuplicateIsNoOp(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkDocumentSectionConcept(secID, conceptID); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept (1st): %v", err)
+	}
+	if err := kb.LinkDocumentSectionConcept(secID, conceptID); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept (2nd): %v", err)
+	}
+	concepts, err := kb.DocumentSectionConcepts(secID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	if len(concepts) != 1 {
+		t.Errorf("expected exactly 1 concept after duplicate link, got %d", len(concepts))
+	}
+}
+
+func TestLinkDocumentSectionConcept_CascadesOnSectionDelete(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkDocumentSectionConcept(secID, conceptID); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+	if _, err := kb.db.Exec(`DELETE FROM document_sections WHERE id = ?`, secID); err != nil {
+		t.Fatalf("delete section: %v", err)
+	}
+	var count int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM document_section_concepts WHERE section_id = ?`, secID).Scan(&count); err != nil {
+		t.Fatalf("count document_section_concepts: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected document_section_concepts to cascade-delete with its section, got %d rows", count)
+	}
+}
+
+// ─── W5: review workflow ─────────────────────────────────────────────────────
+
+func TestDraftDocumentSummary_SetsStatusAndClearsStale(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	if err := kb.MarkDocumentSectionStale(secID); err != nil {
+		t.Fatalf("MarkDocumentSectionStale: %v", err)
+	}
+	confidence := 0.8
+	if err := kb.DraftDocumentSummary(secID, "a draft", "human", &confidence); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	sections, err := kb.DocumentSections(docID)
+	if err != nil {
+		t.Fatalf("DocumentSections: %v", err)
+	}
+	s := sections[0]
+	if s.SummaryBody != "a draft" || s.SummaryStatus != "drafted" || s.GeneratedBy != "human" {
+		t.Errorf("section = %+v, want drafted fields set", s)
+	}
+	if s.SummaryStale {
+		t.Error("expected summary_stale cleared by a fresh draft")
+	}
+	if s.Confidence == nil || *s.Confidence != 0.8 {
+		t.Errorf("Confidence = %v, want 0.8", s.Confidence)
+	}
+}
+
+func TestPromoteDocumentSummary_RequiresDraftedFirst(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	if err := kb.PromoteDocumentSummary(secID); err == nil {
+		t.Fatal("expected an error promoting an unsummarized section")
+	}
+}
+
+func TestPromoteDocumentSummary_SetsReviewedAndIndexesFTS(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "gist"})
+	if err := kb.DraftDocumentSummary(secID, "a distinctive drafted summary", "human", nil); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	if err := kb.PromoteDocumentSummary(secID); err != nil {
+		t.Fatalf("PromoteDocumentSummary: %v", err)
+	}
+	sections, err := kb.DocumentSections(docID)
+	if err != nil {
+		t.Fatalf("DocumentSections: %v", err)
+	}
+	if sections[0].SummaryStatus != "reviewed" {
+		t.Errorf("SummaryStatus = %q, want reviewed", sections[0].SummaryStatus)
+	}
+	results, err := kb.Search("distinctive drafted summary")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	found := false
+	for _, r := range results {
+		if r.SourceType == "document_summary" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Search results = %+v, want the reviewed summary indexed", results)
+	}
+}
+
+func TestPromoteDocumentSummary_RawSectionBodyNeverIndexed(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section", Body: "a very distinctive raw body sentence"})
+	if err := kb.DraftDocumentSummary(secID, "an unrelated summary", "human", nil); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	if err := kb.PromoteDocumentSummary(secID); err != nil {
+		t.Fatalf("PromoteDocumentSummary: %v", err)
+	}
+	results, err := kb.Search("distinctive raw body sentence")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("Search results = %+v, want the raw body never indexed even after promotion", results)
+	}
+}
+
+func TestDocumentReviewQueue_DefaultShowsUnsummarizedAndDrafted(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	unsummarizedID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section", Heading: "Un"})
+	draftedID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section", Heading: "Draft"})
+	if err := kb.DraftDocumentSummary(draftedID, "d", "human", nil); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	reviewedID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section", Heading: "Rev"})
+	if err := kb.DraftDocumentSummary(reviewedID, "r", "human", nil); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	if err := kb.PromoteDocumentSummary(reviewedID); err != nil {
+		t.Fatalf("PromoteDocumentSummary: %v", err)
+	}
+
+	items, err := kb.DocumentReviewQueue(0, "")
+	if err != nil {
+		t.Fatalf("DocumentReviewQueue: %v", err)
+	}
+	ids := map[int64]bool{}
+	for _, it := range items {
+		ids[it.ID] = true
+	}
+	if !ids[unsummarizedID] || !ids[draftedID] {
+		t.Errorf("items = %+v, want unsummarized and drafted included", items)
+	}
+	if ids[reviewedID] {
+		t.Errorf("items = %+v, want reviewed excluded by default", items)
+	}
+}
+
+func TestDocumentReviewQueue_StatusFilterOverridesDefault(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	reviewedID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	if err := kb.DraftDocumentSummary(reviewedID, "r", "human", nil); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	if err := kb.PromoteDocumentSummary(reviewedID); err != nil {
+		t.Fatalf("PromoteDocumentSummary: %v", err)
+	}
+
+	items, err := kb.DocumentReviewQueue(0, "reviewed")
+	if err != nil {
+		t.Fatalf("DocumentReviewQueue: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != reviewedID {
+		t.Errorf("items = %+v, want the one reviewed section", items)
+	}
+}
+
+func TestDocumentReviewQueue_ScopedToProject(t *testing.T) {
+	kb := openTestKB(t)
+	p1, _ := kb.AddProject("alpha", "")
+	p2, _ := kb.AddProject("beta", "")
+	doc1, _ := kb.AddDocument(Document{ProjectID: p1, Title: "T1", Format: "text", Path: "a.txt"})
+	doc2, _ := kb.AddDocument(Document{ProjectID: p2, Title: "T2", Format: "text", Path: "b.txt"})
+	kb.AddDocumentSection(DocumentSection{DocumentID: doc1, Level: "section"})
+	kb.AddDocumentSection(DocumentSection{DocumentID: doc2, Level: "section"})
+
+	items, err := kb.DocumentReviewQueue(p1, "")
+	if err != nil {
+		t.Fatalf("DocumentReviewQueue: %v", err)
+	}
+	if len(items) != 1 || items[0].DocumentTitle != "T1" {
+		t.Errorf("items = %+v, want only project alpha's section", items)
+	}
+}
+
+// ─── W8: Documents query (list/show) ─────────────────────────────────────────
+
+func TestDocuments_ListsAllWhenProjectIDZero(t *testing.T) {
+	kb := openTestKB(t)
+	p1, _ := kb.AddProject("alpha", "")
+	p2, _ := kb.AddProject("beta", "")
+	if _, err := kb.AddDocument(Document{ProjectID: p1, Title: "T1", Format: "text", Path: "a.txt"}); err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	if _, err := kb.AddDocument(Document{ProjectID: p2, Title: "T2", Format: "text", Path: "b.txt"}); err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	docs, err := kb.Documents(0)
+	if err != nil {
+		t.Fatalf("Documents: %v", err)
+	}
+	if len(docs) != 2 {
+		t.Errorf("docs = %+v, want 2", docs)
+	}
+}
+
+func TestDocuments_ScopedToProject(t *testing.T) {
+	kb := openTestKB(t)
+	p1, _ := kb.AddProject("alpha", "")
+	p2, _ := kb.AddProject("beta", "")
+	if _, err := kb.AddDocument(Document{ProjectID: p1, Title: "T1", Format: "text", Path: "a.txt"}); err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	if _, err := kb.AddDocument(Document{ProjectID: p2, Title: "T2", Format: "text", Path: "b.txt"}); err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+	docs, err := kb.Documents(p1)
+	if err != nil {
+		t.Fatalf("Documents: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Title != "T1" {
+		t.Errorf("docs = %+v, want only T1", docs)
 	}
 }

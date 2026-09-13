@@ -1,4 +1,4 @@
-%kb-export(1) user manual | version 0.0.5 59c5f8f
+%kb-export(1) user manual | version 0.0.5 86e779f
 % R. S. Doiel
 % 2026-08-28
 

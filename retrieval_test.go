@@ -288,3 +288,111 @@ func TestMatchConceptNames_MatchesAtWordBoundaryPunctuation(t *testing.T) {
 		t.Errorf("names = %v, want [Foo] despite surrounding [[ ]] and a trailing period", names)
 	}
 }
+
+// ─── W6 (narrative-documents-plan.md): widen RecallByConceptNames to documents ──
+
+func TestRecallByConceptNames_ReturnsLinkedDocumentSection(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section", Heading: "One"})
+	cid, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkDocumentSectionConcept(secID, cid); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+
+	matches, err := kb.RecallByConceptNames([]string{"Foo"}, 10)
+	if err != nil {
+		t.Fatalf("RecallByConceptNames: %v", err)
+	}
+	if len(matches) != 1 || matches[0].SourceType != "document_section" || matches[0].ID != secID {
+		t.Errorf("matches = %+v, want one document_section match with id %d", matches, secID)
+	}
+}
+
+func TestRecallByConceptNames_UnreviewedDocumentMatchHasEmptyBodyButSetStatus(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "gist"})
+	if err := kb.DraftDocumentSummary(secID, "a draft nobody has reviewed yet", "human", nil); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	cid, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkDocumentSectionConcept(secID, cid); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+
+	matches, err := kb.RecallByConceptNames([]string{"Foo"}, 10)
+	if err != nil {
+		t.Fatalf("RecallByConceptNames: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("matches = %+v, want 1", matches)
+	}
+	if matches[0].SourceType != "document_gist" {
+		t.Errorf("SourceType = %q, want document_gist", matches[0].SourceType)
+	}
+	if matches[0].SummaryStatus != "drafted" {
+		t.Errorf("SummaryStatus = %q, want drafted", matches[0].SummaryStatus)
+	}
+	if matches[0].Body != "" {
+		t.Errorf("Body = %q, want empty -- a drafted (unreviewed) summary must not be surfaced as trustworthy content", matches[0].Body)
+	}
+}
+
+func TestRecallByConceptNames_ReviewedDocumentMatchIncludesBody(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "gist"})
+	if err := kb.DraftDocumentSummary(secID, "a reviewed summary", "human", nil); err != nil {
+		t.Fatalf("DraftDocumentSummary: %v", err)
+	}
+	if err := kb.PromoteDocumentSummary(secID); err != nil {
+		t.Fatalf("PromoteDocumentSummary: %v", err)
+	}
+	cid, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkDocumentSectionConcept(secID, cid); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+
+	matches, err := kb.RecallByConceptNames([]string{"Foo"}, 10)
+	if err != nil {
+		t.Fatalf("RecallByConceptNames: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Body != "a reviewed summary" || matches[0].SummaryStatus != "reviewed" {
+		t.Errorf("matches = %+v, want the reviewed summary body included", matches)
+	}
+}
+
+func TestRecallByConceptNames_MergesAllThreeSourceTypes(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	oid, _ := kb.AddObservation(pid, "note", "an observation")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	cid, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkObservationConcept(oid, cid); err != nil {
+		t.Fatalf("LinkObservationConcept: %v", err)
+	}
+	if err := kb.LinkRecordConcept(recID, cid); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+	if err := kb.LinkDocumentSectionConcept(secID, cid); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+
+	matches, err := kb.RecallByConceptNames([]string{"Foo"}, 10)
+	if err != nil {
+		t.Fatalf("RecallByConceptNames: %v", err)
+	}
+	types := map[string]bool{}
+	for _, m := range matches {
+		types[m.SourceType] = true
+	}
+	if len(matches) != 3 || !types["observation"] || !types["record"] || !types["document_section"] {
+		t.Errorf("matches = %+v, want one of each: observation, record, document_section", matches)
+	}
+}

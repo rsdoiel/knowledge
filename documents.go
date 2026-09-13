@@ -64,6 +64,12 @@ CREATE TABLE IF NOT EXISTS document_sections (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_document_sections_uuid ON document_sections(uuid);
+
+CREATE TABLE IF NOT EXISTS document_section_concepts (
+    section_id INTEGER REFERENCES document_sections(id) ON DELETE CASCADE,
+    concept_id INTEGER REFERENCES concepts(id)          ON DELETE CASCADE,
+    PRIMARY KEY (section_id, concept_id)
+);
 `
 
 /** Document is a narrative or article ingested at the graduated-abstraction
@@ -125,15 +131,20 @@ type DocumentSection struct {
  *       Format: "markdown", Path: "stories/a-story.md"})
  */
 func (kb *KnowledgeBase) AddDocument(d Document) (int64, error) {
-	u, err := uuid.NewV7()
-	if err != nil {
-		return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
+	if d.UUID == "" {
+		u, err := uuid.NewV7()
+		if err != nil {
+			return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
+		}
+		d.UUID = u.String()
 	}
-	host, _ := os.Hostname()
+	if d.OriginHost == "" {
+		d.OriginHost, _ = os.Hostname()
+	}
 	res, err := kb.db.Exec(
 		`INSERT INTO documents (project_id, title, format, path, author, published_date, checksum, uuid, origin_host)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		projectValue(d.ProjectID), d.Title, d.Format, d.Path, d.Author, d.PublishedDate, d.Checksum, u.String(), host,
+		projectValue(d.ProjectID), d.Title, d.Format, d.Path, d.Author, d.PublishedDate, d.Checksum, d.UUID, d.OriginHost,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add document: %w", err)
@@ -156,11 +167,16 @@ func (kb *KnowledgeBase) AddDocument(d Document) (int64, error) {
  *       Level: "section", Seq: 0, Heading: "Chapter One", Body: "..."})
  */
 func (kb *KnowledgeBase) AddDocumentSection(s DocumentSection) (int64, error) {
-	u, err := uuid.NewV7()
-	if err != nil {
-		return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
+	if s.UUID == "" {
+		u, err := uuid.NewV7()
+		if err != nil {
+			return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
+		}
+		s.UUID = u.String()
 	}
-	host, _ := os.Hostname()
+	if s.OriginHost == "" {
+		s.OriginHost, _ = os.Hostname()
+	}
 	if s.SummaryStatus == "" {
 		s.SummaryStatus = "unsummarized"
 	}
@@ -170,7 +186,7 @@ func (kb *KnowledgeBase) AddDocumentSection(s DocumentSection) (int64, error) {
 		     summary_stale, source_size, tag_density, confidence, generated_by, uuid, origin_host)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		s.DocumentID, s.Level, s.Seq, s.Heading, s.Body, s.SummaryBody, s.SummaryStatus,
-		boolToInt(s.SummaryStale), s.SourceSize, s.TagDensity, s.Confidence, s.GeneratedBy, u.String(), host,
+		boolToInt(s.SummaryStale), s.SourceSize, s.TagDensity, s.Confidence, s.GeneratedBy, s.UUID, s.OriginHost,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add document section: %w", err)
@@ -261,6 +277,36 @@ func (kb *KnowledgeBase) DocumentByPath(path string) (*Document, error) {
 	err := kb.db.QueryRow(
 		`SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host
 		 FROM documents WHERE path = ? LIMIT 1`, path,
+	).Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author, &d.PublishedDate, &d.Checksum, &ts, &d.UUID, &d.OriginHost)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	d.IngestedAt = parseTimestamp(ts)
+	return &d, nil
+}
+
+/** DocumentByID returns the document with the given internal id, or nil if
+ * none exists.
+ *
+ * Parameters:
+ *   id (int64) — the document's internal id.
+ *
+ * Returns:
+ *   *Document — the matching document, or nil when not found.
+ *   error     — on database failure.
+ *
+ * Example:
+ *   d, err := kb.DocumentByID(42)
+ */
+func (kb *KnowledgeBase) DocumentByID(id int64) (*Document, error) {
+	var d Document
+	var ts string
+	err := kb.db.QueryRow(
+		`SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host
+		 FROM documents WHERE id = ?`, id,
 	).Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author, &d.PublishedDate, &d.Checksum, &ts, &d.UUID, &d.OriginHost)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -557,12 +603,268 @@ func (kb *KnowledgeBase) UpdateDocumentMetadata(id int64, title, author, publish
  * Example:
  *   err := kb.UpdateDocumentSectionBody(secID, newBody, 42, true)
  */
-func (kb *KnowledgeBase) UpdateDocumentSectionBody(id int64, body string, sourceSize int, stale bool) error {
+func (kb *KnowledgeBase) UpdateDocumentSectionBody(id int64, body string, sourceSize, tagDensity int, stale bool) error {
 	_, err := kb.db.Exec(
-		`UPDATE document_sections SET body = ?, source_size = ?, summary_stale = ? WHERE id = ?`,
-		body, sourceSize, boolToInt(stale), id,
+		`UPDATE document_sections SET body = ?, source_size = ?, tag_density = ?, summary_stale = ? WHERE id = ?`,
+		body, sourceSize, tagDensity, boolToInt(stale), id,
 	)
 	return err
+}
+
+/** UpdateDocumentSectionTagDensity updates only a section's tag_density,
+ * without touching body, summary, or stale state. Used to refresh the gist
+ * row's density on re-ingest (design decision 6) -- the gist has no body of
+ * its own to update, only a density computed from the whole document's
+ * current text.
+ *
+ * Parameters:
+ *   id         (int64) — the section's internal id.
+ *   tagDensity (int)   — the new density value.
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   err := kb.UpdateDocumentSectionTagDensity(gistSectionID, 4)
+ */
+func (kb *KnowledgeBase) UpdateDocumentSectionTagDensity(id int64, tagDensity int) error {
+	_, err := kb.db.Exec(`UPDATE document_sections SET tag_density = ? WHERE id = ?`, tagDensity, id)
+	return err
+}
+
+/** DraftDocumentSummary writes a gist or section summary (design decision
+ * 7): sets summary_body, summary_status to "drafted", generatedBy (a caller
+ * identity -- "human" or a model name; knowledge never calls a model
+ * itself), and confidence. A fresh draft clears summary_stale, since it is
+ * by definition not stale against itself. Range-validating confidence is
+ * the caller's job (the CLI does it); this is a trusted data-layer write.
+ *
+ * Parameters:
+ *   sectionID   (int64)    — the document_sections row to draft.
+ *   body        (string)   — the summary text.
+ *   generatedBy (string)   — who/what produced it.
+ *   confidence  (*float64) — self-reported confidence, or nil.
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   c := 0.8
+ *   err := kb.DraftDocumentSummary(sectionID, "...", "human", &c)
+ */
+func (kb *KnowledgeBase) DraftDocumentSummary(sectionID int64, body, generatedBy string, confidence *float64) error {
+	_, err := kb.db.Exec(
+		`UPDATE document_sections
+		 SET summary_body = ?, summary_status = 'drafted', generated_by = ?, confidence = ?, summary_stale = 0
+		 WHERE id = ?`,
+		body, generatedBy, confidence, sectionID,
+	)
+	return err
+}
+
+/** PromoteDocumentSummary promotes a drafted summary to reviewed (design
+ * decision 7) -- the only human action that makes a summary trusted. This
+ * is also the only point a summary is indexed into kb_fts (decision 8): a
+ * section's raw body is never indexed, only its reviewed summary, and only
+ * once it is reviewed.
+ *
+ * Parameters:
+ *   sectionID (int64) — the document_sections row to promote.
+ *
+ * Returns:
+ *   error — if the section does not exist, is not currently "drafted", or
+ *           on database failure.
+ *
+ * Example:
+ *   err := kb.PromoteDocumentSummary(sectionID)
+ */
+func (kb *KnowledgeBase) PromoteDocumentSummary(sectionID int64) error {
+	var status, summaryBody, heading, level string
+	var documentID int64
+	err := kb.db.QueryRow(
+		`SELECT summary_status, summary_body, heading, level, document_id FROM document_sections WHERE id = ?`,
+		sectionID,
+	).Scan(&status, &summaryBody, &heading, &level, &documentID)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("knowledge: no document section with id %d", sectionID)
+	}
+	if err != nil {
+		return err
+	}
+	if status != "drafted" {
+		return fmt.Errorf("knowledge: document section %d is %q, not drafted; draft it first", sectionID, status)
+	}
+	if _, err := kb.db.Exec(`UPDATE document_sections SET summary_status = 'reviewed' WHERE id = ?`, sectionID); err != nil {
+		return err
+	}
+
+	var title string
+	var projectID int64
+	if err := kb.db.QueryRow(
+		`SELECT title, IFNULL(project_id, 0) FROM documents WHERE id = ?`, documentID,
+	).Scan(&title, &projectID); err != nil {
+		return err
+	}
+	kb.indexDocumentSummaryFTS(sectionID, level, title, heading, summaryBody, projectID)
+	return nil
+}
+
+// indexDocumentSummaryFTS writes the kb_fts entry for a promoted summary
+// (design decision 8), the same delete-then-reinsert shape every other
+// writer uses (see indexRecordFTS). Never called for anything but a
+// reviewed summary's body -- raw section text has no writer into kb_fts at
+// all.
+func (kb *KnowledgeBase) indexDocumentSummaryFTS(sectionID int64, level, title, heading, summaryBody string, projectID int64) {
+	if !kb.ftsAvailable {
+		return
+	}
+	label := title
+	if heading != "" {
+		label = title + " — " + heading
+	}
+	_, _ = kb.db.Exec(
+		`DELETE FROM kb_fts WHERE source_type = 'document_summary' AND source_id = ?`, sectionID)
+	_, _ = kb.db.Exec(
+		`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
+		 VALUES (?, ?, ?, ?, 'document_summary', ?, ?)`,
+		summaryBody, level, label, heading, sectionID, projectID)
+}
+
+/** DocumentReviewItem is one row of the review queue (kb document review
+ * list): a document_sections row plus the document context needed to
+ * display it.
+ */
+type DocumentReviewItem struct {
+	DocumentSection
+	DocumentTitle string
+}
+
+/** DocumentReviewQueue returns document_sections rows needing attention
+ * (design decision 7), optionally scoped to one project and one status.
+ * With status == "", the default is the actual triage queue --
+ * "unsummarized" and "drafted" rows, not "reviewed" ones, which need no
+ * further attention. Passing an explicit status (including "reviewed")
+ * overrides that default, for auditing.
+ *
+ * Parameters:
+ *   projectID (int64)  — scope to one project, or 0 for every project.
+ *   status    (string) — an exact status to filter to, or "" for the
+ *                        unsummarized+drafted default.
+ *
+ * Returns:
+ *   []DocumentReviewItem — matching sections, gist first then by seq within
+ *                          each document; nil when none.
+ *   error                — on database failure.
+ *
+ * Example:
+ *   items, err := kb.DocumentReviewQueue(0, "")
+ */
+func (kb *KnowledgeBase) DocumentReviewQueue(projectID int64, status string) ([]DocumentReviewItem, error) {
+	query := `SELECT s.id, s.document_id, s.level, s.seq, s.heading, s.body, s.summary_body, s.summary_status,
+	                 s.summary_stale, s.source_size, s.tag_density, s.confidence, s.generated_by, s.created_at,
+	                 s.uuid, s.origin_host, d.title
+	          FROM document_sections s
+	          JOIN documents d ON d.id = s.document_id`
+	var where []string
+	var args []any
+	if projectID != 0 {
+		where = append(where, "d.project_id = ?")
+		args = append(args, projectID)
+	}
+	if status != "" {
+		where = append(where, "s.summary_status = ?")
+		args = append(args, status)
+	} else {
+		where = append(where, "s.summary_status IN ('unsummarized', 'drafted')")
+	}
+	query += " WHERE " + strings.Join(where, " AND ")
+	query += " ORDER BY d.id, CASE s.level WHEN 'gist' THEN 0 ELSE 1 END, s.seq"
+
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DocumentReviewItem
+	for rows.Next() {
+		var it DocumentReviewItem
+		var stale int
+		var confidence sql.NullFloat64
+		var ts string
+		if err := rows.Scan(&it.ID, &it.DocumentID, &it.Level, &it.Seq, &it.Heading, &it.Body,
+			&it.SummaryBody, &it.SummaryStatus, &stale, &it.SourceSize, &it.TagDensity,
+			&confidence, &it.GeneratedBy, &ts, &it.UUID, &it.OriginHost, &it.DocumentTitle); err != nil {
+			return nil, err
+		}
+		it.SummaryStale = stale != 0
+		if confidence.Valid {
+			v := confidence.Float64
+			it.Confidence = &v
+		}
+		it.CreatedAt = parseTimestamp(ts)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+/** LinkDocumentSectionConcept associates a document section with a concept.
+ * Duplicate links are silently ignored. Verbatim shape of
+ * LinkRecordConcept (knowledge.go), for the same relationship one level
+ * down (design decision 5).
+ *
+ * Parameters:
+ *   sectionID (int64) — ID of the document_sections row.
+ *   conceptID (int64) — ID of the concept.
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   err := kb.LinkDocumentSectionConcept(sectionID, conceptID)
+ */
+func (kb *KnowledgeBase) LinkDocumentSectionConcept(sectionID, conceptID int64) error {
+	_, err := kb.db.Exec(
+		`INSERT OR IGNORE INTO document_section_concepts (section_id, concept_id) VALUES (?, ?)`,
+		sectionID, conceptID,
+	)
+	return err
+}
+
+/** DocumentSectionConcepts returns all concepts linked to the given document
+ * section id, ordered by concept id. Mirrors RecordConcepts (knowledge.go).
+ *
+ * Parameters:
+ *   sectionID (int64) — the document_sections row's internal id.
+ *
+ * Returns:
+ *   []Concept — linked concepts; nil when none.
+ *   error     — on database failure.
+ *
+ * Example:
+ *   concepts, err := kb.DocumentSectionConcepts(sectionID)
+ */
+func (kb *KnowledgeBase) DocumentSectionConcepts(sectionID int64) ([]Concept, error) {
+	rows, err := kb.db.Query(
+		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value
+		 FROM concepts c
+		 JOIN document_section_concepts dsc ON dsc.concept_id = c.id
+		 WHERE dsc.section_id = ?
+		 ORDER BY c.id`,
+		sectionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Concept
+	for rows.Next() {
+		var c Concept
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
 
 /** MarkDocumentSectionStale sets a section's summary_stale flag without
@@ -582,4 +884,46 @@ func (kb *KnowledgeBase) UpdateDocumentSectionBody(id int64, body string, source
 func (kb *KnowledgeBase) MarkDocumentSectionStale(id int64) error {
 	_, err := kb.db.Exec(`UPDATE document_sections SET summary_stale = 1 WHERE id = ?`, id)
 	return err
+}
+
+/** Documents lists documents, optionally scoped to one project, ordered by
+ * id (i.e. ingestion order). Mirrors DocumentReviewQueue's projectID
+ * convention: 0 means every project.
+ *
+ * Parameters:
+ *   projectID (int64) — scope to one project, or 0 for every project.
+ *
+ * Returns:
+ *   []Document — matching documents; nil when none.
+ *   error      — on database failure.
+ *
+ * Example:
+ *   docs, err := kb.Documents(0)
+ */
+func (kb *KnowledgeBase) Documents(projectID int64) ([]Document, error) {
+	query := `SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host
+	          FROM documents`
+	var args []any
+	if projectID != 0 {
+		query += ` WHERE project_id = ?`
+		args = append(args, projectID)
+	}
+	query += ` ORDER BY id`
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Document
+	for rows.Next() {
+		var d Document
+		var ts string
+		if err := rows.Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author,
+			&d.PublishedDate, &d.Checksum, &ts, &d.UUID, &d.OriginHost); err != nil {
+			return nil, err
+		}
+		d.IngestedAt = parseTimestamp(ts)
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }

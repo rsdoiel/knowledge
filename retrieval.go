@@ -9,27 +9,41 @@ import (
 	"time"
 )
 
-/** ConceptMatch is one entity (an observation or a record) linked to one or
- * more concepts a RecallByConceptNames caller asked about.
+/** ConceptMatch is one entity (an observation, a record, or a document
+ * gist/section) linked to one or more concepts a RecallByConceptNames
+ * caller asked about.
  *
  * Fields:
- *   SourceType (string)    — "observation" or "record", the same vocabulary
- *                            kb_fts.source_type uses.
- *   ID         (int64)     — internal database id of the observation or record.
- *   ProjectID  (int64)     — owning project id (0 for a workspace-tier record).
- *   Title      (string)    — "" for an observation; the record's title for a record.
- *   Body       (string)    — the observation or record body text.
- *   MatchCount (int)       — how many of the queried concepts this entity is linked to.
- *   CreatedAt  (time.Time) — Observation.CreatedAt, or Record.IngestedAt.
+ *   SourceType    (string)    — "observation", "record", "document_gist", or
+ *                               "document_section" -- the same vocabulary
+ *                               kb_fts.source_type uses.
+ *   ID            (int64)     — internal database id of the entity (for a
+ *                               document match, the document_sections row).
+ *   ProjectID     (int64)     — owning project id (0 for a workspace-tier record).
+ *   Title         (string)    — "" for an observation; the record's or
+ *                               document's title otherwise.
+ *   Body          (string)    — the entity's text -- for a document match,
+ *                               only when SummaryStatus == "reviewed" (see
+ *                               narrative-documents-design.md decision 8):
+ *                               an unreviewed summary is findable by tag,
+ *                               but never surfaced as trustworthy content.
+ *   SummaryStatus (string)    — "" for observation/record matches;
+ *                               "unsummarized"/"drafted"/"reviewed" for a
+ *                               document match, explaining why Body may be
+ *                               empty rather than leaving the caller to guess.
+ *   MatchCount    (int)       — how many of the queried concepts this entity is linked to.
+ *   CreatedAt     (time.Time) — Observation.CreatedAt, Record.IngestedAt, or
+ *                               the document section's CreatedAt.
  */
 type ConceptMatch struct {
-	SourceType string
-	ID         int64
-	ProjectID  int64
-	Title      string
-	Body       string
-	MatchCount int
-	CreatedAt  time.Time
+	SourceType    string
+	ID            int64
+	ProjectID     int64
+	Title         string
+	Body          string
+	SummaryStatus string
+	MatchCount    int
+	CreatedAt     time.Time
 }
 
 // conceptIDsByNames resolves names to existing concept ids, case-insensitively,
@@ -144,6 +158,46 @@ func (kb *KnowledgeBase) RecallByConceptNames(names []string, limit int) ([]Conc
 		matches = append(matches, m)
 	}
 	if err := recRows.Err(); err != nil {
+		return nil, err
+	}
+
+	docRows, err := kb.db.Query(fmt.Sprintf(`
+		SELECT s.id, IFNULL(d.project_id, 0), d.title, s.level, s.heading, s.summary_body, s.summary_status,
+		       s.created_at, COUNT(DISTINCT dsc.concept_id) AS match_count
+		FROM document_sections s
+		JOIN documents d ON d.id = s.document_id
+		JOIN document_section_concepts dsc ON dsc.section_id = s.id
+		WHERE dsc.concept_id IN (%s)
+		GROUP BY s.id`, placeholders), args...)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: recall document sections by concept: %w", err)
+	}
+	defer docRows.Close()
+	for docRows.Next() {
+		var m ConceptMatch
+		var level, heading, summaryBody, ts string
+		if err := docRows.Scan(&m.ID, &m.ProjectID, &m.Title, &level, &heading, &summaryBody,
+			&m.SummaryStatus, &ts, &m.MatchCount); err != nil {
+			return nil, err
+		}
+		if level == "gist" {
+			m.SourceType = "document_gist"
+		} else {
+			m.SourceType = "document_section"
+			if heading != "" {
+				m.Title = m.Title + " / " + heading
+			}
+		}
+		// Design decision 8: only a reviewed summary is trustworthy content.
+		// An unsummarized/drafted match still surfaces (findable by tag),
+		// with SummaryStatus explaining why Body is empty.
+		if m.SummaryStatus == "reviewed" {
+			m.Body = summaryBody
+		}
+		m.CreatedAt = parseTimestamp(ts)
+		matches = append(matches, m)
+	}
+	if err := docRows.Err(); err != nil {
 		return nil, err
 	}
 
