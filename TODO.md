@@ -17,14 +17,17 @@
   Observation bodies (`kb observation add`) remain out of scope, as decided
   at filing.
 
-- [ ] Concept-tag-based retrieval query (concept names → linked
-  observations/records), consumed by harvey's `UnifiedMemory.Recall` as a
-  cheap, embedder-free first pass ahead of RAG — motivated by small/CPU-only
-  model context budgets. See `concept-tag-retrieval-feature-request.md`
-  (filed 2026-09-08). Depends loosely on the `[[wikilink]]` tagging feature
-  above for link density, but is useful against today's sparse `kb link`
-  data too. Open questions (where name-matching logic lives, ranking beyond
-  match count, whether it covers records) are in the linked document.
+- [x] Concept-tag-based retrieval query (concept names → linked
+  observations/records). Filed as `concept-tag-retrieval-feature-request.md`
+  (2026-09-08). Implemented 2026-09-13: see `concept-tag-retrieval-design.md`
+  and `concept-tag-retrieval-plan.md` (W1-W2). New `retrieval.go`:
+  `MatchConceptNames(text)` (whole-word, case-insensitive match against
+  known concepts) and `RecallByConceptNames(names, limit)` (merged,
+  match-count-then-recency-ranked results across both `observation_concepts`
+  and `record_concepts`, read-only — never creates a concept, unlike
+  `ResolveConceptName`). Not project-scoped, per the original motivation.
+  Consuming this from harvey's `UnifiedMemory.Recall` is separate,
+  harvey-side work, not done here.
 
 - [ ] Ingest narratives/stories (Markdown, Fountain, PDF) and articles/posts
   (Markdown, text, PDF) as a new `documents` entity, stored/indexed at
