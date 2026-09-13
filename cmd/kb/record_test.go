@@ -589,3 +589,45 @@ func TestCmdRecord_ResolvesByRootNotDatabaseLocation(t *testing.T) {
 		t.Errorf("Workspace = %q, want %q — it must follow the root, not the database", recs[0].Workspace, want)
 	}
 }
+
+// ─── wikilink-tagging W3: kb record concepts ────────────────────────────────
+
+func TestRecordConcepts_ListsLinkedConcepts(t *testing.T) {
+	kb, _ := fixtureWorkspace(t, "clasm",
+		testRecord{ID: "0001", Body: "\nSee [[Foo]].\n"})
+
+	out := runRecord(t, kb, "concepts", "0001")
+	if !strings.Contains(out, "Foo") {
+		t.Errorf("record concepts 0001 = %q, want it to include Foo", out)
+	}
+}
+
+func TestRecordConcepts_NoLinkedConceptsPrintsPlaceholder(t *testing.T) {
+	kb, _ := fixtureWorkspace(t, "clasm", testRecord{ID: "0001"})
+
+	out := runRecord(t, kb, "concepts", "0001")
+	if !strings.Contains(out, "no linked concepts") {
+		t.Errorf("record concepts 0001 = %q, want a placeholder for no linked concepts", out)
+	}
+}
+
+func TestRecordConcepts_JSONOutput(t *testing.T) {
+	kb, _ := fixtureWorkspace(t, "clasm",
+		testRecord{ID: "0001", Body: "\nSee [[Foo]].\n"})
+
+	var concepts []knowledge.Concept
+	runRecordJSON(t, kb, &concepts, "concepts", "0001")
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("concepts = %+v, want one concept named Foo", concepts)
+	}
+}
+
+func TestRecordConcepts_UnknownRecordIDErrors(t *testing.T) {
+	kb, _ := fixtureWorkspace(t, "clasm", testRecord{ID: "0001"})
+
+	var out bytes.Buffer
+	err := cmdRecord(kb, nil, false, []string{"concepts", "9999"}, &out)
+	if err == nil {
+		t.Fatal("expected an error for an unknown record id, got none")
+	}
+}

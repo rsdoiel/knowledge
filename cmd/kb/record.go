@@ -78,7 +78,7 @@ type recordFlags struct {
  */
 func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("record requires a subverb: list, show, new, set-status, supersede or fmt")
+		return fmt.Errorf("record requires a subverb: list, show, new, set-status, supersede, fmt or concepts")
 	}
 	flags, err := parseRecordFlags(args[1:])
 	if err != nil {
@@ -99,8 +99,10 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return recordFmt(kb, jsonOut, flags, out)
 	case "new":
 		return recordNew(kb, jsonOut, flags, out)
+	case "concepts":
+		return recordConcepts(kb, jsonOut, flags, out)
 	default:
-		return fmt.Errorf("unknown record subverb %q; want list, show, new, set-status, supersede or fmt", args[0])
+		return fmt.Errorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt or concepts", args[0])
 	}
 }
 
@@ -342,6 +344,34 @@ func qualify(r knowledge.Record, names map[int64]string) string {
 		return "workspace"
 	}
 	return names[r.ProjectID]
+}
+
+// recordConcepts implements `kb record concepts RECORD_ID`, mirroring
+// `kb observation sources`: read-only visibility into what wikilink-tagging
+// (see wikilink-tagging-design.md) has linked to a record.
+func recordConcepts(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
+	if len(f.args) < 1 {
+		return fmt.Errorf("record concepts requires a RECORD_ID")
+	}
+	rec, err := resolveRecord(kb, f.args[0], f)
+	if err != nil {
+		return err
+	}
+	concepts, err := kb.RecordConcepts(rec.ID)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, concepts)
+	}
+	if len(concepts) == 0 {
+		fmt.Fprintln(out, "(no linked concepts)")
+		return nil
+	}
+	for _, c := range concepts {
+		fmt.Fprintf(out, "%-4d  %s\n", c.ID, c.Name)
+	}
+	return nil
 }
 
 // recordRoot is the workspace root that stored paths are relative to.

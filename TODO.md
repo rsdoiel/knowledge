@@ -3,16 +3,19 @@
 
 ## Requested features
 
-- [ ] `[[double-bracket]]` inline concept tagging when ingesting Markdown
-  record bodies, beyond formal frontmatter. See
-  `wikilink-tagging-feature-request.md` (filed 2026-09-08) — inspired by
+- [x] `[[double-bracket]]` inline concept tagging when ingesting Markdown
+  record bodies, beyond formal frontmatter. Filed as
+  `wikilink-tagging-feature-request.md` (2026-09-08) — inspired by
   [Build a digitally sovereign second brain](https://www.raspberrypi.com/news/build-a-digitally-sovereign-second-brain/)
-  (Raspberry Pi magazine). Decided at filing: resolves to concepts only,
-  auto-creates a missing concept, and scoped to `kb ingest` (records) for a
-  first pass — `kb observation add` bodies are explicitly out of scope until
-  this proves useful on records. Open questions (where the links land, name
-  normalization, interaction with the unused `Tags` frontmatter field) are in
-  the linked document.
+  (Raspberry Pi magazine). Implemented 2026-09-13: see
+  `wikilink-tagging-design.md` and `wikilink-tagging-plan.md` (W1-W5). Both
+  `[[Name]]` body scanning and the previously-unused frontmatter `tags` list
+  resolve into `record_concepts`, case-insensitively via a new
+  `ResolveConceptName` (not `AddConcept`/`kb concept add`, which stay
+  exact-match); visible via `kb record concepts RECORD_ID`; carried through
+  `knowledge_merge.go` and `jsonl.go` export/import for portability.
+  Observation bodies (`kb observation add`) remain out of scope, as decided
+  at filing.
 
 - [ ] Concept-tag-based retrieval query (concept names → linked
   observations/records), consumed by harvey's `UnifiedMemory.Recall` as a
@@ -22,6 +25,18 @@
   above for link density, but is useful against today's sparse `kb link`
   data too. Open questions (where name-matching logic lives, ranking beyond
   match count, whether it covers records) are in the linked document.
+
+- [ ] Ingest narratives/stories (Markdown, Fountain, PDF) and articles/posts
+  (Markdown, text, PDF) as a new `documents` entity, stored/indexed at
+  graduated abstraction levels (gist, section/scene summary, full text)
+  rather than as one flat body — motivated by small-model context budgets,
+  same as the retrieval item above, but for whole documents rather than
+  observations. See `narrative-documents-feature-request.md` (filed
+  2026-09-13). Embedder-based retrieval is explicitly deferred; this is
+  scoped to work on top of the concept-tag graph from the two feature
+  requests above. Open questions (schema shape for the levels, who generates
+  summaries, PDF extraction tooling, whether full text is FTS-indexed at
+  all) are in the linked document.
 
 - [ ] Cross-machine reconciliation of an edited description. Deferred out of
   the `set-description` work (see DR-0012) because it is a policy inversion

@@ -601,6 +601,14 @@ Ingest is additive. A record whose file has vanished stays in the database and
 is reported, never deleted — pruning would destroy data on a partial or
 wrong-directory run. Ingest never writes to a record file; only record does.
 
+Every [[Name]] found in a record's body, and every entry in its frontmatter
+tags list, is resolved to a concept and linked to the record (kb record
+concepts shows the result). A name that does not match an existing concept
+creates one; matching is case-insensitive, so [[Computer]] and [[computer]]
+resolve to the same concept regardless of where each mention falls in a
+sentence, and the casing of whichever mention is resolved first becomes
+canonical. This does not change kb concept add, which stays exact-match.
+
 # OPTIONS
 
 --dry-run
@@ -652,6 +660,8 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record fmt PATH [--dry-run]
 
+{app_name} record concepts RECORD_ID [--project P] [--workspace]
+
 # DESCRIPTION
 
 A decision record is one file, indexed by ingest. new writes a project-scoped
@@ -693,6 +703,10 @@ fmt
 : rewrite every record under PATH into canonical form. This is the
   normalisation path ingest deliberately lacks, since ingest never writes to
   a record file
+
+concepts
+: list the concepts ingest linked to a record, from [[Name]] wikilinks in its
+  body and its frontmatter tags list
 
 new, set-status, supersede and fmt are the only commands that write a record
 file; ingest never does. A record is written proposed and stays proposed: a

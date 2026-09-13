@@ -389,6 +389,37 @@ func TestMergeKnowledgeBases_ProjectConceptsSurvive(t *testing.T) {
 	}
 }
 
+func TestMergeKnowledgeBases_RecordConceptsSurvive(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	pid, err := a.AddProject("proj", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	recID := seedTestRecord(t, a, pid, "0001")
+	cid, err := a.AddConcept("concept", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := a.LinkRecordConcept(recID, cid); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	var count int
+	if err := merged.db.QueryRow(`
+		SELECT COUNT(*) FROM record_concepts j
+		JOIN records  r ON r.id = j.record_id
+		JOIN concepts c ON c.id = j.concept_id
+		WHERE r.record_id = '0001' AND c.name = 'concept'`,
+	).Scan(&count); err != nil {
+		t.Fatalf("count link: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 record_concepts link in merged db, got %d", count)
+	}
+}
+
 func TestMergeKnowledgeBases_ObservationSourcesSurvive(t *testing.T) {
 	a := openTestKB(t)
 	b := openTestKB(t)
@@ -886,13 +917,13 @@ func TestMergeKnowledgeBases_SummaryIncludesRecordTables(t *testing.T) {
 	}
 	// A table absent from the summary is a table whose loss goes unreported,
 	// which is how records came to be dropped silently in the first place.
-	for _, want := range []string{"records", "record_relations"} {
+	for _, want := range []string{"records", "record_relations", "record_concepts"} {
 		if !seen[want] {
 			t.Errorf("summary omits %s: %v", want, seen)
 		}
 	}
-	if len(summary) != 9 {
-		t.Errorf("summary covers %d tables, want 9 (every table that travels)", len(summary))
+	if len(summary) != 10 {
+		t.Errorf("summary covers %d tables, want 10 (every table that travels)", len(summary))
 	}
 }
 

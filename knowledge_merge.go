@@ -295,8 +295,8 @@ type MergeTableSummary struct {
  * UNIQUE constraint, and for records by their four-column identity). aPath and
  * bPath are opened read-only via ATTACH; neither is modified.
  *
- * All nine tables that travel are carried: projects, concepts, sources,
- * observations and records, plus the four join tables. Every one appears in
+ * All ten tables that travel are carried: projects, concepts, sources,
+ * observations and records, plus the five join tables. Every one appears in
  * the returned summary, so a table that loses rows says so — records were once
  * absent from both the merge and the summary, and a merge that dropped them
  * reported success (DR-0013).
@@ -443,6 +443,19 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		}
 
 		if _, err := db.Exec(fmt.Sprintf(`
+			INSERT OR IGNORE INTO record_concepts (record_id, concept_id)
+			SELECT mr.id, mc.id
+			FROM %s.record_concepts j
+			JOIN %s.records  sr ON sr.id = j.record_id
+			JOIN %s.concepts sc ON sc.id = j.concept_id
+			JOIN records  mr ON mr.uuid = sr.uuid
+			JOIN concepts mc ON mc.uuid = sc.uuid`,
+			src, src, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge record_concepts from %s: %w", src, err)
+		}
+
+		if _, err := db.Exec(fmt.Sprintf(`
 			INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship)
 			SELECT mo.id, ms.id, j.relationship
 			FROM %s.observation_sources j
@@ -463,7 +476,7 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 	allTables := []string{
 		"projects", "concepts", "sources", "observations", "records",
 		"observation_concepts", "project_concepts", "observation_sources",
-		"record_relations",
+		"record_relations", "record_concepts",
 	}
 	var summary []MergeTableSummary
 	for _, table := range allTables {

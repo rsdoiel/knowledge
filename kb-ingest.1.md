@@ -1,4 +1,4 @@
-%kb-ingest(1) user manual | version 0.0.5 98e74cd
+%kb-ingest(1) user manual | version 0.0.5 e621600
 % R. S. Doiel
 % 2026-08-28
 
@@ -38,6 +38,14 @@ is what the two passes exist to avoid.
 Ingest is additive. A record whose file has vanished stays in the database and
 is reported, never deleted — pruning would destroy data on a partial or
 wrong-directory run. Ingest never writes to a record file; only record does.
+
+Every [[Name]] found in a record's body, and every entry in its frontmatter
+tags list, is resolved to a concept and linked to the record (kb record
+concepts shows the result). A name that does not match an existing concept
+creates one; matching is case-insensitive, so [[Computer]] and [[computer]]
+resolve to the same concept regardless of where each mention falls in a
+sentence, and the casing of whichever mention is resolved first becomes
+canonical. This does not change kb concept add, which stays exact-match.
 
 # OPTIONS
 

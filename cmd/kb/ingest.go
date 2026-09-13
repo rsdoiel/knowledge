@@ -21,6 +21,10 @@ func init() {
 // dash, a slug. The generated index.md deliberately does not match.
 var recordFilePattern = regexp.MustCompile(`^[0-9]{4}-.*\.md$`)
 
+// wikilinkPattern matches a [[Name]] inline concept tag. Simple and
+// non-nested by design decision — see wikilink-tagging-design.md decision 3.
+var wikilinkPattern = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
+
 // ingestSummary is what one ingest run reports, in both JSON and text form.
 // Unresolved, Malformed and Missing are the three ways a run can be
 // incomplete without being a failure.
@@ -286,6 +290,7 @@ func (ing *ingester) upsertAll(files []string) {
 			rec.dbID = id
 		}
 		ing.linkInitiative(rf, projectID)
+		ing.linkWikilinkTags(rf, rec.dbID)
 
 		ing.byIdent[identityKey{rf.ProjectName, rf.Record.Scope, rf.Record.RecordID}] = rec
 		ing.order = append(ing.order, rec)
@@ -349,6 +354,49 @@ func (ing *ingester) linkInitiative(rf *knowledge.RecordFile, projectID int64) {
 		return
 	}
 	_ = ing.kb.LinkProjectConcept(projectID, conceptID)
+}
+
+// linkWikilinkTags resolves [[Name]] tokens in the record body and every
+// entry in the frontmatter Tags list into concepts, linked to the record via
+// record_concepts. Both sources feed the same resolution call — see
+// wikilink-tagging-design.md decision 3. Name matching is case-insensitive
+// (decision 4: ResolveConceptName, not AddConcept) because capitalization in
+// prose is often just sentence position, not a deliberate distinction.
+// Idempotent like linkInitiative: safe to call on every ingest run,
+// regardless of whether the record was added, updated, or skipped as
+// unchanged.
+func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64) {
+	if ing.dryRun || recordDBID == 0 {
+		return
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, m := range wikilinkPattern.FindAllStringSubmatch(rf.Record.Body, -1) {
+		name := strings.TrimSpace(m[1])
+		if name != "" && !seen[strings.ToLower(name)] {
+			seen[strings.ToLower(name)] = true
+			names = append(names, name)
+		}
+	}
+	for _, tag := range rf.Tags {
+		name := strings.TrimSpace(tag)
+		if name != "" && !seen[strings.ToLower(name)] {
+			seen[strings.ToLower(name)] = true
+			names = append(names, name)
+		}
+	}
+	for _, name := range names {
+		conceptID, err := ing.kb.ResolveConceptName(name)
+		if err != nil {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: resolve concept %q: %v", rf.Record.Path, name, err))
+			continue
+		}
+		if err := ing.kb.LinkRecordConcept(recordDBID, conceptID); err != nil {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: link concept %q: %v", rf.Record.Path, name, err))
+		}
+	}
 }
 
 // relativeTo renders a file path relative to the workspace root, falling back

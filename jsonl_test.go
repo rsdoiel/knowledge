@@ -559,6 +559,94 @@ func TestImportJSONL_Records_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestImportJSONL_RecordConcepts_RoundTrip(t *testing.T) {
+	src, _, projRecID, _ := newJSONLRecordsFixture(t)
+	conceptID, err := src.AddConcept("Foo", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := src.LinkRecordConcept(projRecID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	dst := openTestKB(t)
+	summary, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	if s := byTable["record_concept"]; s.Imported != 1 || s.Skipped != 0 {
+		t.Errorf("record_concept summary = %+v, want Imported=1 Skipped=0", s)
+	}
+
+	p, err := dst.ProjectByName("proj")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	projRec, err := dst.RecordByIdentity("ws1", p.ID, "project", "0001")
+	if err != nil {
+		t.Fatalf("RecordByIdentity: %v", err)
+	}
+	concepts, err := dst.RecordConcepts(projRec.ID)
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("RecordConcepts = %+v, want one concept named Foo", concepts)
+	}
+}
+
+func TestImportJSONL_RecordConcepts_ReimportIsNoOp(t *testing.T) {
+	src, _, projRecID, _ := newJSONLRecordsFixture(t)
+	conceptID, err := src.AddConcept("Foo", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := src.LinkRecordConcept(projRecID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+	dst := openTestKB(t)
+	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("first ImportJSONL: %v", err)
+	}
+	summary, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("second ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	if s := byTable["record_concept"]; s.Imported != 0 || s.Skipped != s.Read {
+		t.Errorf("re-import record_concept summary = %+v, want Imported=0 Skipped=Read", s)
+	}
+}
+
+func TestImportJSONL_RecordConcepts_UnresolvableEndpointSkippedNotFatal(t *testing.T) {
+	dst := openTestKB(t)
+	input := `{"type":"record","uuid":"11111111-1111-7111-8111-111111111111","origin_host":"h","workspace":"ws","project_name":"","record_id":"0001","scope":"workspace","path":"agents/decisions/0001-x.md","title":"t","date":"2026-08-28","status":"accepted","kind":"decision","trigger":"","phase":"","initiative":"","session":"","body":"b","checksum":"c","ingested_at":""}
+{"type":"record_concept","record_uuid":"11111111-1111-7111-8111-111111111111","concept_uuid":"does-not-exist"}
+`
+	summary, err := ImportJSONL(dst, strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	rc := byTable["record_concept"]
+	if rc.Read != 1 || rc.Imported != 0 || rc.Skipped != 1 {
+		t.Errorf("record_concept summary = %+v, want Read=1 Imported=0 Skipped=1", rc)
+	}
+	if _, err := dst.RecordByIdentity("ws", 0, "workspace", "0001"); err != nil {
+		t.Errorf("RecordByIdentity: %v, want the record itself to still import", err)
+	}
+}
+
 func TestImportJSONL_Records_ReimportIsNoOp(t *testing.T) {
 	src, _, _, _ := newJSONLRecordsFixture(t)
 	var buf bytes.Buffer

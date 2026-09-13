@@ -26,6 +26,7 @@ type testRecord struct {
 	RelatesTo    []string
 	Initiative   string
 	Body         string
+	Tags         []string
 }
 
 // flowList renders a string slice as a flow sequence of quoted items.
@@ -73,14 +74,14 @@ relates_to: %s
 initiative: "%s"
 session: ""
 decisions: []
-tags: []
+tags: %s
 uuid: ""
 origin_host: ""
 ---%s`,
 		r.ID, r.Title, r.Date, r.Status, r.Kind,
 		quoteIfEmpty(r.Trigger), quoteIfEmpty(r.Project),
 		flowList(r.Supersedes), flowList(r.SupersededBy), flowList(r.RelatesTo),
-		r.Initiative, r.Body)
+		r.Initiative, flowList(r.Tags), r.Body)
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("MkdirAll %s: %v", dir, err)
@@ -494,6 +495,133 @@ func TestCmdIngest_InitiativeBecomesAConcept(t *testing.T) {
 		}
 	}
 	t.Errorf("concepts = %+v, want one named eprints-to-rdm", concepts)
+}
+
+// ─── wikilink-tagging W2 ─────────────────────────────────────────────────────
+
+// recordDBID looks up a record's internal database id by its display RecordID,
+// scoped to one project — the tests need this because RecordConcepts takes
+// the internal id, not the display id used in fixtures.
+func recordDBID(t *testing.T, kb *knowledge.KnowledgeBase, projectName, recordID string) int64 {
+	t.Helper()
+	p, err := kb.ProjectByName(projectName)
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName(%q): %v", projectName, err)
+	}
+	recs, err := kb.RecordsByProject(p.ID)
+	if err != nil {
+		t.Fatalf("RecordsByProject: %v", err)
+	}
+	for _, r := range recs {
+		if r.RecordID == recordID {
+			return r.ID
+		}
+	}
+	t.Fatalf("no record %q found in project %q", recordID, projectName)
+	return 0
+}
+
+func TestCmdIngest_WikilinkInBodyBecomesConcept(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[Foo]] for background.\n"}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("RecordConcepts = %+v, want one concept named Foo", concepts)
+	}
+}
+
+func TestCmdIngest_TagsFrontmatterBecomesConcepts(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Tags: []string{"bar", "baz"}}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	names := map[string]bool{}
+	for _, c := range concepts {
+		names[c.Name] = true
+	}
+	if len(concepts) != 2 || !names["bar"] || !names["baz"] {
+		t.Errorf("RecordConcepts = %+v, want bar and baz", concepts)
+	}
+}
+
+func TestCmdIngest_WikilinkAndTagsAreCaseInsensitive(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\n[[Computer]] hardware is discussed here. I use a [[computer]] daily.\n"}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 {
+		t.Errorf("RecordConcepts = %+v, want exactly one concept (case-insensitive fold)", concepts)
+	}
+}
+
+func TestCmdIngest_ReingestUnchangedFileDoesNotDuplicateLinks(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[Foo]].\n"}.write(t, dir)
+
+	runIngest(t, kb, dir)
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 {
+		t.Errorf("RecordConcepts = %+v, want exactly 1 after re-ingesting an unchanged file", concepts)
+	}
+}
+
+func TestCmdIngest_DryRunCreatesNoConceptsOrLinks(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[Foo]].\n"}.write(t, dir)
+
+	runIngest(t, kb, dir, "--dry-run")
+
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	for _, c := range concepts {
+		if c.Name == "Foo" {
+			t.Errorf("expected no Foo concept after --dry-run, got %+v", concepts)
+		}
+	}
+}
+
+func TestCmdIngest_WikilinkWhitespaceIsTrimmed(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[ Foo ]].\n"}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("RecordConcepts = %+v, want one concept named Foo (whitespace trimmed)", concepts)
+	}
 }
 
 func TestCmdIngest_RecordsAreSearchable(t *testing.T) {

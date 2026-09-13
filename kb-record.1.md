@@ -1,4 +1,4 @@
-%kb-record(1) user manual | version 0.0.5 98e74cd
+%kb-record(1) user manual | version 0.0.5 e621600
 % R. S. Doiel
 % 2026-08-28
 
@@ -19,6 +19,8 @@ kb record supersede NEW OLD [--partial] [--project P] [--workspace] [--root DIR]
 kb record new --title T --trigger G (--project P | --workspace) [--kind K] [--dir DIR] [--root DIR]
 
 kb record fmt PATH [--dry-run]
+
+kb record concepts RECORD_ID [--project P] [--workspace]
 
 # DESCRIPTION
 
@@ -61,6 +63,10 @@ fmt
 : rewrite every record under PATH into canonical form. This is the
   normalisation path ingest deliberately lacks, since ingest never writes to
   a record file
+
+concepts
+: list the concepts ingest linked to a record, from [[Name]] wikilinks in its
+  body and its frontmatter tags list
 
 new, set-status, supersede and fmt are the only commands that write a record
 file; ingest never does. A record is written proposed and stays proposed: a

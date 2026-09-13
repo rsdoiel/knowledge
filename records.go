@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS record_relations (
     relationship TEXT    NOT NULL,
     PRIMARY KEY (from_id, to_id, relationship)
 );
+
+CREATE TABLE IF NOT EXISTS record_concepts (
+    record_id  INTEGER REFERENCES records(id)  ON DELETE CASCADE,
+    concept_id INTEGER REFERENCES concepts(id) ON DELETE CASCADE,
+    PRIMARY KEY (record_id, concept_id)
+);
 `
 
 // recordsAlterStmts are lazy-migration statements for the records table.

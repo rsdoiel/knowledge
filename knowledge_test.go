@@ -1620,3 +1620,201 @@ func TestOpenKnowledgeBase_NoExperimentsTableIsNoOp(t *testing.T) {
 		t.Errorf("expected exactly the one project just added, got %d", len(projects))
 	}
 }
+
+// ─── record_concepts (wikilink-tagging W1) ──────────────────────────────────
+
+func seedTestRecord(t *testing.T, kb *KnowledgeBase, projectID int64, recordID string) int64 {
+	t.Helper()
+	id, err := kb.AddRecord(Record{
+		RecordID:  recordID,
+		ProjectID: projectID,
+		Scope:     "project",
+		Path:      recordID + "-slug.md",
+		Title:     "Test record " + recordID,
+		Date:      "2026-09-13",
+		Body:      "body text",
+	})
+	if err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+	return id
+}
+
+func TestLinkRecordConcept_CreatesLink(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	conceptID, err := kb.AddConcept("Foo", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := kb.LinkRecordConcept(recID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+	concepts, err := kb.RecordConcepts(recID)
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Foo" {
+		t.Errorf("RecordConcepts = %+v, want one concept named Foo", concepts)
+	}
+}
+
+func TestLinkRecordConcept_DuplicateIsNoOp(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkRecordConcept(recID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept (1st): %v", err)
+	}
+	if err := kb.LinkRecordConcept(recID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept (2nd): %v", err)
+	}
+	concepts, err := kb.RecordConcepts(recID)
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 {
+		t.Errorf("expected exactly 1 concept after duplicate link, got %d", len(concepts))
+	}
+}
+
+func TestLinkRecordConcept_CascadesOnRecordDelete(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkRecordConcept(recID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+	if _, err := kb.db.Exec(`DELETE FROM records WHERE id = ?`, recID); err != nil {
+		t.Fatalf("delete record: %v", err)
+	}
+	var count int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM record_concepts WHERE record_id = ?`, recID).Scan(&count); err != nil {
+		t.Fatalf("count record_concepts: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected record_concepts row to cascade-delete with its record, got %d rows", count)
+	}
+}
+
+func TestLinkRecordConcept_CascadesOnConceptDelete(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkRecordConcept(recID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+	if _, err := kb.db.Exec(`DELETE FROM concepts WHERE id = ?`, conceptID); err != nil {
+		t.Fatalf("delete concept: %v", err)
+	}
+	var count int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM record_concepts WHERE concept_id = ?`, conceptID).Scan(&count); err != nil {
+		t.Fatalf("count record_concepts: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected record_concepts row to cascade-delete with its concept, got %d rows", count)
+	}
+}
+
+func TestResolveConceptName_CreatesWhenMissing(t *testing.T) {
+	kb := openTestKB(t)
+	id, err := kb.ResolveConceptName("Foo")
+	if err != nil {
+		t.Fatalf("ResolveConceptName: %v", err)
+	}
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	found := false
+	for _, c := range concepts {
+		if c.ID == id && c.Name == "Foo" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a concept named Foo with id %d, got %+v", id, concepts)
+	}
+}
+
+func TestResolveConceptName_CaseInsensitiveMatchesExisting(t *testing.T) {
+	kb := openTestKB(t)
+	wantID, err := kb.AddConcept("Computer", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	gotID, err := kb.ResolveConceptName("computer")
+	if err != nil {
+		t.Fatalf("ResolveConceptName: %v", err)
+	}
+	if gotID != wantID {
+		t.Errorf("ResolveConceptName(%q) = %d, want existing concept id %d (case-insensitive match)", "computer", gotID, wantID)
+	}
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	if len(concepts) != 1 {
+		t.Errorf("expected exactly 1 concept (no case-variant duplicate created), got %d: %+v", len(concepts), concepts)
+	}
+}
+
+func TestResolveConceptName_FirstWrittenCasingIsCanonical(t *testing.T) {
+	kb := openTestKB(t)
+	firstID, err := kb.ResolveConceptName("computer")
+	if err != nil {
+		t.Fatalf("ResolveConceptName (1st): %v", err)
+	}
+	secondID, err := kb.ResolveConceptName("Computer")
+	if err != nil {
+		t.Fatalf("ResolveConceptName (2nd): %v", err)
+	}
+	if secondID != firstID {
+		t.Fatalf("expected the same concept id, got %d then %d", firstID, secondID)
+	}
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "computer" {
+		t.Errorf("expected the canonical name to stay %q (first-written casing), got %+v", "computer", concepts)
+	}
+}
+
+func TestRecordConcepts_ReturnsLinkedConceptsOrderedByID(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	c1, _ := kb.AddConcept("Alpha", "")
+	c2, _ := kb.AddConcept("Beta", "")
+	if err := kb.LinkRecordConcept(recID, c2); err != nil {
+		t.Fatalf("LinkRecordConcept c2: %v", err)
+	}
+	if err := kb.LinkRecordConcept(recID, c1); err != nil {
+		t.Fatalf("LinkRecordConcept c1: %v", err)
+	}
+	concepts, err := kb.RecordConcepts(recID)
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 2 || concepts[0].ID != c1 || concepts[1].ID != c2 {
+		t.Errorf("RecordConcepts = %+v, want [%d, %d] ordered by id", concepts, c1, c2)
+	}
+}
+
+func TestRecordConcepts_EmptyWhenNoneLinked(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	concepts, err := kb.RecordConcepts(recID)
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 0 {
+		t.Errorf("expected no linked concepts, got %+v", concepts)
+	}
+}

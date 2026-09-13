@@ -21,6 +21,7 @@ const (
 	recObservationSource  = "observation_source"
 	recRecord             = "record"
 	recRecordRelation     = "record_relation"
+	recRecordConcept      = "record_concept"
 )
 
 // projectRecord is the JSON-L shape of one projects row. Identity travels
@@ -90,6 +91,13 @@ type observationConceptRecord struct {
 type projectConceptRecord struct {
 	Type        string `json:"type"`
 	ProjectUUID string `json:"project_uuid"`
+	ConceptUUID string `json:"concept_uuid"`
+}
+
+// recordConceptRecord is the JSON-L shape of one record_concepts join row.
+type recordConceptRecord struct {
+	Type        string `json:"type"`
+	RecordUUID  string `json:"record_uuid"`
 	ConceptUUID string `json:"concept_uuid"`
 }
 
@@ -216,6 +224,9 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 	if err := exportRecordRelations(kb, enc, scoped, projectID); err != nil {
 		return err
 	}
+	if err := exportRecordConcepts(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -312,6 +323,33 @@ func exportRecordRelations(kb *KnowledgeBase, enc *json.Encoder, scoped bool, pr
 		}
 		if err := enc.Encode(r); err != nil {
 			return fmt.Errorf("knowledge: export record_relations: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+func exportRecordConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT r.uuid, c.uuid
+	          FROM record_concepts rc
+	          JOIN records  r ON r.id = rc.record_id
+	          JOIN concepts c ON c.id = rc.concept_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE r.project_id = ?`
+		args = append(args, projectID)
+	}
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export record_concepts: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := recordConceptRecord{Type: recRecordConcept}
+		if err := rows.Scan(&r.RecordUUID, &r.ConceptUUID); err != nil {
+			return fmt.Errorf("knowledge: export record_concepts: %w", err)
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export record_concepts: %w", err)
 		}
 	}
 	return rows.Err()
@@ -546,6 +584,7 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		obsSources      []observationSourceRecord
 		records         []decisionRecord
 		recordRelations []decisionRecordRelation
+		recordConcepts  []recordConceptRecord
 	)
 	readCount := map[string]int{}
 	var typeOrder []string // first-seen order, so unknown types get a stable summary order too
@@ -625,6 +664,12 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
 			}
 			recordRelations = append(recordRelations, rec)
+		case recRecordConcept:
+			var rec recordConceptRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			recordConcepts = append(recordConcepts, rec)
 		default:
 			// Unknown type: counted (readCount above) but nothing to buffer.
 		}
@@ -800,6 +845,25 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO record_relations (from_id, to_id, relationship) VALUES (?, ?, ?)`, fromID, toID, rec.Relationship)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import record_relation: %w", err)
+		}
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recRecordConcept)
+	for _, rec := range recordConcepts {
+		recID, ok := resolveLocalID(kb, recordLocalID, "records", rec.RecordUUID)
+		conceptID, cok := resolveLocalID(kb, conceptLocalID, "concepts", rec.ConceptUUID)
+		if !ok || !cok {
+			s.Skipped++
+			continue
+		}
+		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO record_concepts (record_id, concept_id) VALUES (?, ?)`, recID, conceptID)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import record_concept: %w", err)
 		}
 		if isNew {
 			s.Imported++

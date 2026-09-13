@@ -1021,6 +1021,98 @@ func (kb *KnowledgeBase) LinkProjectConcept(projectID, conceptID int64) error {
 	return err
 }
 
+/** LinkRecordConcept associates a record with a concept. Duplicate links are
+ * silently ignored.
+ *
+ * Parameters:
+ *   recordID  (int64) — internal database id of the record (Record.ID, not RecordID).
+ *   conceptID (int64) — ID of the concept.
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   err := kb.LinkRecordConcept(recordID, conceptID)
+ */
+func (kb *KnowledgeBase) LinkRecordConcept(recordID, conceptID int64) error {
+	_, err := kb.db.Exec(
+		`INSERT OR IGNORE INTO record_concepts (record_id, concept_id) VALUES (?, ?)`,
+		recordID, conceptID,
+	)
+	return err
+}
+
+/** ResolveConceptName finds an existing concept whose name matches name
+ * case-insensitively, or creates one with name exactly as given when none
+ * exists. Intended for concept names extracted from free text (inline
+ * [[wikilink]] tags, frontmatter Tags lists), where capitalization is often
+ * an artifact of sentence position rather than a deliberate distinction —
+ * unlike AddConcept/kb concept add, which stays exact-match since a human
+ * typing a concept name at the CLI is a deliberate act. The casing of
+ * whichever mention is resolved first becomes canonical for every later
+ * case-variant.
+ *
+ * Parameters:
+ *   name (string) — concept name as encountered in text.
+ *
+ * Returns:
+ *   int64 — ID of the matching or newly created concept.
+ *   error — on database failure.
+ *
+ * Example:
+ *   id, err := kb.ResolveConceptName("computer")
+ */
+func (kb *KnowledgeBase) ResolveConceptName(name string) (int64, error) {
+	var id int64
+	err := kb.db.QueryRow(
+		`SELECT id FROM concepts WHERE name = ?1 COLLATE NOCASE LIMIT 1`, name,
+	).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, fmt.Errorf("knowledge: resolve concept name: %w", err)
+	}
+	return kb.AddConcept(name, "")
+}
+
+/** RecordConcepts returns all concepts linked to the given record id, ordered
+ * by concept id.
+ *
+ * Parameters:
+ *   recordID (int64) — internal database id of the record (Record.ID, not RecordID).
+ *
+ * Returns:
+ *   []Concept — linked concepts; nil when none.
+ *   error     — on database failure.
+ *
+ * Example:
+ *   concepts, err := kb.RecordConcepts(recID)
+ */
+func (kb *KnowledgeBase) RecordConcepts(recordID int64) ([]Concept, error) {
+	rows, err := kb.db.Query(
+		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value
+		 FROM concepts c
+		 JOIN record_concepts rc ON rc.concept_id = c.id
+		 WHERE rc.record_id = ?
+		 ORDER BY c.id`,
+		recordID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Concept
+	for rows.Next() {
+		var c Concept
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 /** Summary returns a human-readable text summary of all projects and their
