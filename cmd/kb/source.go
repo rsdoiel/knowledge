@@ -42,64 +42,45 @@ func cmdSource(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 // parseSourceFlags consumes the --doi/--url/--authors/--published/
 // --publisher/--rights/--version flags (in any order, interleaved with
 // TITLE) and returns the assembled Source plus whether a title was found.
-func parseSourceFlags(args []string) (knowledge.Source, bool) {
+// parseSourceFlags separates flags from positional arguments via the shared
+// splitFlags (cmd/kb/flagsplit.go). doi and url are captured separately so
+// that doi's priority over url (kb-source(1): "doi takes priority if both
+// are given") can be applied after parsing, rather than needing splitFlags
+// itself to know about that precedence.
+//
+// Tightened from its previous hand-rolled form: an unrecognized flag, or a
+// recognized one missing its value, now errors instead of being silently
+// dropped -- matching every other verb's flag parsing, and closing a real
+// gap where a mistyped flag used to vanish with no feedback.
+func parseSourceFlags(args []string) (knowledge.Source, error) {
 	var s knowledge.Source
-	haveTitle := false
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--doi":
-			if i+1 < len(args) {
-				i++
-				s.IdentifierType = "doi"
-				s.IdentifierValue = args[i]
-			}
-		case "--url":
-			if i+1 < len(args) {
-				i++
-				if s.IdentifierType == "" {
-					s.IdentifierType = "url"
-					s.IdentifierValue = args[i]
-				}
-			}
-		case "--authors":
-			if i+1 < len(args) {
-				i++
-				s.Authors = args[i]
-			}
-		case "--published":
-			if i+1 < len(args) {
-				i++
-				s.PublishedDate = args[i]
-			}
-		case "--publisher":
-			if i+1 < len(args) {
-				i++
-				s.Publisher = args[i]
-			}
-		case "--rights":
-			if i+1 < len(args) {
-				i++
-				s.Rights = args[i]
-			}
-		case "--version":
-			if i+1 < len(args) {
-				i++
-				s.Version = args[i]
-			}
-		default:
-			if !haveTitle {
-				s.Title = args[i]
-				haveTitle = true
-			}
-		}
+	var doi, url string
+	strFlags := map[string]*string{
+		"--doi": &doi, "--url": &url,
+		"--authors": &s.Authors, "--published": &s.PublishedDate,
+		"--publisher": &s.Publisher, "--rights": &s.Rights, "--version": &s.Version,
 	}
-	return s, haveTitle
+	positional, err := splitFlags(args, strFlags, nil)
+	if err != nil {
+		return s, err
+	}
+	switch {
+	case doi != "":
+		s.IdentifierType, s.IdentifierValue = "doi", doi
+	case url != "":
+		s.IdentifierType, s.IdentifierValue = "url", url
+	}
+	if len(positional) == 0 {
+		return s, fmt.Errorf("source add requires a TITLE")
+	}
+	s.Title = positional[0]
+	return s, nil
 }
 
 func cmdSourceAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	s, haveTitle := parseSourceFlags(args)
-	if !haveTitle {
-		return fmt.Errorf("usage: source add TITLE [--doi D] [--url U] [--authors A] [--published DATE] [--publisher P] [--rights R] [--version V]")
+	s, err := parseSourceFlags(args)
+	if err != nil {
+		return fmt.Errorf("usage: source add TITLE [--doi D] [--url U] [--authors A] [--published DATE] [--publisher P] [--rights R] [--version V]: %w", err)
 	}
 	id, err := logKBCall(dl, "AddSource", map[string]any{"title": s.Title}, func() (int64, error) {
 		return kb.AddSource(s)

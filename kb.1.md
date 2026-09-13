@@ -1,4 +1,4 @@
-%kb(1) user manual | version 0.0.5 e621600
+%kb(1) user manual | version 0.0.5 59c5f8f
 % R. S. Doiel
 % 2026-08-28
 
@@ -109,6 +109,10 @@ ingest
 record
 : read and maintain decision records — list, show, new, set-status,
   supersede, fmt — see kb-record(1)
+
+document
+: ingest narrative documents (Markdown, Fountain, text) at graduated
+  abstraction levels — see kb-document(1)
 
 index
 : generate a decisions/index.md from a directory of records — see

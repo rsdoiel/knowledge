@@ -106,7 +106,8 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	}
 }
 
-// parseRecordFlags separates flags from positional arguments.
+// parseRecordFlags separates flags from positional arguments via the shared
+// splitFlags (cmd/kb/flagsplit.go).
 func parseRecordFlags(args []string) (recordFlags, error) {
 	var f recordFlags
 	strFlags := map[string]*string{
@@ -114,30 +115,14 @@ func parseRecordFlags(args []string) (recordFlags, error) {
 		"--trigger": &f.trigger, "--initiative": &f.initiative,
 		"--since": &f.since, "--root": &f.root, "--dir": &f.dir, "--title": &f.title,
 	}
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if target, ok := strFlags[arg]; ok {
-			if i+1 >= len(args) {
-				return f, fmt.Errorf("%s requires a value", arg)
-			}
-			*target = args[i+1]
-			i++
-			continue
-		}
-		switch arg {
-		case "--workspace":
-			f.workspace = true
-		case "--partial":
-			f.partial = true
-		case "--dry-run":
-			f.dryRun = true
-		default:
-			if strings.HasPrefix(arg, "-") {
-				return f, fmt.Errorf("unknown flag %q", arg)
-			}
-			f.args = append(f.args, arg)
-		}
+	boolFlags := map[string]*bool{
+		"--workspace": &f.workspace, "--partial": &f.partial, "--dry-run": &f.dryRun,
 	}
+	positional, err := splitFlags(args, strFlags, boolFlags)
+	if err != nil {
+		return f, err
+	}
+	f.args = positional
 	return f, nil
 }
 

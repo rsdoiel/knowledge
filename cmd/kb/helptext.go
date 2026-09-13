@@ -114,6 +114,10 @@ record
 : read and maintain decision records — list, show, new, set-status,
   supersede, fmt — see {app_name}-record(1)
 
+document
+: ingest narrative documents (Markdown, Fountain, text) at graduated
+  abstraction levels — see {app_name}-document(1)
+
 index
 : generate a decisions/index.md from a directory of records — see
   {app_name}-index(1)
@@ -138,6 +142,35 @@ init
 {app_name}-link(1), {app_name}-source(1), {app_name}-search(1),
 {app_name}-merge(1), {app_name}-export(1), {app_name}-import(1),
 {app_name}-init(1)
+
+`
+
+// DocumentHelpText is shown by `kb document -h` and `kb help document`.
+// Generates kb-document.1.md. Stub: only `ingest` exists so far
+// (narrative-documents-plan.md W3); review/draft/promote/list/show land in
+// W5/W8, and this page grows a full DESCRIPTION then.
+const DocumentHelpText = `%{app_name}-document(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-document — ingest narrative documents at graduated abstraction levels
+
+# SYNOPSIS
+
+{app_name} document ingest PATH --project P [--title T] [--format F] [--dry-run]
+
+# DESCRIPTION
+
+Ingests a narrative or article (Markdown, Fountain, or plain text) into
+documents/document_sections, segmented per format and tagged the same way
+records are. See narrative-documents-design.md for the full model; this page
+covers ingest only -- review/draft/promote and list/show are not built yet.
+
+# SEE ALSO
+
+{app_name}-record(1), {app_name}-ingest(1)
 
 `
 
@@ -953,6 +986,9 @@ ingest
 
 record
 : read and maintain decision records
+
+document
+: ingest narrative documents at graduated abstraction levels
 
 index
 : generate a decisions/index.md from a directory of records

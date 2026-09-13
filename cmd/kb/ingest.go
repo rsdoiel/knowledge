@@ -151,30 +151,20 @@ func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 
 // parseIngestFlags pulls PATH, --root and --dry-run out of args.
 func parseIngestFlags(args []string) (path, root string, dryRun bool, err error) {
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--dry-run", "-dry-run":
-			dryRun = true
-		case "--root", "-root":
-			if i+1 >= len(args) {
-				return "", "", false, fmt.Errorf("--root requires a directory argument")
-			}
-			root = args[i+1]
-			i++
-		default:
-			if strings.HasPrefix(args[i], "-") {
-				return "", "", false, fmt.Errorf("unknown flag %q", args[i])
-			}
-			if path != "" {
-				return "", "", false, fmt.Errorf("ingest takes a single PATH, got %q and %q", path, args[i])
-			}
-			path = args[i]
-		}
+	strFlags := map[string]*string{"--root": &root, "-root": &root}
+	boolFlags := map[string]*bool{"--dry-run": &dryRun, "-dry-run": &dryRun}
+	positional, err := splitFlags(args, strFlags, boolFlags)
+	if err != nil {
+		return "", "", false, err
 	}
-	if path == "" {
+	switch len(positional) {
+	case 0:
 		return "", "", false, fmt.Errorf("ingest requires a PATH; see kb help ingest")
+	case 1:
+		return positional[0], root, dryRun, nil
+	default:
+		return "", "", false, fmt.Errorf("ingest takes a single PATH, got %q and %q", positional[0], positional[1])
 	}
-	return path, root, dryRun, nil
 }
 
 // defaultIngestRoot returns the workspace root implied by the database's
