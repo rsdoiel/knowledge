@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="double-bracket-inline-concept-tagging-feature-request"><code>[[double-bracket]]</code>
+inline concept tagging — Feature Request</h1>
+<blockquote>
+<p><strong>2026-09-08: Filed.</strong> Captured from a conversation with
+RSDOIEL. No design/decide/plan cycle has been run on the <code>kb</code>
+side yet. This document preserves the idea and the decisions already
+made about its shape — it is a starting point for that cycle, not a
+committed design.</p>
+<p>Decided in the filing conversation: - <code>[[Name]]</code> resolves
+to a <strong>concept</strong> only (not records, projects, or
+observations — no cross-type disambiguation needed). - A
+<code>[[Name]]</code> naming a concept that doesn’t exist yet
+<strong>auto-creates</strong> it, the same way
+<code>[[wikilinks]]</code> behave in Obsidian/second-brain tools. -
+Scope is <strong><code>kb ingest</code> (records) only</strong> for a
+first pass — observation bodies (<code>kb observation add</code>) are
+out of scope until this proves useful on records.</p>
+</blockquote>
+<h2 id="motivation">Motivation</h2>
+<p>Inspired by <a
+href="https://www.raspberrypi.com/news/build-a-digitally-sovereign-second-brain/">Build
+a digitally sovereign second brain</a> (Raspberry Pi magazine), which
+uses <code>[[double-bracket]]</code> wikilink notation in plain Markdown
+as a lightweight way to build a link graph across notes, without a
+database or a formal schema — the notation itself <em>is</em> the
+schema, readable in any plain-text editor.</p>
+<p><code>kb</code>’s decision records already have a formal way to
+express relationships: YAML frontmatter (<code>relates_to</code>,
+<code>supersedes</code>, <code>initiative</code>). What they don’t have
+is a low-friction way to tag a concept <strong>from inside the
+prose</strong>, at the point where the author is actually thinking about
+it, without stopping to edit frontmatter. <code>[[Name]]</code> inline
+is that: write the sentence, name the concept where it’s relevant,
+done.</p>
+<h2 id="what-kb-assumes-today">What <code>kb</code> assumes today</h2>
+<p>Record frontmatter already has a <code>Tags []string</code> field
+(<code>recordfile.go:76</code>, <code>yaml:"tags,flow"</code>) — but
+nothing in <code>cmd/kb/ingest.go</code> reads it. It’s parsed and then
+dropped; no record has ever had its tags materialized as concepts. The
+only existing frontmatter-to-concept path is <code>initiative</code>,
+which <code>linkInitiative</code> (<code>cmd/kb/ingest.go:340</code>)
+turns into an <code>AddConcept</code> call plus a
+<code>project_concepts</code> link — one concept per record, not a list,
+and scoped to the project rather than the record.</p>
+<p>So there is no precedent yet for “many concepts per record,
+materialized from free text.” <code>[[Name]]</code> in the body would be
+the first.</p>
+<h2 id="what-is-already-fine">What is already fine</h2>
+<ul>
+<li><strong><code>AddConceptWithIdentifier</code>/<code>AddConcept</code></strong>
+(<code>knowledge.go:881</code>) already do find-or-create by name — an
+ingest-time <code>[[Name]]</code> scan can call straight into the
+existing function, no new concept-creation path needed.</li>
+<li><strong><code>observation_concepts</code>/<code>project_concepts</code></strong>
+join tables already express many-to-many concept links; if
+<code>[[Name]]</code> in a record body links to the record’s own
+observation (records already get ingested alongside an observation row
+per <code>DR-0012</code>/<code>DR-0021</code> era work — verify current
+shape), the linking mechanism is a straight reuse.</li>
+<li><strong>FTS reindexing on concept insert</strong> is already handled
+by <code>AddConcept</code>, so a newly-coined concept is searchable
+immediately, same as one added via <code>kb concept add</code>.</li>
+</ul>
+<h2 id="proposal">Proposal</h2>
+<ol type="1">
+<li>During <code>kb ingest</code>, after frontmatter parsing, scan the
+record body for <code>[[Name]]</code> tokens (simple regex, no
+nested-bracket handling needed for a first pass).</li>
+<li>For each distinct <code>Name</code> found:
+<code>AddConcept(Name, "")</code> (find-or-create, matching decision 2
+above), then link it to whatever the record already links concepts to
+today (see “already fine” above — needs the actual current linking
+target confirmed during design, not assumed here).</li>
+<li>Re-running ingest on an unchanged file should not create duplicate
+links — same idempotency requirement as every other ingest-time
+relation.</li>
+<li>Out of scope for this pass (explicitly, per the filing
+conversation): resolving <code>[[Name]]</code> to anything other than a
+concept; scanning <code>kb observation add</code> bodies; nested or
+aliased links (<code>[[Name|Alias]]</code>, which Obsidian supports but
+this proposal does not need yet).</li>
+</ol>
+<h2 id="open-questions-for-the-design-cycle">Open questions for the
+design cycle</h2>
+<ul>
+<li><strong>Where do the links land?</strong> Concept-to-record isn’t an
+existing join table the way concept-to-observation and
+concept-to-project are (see <code>knowledge.db</code> schema table in
+root <code>CLAUDE.md</code>) — does this need a new
+<code>record_concepts</code> table, or does it ride on the observation
+that ingest already creates per record?</li>
+<li><strong>Case/whitespace normalization.</strong> <code>[[bug]]</code>
+and <code>[[Bug]]</code> — same concept or two?
+<code>AddConceptWithIdentifier</code>’s existing find-or-create
+presumably does exact-name matching; confirm before this doubles up
+concepts that only differ by case.</li>
+<li><strong>Does this ever conflict with the existing <code>Tags</code>
+frontmatter field</strong> sitting unused? Worth deciding whether
+<code>[[Name]]</code> supersedes <code>Tags</code>, activates it, or the
+two stay independent.</li>
+<li><strong>Escaping.</strong> Markdown that legitimately needs literal
+<code>[[</code>/<code>]]</code> (unlikely in decision records, but not
+impossible) — probably not worth solving for a first pass, but worth
+naming as a known gap.</li>
+</ul>
+<h2 id="related">Related</h2>
+<ul>
+<li>Filing conversation, 2026-09-08 (Laboratory root).</li>
+<li><code>agents-projects-layout-feature-request.md</code> — the
+template this document follows.</li>
+<li>Raspberry Pi magazine: <a
+href="https://www.raspberrypi.com/news/build-a-digitally-sovereign-second-brain/">Build
+a digitally sovereign second brain</a>.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="narrativedocument-ingestion-graduated-abstraction-levels-implementation-plan">Narrative/document
+ingestion, graduated abstraction levels — Implementation Plan</h1>
+<p>See <a
+href="narrative-documents-design.html">narrative-documents-design.md</a>
+for the full rationale and confirmed decisions. Work items ordered W1 →
+W8. TDD-first: each phase’s tests are written and confirmed red before
+its implementation. This is a bigger feature than the last two — eight
+phases, not two or five — because it’s a new entity with real internal
+structure, not an extension of an existing one.</p>
+<p>New code lives in <code>documents.go</code> (core schema + queries,
+mirroring <code>records.go</code>’s role) and
+<code>cmd/kb/document.go</code> (the CLI verb, mirroring
+<code>cmd/kb/record.go</code>), plus targeted extensions to
+<code>retrieval.go</code>, <code>knowledge_merge.go</code>,
+<code>jsonl.go</code>, and <code>cmd/kb/helptext.go</code>.</p>
+<hr />
+<h2 id="w1-schema-core-types-documents-document_sections">W1 — Schema +
+core types: <code>documents</code>, <code>document_sections</code></h2>
+<h3 id="files-to-create">Files to create</h3>
+<p><code>documents.go</code>: - <code>documentsSchema</code> const
+(design decision 1, with <code>summary_stale</code> from decision 10),
+applied after <code>recordsSchema</code> in
+<code>OpenKnowledgeBase</code> — <code>documents</code> first,
+<code>document_sections</code> second (FK order). -
+<code>Document</code> and <code>DocumentSection</code> structs mirroring
+the schema columns. -
+<code>AddDocument(d Document) (int64, error)</code> — insert-only for
+now (no update-in-place path yet; that’s W3’s re-ingest logic). -
+<code>AddDocumentSection(s DocumentSection) (int64, error)</code>. -
+<code>DocumentSections(documentID int64) ([]DocumentSection, error)</code>
+— ordered by <code>level</code> (gist first) then <code>seq</code>. -
+<code>DocumentByPath(path string) (*Document, error)</code> — needed by
+W3 to find an existing document on re-ingest, mirrors
+<code>RecordByIdentity</code>’s role.</p>
+<h3 id="tests-to-add-documents_test.go">Tests to add
+(<code>documents_test.go</code>)</h3>
+<ul>
+<li><code>TestAddDocument_CreatesRow</code></li>
+<li><code>TestAddDocumentSection_CreatesRow</code></li>
+<li><code>TestDocumentSections_OrdersGistFirstThenBySeq</code></li>
+<li><code>TestDocumentByPath_FindsExisting</code></li>
+<li><code>TestDocumentByPath_UnknownPathReturnsNotFound</code></li>
+<li><code>TestDocumentSections_CascadesOnDocumentDelete</code></li>
+</ul>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> and <code>go vet ./...</code> clean.</li>
+</ul>
+<hr />
+<h2 id="w2-segmentation-and-metadata-extraction-per-format">W2 —
+Segmentation and metadata extraction, per format</h2>
+<h3 id="files-to-modify">Files to modify</h3>
+<p><code>go.mod</code>:
+<code>go get github.com/rsdoiel/fountain@v1.0.2</code> (same version
+harvey already pins — design decision 4).</p>
+<p><code>documents.go</code>: -
+<code>detectFormat(path string) string</code> — extension-based
+(<code>.md</code>/<code>.markdown</code>→markdown,
+<code>.fountain</code>/<code>.spmd</code>→fountain, else text). -
+<code>segmentMarkdown(body string) []DocumentSection</code> — split on
+<code>^#{1,6}\s</code> lines (regex, no library). -
+<code>segmentFountain(src []byte) ([]DocumentSection, map[string]string, error)</code>
+— <code>fountain.Parse(src)</code>; a new section per
+<code>fountain.SceneHeadingType</code> element; also returns the
+<code>TitlePage</code> key/value map (decision 4) for the caller to fold
+into metadata the same way frontmatter is. -
+<code>segmentText(body string) []DocumentSection</code> — the whole
+file, one section, <code>seq=0</code>, <code>heading=""</code>. -
+<code>extractFrontmatter(data []byte) (fields map[string]string, keywords []string, body string, warning string)</code>
+— tries <code>splitFrontmatter</code> (reused from
+<code>recordfile.go</code>); “no frontmatter” is not a warning,
+“unterminated frontmatter” is (decision 3). Loosely decodes into
+<code>title</code>/<code>description</code>/<code>pubDate</code>/<code>datePublished</code>/
+<code>dateCreated</code>/<code>author</code>/<code>keywords</code>,
+ignoring unrecognized keys.</p>
+<h3 id="tests-to-add-documents_test.go-1">Tests to add
+(<code>documents_test.go</code>)</h3>
+<ul>
+<li><code>TestSegmentMarkdown_SplitsOnHeadings</code></li>
+<li><code>TestSegmentMarkdown_NoHeadingsIsOneSection</code></li>
+<li><code>TestSegmentFountain_SplitsOnSceneHeadings</code> — a small
+real Fountain fixture with two <code>INT.</code>/<code>EXT.</code>
+headings.</li>
+<li><code>TestSegmentFountain_ExtractsTitlePage</code> —
+<code>Title:</code>/<code>Author:</code> lines.</li>
+<li><code>TestSegmentText_IsAlwaysOneSection</code></li>
+<li><code>TestExtractFrontmatter_ParsesAntennaAppFields</code> —
+<code>title</code>, <code>description</code>, <code>pubDate</code>,
+<code>author</code>, <code>keywords</code> fixture matching antennaApp’s
+real vocabulary (design decision 3).</li>
+<li><code>TestExtractFrontmatter_MissingFrontmatterIsNotAWarning</code></li>
+<li><code>TestExtractFrontmatter_UnterminatedFrontmatterWarnsNotFails</code></li>
+<li><code>TestExtractFrontmatter_IgnoresUnrecognizedKeys</code></li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+</ul>
+<hr />
+<h2 id="w3-kb-document-ingest-including-re-ingest-matching">W3 —
+<code>kb document ingest</code>, including re-ingest matching</h2>
+<h3 id="files-to-create-1">Files to create</h3>
+<p><code>cmd/kb/document.go</code>: -
+<code>verbs["document"] = cmdDocument</code>, dispatch to
+<code>document ingest|list|show</code> (review/draft/promote land in
+W5). - <code>documentIngest</code>: reads the file, extracts
+frontmatter/title-page metadata (W2), segments by format (W2), and
+either inserts a new <code>documents</code> row + its sections (first
+ingest) or reconciles against an existing one by
+<code>DocumentByPath</code> (re-ingest — design decision 10): -
+Unchanged checksum: skip entirely, matching <code>kb ingest</code>’s own
+skip-on-unchanged behavior. - Changed checksum: match new sections to
+old by <code>(level, heading)</code>. Matched + body unchanged: leave
+the row alone. Matched + body changed: update <code>body</code>, set
+<code>summary_stale = 1</code>, leave <code>summary_body</code>/
+<code>summary_status</code>/<code>confidence</code> untouched. Unmatched
+old: leave the row in place, report it (mirrors <code>kb ingest</code>’s
+vanished-record reporting). Unmatched new: insert fresh,
+<code>summary_status = 'unsummarized'</code>.</p>
+<h3 id="tests-to-add-cmdkbdocument_test.go">Tests to add
+(<code>cmd/kb/document_test.go</code>)</h3>
+<ul>
+<li><code>TestDocumentIngest_CreatesDocumentAndSections</code></li>
+<li><code>TestDocumentIngest_TitleFromFrontmatterWhenFlagOmitted</code></li>
+<li><code>TestDocumentIngest_TitleFlagOverridesFrontmatter</code></li>
+<li><code>TestDocumentIngest_UnchangedFileIsSkipped</code></li>
+<li><code>TestDocumentIngest_MatchedHeadingUnchangedBodyPreservesSummary</code>
+— seed a section with a <code>reviewed</code> summary, re-ingest
+identical content, assert
+<code>summary_status</code>/<code>summary_body</code> unchanged.</li>
+<li><code>TestDocumentIngest_MatchedHeadingChangedBodySetsStale</code> —
+same seed, edit the section’s underlying text, re-ingest, assert
+<code>summary_stale = true</code> and the summary itself is still there,
+not deleted.</li>
+<li><code>TestDocumentIngest_RemovedHeadingIsReportedNotDeleted</code></li>
+<li><code>TestDocumentIngest_NewHeadingInsertsUnsummarizedSection</code></li>
+<li><code>TestDocumentIngest_RejectsPDFExplicitly</code> — design
+decision 2’s explicit “not yet supported” error, not silent
+mishandling.</li>
+<li><code>TestDocumentIngest_DryRunWritesNothing</code></li>
+</ul>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+<li>Manual smoke test (per
+<code>feedback_smoke_test_data_transforms</code>): ingest a real small
+Fountain fixture and a real Markdown fixture with antennaApp- style
+frontmatter, inspect the resulting rows directly, then edit one section
+and re-ingest to see the stale flag and preserved summary with your own
+eyes, not just in a unit test.</li>
+</ul>
+<hr />
+<h2
+id="w4-concept-tagging-wikilinks-frontmatter-keywords-tag_density">W4 —
+Concept tagging: wikilinks, frontmatter keywords,
+<code>tag_density</code></h2>
+<h3 id="files-to-modify-1">Files to modify</h3>
+<p><code>documents.go</code>: - <code>document_section_concepts</code>
+table (same shape as <code>record_concepts</code>), added to
+<code>documentsSchema</code>. -
+<code>LinkDocumentSectionConcept(sectionID, conceptID int64) error</code>
+— verbatim shape of <code>LinkRecordConcept</code>. -
+<code>DocumentSectionConcepts(sectionID int64) ([]Concept, error)</code>
+— mirrors <code>RecordConcepts</code>.</p>
+<p><code>cmd/kb/document.go</code>: - Reuse <code>wikilinkPattern</code>
+from <code>cmd/kb/ingest.go</code> (design decision 5): scan each
+<code>'section'</code> row’s <code>body</code> for
+<code>[[Name]]</code>, resolve via <code>ResolveConceptName</code>,
+link. Scan the <strong>whole document’s</strong> concatenated raw text
+the same way for the <code>'gist'</code> row. Also resolve frontmatter
+<code>keywords</code> (decision 3) into the gist row’s links, same call.
+- <code>tag_density</code> (design decision 6):
+<code>MatchConceptNames(body)</code> count per section; for the gist
+row, the count against the whole document’s text.</p>
+<h3 id="tests-to-add">Tests to add</h3>
+<ul>
+<li><code>TestDocumentIngest_WikilinkInSectionBodyBecomesConcept</code></li>
+<li><code>TestDocumentIngest_GistTaggedFromWholeDocumentText</code></li>
+<li><code>TestDocumentIngest_FrontmatterKeywordsBecomeGistConcepts</code></li>
+<li><code>TestDocumentIngest_TagDensityReflectsMatchConceptNamesCount</code></li>
+<li><code>TestDocumentIngest_ReingestUnchangedDoesNotDuplicateLinks</code></li>
+</ul>
+<h3 id="acceptance-criteria-3">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+</ul>
+<hr />
+<h2 id="w5-review-workflow-review-list-draft-review-promote">W5 — Review
+workflow: <code>review list</code>, <code>draft</code>,
+<code>review promote</code></h2>
+<h3 id="files-to-modify-2">Files to modify</h3>
+<p><code>cmd/kb/document.go</code>: -
+<code>kb document review list [--project P] [--status S]</code> — prints
+<code>document_sections</code> rows (any status) with
+size/tag_density/confidence/ stale columns, the actual triage queue from
+design decision 7. -
+<code>kb document draft SECTION_ID BODY --by WHO [--confidence N]</code>
+— sets <code>summary_body</code>,
+<code>summary_status = 'drafted'</code>, <code>generated_by</code>,
+<code>confidence</code> (validated to <code>[0,1]</code> if given);
+clears <code>summary_stale</code> (a fresh draft is by definition not
+stale against itself). -
+<code>kb document review promote SECTION_ID</code> — sets
+<code>summary_status =   'reviewed'</code>; this is the only place that
+writes the <code>kb_fts</code> <code>'document_summary'</code> entry
+(design decision 8) — delete-then-reinsert, matching the existing
+four-writer pattern exactly.</p>
+<h3 id="tests-to-add-1">Tests to add</h3>
+<ul>
+<li><code>TestDocumentReviewList_ShowsUnsummarizedAndDrafted</code></li>
+<li><code>TestDocumentDraft_SetsStatusAndClearsStale</code></li>
+<li><code>TestDocumentDraft_RejectsConfidenceOutOfRange</code></li>
+<li><code>TestDocumentReviewPromote_IndexesInFTS</code></li>
+<li><code>TestDocumentReviewPromote_RawSectionBodyNeverIndexed</code> —
+regression guard for decision 8’s other half: confirm a section’s raw
+<code>body</code> never appears in <code>kb_fts</code> regardless of
+status.</li>
+<li><code>TestDocumentReviewPromote_RequiresDraftedFirst</code> —
+promoting an <code>unsummarized</code> section is a usage error, not a
+silent no-op.</li>
+</ul>
+<h3 id="acceptance-criteria-4">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+</ul>
+<hr />
+<h2 id="w6-widen-recallbyconceptnames-to-documents">W6 — Widen
+<code>RecallByConceptNames</code> to documents</h2>
+<h3 id="files-to-modify-3">Files to modify</h3>
+<p><code>retrieval.go</code>: - <code>ConceptMatch</code> gains
+<code>SummaryStatus string</code> (design decision 9). - A third query
+in <code>RecallByConceptNames</code>, joining
+<code>document_section_concepts</code> → <code>document_sections</code>
+→ <code>documents</code>; <code>Body</code> is <code>summary_body</code>
+when <code>summary_status == "reviewed"</code>, else <code>""</code>;
+<code>SourceType</code> is <code>"document_gist"</code> or
+<code>"document_section"</code> (from <code>level</code>);
+<code>SummaryStatus</code> always set for these rows.</p>
+<h3 id="tests-to-add-retrieval_test.go">Tests to add
+(<code>retrieval_test.go</code>)</h3>
+<ul>
+<li><code>TestRecallByConceptNames_ReturnsLinkedDocumentSection</code></li>
+<li><code>TestRecallByConceptNames_UnreviewedDocumentMatchHasEmptyBodyButSetStatus</code>
+— this is the regression guard for decision 9’s actual point: an
+<code>unsummarized</code>/<code>drafted</code> match must still surface
+(findable by tag) with <code>Body == ""</code> and
+<code>SummaryStatus</code> explaining why, never silently omitted.</li>
+<li><code>TestRecallByConceptNames_MergesAllThreeSourceTypes</code> —
+one matching observation, one record, one document section in a single
+call; assert all three appear, ranked together.</li>
+</ul>
+<h3 id="acceptance-criteria-5">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+<li>Re-run the end-to-end smoke test from
+<code>concept-tag-retrieval-plan.md</code>
+(<code>MatchConceptNames</code> → <code>RecallByConceptNames</code>)
+with a real ingested document in the mix, confirming three-way
+composition for real, not just in a unit test.</li>
+</ul>
+<hr />
+<h2 id="w7-portability-knowledge_merge.go-jsonl.go">W7 — Portability:
+<code>knowledge_merge.go</code>, <code>jsonl.go</code></h2>
+<h3 id="files-to-modify-4">Files to modify</h3>
+<p><code>knowledge_merge.go</code>: merge blocks for
+<code>documents</code>, <code>document_sections</code>,
+<code>document_section_concepts</code> (uuid-joined, mirroring
+<code>records</code>/
+<code>record_relations</code>/<code>record_concepts</code>); all three
+added to <code>allTables</code> (now 13) — per DR-0013, a table missing
+from that list is a table whose loss during merge is never reported.</p>
+<p><code>jsonl.go</code>: <code>documentRecord</code>,
+<code>documentSectionRecord</code>,
+<code>documentSectionConceptRecord</code> types;
+<code>exportDocuments</code>/
+<code>exportDocumentSections</code>/<code>exportDocumentSectionConcepts</code>;
+matching import branches, resolved by uuid the same way records are.</p>
+<h3 id="tests-to-add-2">Tests to add</h3>
+<ul>
+<li><code>TestMergeKnowledgeBases_DocumentsSurvive</code></li>
+<li><code>TestMergeKnowledgeBases_DocumentSectionsSurvive</code></li>
+<li><code>TestMergeKnowledgeBases_DocumentSectionConceptsSurvive</code></li>
+<li>Update
+<code>TestMergeKnowledgeBases_SummaryIncludesRecordTables</code> (or its
+successor) for the new table count — same pattern as
+<code>wikilink-tagging-plan.md</code> W4 hitting this exact
+hardcoded-count test.</li>
+<li><code>TestImportJSONL_Documents_RoundTrip</code></li>
+<li><code>TestImportJSONL_Documents_ReimportIsNoOp</code></li>
+<li><code>TestImportJSONL_DocumentSectionConcepts_UnresolvableEndpointSkippedNotFatal</code></li>
+</ul>
+<h3 id="acceptance-criteria-6">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+<li>Real export → fresh-database import round trip via the built binary,
+same as <code>wikilink-tagging-plan.md</code> W4’s acceptance check,
+confirming a document with a reviewed summary and concept tags survives
+intact.</li>
+</ul>
+<hr />
+<h2 id="w8-kb-document-listshow-documentation">W8 —
+<code>kb document list</code>/<code>show</code>, documentation</h2>
+<h3 id="files-to-modify-5">Files to modify</h3>
+<p><code>cmd/kb/document.go</code>: -
+<code>kb document list [--project P]</code> — one line per document. -
+<code>kb document show ID</code> — document metadata plus every section
+(heading, status, stale flag, linked concepts) in one view — no separate
+<code>concepts</code> subverb (design note: fold into <code>show</code>
+from day one, unlike records, which grew <code>concepts</code> as an
+add-on).</p>
+<p><code>cmd/kb/helptext.go</code>: new <code>DocumentHelpText</code>
+constant, following <code>RecordHelpText</code>’s structure; add
+<code>document</code> to <code>KB_TOPICS</code> in the Makefile so
+<code>make kb-topics-help</code> generates
+<code>kb-document.1.md</code>.</p>
+<h3 id="acceptance-criteria-7">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+<li><code>make kb-topics-help</code> regenerates
+<code>kb-document.1.md</code> cleanly (new file, so no
+pre-existing-content diff to check, but confirm it lands where the other
+generated man pages do).</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

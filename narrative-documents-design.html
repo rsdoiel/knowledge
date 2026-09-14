@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="narrativedocument-ingestion-graduated-abstraction-levels-design">Narrative/document
+ingestion, graduated abstraction levels — Design</h1>
+<p><strong>Status (2026-09-13):</strong> Decisions confirmed. See <a
+href="narrative-documents-plan.html">narrative-documents-plan.md</a> for
+the phased plan.</p>
+<p><strong>References:</strong> -
+<code>narrative-documents-feature-request.md</code> — the filed idea
+this design resolves; every open question it left is answered below. -
+<code>wikilink-tagging-design.md</code>,
+<code>concept-tag-retrieval-design.md</code> — both shipped 2026-09-13;
+this design is the first real test of whether their shape actually
+generalizes, which the concept-tag-retrieval design predicted but didn’t
+verify.</p>
+<h2 id="whats-different-about-this-one">What’s different about this
+one</h2>
+<p>The previous two designs each extended one existing thing (a join
+table, a query). This one adds a new entity with real internal structure
+— a document isn’t a single row the way an observation or a record is,
+it’s a document plus a sequence of sections plus, for each of those, a
+summary that may not exist yet. Getting the shape of that right matters
+more than usual, because every other decision here (tagging, retrieval,
+review) sits on top of it.</p>
+<h2 id="decisions">Decisions</h2>
+<h3 id="schema-two-tables-not-one-documents-and-document_sections">1.
+Schema: two tables, not one — <code>documents</code> and
+<code>document_sections</code></h3>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode sql"><code class="sourceCode sql"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> documents (</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">id</span>             <span class="dt">INTEGER</span> <span class="kw">PRIMARY</span> <span class="kw">KEY</span> AUTOINCREMENT,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    project_id     <span class="dt">INTEGER</span> <span class="kw">REFERENCES</span> projects(<span class="kw">id</span>) <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">SET</span> <span class="kw">NULL</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    title          TEXT <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    format         TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,   <span class="co">-- markdown | fountain | text | pdf</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    path           TEXT <span class="kw">NOT</span> <span class="kw">NULL</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    author         TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,   <span class="co">-- from frontmatter `author`, if present (decision 3)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    published_date TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,   <span class="co">-- from frontmatter `pubDate`/`datePublished`/`dateCreated` (decision 3)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    checksum       TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    ingested_at    DATETIME <span class="kw">DEFAULT</span> <span class="fu">CURRENT_TIMESTAMP</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    uuid           TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    origin_host    TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>);</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> document_sections (</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">id</span>             <span class="dt">INTEGER</span> <span class="kw">PRIMARY</span> <span class="kw">KEY</span> AUTOINCREMENT,</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    document_id    <span class="dt">INTEGER</span> <span class="kw">REFERENCES</span> documents(<span class="kw">id</span>) <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">CASCADE</span>,</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">level</span>          TEXT <span class="kw">NOT</span> <span class="kw">NULL</span>,             <span class="co">-- &#39;gist&#39; | &#39;section&#39;</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    seq            <span class="dt">INTEGER</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="dv">0</span>,</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    heading        TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,  <span class="co">-- scene/markdown heading; &#39;&#39; for gist</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">body</span>           TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,  <span class="co">-- raw source text; always &#39;&#39; for &#39;gist&#39;</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    summary_body   TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    summary_status TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;unsummarized&#39;</span>, <span class="co">-- unsummarized|drafted|reviewed</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    summary_stale  <span class="dt">INTEGER</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="dv">0</span>,  <span class="co">-- set true when body changes under an existing summary (decision 10)</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    source_size    <span class="dt">INTEGER</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="dv">0</span>,  <span class="co">-- word count</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    tag_density    <span class="dt">INTEGER</span> <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="dv">0</span>,  <span class="co">-- MatchConceptNames() count</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    confidence     <span class="dt">REAL</span>,                        <span class="co">-- NULL until drafted</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    generated_by   TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,    <span class="co">-- &#39;human&#39; or a model identifier</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    created_at     DATETIME <span class="kw">DEFAULT</span> <span class="fu">CURRENT_TIMESTAMP</span>,</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    uuid           TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span>,</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    origin_host    TEXT <span class="kw">NOT</span> <span class="kw">NULL</span> <span class="kw">DEFAULT</span> <span class="st">&#39;&#39;</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>);</span></code></pre></div>
+<p>Every document gets exactly one <code>level='gist'</code> row (the
+document-level summary target) plus one <code>level='section'</code> row
+per structural unit, ordered by <code>seq</code>. This makes the gist
+and every section summary <strong>the same kind of row</strong> — one
+status/size/density/confidence machinery, one review queue query, no
+special-casing gist vs. section anywhere in code. The asymmetry is real
+but contained to one column: a <code>'section'</code> row’s
+<code>body</code> is populated at ingest (it’s the actual source text);
+a <code>'gist'</code> row’s <code>body</code> stays empty forever,
+because a whole-document gist has no “raw” form of its own — it is
+always generated, never mechanically extracted.</p>
+<p>This resolves the feature request’s schema open question in favor of
+the child-table option: a single row per document with fixed columns
+couldn’t hold a variable number of sections, and would need the
+gist/section distinction baked into column names instead of data.</p>
+<h3
+id="documents-scope-markdown-fountain-and-plain-text.-not-pdf-yet.">2.
+<code>documents</code> scope: Markdown, Fountain, and plain text. Not
+PDF, yet.</h3>
+<p>PDF extraction has no home anywhere in this workspace — building it
+out is an unrelated yak to shave before a single PDF document could ever
+be ingested. <code>format</code> reserves <code>'pdf'</code> as a
+documented, valid value so the column doesn’t need a migration later,
+but <code>kb document ingest</code> rejects a <code>.pdf</code> file
+outright with an explicit “not yet supported” error rather than
+pretending to handle it. Markdown, Fountain, and plain text need no new
+dependency and cover the stated scope (stories, articles, posts) well
+enough to ship.</p>
+<h3 id="frontmatter-is-optional-but-recognized-and-used-when-present">3.
+Frontmatter is optional, but recognized and used when present</h3>
+<p>Revised after review: a short story or Fountain screenplay usually
+has no frontmatter at all, and requiring an author to add YAML fences
+just to make prose ingestible would be the wrong ergonomics — but a blog
+post is a different case. It very often already <strong>has</strong>
+frontmatter, written for an entirely different purpose (feeding a static
+site generator), and throwing that away at ingest and asking for
+<code>--title</code> by hand would be discarding real, already-authored
+metadata for no reason.</p>
+<p>So: <code>kb document ingest</code> tries
+<code>splitFrontmatter</code> (the same helper
+<code>recordfile.go</code> uses) first. Unlike a record, a document’s
+frontmatter is never required — <code>splitFrontmatter</code>‘s “does
+not start with <code>---</code>” error is the normal, expected case for
+Fountain and plain text, not a problem; “starts with <code>---</code>
+but the closing fence is missing” is a warning (matching records’
+non-fatal-warning philosophy), not a failure, and ingestion falls back
+to treating the whole file as body either way.</p>
+<p>Rather than inventing a generic frontmatter schema (most static-site
+generators — Jekyll, Hugo — use their own field names, none of them
+authoritative here), the recognized fields are <strong>antennaApp’s own
+documented vocabulary</strong> (<code>helptext.go</code>’s
+<code>post</code> command: “Required front matter fields… Recommended
+additional fields”), since it’s the one already producing real posts in
+this workspace, not a guess at a convention nothing here actually
+follows:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Frontmatter field</th>
+<th scope="col">Used for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code></td>
+<td><code>documents.title</code> (a <code>--title</code> flag still
+overrides)</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>seeds the <strong>gist</strong>: <code>summary_body</code>,
+<code>summary_status = 'drafted'</code>,
+<code>generated_by = 'human'</code> — antennaApp’s own doc calls this
+“summary for RSS and search engines,” which is exactly what a gist is,
+already written by a human. It still needs an explicit
+<code>kb document review promote</code> before it’s trusted for search
+(decision 7) — the fact that a human wrote it into frontmatter doesn’t
+get it a special exemption from the same review step everything else
+goes through.</td>
+</tr>
+<tr>
+<td><code>pubDate</code> (or
+<code>datePublished</code>/<code>dateCreated</code>, antennaApp’s own
+aliases)</td>
+<td>new
+<code>documents.published_date TEXT NOT NULL DEFAULT ''</code></td>
+</tr>
+<tr>
+<td><code>author</code></td>
+<td>new <code>documents.author TEXT NOT NULL DEFAULT ''</code></td>
+</tr>
+<tr>
+<td><code>keywords</code> (antennaApp’s tag field — not
+<code>tags</code>)</td>
+<td>resolved via <code>ResolveConceptName</code>, linked to the gist row
+exactly like a record’s <code>Tags</code> frontmatter (decision 5)</td>
+</tr>
+</tbody>
+</table>
+<p>Every field is optional and unrecognized keys are ignored — this is a
+loose, tolerant parse of someone else’s schema, not the strict
+required-field validation <code>recordfile.go</code> enforces on its own
+format. Format itself (decision 2) is still inferred from extension or
+<code>--format</code>, never from frontmatter — a blog post’s
+frontmatter doesn’t get to claim it’s Fountain.</p>
+<h3
+id="segmentation-is-per-format-fountain-uses-github.comrsdoielfountain-directly">4.
+Segmentation is per-format; Fountain uses
+<code>github.com/rsdoiel/fountain</code> directly</h3>
+<p>Revised after review — this was wrong in the first draft. I’d assumed
+harvey’s Fountain handling was harvey’s own code, making a shared
+dependency backwards (harvey depends on <code>knowledge</code>, not the
+reverse), and proposed <code>knowledge</code> hand-roll a minimal
+scene-heading regex to avoid that. Checked instead: harvey’s Fountain
+parsing is <strong>not</strong> harvey’s own code —
+<code>replay.go</code> and <code>recorder.go</code> both import
+<code>github.com/rsdoiel/fountain</code> (currently pinned at v1.0.2)
+and call <code>fountain.ParseFile</code>/
+<code>fountain.SceneHeadingType</code> directly. <code>fountain</code>
+is already a third, independent module both <code>harvey</code> and
+<code>knowledge</code> can depend on without either depending on the
+other — exactly the shape needed, already sitting in
+<code>~/Laboratory/fountain</code>, no invention required.</p>
+<p>So: <code>knowledge</code> adds
+<code>github.com/rsdoiel/fountain</code> as a real dependency.
+<code>fountain.Parse</code>/<code>fountain.ParseFile</code> returns
+<code>*Fountain{TitlePage []*Element, Elements []*Element}</code>; a new
+section starts at each
+<code>Element.Type == fountain.SceneHeadingType</code>, with the section
+body being that element’s <code>Content</code> plus everything up to the
+next scene heading. This is the actual parser every other Fountain
+consumer in this workspace already trusts, not a second, weaker
+implementation of the same idea — no enhancement to the
+<code>fountain</code> module itself is needed for this; its existing API
+already covers what segmentation requires.</p>
+<p>One more thing this gets for free: <code>Fountain.TitlePage</code> is
+a parsed key/value list (<code>Title:</code>, <code>Author:</code>,
+<code>Credit:</code>, etc. — Fountain’s own title-page convention,
+distinct from YAML frontmatter but the same idea). Decision 3’s
+frontmatter-mapping table applies here too: a Fountain document’s
+<code>Title</code>/<code>Author</code> title-page fields map to
+<code>documents.title</code>/ <code>documents.author</code> the same way
+a Markdown post’s frontmatter does.</p>
+<p>Markdown uses <code>^#{1,6}\s</code> heading lines for section
+boundaries (no library needed — that’s a one-line regex, not a parser to
+depend on). Plain text has no internal structure to find: the whole file
+is one <code>'section'</code> row, seq 0 — this is the case that proves
+the schema degrades correctly to “one section” rather than needing
+special handling.</p>
+<h3
+id="concept-tagging-reuses-wikilink-taggings-mechanism-exactly-on-section-bodies">5.
+Concept tagging reuses wikilink-tagging’s mechanism exactly, on section
+bodies</h3>
+<p>At ingest, each <code>'section'</code> row’s raw <code>body</code> is
+scanned for <code>[[Name]]</code> wikilinks, resolved via
+<code>ResolveConceptName</code> (case-insensitive, same as records), and
+linked into a new <code>document_section_concepts</code> table (same
+shape as <code>record_concepts</code>). The <code>'gist'</code> row is
+tagged too, but against the <strong>whole document’s concatenated raw
+text</strong> at ingest time — this makes a document findable by tag
+immediately, without waiting for anyone to draft a gist summary, the
+same way a record is taggable the moment it’s ingested. Frontmatter
+<code>keywords</code> (decision 3), when present, resolve into the same
+gist-row links, exactly the same unification records already do for
+their <code>Tags</code> field.</p>
+<h3
+id="tag_density-is-computed-with-matchconceptnames-not-a-new-gazetteer">6.
+<code>tag_density</code> is computed with
+<code>MatchConceptNames</code>, not a new gazetteer</h3>
+<p><code>tag_density</code> (the triage signal from the feature request)
+is exactly what <code>MatchConceptNames</code> (shipped in
+<code>concept-tag-retrieval-plan.md</code>) already computes: a count of
+known concept names appearing in text, whole-word, case-insensitive.
+Running it against a section’s raw body at ingest time is the entire
+implementation — no new matching logic. This is the strongest sign the
+previous two designs’ shapes actually hold up under a real second
+consumer, not just the concept-tag-retrieval design’s own hopeful claim
+that they would.</p>
+<p>Note the distinction from decision 5: <code>MatchConceptNames</code>
+only <strong>counts</strong> matches against existing concepts, it never
+creates one — a document mentioning a concept nobody has named yet
+contributes to <code>tag_density</code> only via an explicit
+<code>[[Name]]</code> wikilink (which does create), never via incidental
+prose that happens to repeat an existing concept’s name without being
+marked up.</p>
+<h3
+id="review-queue-and-workflow-document_sections-is-the-whole-review-queue-no-separate-table">7.
+Review queue and workflow: <code>document_sections</code> is the whole
+review queue, no separate table</h3>
+<p>Because gist and section rows share one shape (decision 1), the
+review queue is one query: <code>document_sections</code> filtered by
+<code>summary_status</code>, ordered/filterable by
+<code>source_size</code>, <code>tag_density</code>,
+<code>confidence</code>. Three new commands, deliberately minimal:</p>
+<ul>
+<li><code>kb document review list [--project P] [--status S]</code> —
+the triage queue, printing size/density/confidence alongside each
+unsummarized or drafted row so a human can decide, per the feature
+request’s classroom framing, whether a given row is small/simple enough
+to hand to a model or ought to be written by hand.</li>
+<li><code>kb document draft SECTION_ID BODY --by WHO [--confidence N]</code>
+— writes <code>summary_body</code>, sets
+<code>summary_status = 'drafted'</code>, records
+<code>generated_by</code> (<code>WHO</code> is free text:
+<code>"human"</code> or a model identifier) and <code>confidence</code>
+if given. <code>kb</code> does not call any model itself here —
+<code>WHO</code> and <code>BODY</code> are supplied by whatever already
+decided to draft this (a human typing, or a harvey job piping in a
+model’s output). This is the same boundary
+<code>concept-tag-retrieval-design.md</code> drew around harvey
+consumption: a pure data layer, not an LLM caller.</li>
+<li><code>kb document review promote SECTION_ID</code> — human-only,
+sets <code>summary_status = 'reviewed'</code>. This is also the point
+where the summary becomes visible to search and retrieval (decisions 8
+and 9) — nothing unreviewed is ever surfaced as trustworthy content,
+only findable by tag (decision 5’s links are independent of review
+status, since a wikilink tag is author-asserted, not generated, and
+needs no review).</li>
+</ul>
+<p>No auto-promotion path exists, confirming the feature request’s own
+first-pass decision unchanged.</p>
+<h3
+id="kb_fts-indexing-reviewed-summaries-only-raw-section-bodies-never">8.
+<code>kb_fts</code> indexing: reviewed summaries only, raw section
+bodies never</h3>
+<p>New <code>source_type</code> literal <code>'document_summary'</code>,
+written/deleted the same delete-then-reinsert way every other writer
+works, but <strong>only when
+<code>summary_status = 'reviewed'</code></strong> — indexed on
+promotion, removed from the index if a summary is ever un-reviewed (the
+mechanism supports this even though nothing in this design adds a
+command to un-review one). Raw <code>document_sections.body</code> is
+never indexed, full stop — mirrors DR-0013’s <code>sources</code>
+boundary exactly: a section’s full text is reference-only, fetched by
+reading <code>documents.path</code> if truly needed, never searched
+directly. This is the actual point of graduated abstraction: what’s
+cheaply searchable is the dense, reviewed summary, not the underlying
+prose.</p>
+<p><code>documents</code> itself gets a thin <code>'document'</code> FTS
+entry (title only, indexed at ingest) — mirrors how
+<code>projects</code> are indexed by name, so a document is findable by
+title even before anything about it is summarized.</p>
+<h3
+id="recallbyconceptnames-widens-to-a-third-source-not-a-parallel-query">9.
+<code>RecallByConceptNames</code> widens to a third source, not a
+parallel query</h3>
+<p><code>retrieval.go</code>’s merge-in-Go pattern (one query per entity
+type, sorted together in Go) extends cleanly: a third query joins
+<code>document_section_concepts</code>, and its rows merge into the same
+ranked <code>[]ConceptMatch</code> slice concept-tag-retrieval already
+returns. This is the generalization
+<code>concept-tag-retrieval-design.md</code> predicted but explicitly
+didn’t build (“a claim to verify when that feature actually gets built,
+not now”) — now verified, by building it.</p>
+<p><code>ConceptMatch</code> gains one field:
+<code>SummaryStatus string</code> (empty for observation/record matches;
+<code>"unsummarized"</code>/<code>"drafted"</code>/<code>"reviewed"</code>
+for a document match). <code>Body</code> carries the summary text only
+when <code>SummaryStatus == "reviewed"</code>; otherwise it’s empty and
+<code>SummaryStatus</code> tells the caller why, rather than leaving it
+to guess whether empty means “no content” or “content exists but isn’t
+trustworthy yet.” <code>SourceType</code> is
+<code>"document_gist"</code> or <code>"document_section"</code>.</p>
+<h3
+id="re-ingesting-a-changed-document-match-by-heading-never-silently-delete-review-work">10.
+Re-ingesting a changed document: match by heading, never silently delete
+review work</h3>
+<p>Resolved after discussion, in favor of the careful option flagged
+above, and for a reason bigger than “it’s more careful”: a
+wipe-and-recreate default would foreclose a real future direction rather
+than just being locally worse. The stated goal is eventually interactive
+re-ingest in harvey — a human, a model, or both together revisiting a
+document as it changes, promotion and re-ingestion handled
+collaboratively, closer to a Socratic dialogue building up what’s known
+than a batch job. That mode needs exactly the information a silent wipe
+would throw away: which sections changed, which summaries might now be
+stale, which sections vanished. Building the destructive default now
+would mean rebuilding this decision later anyway, once that mode is
+wanted — better to get the non-destructive shape right the first time,
+even though nothing in this plan builds the interactive session
+itself.</p>
+<p>So: on a checksum change, <strong>match new sections to old ones by
+<code>(level, heading)</code></strong>, not by position, and never
+delete silently:</p>
+<ul>
+<li><strong>Heading matches, body unchanged</strong> — untouched,
+summary and status carry forward exactly as they were.</li>
+<li><strong>Heading matches, body changed</strong> — the summary is
+kept, not deleted (deleting it would be exactly the data loss this
+decision exists to avoid), but it’s now describing text that has moved
+out from under it. Flag it: a new <code>summary_stale</code> boolean
+column on <code>document_sections</code>, set true whenever the
+underlying <code>body</code> changes under an existing
+<code>drafted</code> or <code>reviewed</code> summary. Nothing currently
+reads this column to block anything automatically — it’s a signal for
+the review queue (decision 7) to surface, and exactly the kind of thing
+a future interactive re-ingest session would ask about first.</li>
+<li><strong>Old heading has no match in the new content</strong> — the
+section is reported, not deleted, mirroring <code>kb ingest</code>’s own
+existing rule for records almost verbatim (“a record whose file has
+vanished stays in the database and is reported, never deleted — pruning
+would destroy data”). A renamed scene heading is indistinguishable from
+a removed one at this mechanical level, which is a known, named
+limitation, not a silent gap.</li>
+<li><strong>New heading has no match in the old content</strong> — a
+genuinely new section, inserted fresh with
+<code>summary_status = 'unsummarized'</code>.</li>
+</ul>
+<p>This is still entirely mechanical and non-interactive —
+<code>kb document ingest</code> does the matching and reporting, nothing
+more. The interactive, dialogic re-ingest harvey might build later is
+explicitly not this design’s job (see Deferred, below); this decision’s
+job is only to make sure that future mode has something real to work
+with instead of a clean slate every time a file changes.</p>
+<h2 id="deferred-explicitly">Deferred, explicitly</h2>
+<ul>
+<li>PDF ingestion (decision 2) — blocked on an extraction-tooling
+decision this design doesn’t make.</li>
+<li>Any model call, anywhere in <code>knowledge</code> — drafting is
+always supplied by the caller (decision 7); <code>knowledge</code> never
+invokes a model.</li>
+<li>Un-reviewing a promoted summary — the FTS mechanism in decision 8
+would support it, but no command exposes it in this pass.</li>
+<li>Auto-promotion — the feature request decided against it already;
+unchanged here.</li>
+<li>Consuming any of this from harvey’s
+<code>UnifiedMemory.Recall</code> — separate, harvey-repo work, same
+boundary drawn in <code>concept-tag-retrieval-design.md</code>.</li>
+<li><strong>Interactive/dialogic re-ingest itself</strong> (decision
+10’s stated motivation) — a harvey-driven session where a human, a
+model, or both review <code>summary_stale</code>/orphaned sections turn
+by turn and decide what to re-draft or re-promote.
+<code>knowledge</code>’s job here stops at exposing the signal
+(<code>summary_stale</code>, reported vanished sections); building the
+session that consumes it is future harvey work, not part of this
+plan.</li>
+<li>Portability (<code>knowledge_merge.go</code>, <code>jsonl.go</code>)
+for the three new tables — required before this ships, per DR-0013’s
+rule that every table must travel, but it’s mechanical repetition of the
+pattern <code>wikilink-tagging-plan.md</code> already established, worth
+its own plan phase rather than a design decision.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

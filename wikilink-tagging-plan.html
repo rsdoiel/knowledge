@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-ingest-inline-wikilink-concept-tagging-implementation-plan"><code>kb ingest</code>
+— inline <code>[[wikilink]]</code> concept tagging — Implementation
+Plan</h1>
+<p>See <a
+href="wikilink-tagging-design.html">wikilink-tagging-design.md</a> for
+the full rationale and confirmed decisions. Work items ordered W1 → W5.
+TDD-first: each phase’s tests are written and confirmed red before its
+implementation.</p>
+<hr />
+<h2 id="w1-schema-core-knowledge-package-primitives">W1 — Schema + core
+<code>knowledge</code> package primitives</h2>
+<h3 id="files-to-modify">Files to modify</h3>
+<p><code>records.go</code> — append to <code>recordsSchema</code> (after
+<code>record_relations</code>):</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode sql"><code class="sourceCode sql"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> <span class="cf">IF</span> <span class="kw">NOT</span> <span class="kw">EXISTS</span> record_concepts (</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    record_id  <span class="dt">INTEGER</span> <span class="kw">REFERENCES</span> records(<span class="kw">id</span>)  <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">CASCADE</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    concept_id <span class="dt">INTEGER</span> <span class="kw">REFERENCES</span> concepts(<span class="kw">id</span>) <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">CASCADE</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">PRIMARY</span> <span class="kw">KEY</span> (record_id, concept_id)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>);</span></code></pre></div>
+<p><code>knowledge.go</code> — two new methods, placed near
+<code>LinkObservationConcept</code>/ <code>LinkProjectConcept</code> and
+<code>ObservationSources</code> respectively:</p>
+<ul>
+<li><code>LinkRecordConcept(recordID, conceptID int64) error</code> —
+verbatim shape of <code>LinkProjectConcept</code>
+(<code>INSERT OR IGNORE INTO record_concepts ...</code>).</li>
+<li><code>ResolveConceptName(name string) (int64, error)</code> — per
+design decision 4:
+<code>SELECT id FROM concepts WHERE name = ? COLLATE NOCASE LIMIT 1</code>;
+on <code>sql.ErrNoRows</code>, fall through to
+<code>kb.AddConcept(name, "")</code> and return its id; any other query
+error propagates.</li>
+<li><code>RecordConcepts(recordID int64) ([]Concept, error)</code> —
+mirrors <code>ObservationSources</code>’s shape exactly: join
+<code>concepts</code> through <code>record_concepts</code>,
+<code>ORDER BY c.id</code>, scan into
+<code>Concept{ID, Name, Description, IdentifierType, IdentifierValue}</code>.</li>
+</ul>
+<h3 id="tests-to-add-knowledge_test.go">Tests to add
+(<code>knowledge_test.go</code>)</h3>
+<ul>
+<li><code>TestLinkRecordConcept_CreatesLink</code></li>
+<li><code>TestLinkRecordConcept_DuplicateIsNoOp</code> — linking the
+same pair twice leaves exactly one row.</li>
+<li><code>TestLinkRecordConcept_CascadesOnRecordDelete</code> and
+<code>TestLinkRecordConcept_CascadesOnConceptDelete</code> — confirms
+the <code>ON DELETE CASCADE</code> on both sides actually fires (SQLite
+requires <code>PRAGMA foreign_keys = ON</code>, already set in
+<code>schema</code>).</li>
+<li><code>TestResolveConceptName_CreatesWhenMissing</code></li>
+<li><code>TestResolveConceptName_CaseInsensitiveMatchesExisting</code> —
+seed a concept named <code>Computer</code>, resolve
+<code>"computer"</code>, assert the <em>same</em> id comes back and no
+second row was created.</li>
+<li><code>TestResolveConceptName_FirstWrittenCasingIsCanonical</code> —
+resolve <code>"computer"</code> first (creates it lowercase), then
+resolve <code>"Computer"</code>, assert the stored name is still
+<code>"computer"</code>.</li>
+<li><code>TestRecordConcepts_ReturnsLinkedConceptsOrderedByID</code></li>
+<li><code>TestRecordConcepts_EmptyWhenNoneLinked</code> — returns
+<code>[]Concept{}</code>, not nil (matches
+<code>ObservationSources</code>’s own convention — confirm by reading
+it, match whichever it actually does).</li>
+</ul>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> (package root) green.</li>
+<li><code>go vet ./...</code> clean.</li>
+</ul>
+<hr />
+<h2 id="w2-ingest-side-wiring-wikilink-tags-resolution">W2 — Ingest-side
+wiring: <code>[[wikilink]]</code> + <code>Tags</code> resolution</h2>
+<h3 id="files-to-modify-1">Files to modify</h3>
+<p><code>cmd/kb/ingest.go</code>:</p>
+<ul>
+<li><p>New unexported
+<code>wikilinkPattern = regexp.MustCompile(</code>[[([^[]]+)]]<code>)</code>
+package-level var, alongside the existing
+<code>recordFilePattern</code>.</p></li>
+<li><p>New method
+<code>(ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64)</code>:</p>
+<ul>
+<li>Returns immediately if
+<code>ing.dryRun || recordDBID == 0</code>.</li>
+<li>Collects names from two sources: every <code>wikilinkPattern</code>
+match in <code>rf.Record.Body</code> (submatch 1, trimmed via
+<code>strings.TrimSpace</code>), plus every entry in
+<code>rf.Record.Tags</code> (also trimmed).</li>
+<li>De-duplicates the combined name list before resolving (a
+<code>[[Name]]</code> appearing twice, or also listed in
+<code>Tags</code>, must not attempt two links —
+<code>LinkRecordConcept</code> is idempotent so this is a minor
+efficiency concern, not a correctness one, but avoids redundant
+<code>ResolveConceptName</code> round-trips).</li>
+<li>For each distinct, non-empty name:
+<code>ing.kb.ResolveConceptName(name)</code> then
+<code>ing.kb.LinkRecordConcept(recordDBID, conceptID)</code>; on either
+error, append to <code>ing.summary.Warnings</code> (matching how other
+non-fatal ingest problems are reported) and continue rather than
+aborting the record.</li>
+</ul></li>
+<li><p>One new call site in <code>upsertAll</code>, immediately after
+<code>ing.linkInitiative(rf, projectID)</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>ing<span class="op">.</span>linkWikilinkTags<span class="op">(</span>rf<span class="op">,</span> rec<span class="op">.</span>dbID<span class="op">)</span></span></code></pre></div></li>
+</ul>
+<h3 id="tests-to-add-cmdkbingest_test.go-alongside">Tests to add
+(<code>cmd/kb/ingest_test.go</code>, alongside</h3>
+<p><code>TestCmdIngest_InitiativeBecomesAConcept</code>)</p>
+<ul>
+<li><code>TestCmdIngest_WikilinkInBodyBecomesConcept</code> — a record
+body containing <code>[[Foo]]</code>; assert a concept named
+<code>Foo</code> exists and is linked via
+<code>RecordConcepts</code>.</li>
+<li><code>TestCmdIngest_TagsFrontmatterBecomesConcepts</code> —
+<code>tags: [bar, baz]</code> in frontmatter, no wikilinks in body;
+assert both become linked concepts.</li>
+<li><code>TestCmdIngest_WikilinkAndTagsAreCaseInsensitive</code> — body
+has <code>[[Foo]]</code> and <code>[[foo]]</code> in two different
+sentences (mirrors the user’s own
+“<code>[[Computers]] are ... a [[computer]]</code>” example); assert
+exactly one concept, linked once.</li>
+<li><code>TestCmdIngest_ReingestUnchangedFileDoesNotDuplicateLinks</code>
+— run ingest twice on the same file; assert <code>record_concepts</code>
+still has exactly the same rows (via <code>RecordConcepts</code>, not a
+raw duplicate count — count is the cheaper assertion here).</li>
+<li><code>TestCmdIngest_DryRunCreatesNoConceptsOrLinks</code> —
+<code>--dry-run</code> with a wikilink in the body; assert the concept
+was never created at all (distinguish from “created but not
+linked”).</li>
+<li><code>TestCmdIngest_WikilinkWhitespaceIsTrimmed</code> —
+<code>[[ Foo ]]</code> resolves to the same concept as
+<code>[[Foo]]</code>.</li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+<li>Manual smoke test against a scratch decision record (per
+<code>feedback_smoke_test_data_transforms</code> convention — this is
+exactly the kind of ingest/merge-shaped transform that needs a real
+binary run, not just unit tests): write a throwaway record with a
+<code>[[wikilink]]</code> and a <code>tags:</code> entry under a scratch
+project, <code>kb ingest</code> it for real, confirm with
+<code>kb record concepts</code> (once W3 lands) or a direct
+<code>sqlite3</code> query against <code>record_concepts</code>.</li>
+</ul>
+<hr />
+<h2 id="w3-read-path-kb-record-concepts-id">W3 — Read path:
+<code>kb record concepts ID</code></h2>
+<h3 id="files-to-modify-2">Files to modify</h3>
+<p><code>cmd/kb/record.go</code>:</p>
+<ul>
+<li>Add
+<code>case "concepts": return recordConcepts(kb, dl, jsonOut, flags, out)</code>
+to the subverb switch; update the <code>default</code> error’s verb list
+to include <code>concepts</code>.</li>
+<li>New <code>recordConcepts</code> function, verbatim shape of
+<code>cmdObservationSources</code>: parses one positional
+<code>RECORD_ID</code> (note: this is the record’s <em>display</em> id,
+e.g. <code>0042</code> or <code>DR-0042</code> — confirm during
+implementation which form <code>record show</code> already accepts and
+match it exactly, rather than requiring the internal database id a
+caller can’t otherwise see), calls <code>kb.RecordConcepts(...)</code>
+through <code>logKBCall</code>, prints one <code>id  name</code> line
+per concept or <code>(no linked concepts)</code>, honors
+<code>--json</code>.</li>
+</ul>
+<h3 id="tests-to-add-cmdkbrecord_test.go">Tests to add
+(<code>cmd/kb/record_test.go</code>)</h3>
+<ul>
+<li><code>TestRecordConcepts_ListsLinkedConcepts</code></li>
+<li><code>TestRecordConcepts_NoLinkedConceptsPrintsPlaceholder</code></li>
+<li><code>TestRecordConcepts_JSONOutput</code></li>
+<li><code>TestRecordConcepts_UnknownRecordIDErrors</code></li>
+</ul>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2 id="w4-portability-merge-json-l-exportimport">W4 — Portability:
+merge + JSON-L export/import</h2>
+<h3 id="files-to-modify-3">Files to modify</h3>
+<p><code>knowledge_merge.go</code>:</p>
+<ul>
+<li>New uuid-joined merge block for <code>record_concepts</code>, placed
+with the other concept-link blocks (mirrors
+<code>project_concepts</code>’s block exactly, joining through
+<code>records</code>/<code>concepts</code> by <code>uuid</code> instead
+of <code>projects</code>/<code>concepts</code>).</li>
+<li>Add <code>"record_concepts"</code> to the <code>allTables</code>
+summary slice — per DR-0013, a table absent from that list is a table
+whose loss during merge goes unreported.</li>
+</ul>
+<p><code>jsonl.go</code>:</p>
+<ul>
+<li>New <code>recordConceptRecord</code> struct (<code>Type</code>,
+<code>RecordUUID</code>, <code>ConceptUUID</code>), mirroring
+<code>projectConceptRecord</code>.</li>
+<li>New <code>exportRecordConcepts</code> function, mirroring
+<code>exportProjectConcepts</code> (join <code>record_concepts</code>
+through <code>records</code>/<code>concepts</code> by internal id,
+select their uuids).</li>
+<li>New import branch (alongside the existing
+<code>recObservationConcept</code>/ <code>recProjectConcept</code>
+handling) resolving both uuids via
+<code>resolveLocalID</code>/<code>conceptLocalID</code> and inserting
+through
+<code>INSERT OR IGNORE INTO record_concepts (record_id, concept_id) VALUES (?, ?)</code>.</li>
+<li>Wire the new export function into whatever calls
+<code>exportProjectConcepts</code>/<code>exportObservationConcepts</code>
+today (same call site(s), same scoping behavior).</li>
+</ul>
+<h3 id="tests-to-add">Tests to add</h3>
+<p><code>knowledge_merge_test.go</code> —
+<code>TestMergeKnowledgeBases_RecordConcepts</code>, mirroring
+<code>TestMergeKnowledgeBases_ProjectConcepts</code>’s structure (seed
+two source databases, merge, assert exactly the expected row count and
+that it appears in the summary).</p>
+<p><code>jsonl_test.go</code> —
+<code>TestExportRecordConcepts_RoundTrips</code> (export then re-import
+into a fresh database, assert the link survives),
+<code>TestImportRecordConcept_SkipsWhenEndpointMissing</code> (mirrors
+whatever the existing
+<code>project_concept</code>/<code>observation_concept</code> import
+tests do for a dangling uuid reference).</p>
+<h3 id="acceptance-criteria-3">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green, including
+<code>knowledge_merge_test.go</code> and
+<code>jsonl_test.go</code>.</li>
+<li>Re-run the W2 manual smoke-test record through an actual export →
+fresh-database import round trip (not just unit tests — this is the same
+“smoke-test data transforms on a real run” requirement as W2, applied to
+the merge/export path specifically) and confirm the
+<code>[[wikilink]]</code>-derived link survives.</li>
+</ul>
+<hr />
+<h2 id="w5-documentation">W5 — Documentation</h2>
+<h3 id="files-to-modify-4">Files to modify</h3>
+<p><code>cmd/kb/helptext.go</code>:</p>
+<ul>
+<li><code>IngestHelpText</code> (line ~563): add a
+<code>DESCRIPTION</code> paragraph covering <code>[[Name]]</code> body
+scanning and <code>Tags</code> frontmatter resolution (design decision
+3), and the case-insensitive-matching/first-write-wins-casing behavior
+(decision 4) — including a short example matching the
+<code>[[Computers]]</code>/<code>[[computer]]</code> case from the
+design conversation.</li>
+<li><code>RecordHelpText</code> (line ~633): add
+<code>concepts RECORD_ID</code> to the <code>SYNOPSIS</code> block and a
+<code>concepts</code> bullet to the verb list in
+<code>DESCRIPTION</code>.</li>
+</ul>
+<h3
+id="regeneration-do-not-hand-edit-.1.md-files-they-are-generated">Regeneration
+(do not hand-edit <code>.1.md</code> files — they are generated)</h3>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> kb-topics-help   <span class="co"># regenerates kb-ingest.1.md and kb-record.1.md</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> man              <span class="co"># (if HTML/man output is otherwise part of the normal build)</span></span></code></pre></div>
+<h3 id="acceptance-criteria-4">Acceptance criteria</h3>
+<ul>
+<li><code>git diff kb-ingest.1.md kb-record.1.md</code> shows only the
+expected additions, regenerated from the edited <code>helptext.go</code>
+constants — no hand-edits to either <code>.1.md</code> file.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

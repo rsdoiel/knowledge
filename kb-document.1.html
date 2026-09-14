@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-document — ingest and review narrative documents at graduated
+abstraction levels</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb document ingest PATH –project P [–title T] [–format F]
+[–dry-run]</p>
+<p>kb document list [–project P]</p>
+<p>kb document show ID</p>
+<p>kb document review list [–project P] [–status S]</p>
+<p>kb document draft SECTION_ID BODY –by WHO [–confidence N]</p>
+<p>kb document review promote SECTION_ID</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>A document is a narrative or article (Markdown, Fountain, or plain
+text) ingested into two tables: one documents row plus one
+document_sections row per structural unit, always including one
+<code>level = 'gist'</code> row for the whole document. Unlike a
+decision record, a document takes no required frontmatter –
+title/author/publication-date/keywords are recognized when present
+(antennaApp’s own frontmatter vocabulary: title, description, pubDate,
+author, keywords) but never required, since a story or screenplay
+usually has none.</p>
+<p>Every <code>[[Name]]</code> wikilink in a section’s body, and every
+frontmatter keyword, resolves to a concept and links to the record the
+same way kb-ingest(1) tags decision records – case-insensitive, and
+matching case becomes canonical for later mentions. A section’s
+tag_density (how many known concepts its text mentions, tagged or not)
+is a mechanical triage signal, not a link – see review, below.</p>
+<p>Re-ingesting a changed file matches new sections to old ones by
+heading text: an unchanged section is left alone; a changed one updates
+its body and is flagged stale rather than losing its summary; a heading
+with no match is reported, never deleted.</p>
+<dl>
+<dt>ingest</dt>
+<dd>
+parse and segment PATH, creating the document and its sections on first
+ingest, or reconciling a changed file against its existing rows
+</dd>
+<dt>list</dt>
+<dd>
+print matching documents, one per line
+</dd>
+<dt>show</dt>
+<dd>
+print one document’s metadata plus every section (heading, summary
+status, stale flag, linked concepts) in one view
+</dd>
+<dt>review list</dt>
+<dd>
+the triage queue – sections needing attention, with their size,
+tag_density and confidence signals. Defaults to unsummarized and drafted
+sections; –status narrows to one exact status, including “reviewed” for
+auditing
+</dd>
+<dt>draft</dt>
+<dd>
+write a gist or section summary. WHO is free text (“human” or a model
+identifier) – kb never calls a model itself, drafting is always supplied
+by the caller. Clears a section’s stale flag, since a fresh draft is not
+stale against itself
+</dd>
+<dt>review promote</dt>
+<dd>
+promote a drafted summary to reviewed – the only human action that makes
+a summary trusted. Only a reviewed summary is indexed for search or
+returned as content by a concept-tag query; a section’s raw body is
+never indexed at all, only its reviewed summary
+</dd>
+</dl>
+<h1 id="vocabularies">VOCABULARIES</h1>
+<dl>
+<dt>summary_status</dt>
+<dd>
+unsummarized, drafted, reviewed – promotion is a one-way, human-only
+action for a first pass; no path un-reviews a promoted summary yet
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb-record(1), kb-ingest(1), kb-search(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

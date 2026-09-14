@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="concept-tag-based-retrieval-design">Concept-tag-based retrieval
+— Design</h1>
+<p><strong>Status (2026-09-13):</strong> Decisions confirmed. See <a
+href="concept-tag-retrieval-plan.html">concept-tag-retrieval-plan.md</a>
+for the phased plan.</p>
+<p><strong>References:</strong> -
+<code>concept-tag-retrieval-feature-request.md</code> — the filed idea
+this design resolves. -
+<code>wikilink-tagging-design.md</code>/<code>wikilink-tagging-plan.md</code>
+— shipped 2026-09-13; this design consumes what it built
+(<code>record_concepts</code>, case-insensitive concept resolution)
+rather than re-deriving it.</p>
+<h2 id="motivation-and-whats-changed-since-filing">Motivation, and
+what’s changed since filing</h2>
+<p>Filed 2026-09-08, motivated by harvey’s
+<code>UnifiedMemory.recallKB</code>
+(<code>memory_unified.go:276-314</code> as of filing) being a naive
+substring match scoped to the current project only, with a flat 0.5
+score and no concept awareness. The fix proposed there: a concept-name →
+linked-entities query, consumed as a cheap, embedder-free first pass
+ahead of harvey’s existing vector RAG fallback.</p>
+<p>One of the feature request’s open questions has a different answer
+today than it did on 2026-09-08: <strong>“Records, not just
+observations?”</strong> was left as “depends on where wikilink-tagging
+lands its concept↔︎record links — possibly a new
+<code>record_concepts</code> table.” That table now exists — shipped in
+<code>wikilink-tagging-plan.md</code> W1. So this design is in scope for
+both observations and records from the start, not observations-only.</p>
+<h2 id="what-knowledge-has-today-checked-directly">What
+<code>knowledge</code> has today, checked directly</h2>
+<ul>
+<li><code>Concepts()</code> lists every concept by name — the candidate
+set to match query text against.</li>
+<li><code>observation_concepts</code> and <code>record_concepts</code>
+are the two link tables this query reads from. Both are sparse today
+(<code>kb link</code> is the only pre-wikilink-tagging way
+observation↔︎concept links were made manually), but that is a
+data-density problem, not a design blocker — the query works the same
+whether it finds one link or a hundred.</li>
+<li>No query anywhere goes concept name → linked observations or
+records; only the reverse exists (<code>ProjectConcepts</code>,
+<code>RecordConcepts</code>).</li>
+<li><code>ResolveConceptName</code> (from wikilink-tagging) is
+<strong>not</strong> reusable here — it creates a concept on a miss,
+which is correct for ingest but wrong for a read-only retrieval path: a
+prompt mentioning a word that happens to match no concept must resolve
+to “no match,” never to a newly created empty concept.</li>
+</ul>
+<h2 id="decisions">Decisions</h2>
+<ol type="1">
+<li><p><strong>Two separate functions, not one</strong>, matching the
+feature request’s own split of “which concepts does this prompt mention”
+from “what do those concepts link to”:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> MatchConceptNames<span class="op">(</span>text <span class="dt">string</span><span class="op">)</span> <span class="op">([]</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> RecallByConceptNames<span class="op">(</span>names <span class="op">[]</span><span class="dt">string</span><span class="op">,</span> limit <span class="dt">int</span><span class="op">)</span> <span class="op">([]</span>ConceptMatch<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<p>Keeping them separate means a caller that already knows which
+concepts it cares about (not extracting them from free text) can call
+<code>RecallByConceptNames</code> directly — harvey’s chunk-analysis
+paths, not just <code>UnifiedMemory.Recall</code>, are plausible future
+callers of just the second half.</p></li>
+<li><p><strong><code>MatchConceptNames</code> does whole-word,
+case-insensitive matching, not substring.</strong> Loads
+<code>Concepts()</code> once, and for each concept name checks for a
+word-boundary match in <code>text</code> (case-folded). Substring
+matching alone would let a short concept name like <code>"RAG"</code>
+false-positive inside an unrelated word like <code>"storage"</code> —
+worth guarding against explicitly since concept names are free-form and
+can be short. Returns matched concept <strong>names</strong> (not ids) —
+the caller-facing contract stays in the same vocabulary as
+<code>[[wikilink]]</code> tags and <code>kb concept add</code>.</p></li>
+<li><p><strong><code>RecallByConceptNames</code> resolves names to
+concept ids read-only</strong> — a
+<code>SELECT id FROM concepts WHERE name = ? COLLATE NOCASE</code> per
+distinct name (deduped case-insensitively so <code>"Foo"</code> and
+<code>"foo"</code> in the same call don’t double-count), skipping any
+name with no match. This deliberately does <strong>not</strong> call
+<code>ResolveConceptName</code> (decision above) — nothing in a read
+path may create a concept as a side effect.</p></li>
+<li><p><strong>One merged, ranked result across both entity
+types.</strong> New struct:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ConceptMatch <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    SourceType <span class="dt">string</span>    <span class="co">// &quot;observation&quot; or &quot;record&quot; — same vocabulary as kb_fts.source_type</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    ID         <span class="dt">int64</span>     <span class="co">// internal db id of the observation or record</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    ProjectID  <span class="dt">int64</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    Title      <span class="dt">string</span>    <span class="co">// &quot;&quot; for observations; record title for records</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    Body       <span class="dt">string</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    MatchCount <span class="dt">int</span>       <span class="co">// distinct queried concepts this entity is linked to</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    CreatedAt  time<span class="op">.</span>Time <span class="co">// Observation.CreatedAt, or Record.IngestedAt</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Two SQL queries (one joining <code>observation_concepts</code>, one
+joining <code>record_concepts</code>, each grouped by entity id with
+<code>COUNT(DISTINCT concept_id)</code>), merged in Go and sorted by
+<code>MatchCount</code> descending, then <code>CreatedAt</code>
+descending, then truncated to <code>limit</code>. A single Go-side merge
+is simpler than a <code>UNION</code> across two differently-shaped
+SELECTs, and keeps each query’s SQL readable on its own.</p></li>
+<li><p><strong>Not project-scoped</strong>, matching the feature
+request’s explicit motivation: today’s <code>recallKB</code> missing
+cross-project concept matches was one of the three named limitations.
+<code>RecallByConceptNames</code> returns <code>ProjectID</code> on
+every result so a caller can filter or weight by
+workspace-current-project afterward, but the query itself doesn’t narrow
+by project.</p></li>
+<li><p><strong>Ranking is match-count-then-recency, nothing fancier, for
+a first pass.</strong> The feature request left “ranking beyond match
+count” open (recency, source-project affinity, link count). Recency as
+the tiebreak is enough to make ranking deterministic and useful without
+inventing a scoring formula nothing has validated yet; project-affinity
+weighting is explicitly deferred (decision 8).</p></li>
+<li><p><strong><code>limit</code> is a caller-supplied parameter, not a
+hardcoded constant.</strong> Answers the feature request’s “token budget
+interaction” question directly: harvey’s
+<code>UnifiedMemory.Recall</code> already has a budget-aware
+<code>add()</code> closure: it decides how many results are worth asking
+for, this function doesn’t guess on its behalf. (Today’s
+<code>recallKB</code> hardcodes 5 — that hardcoding was never a
+<code>knowledge</code>-side decision to begin with.)</p></li>
+<li><p><strong>No embedder, no new dependency</strong> — pure SQL and
+string matching, consistent with the feature request’s stated motivation
+(Pi-class, CPU-only hardware). Vector RAG stays a separate, later
+fallback in harvey; this design does not touch it.</p></li>
+</ol>
+<h2 id="deferred-explicitly">Deferred, explicitly</h2>
+<ul>
+<li>Consuming this from harvey’s <code>UnifiedMemory.Recall</code> —
+that’s a harvey-side change, in a different repository, consumed via the
+<code>go.mod replace</code> pending <code>knowledge</code>’s own publish
+(per <code>CLAUDE.md</code>). This design and its plan cover the
+<code>knowledge</code>-side query API only.</li>
+<li>Project-affinity ranking (workspace-current-project weighted above
+others) — noted in decision 6, real signal but not validated by any real
+usage yet.</li>
+<li>Widening past observations/records to the <code>documents</code>
+entity from <code>narrative-documents-feature-request.md</code> — that
+entity doesn’t exist yet; this query’s shape (merge-and-rank across
+<code>ConceptMatch</code> rows) should generalize to it later without a
+redesign, but that’s a claim to verify when that feature actually gets
+built, not now.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

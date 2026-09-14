@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="concept-tag-based-retrieval-implementation-plan">Concept-tag-based
+retrieval — Implementation Plan</h1>
+<p>See <a
+href="concept-tag-retrieval-design.html">concept-tag-retrieval-design.md</a>
+for the full rationale and confirmed decisions. Work items ordered W1 →
+W2. TDD-first: each phase’s tests are written and confirmed red before
+its implementation.</p>
+<p>New code lives in a new file, <code>retrieval.go</code> (tests in
+<code>retrieval_test.go</code>), rather than growing
+<code>knowledge.go</code> further (already ~1900 lines) — matches this
+package’s existing convention of one file per feature area
+(<code>records.go</code>, <code>knowledge_merge.go</code>,
+<code>retraction_check.go</code>).</p>
+<hr />
+<h2 id="w1-recallbyconceptnames-conceptmatch">W1 —
+<code>RecallByConceptNames</code> + <code>ConceptMatch</code></h2>
+<h3 id="files-to-create">Files to create</h3>
+<p><code>retrieval.go</code>:</p>
+<ul>
+<li><code>ConceptMatch</code> struct (design decision 4):
+<code>SourceType</code>, <code>ID</code>, <code>ProjectID</code>,
+<code>Title</code>, <code>Body</code>, <code>MatchCount</code>,
+<code>CreatedAt</code>.</li>
+<li>Unexported
+<code>conceptIDsByNames(kb *KnowledgeBase, names []string) ([]int64, error)</code>
+— per-name
+<code>SELECT id FROM concepts WHERE name = ?1 COLLATE NOCASE</code>,
+deduping resolved ids (not input names — two input spellings can resolve
+to the same id) and skipping any name with no match. Deliberately calls
+neither <code>AddConcept</code> nor <code>ResolveConceptName</code>
+(decision 3): a query error other than “no row” propagates; “no row” is
+a skip, not a failure.</li>
+<li><code>RecallByConceptNames(names []string, limit int) ([]ConceptMatch, error)</code>:
+<ol type="1">
+<li>Resolve <code>names</code> via <code>conceptIDsByNames</code>; if
+none resolve, return <code>nil, nil</code> (a prompt mentioning nothing
+tagged isn’t an error).</li>
+<li>Two queries, each <code>GROUP BY</code> the entity id with
+<code>COUNT(DISTINCT concept_id) AS match_count</code>, using a dynamic
+<code>IN (?,?,...)</code> placeholder list sized to the resolved id
+count:
+<ul>
+<li>Observations, joined through <code>observation_concepts</code>.</li>
+<li>Records, joined through <code>record_concepts</code> (title comes
+along; body is <code>records.body</code>, timestamp is
+<code>records.ingested_at</code>).</li>
+</ul></li>
+<li>Merge both result slices, sort by <code>MatchCount</code> desc then
+<code>CreatedAt</code> desc, truncate to <code>limit</code> (a
+non-positive <code>limit</code> means “no cap” — confirm this default
+during implementation and document it in the doc comment either
+way).</li>
+</ol></li>
+</ul>
+<h3 id="tests-to-add-retrieval_test.go">Tests to add
+(<code>retrieval_test.go</code>)</h3>
+<ul>
+<li><code>TestRecallByConceptNames_ReturnsLinkedObservation</code></li>
+<li><code>TestRecallByConceptNames_ReturnsLinkedRecord</code></li>
+<li><code>TestRecallByConceptNames_MergesAndRanksAcrossBothTypes</code>
+— seed one observation matching 1 concept and one record matching 2 (of
+the same queried set); assert the record sorts first.</li>
+<li><code>TestRecallByConceptNames_TiesBreakByRecency</code> — two
+observations tied on match count, different <code>CreatedAt</code>;
+assert the newer sorts first.</li>
+<li><code>TestRecallByConceptNames_UnmatchedNameIsSkippedNotError</code>
+— a name with no concept at all; assert no error, and it contributes
+nothing.</li>
+<li><code>TestRecallByConceptNames_DoesNotCreateConcepts</code> —
+regression guard for decision 3: call with a name that matches no
+concept, then assert <code>Concepts()</code> is unchanged (count and
+contents) — this is the test that would catch an accidental
+<code>AddConcept</code>/<code>ResolveConceptName</code> call creeping
+back in.</li>
+<li><code>TestRecallByConceptNames_DedupesCaseVariantInputNames</code> —
+<code>names</code> contains both <code>"Foo"</code> and
+<code>"foo"</code> resolving to the same concept; assert an observation
+linked to that concept gets <code>MatchCount == 1</code>, not 2.</li>
+<li><code>TestRecallByConceptNames_NotProjectScoped</code> — link the
+same concept to observations in two different projects; assert both come
+back.</li>
+<li><code>TestRecallByConceptNames_RespectsLimit</code> — three matching
+observations, <code>limit=2</code>; assert exactly 2 come back, the two
+highest-ranked.</li>
+<li><code>TestRecallByConceptNames_EmptyNamesReturnsNilNotError</code></li>
+</ul>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+<li><code>go vet ./...</code> clean.</li>
+</ul>
+<hr />
+<h2 id="w2-matchconceptnames">W2 — <code>MatchConceptNames</code></h2>
+<h3 id="files-to-modify">Files to modify</h3>
+<p><code>retrieval.go</code>:</p>
+<ul>
+<li><code>MatchConceptNames(text string) ([]string, error)</code>
+(design decision 2): loads <code>Concepts()</code> once, and for each
+concept name checks for a whole-word, case-insensitive match in
+<code>text</code> — build the check with
+<code>regexp.MustCompile(</code>(?i) + regexp.QuoteMeta(name) +
+<code>\b</code>)<code>per concept name (compiled once per call, not cached — call frequency here is "once per prompt," not a hot loop, so per-call compilation is simple and fine; revisit only if profiling ever says otherwise). Returns matched concept names in</code>Concepts()<code>'s own order (by name), not input order — there is no input order,</code>text`
+is prose.</li>
+</ul>
+<h3 id="tests-to-add-retrieval_test.go-1">Tests to add
+(<code>retrieval_test.go</code>)</h3>
+<ul>
+<li><code>TestMatchConceptNames_FindsWholeWordCaseInsensitive</code> —
+concept <code>"Foo"</code>, text <code>"... foo ..."</code>.</li>
+<li><code>TestMatchConceptNames_DoesNotFalsePositiveOnSubstring</code> —
+concept <code>"RAG"</code>, text <code>"we need more storage"</code>;
+assert no match (guards decision 2 directly — this is the case that
+motivated whole-word matching over substring).</li>
+<li><code>TestMatchConceptNames_NoMatchesReturnsEmpty</code></li>
+<li><code>TestMatchConceptNames_MultipleConceptsInOneText</code></li>
+<li><code>TestMatchConceptNames_MatchesAtWordBoundaryPunctuation</code>
+— e.g. <code>"[[Foo]]"</code> or <code>"Foo."</code> still matches
+despite non-word characters immediately adjacent.</li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./...</code> green.</li>
+<li>Manual smoke test (per
+<code>feedback_smoke_test_data_transforms</code> — this chains two real
+functions over real data, worth seeing it work end to end once, not just
+per-unit): in a scratch database, add a couple of concepts and link one
+to an observation and one to a record, then call
+<code>MatchConceptNames</code> on a short paragraph mentioning one of
+them by name, feed the result straight into
+<code>RecallByConceptNames</code>, and confirm the linked entity comes
+back. A small <code>go run</code>-able scratch program or a combined
+integration test in <code>retrieval_test.go</code> both satisfy this —
+pick whichever is faster to write at implementation time.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

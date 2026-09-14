@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-ingest-inline-wikilink-concept-tagging-design"><code>kb ingest</code>
+— inline <code>[[wikilink]]</code> concept tagging — Design</h1>
+<p><strong>Status (2026-09-13):</strong> Decisions confirmed. See <a
+href="wikilink-tagging-plan.html">wikilink-tagging-plan.md</a> for the
+phased plan.</p>
+<p><strong>References:</strong> -
+<code>wikilink-tagging-feature-request.md</code> — the filed idea this
+design resolves. - <code>narrative-documents-feature-request.md</code> —
+a second, independent consumer of the same
+<code>[[Name]] → concept</code> mechanism, not built by this design, but
+the reason the mechanism should live in <code>knowledge</code> rather
+than being ingest-only from the start (see decision 3).</p>
+<h2 id="motivation-and-two-corrections">Motivation, and two
+corrections</h2>
+<p>Filed as <code>wikilink-tagging-feature-request.md</code>, inspired
+by <a
+href="https://www.raspberrypi.com/news/build-a-digitally-sovereign-second-brain/">Build
+a digitally sovereign second brain</a> (Hinchliffe, <em>Raspberry
+Pi</em> magazine — the article actually demonstrates Logseq + Syncthing,
+not Obsidian as the feature request’s motivation section says; same
+<code>[[double-bracket]]</code> convention either way, so the design
+intent is unaffected). Two of the feature request’s open questions turn
+out to have concrete answers once checked against the current code, not
+just design choices:</p>
+<p><strong>“Does this ride on the observation that ingest already
+creates per record?”</strong> No — checked <code>cmd/kb/upsertAll</code>
+(<code>cmd/kb/ingest.go:232-291</code>) directly: <code>kb ingest</code>
+never calls <code>AddObservation</code>. A record’s only existing path
+to a concept today is <code>linkInitiative</code>
+(<code>cmd/kb/ingest.go:343-352</code>), which links the record’s
+<em>project</em> to a concept named after the <code>initiative</code>
+field — one concept per record, scoped to the project, not to the
+record. There is no existing record-to-concept relationship to reuse.
+This settles the feature request’s schema question: a new join table is
+required, not optional.</p>
+<p><strong>“Does <code>[[Name]]</code> conflict with the unused
+<code>Tags</code> frontmatter field?”</strong> Checked
+<code>recordfile.go:76</code> and every reference to it:
+<code>Tags []string</code> is parsed by <code>ParseRecordFile</code> and
+carried through <code>RecordFile</code>/<code>Record</code>
+(<code>recordfile.go:219,368</code>), but nothing in
+<code>cmd/kb/ingest.go</code> ever reads it — it has been dead weight
+since it was added. Rather than leave that question open, this design
+resolves it: <code>Tags</code> and <code>[[wikilink]]</code> feed the
+same mechanism (decision 3).</p>
+<h2 id="decisions">Decisions</h2>
+<ol type="1">
+<li><p><strong>New join table <code>record_concepts</code></strong>,
+added to <code>recordsSchema</code> (<code>records.go</code>), same
+shape as
+<code>observation_concepts</code>/<code>project_concepts</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode sql"><code class="sourceCode sql"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">CREATE</span> <span class="kw">TABLE</span> <span class="cf">IF</span> <span class="kw">NOT</span> <span class="kw">EXISTS</span> record_concepts (</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    record_id  <span class="dt">INTEGER</span> <span class="kw">REFERENCES</span> records(<span class="kw">id</span>)  <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">CASCADE</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    concept_id <span class="dt">INTEGER</span> <span class="kw">REFERENCES</span> concepts(<span class="kw">id</span>) <span class="kw">ON</span> <span class="kw">DELETE</span> <span class="kw">CASCADE</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">PRIMARY</span> <span class="kw">KEY</span> (record_id, concept_id)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>);</span></code></pre></div>
+<p><code>CREATE TABLE IF NOT EXISTS</code> is idempotent on an existing
+database, same lazy-migration pattern the rest of the schema uses — no
+<code>ALTER</code>, no backfill needed since this is a brand-new
+relationship with nothing to migrate.</p></li>
+<li><p><strong>New method
+<code>LinkRecordConcept(recordID, conceptID int64) error</code></strong>
+in <code>knowledge.go</code>, verbatim shape of
+<code>LinkObservationConcept</code>/ <code>LinkProjectConcept</code> —
+<code>INSERT OR IGNORE</code>, duplicate links a silent no-op.</p></li>
+<li><p><strong>Two sources feed the same concept-linking call, not
+one</strong>:</p>
+<ul>
+<li><code>[[Name]]</code> tokens scanned from the record <strong>body
+only</strong> (not title, not other frontmatter), via a simple
+non-nested regex: <code>\[\[([^\[\]]+)\]\]</code>.</li>
+<li>Each entry in the frontmatter <strong><code>Tags</code></strong>
+list, resolved exactly the same way. This gives the dead
+<code>Tags</code> field a purpose without new schema, rather than
+leaving “does this conflict with Tags” as an open question — they don’t
+conflict, they’re the same mechanism from two entry points
+(inline-while-writing vs. declared-up-front).</li>
+</ul>
+<p>For each name found (from either source), trimmed of surrounding
+whitespace: resolve via the new <code>ResolveConceptName</code>
+(decision 4), then
+<code>ing.kb.LinkRecordConcept(recordDBID, conceptID)</code>.</p></li>
+<li><p><strong>Case-insensitive resolution, scoped to this path only —
+not a change to
+<code>AddConcept</code>/<code>kb concept add</code>.</strong> Revised
+after review: a wikilink is embedded in ordinary prose, and English
+sentence position dictates capitalization independent of what the
+concept actually is —
+<code>[[Computers]] are ... I use a [[computer]] regularly</code> names
+one concept twice, not two concepts. Folding this is correct for text
+scanned out of prose. It is <em>not</em> correct to widen
+<code>kb concept add</code>’s own semantics the same way: a human typing
+<code>kb concept add Bug</code> at the CLI is a single deliberate act,
+not an artifact of sentence grammar, and forcing case-insensitive
+uniqueness onto <code>concepts.name</code> globally means an actual
+schema migration (SQLite can’t widen a <code>UNIQUE</code> column’s
+collation via <code>ALTER TABLE</code>; it requires a full table rebuild
+— new table, copy, drop, rename) for a problem this feature doesn’t
+have.</p>
+<p>So: a new method,
+<code>(kb *KnowledgeBase) ResolveConceptName(name string) (int64, error)</code>
+—
+<code>SELECT id FROM concepts WHERE name = ? COLLATE NOCASE LIMIT 1</code>;
+on a hit, return the existing id (whatever casing it was originally
+stored with, however that concept was created — manually or via an
+earlier wikilink); on a miss, <code>AddConcept(name, "")</code> creates
+it verbatim, and that casing becomes canonical for every later mention
+regardless of case. Checked the live <code>agents/knowledge.db</code>:
+<code>SELECT LOWER(name)... HAVING COUNT(*) &gt; 1</code> returns
+nothing today, so there’s no pre-existing case-duplicate to worry about
+at the code level either — this is a clean, additive method with no
+migration.</p>
+<p><code>AddConcept</code>/<code>AddConceptWithIdentifier</code> are
+untouched — <code>kb concept add</code> keeps its exact-match behavior,
+no risk to existing callers or tests.</p></li>
+<li><p><strong>Escaping is out of scope</strong>, per the feature
+request’s original decision — Markdown that legitimately needs literal
+<code>[[</code>/<code>]]</code> is a known, unaddressed gap.</p></li>
+<li><p><strong>New unexported
+<code>(ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64)</code></strong>,
+called unconditionally immediately after
+<code>ing.linkInitiative(rf, projectID)</code> in <code>upsertAll</code>
+— same call site, same unconditional-per-run shape (runs whether the
+record was added, updated, or skipped as unchanged), guarded only by
+<code>ing.dryRun</code> and <code>recordDBID == 0</code> (mirrors why
+<code>linkInitiative</code> guards on <code>projectID == 0</code>).
+Because both <code>ResolveConceptName</code> and
+<code>LinkRecordConcept</code> are idempotent, re-ingesting an unchanged
+file is a safe no-op rather than a duplicate-link error — no new
+idempotency mechanism needed.</p></li>
+<li><p><strong>Portability parity is required, not optional.</strong>
+<code>record_concepts</code> must be added everywhere
+<code>observation_concepts</code>/<code>project_concepts</code> already
+are, or it becomes the one relationship in the schema that silently
+doesn’t survive a merge or export/import round-trip:</p>
+<ul>
+<li><code>knowledge_merge.go</code>: a uuid-joined
+<code>INSERT OR IGNORE</code> block (mirroring the existing
+<code>observation_concepts</code>/<code>project_concepts</code> blocks
+at <code>knowledge_merge.go:416-443</code>), <strong>and</strong> an
+entry in the <code>allTables</code> summary list
+(<code>knowledge_merge.go:461-465</code>) — the comment there is
+explicit that a table missing from that list is a table whose loss is
+never reported (DR-0013).</li>
+<li><code>jsonl.go</code>: a <code>recordConceptRecord</code> JSON-L
+type, an <code>exportRecordConcepts</code> function, and an import
+branch — mirroring
+<code>observationConceptRecord</code>/<code>exportObservationConcepts</code>
+exactly.</li>
+</ul></li>
+<li><p><strong>No <code>kb_fts</code> changes.</strong>
+<code>record_concepts</code> is a pure join table; concepts are already
+indexed by <code>AddConceptWithIdentifier</code> itself. This feature
+touches none of the four-writer FTS mechanics.</p></li>
+<li><p><strong>New read path:
+<code>kb record concepts ID</code></strong>, mirroring
+<code>kb observation sources ID</code> — lists the concepts linked to a
+record. A write-only feature with no way to see what it wrote is
+incomplete; this is the minimum visibility needed to verify the feature
+works and to debug a record’s tags later.</p></li>
+<li><p><strong>Documentation.</strong>
+<code>kb-ingest.1.md</code>/<code>kb-record.1.md</code> are generated,
+not hand-maintained — checked the Makefile: each is produced by
+<code>./bin/kb TOPIC -help &gt;kb-TOPIC.1.md</code> (the
+<code>kb-topics-help</code> target), and the actual source text is
+<code>IngestHelpText</code>/<code>RecordHelpText</code>, Go string
+constants in <code>cmd/kb/helptext.go</code> (lines 563 and 633). So
+this decision is: edit those two constants (a paragraph on
+<code>[[wikilink]]</code>/<code>Tags</code> resolution and the
+case-insensitivity behavior for <code>IngestHelpText</code>; the new
+<code>concepts</code> subverb’s synopsis/description for
+<code>RecordHelpText</code>), then regenerate the <code>.1.md</code>
+files by running <code>kb-topics-help</code> — never hand-edit the
+<code>.1.md</code> files themselves, they’d be overwritten.</p></li>
+</ol>
+<h2 id="deferred-explicitly">Deferred, explicitly</h2>
+<ul>
+<li>Scanning <code>kb observation add</code> bodies for
+<code>[[Name]]</code> — the feature request scoped this to
+<code>kb ingest</code> (records) only for a first pass; nothing here
+changes that.</li>
+<li>Widening <code>kb concept add</code>/<code>AddConcept</code> to
+case-insensitive uniqueness globally (decision 4 scopes normalization to
+wikilink/Tags resolution only) — a real schema migration, not needed to
+solve the problem this design was asked to solve.</li>
+<li>Escaping (decision 5) — known gap, not blocking.</li>
+<li>Everything in <code>narrative-documents-feature-request.md</code> —
+that consumes <code>ResolveConceptName</code> the same way but is a
+separate entity (<code>documents</code>, not <code>records</code>) and a
+separate design cycle.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

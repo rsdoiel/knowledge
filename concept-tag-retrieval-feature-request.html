@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="concept-tag-based-retrieval-feature-request">Concept-tag-based
+retrieval — Feature Request</h1>
+<blockquote>
+<p><strong>2026-09-08: Filed.</strong> Captured from a conversation with
+RSDOIEL about small-model context budgets in harvey. No
+design/decide/plan cycle has been run yet. This document preserves the
+idea and the decisions already made about its shape — a starting point
+for that cycle, not a committed design.</p>
+<p>Decided in the filing conversation: - Lives in
+<strong><code>knowledge</code>, as a query API</strong> — harvey’s
+<code>UnifiedMemory</code> calls it, rather than harvey growing its own
+concept-matching logic. - Targets <strong>general per-prompt context
+injection</strong> (<code>UnifiedMemory.Recall</code>), not specifically
+the <code>/read-chunks</code> map-reduce path — though nothing here
+rules that path out later. - <strong>Supplements, not replaces,</strong>
+the existing vector RAG store: cheap tag-match runs first; RAG (when
+enabled and an embedder is configured) stays available as the
+semantic-similarity fallback.</p>
+</blockquote>
+<h2 id="motivation">Motivation</h2>
+<p>harvey’s small-model work (see <code>TODO.md</code>’s chunk-timing
+benchmark entry) has spent real effort making large-document analysis
+survive constrained, CPU-only hardware (GPULayers default fix, per-model
+timing, chunking guard fixes). Runtime KB retrieval hasn’t had the same
+attention — see “what harvey assumes today” below. A concept/tag-based
+lookup is attractive specifically <em>because</em> the hardware is
+constrained: it needs no embedder, no vector index, and no extra model
+call — just a name match against rows <code>knowledge</code> already
+stores, which is cheap enough to run on a Pi on every prompt.</p>
+<p>This also gives the <code>[[wikilink]]</code> tagging feature
+(<code>wikilink-tagging-feature-request.md</code>) a consumer. That
+document proposes <em>writing</em> denser concept links; this one
+proposes <em>reading</em> them back out selectively. Related but
+independent — this is useful today against however sparse the current
+<code>observation_concepts</code>/<code>project_concepts</code> links
+are, and gets more useful as tagging density grows, but doesn’t require
+wikilinks to ship first.</p>
+<h2 id="what-harvey-assumes-today">What harvey assumes today</h2>
+<p><code>memory_unified.go:276-314</code>
+(<code>UnifiedMemory.recallKB</code>) is the entire current KB retrieval
+path:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>obs<span class="op">,</span> err <span class="op">:=</span> kb<span class="op">.</span>Observations<span class="op">(</span>u<span class="op">.</span>cfg<span class="op">.</span>CurrentProjectID<span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">...</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> o <span class="op">:=</span> <span class="kw">range</span> obs <span class="op">{</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> qLower <span class="op">!=</span> <span class="st">&quot;&quot;</span> <span class="op">&amp;&amp;</span> <span class="op">!</span>strings<span class="op">.</span>Contains<span class="op">(</span>strings<span class="op">.</span>ToLower<span class="op">(</span>o<span class="op">.</span>Body<span class="op">),</span> qLower<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">continue</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    out <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>out<span class="op">,</span> UnifiedResult<span class="op">{</span>Source<span class="op">:</span> <span class="st">&quot;kb&quot;</span><span class="op">,</span> <span class="op">...,</span> Score<span class="op">:</span> <span class="fl">0.5</span><span class="op">})</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>out<span class="op">)</span> <span class="op">&gt;=</span> <span class="dv">5</span> <span class="op">{</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Three limitations this feature request addresses: - <strong>Substring
+match on the query as typed</strong>, not on concepts — a query about
+“chunking” won’t match an observation that says “map-reduce” even if
+both are tagged with the same concept. - <strong>Scoped to
+<code>CurrentProjectID</code> only</strong> — an observation from a
+different project tagged with a relevant concept is invisible, even
+though <code>observation_concepts</code> is not project-scoped. -
+<strong>Fixed score of 0.5, first-5-found</strong> — no ranking signal
+at all; order is whatever <code>kb.Observations</code> returns.</p>
+<p><code>knowledge</code> itself has no query in its public API today
+that goes concept → linked observations/records; only the reverse
+direction exists (<code>ProjectConcepts(projectID)</code>).</p>
+<h2 id="what-is-already-fine">What is already fine</h2>
+<ul>
+<li><strong><code>Concepts()</code></strong>
+(<code>knowledge.go:960</code>) already lists every concept by name —
+the candidate set to match query text against.</li>
+<li><strong><code>observation_concepts</code>/<code>project_concepts</code></strong>
+already express the many-to-many links this would read from; nothing new
+to store on the concept side.</li>
+<li><strong><code>kb link</code></strong> (<code>cmd/kb/link.go</code>)
+is the existing way observation↔︎concept links get made today — manually.
+Sparse, but real data to retrieve against now, not a hypothetical.</li>
+</ul>
+<h2 id="proposal">Proposal</h2>
+<ol type="1">
+<li><code>knowledge</code> grows a query, roughly:
+<code>ObservationsByConceptNames(names []string) ([]Observation, error)</code>
+— given concept names already known to match, return linked observations
+(and, once the schema question below is settled, records) ordered by
+concept-match count, not project-scoped.</li>
+<li>Query-text-to-concept-name matching (the “which concepts does this
+prompt mention” step) is a separate, simpler piece:
+substring/case-insensitive match of the prompt against
+<code>Concepts()</code> names. Whether this lives in
+<code>knowledge</code> (as a helper) or in harvey (calling
+<code>Concepts()</code> itself and doing the match locally) is an open
+question below.</li>
+<li>harvey’s <code>recallKB</code> calls the new query as a first pass;
+the existing substring-over-project-observations behavior becomes the
+fallback when no concept name matches, preserving today’s behavior
+rather than regressing it for KB content that’s never been tagged.</li>
+<li>No embedder, no new dependency — this stays a pure SQL/string-match
+path, consistent with why it’s worth building for small/CPU-only
+models.</li>
+</ol>
+<h2 id="open-questions-for-the-design-cycle">Open questions for the
+design cycle</h2>
+<ul>
+<li><strong>Concept-name matching belongs where?</strong> In
+<code>knowledge</code> (so any consumer gets the same matching logic) or
+in harvey (keeps <code>knowledge</code>’s API surface to pure data
+queries)? Precedent from the wikilink feature request leans toward
+<code>knowledge</code> owning name resolution generally.</li>
+<li><strong>Ranking beyond match count.</strong> Recency
+(<code>created_at</code>), source project matching harvey’s current
+workspace, or concept-link count — not decided.</li>
+<li><strong>Records, not just observations.</strong> This depends on
+where <code>wikilink-tagging-feature-request.md</code> lands its
+concept↔︎record links (open question there too — possibly a new
+<code>record_concepts</code> table). If that table doesn’t exist yet,
+this feature request’s first pass is observations-only.</li>
+<li><strong>Token budget interaction.</strong>
+<code>UnifiedMemory.Recall</code>’s existing budget-aware
+<code>add()</code> closure should keep working unchanged — confirm the
+new source doesn’t need special-casing there.</li>
+</ul>
+<h2 id="related">Related</h2>
+<ul>
+<li>Filing conversation, 2026-09-08 (Laboratory root).</li>
+<li><code>wikilink-tagging-feature-request.md</code> — writes the
+concept links this reads.</li>
+<li><code>agents-projects-layout-feature-request.md</code> — the
+template both of these documents follow.</li>
+<li>harvey’s <code>TODO.md</code>, chunk-timing benchmark entry — the
+small-model CPU-only-hardware context this is motivated by.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

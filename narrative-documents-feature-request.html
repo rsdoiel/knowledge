@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="narrativedocument-ingestion-at-graduated-abstraction-levels-feature-request">Narrative/document
+ingestion, at graduated abstraction levels — Feature Request</h1>
+<blockquote>
+<p><strong>2026-09-13: Filed.</strong> Captured from a conversation with
+RSDOIEL about enhancing the knowledge base to hold stories, narratives
+and articles, and about using the base to help small models. No
+design/decide/plan cycle has been run yet. This document preserves the
+idea and the decisions already made about its shape — a starting point
+for that cycle, not a committed design.</p>
+<p>Decided in the filing conversation: - In scope: narratives/stories
+(Markdown, Fountain, PDF) and articles/posts (Markdown, text, PDF). -
+Embedder-based retrieval is explicitly deferred — this feature is scoped
+to work without one, on top of the concept-tag graph
+(<code>wikilink-tagging-feature-request.md</code>,
+<code>concept-tag-retrieval-feature-request.md</code>), not as a
+replacement for either. - The central structural idea is
+<strong>graduated abstraction levels</strong>, not flat chunking: a
+document is stored/indexed as a gist, one or more section/scene
+summaries, and full text — not as one blob or as uniform fixed-size
+chunks. - Generating those summaries is <strong>deferred work, not an
+ingest-time requirement</strong>, and it is tracked, not
+fire-and-forget: ingest stores full text and segmentation immediately;
+gist/section summaries are produced later, by a model or a human, and go
+through a review step before being trusted the way decision records
+already require authorship and promotion to be separate acts
+(<code>proposed</code> → <code>accepted</code>; “a model may write a
+record but may not accept one” — the same rule applies here to
+summaries).</p>
+</blockquote>
+<h2 id="motivation">Motivation</h2>
+<p>The prompting for this came from thinking about how humans use
+stories. Immediate recall is limited — comparable to a model’s context
+window — but humans also have deeper recall, and stories are how a lot
+of information survives the trip between the two: a story compresses
+causal and relational structure (who did what, why, with what
+consequence) into a form that is cheap to recall as a whole and only
+expanded into detail when the detail is actually needed. That is a
+different shape than a flat list of facts, and it suggests the knowledge
+base should not treat a story the same way it treats an observation.</p>
+<p>Deferring summary generation raises a second question this document
+also answers: how does anyone — human or model — know what still needs
+doing, and whether a given piece of deferred work is safe to hand to a
+model at all? The model of this is ordinary classroom instruction: a
+student is given an assignment, does the work, and then the student and
+teacher review what was actually absorbed before it counts as learned.
+Applied here, “the work” is a gist or section summary, “the student” can
+be a model or a human, and the review step is what decides whether a
+draft is trustworthy — the same separation of authorship from acceptance
+that decision records already enforce. What classroom instruction adds
+on top is <em>triage before the work is assigned</em>: a teacher doesn’t
+hand every assignment to the same student regardless of difficulty.
+Proposal item 5 below makes that triage concrete — quantifiable signals
+(source size, tag density) decide whether a piece of deferred work is
+small/simple enough to route to a model, or ought to go to a human
+directly.</p>
+<p>This is also the direct next step after <a
+href="https://www.raspberrypi.com/news/build-a-digitally-sovereign-second-brain/">Build
+a digitally sovereign second brain</a> (Hinchliffe, <em>Raspberry
+Pi</em> magazine, 2026-09-07 — now cited in the database as source id
+13, linked from observation 401 on the <code>knowledge</code> project).
+The wikilink-tagging feature request that article motivated gives
+concepts a cheap, low-friction way to be named from inside prose; this
+feature request is about giving that prose somewhere richer to live than
+an observation body — full documents, at more than one altitude.</p>
+<h2 id="what-knowledge-assumes-today">What <code>knowledge</code>
+assumes today</h2>
+<ul>
+<li><strong><code>sources</code></strong> is for citations (papers,
+pages, datasets), not bodies of text to search — DR-0013 deliberately
+left it out of <code>kb_fts</code> (see
+<code>knowledge.go:1214-1216</code>), reasoning that what a source’s
+searchable text should be is its own decision. A narrative or article is
+exactly the case DR-0013 postponed: unlike a citation, its whole point
+<em>is</em> to be searched. That makes <code>sources</code> the wrong
+table to extend and argues for a new entity rather than loosening
+DR-0013’s boundary.</li>
+<li><strong><code>kb_fts</code></strong> has four writers today
+(<code>observation</code>, <code>project</code>, <code>concept</code>,
+<code>record</code>), each a flat
+<code>(body, kind, label, descr, source_type, source_id, project_id)</code>
+row, delete-then-reinsert on every write, with a matching block required
+in <code>rebuildFTSIfNeeded</code> and in <code>Search</code>’s display-
+reconstruction <code>CASE</code> (see
+<code>knowledge-structures-2026-09-13.md</code> for the full mechanics).
+Nothing today models one logical document as <em>multiple</em> indexed
+rows at different granularities — every existing
+<code>source_type</code> is one row per entity.</li>
+<li><strong>Fountain parsing already exists</strong> in harvey
+(<code>harvey/FOUNTAIN_FORMAT.md</code>) — scene headings
+(<code>INT./EXT.</code>) give a narrative document free, author-supplied
+structural boundaries that an article or a PDF doesn’t have.</li>
+<li><strong>No PDF text extraction exists anywhere in the workspace
+yet.</strong> This is a real gap, not an oversight to design around:
+PDF-format documents can’t be ingested until something (a Go library, or
+shelling out to <code>pdftotext</code>/poppler) does that
+extraction.</li>
+<li><strong>Concept tagging of free text</strong> is exactly the
+mechanism <code>wikilink-tagging-feature-request.md</code> proposes, but
+scoped there to <code>kb ingest</code> record bodies only. Documents are
+a second, independent consumer of the same
+<code>[[Name]] → AddConcept</code> mechanism, not something that feature
+request already covers.</li>
+</ul>
+<h2 id="what-is-already-fine">What is already fine</h2>
+<ul>
+<li><strong><code>AddConcept</code>/<code>AddConceptWithIdentifier</code></strong>
+find-or-create by name — same reuse point the wikilink feature request
+already identified. A document’s gist or section summaries can be
+scanned for <code>[[Name]]</code> the same way a record body would
+be.</li>
+<li><strong>The FTS four-writer pattern is a known checklist</strong>,
+not something to invent: pick a <code>source_type</code> literal, add a
+live insert/delete pair, match it in <code>rebuildFTSIfNeeded</code>,
+extend <code>Search</code>’s reconstruction <code>CASE</code>. Adding
+multiple rows per document (one per abstraction level) is a variation on
+this pattern, not a departure from it — each level’s row just carries
+the same <code>source_id</code> with a different <code>kind</code> or a
+level marker.</li>
+<li><strong><code>concept-tag-retrieval-feature-request.md</code>’s
+proposed query</strong> (<code>ObservationsByConceptNames</code>)
+generalizes to documents with the same shape: concept names in, linked
+entities out. A <code>DocumentsByConceptNames</code> (or a widened,
+type-spanning version of the same query) is additive, not a
+redesign.</li>
+</ul>
+<h2 id="proposal">Proposal</h2>
+<ol type="1">
+<li><p>A new entity — working name <code>documents</code> — carrying at
+minimum: <code>title</code>, <code>format</code> (<code>markdown</code>
+/ <code>fountain</code> / <code>pdf</code> / <code>text</code>), a path
+or reference to the source file, and project scope (same shape as
+<code>records</code>’ project linkage).</p></li>
+<li><p>Each document is represented at <strong>graduated abstraction
+levels</strong>, not as one body:</p>
+<ul>
+<li><strong>Gist</strong> — one or two sentences, the level cheap enough
+to always be a candidate for concept-tag retrieval, analogous to
+immediate recall.</li>
+<li><strong>Section/scene summaries</strong> — one per structural unit.
+Fountain’s scene headings give this boundary for free; Markdown/article
+headings (<code>#</code>/<code>##</code>) give an equivalent boundary;
+PDF has neither cleanly and needs its own segmentation strategy, an open
+question below.</li>
+<li><strong>Full text</strong> — the deep layer, retrieved only once a
+higher level has already matched.</li>
+</ul>
+<p>Each level is <code>[[wikilink]]</code>-taggable the same way a
+record body would be, so a search or a concept-tag-retrieval call can be
+told which altitude it is asking for.</p></li>
+<li><p>Segmentation and summary generation are per-format concerns, not
+one generic chunker: Fountain uses scene headings, Markdown/articles use
+heading levels, PDF needs a segmentation strategy decided separately
+once extraction exists.</p></li>
+<li><p>Retrieval-side: a small model’s cheap first pass stays
+concept-tag matching against gists (near-zero token cost); descending to
+a section summary or full text is a deliberate second call once the
+gist-level match indicates it’s worth the tokens. No embedder is
+required for this to work at all — semantic RAG over the full-text level
+remains available later as a further fallback, per the existing
+<code>concept-tag-retrieval-feature-request.md</code> sequencing
+(tag-match first, RAG-embedder as fallback), not as something this
+feature request needs to build.</p></li>
+<li><p><strong>Deferral and review, not ingest-time generation.</strong>
+Ingest stores a document’s full text and segmentation and stops there —
+it does not block on writing a gist or section summaries. Each level
+that doesn’t have one yet carries a status:</p>
+<ul>
+<li><strong><code>unsummarized</code></strong> — segmented, no summary
+attempted.</li>
+<li><strong><code>drafted</code></strong> — a model or a human has
+written one; not yet trusted for retrieval beyond low-stakes use.</li>
+<li><strong><code>reviewed</code></strong> — a human has confirmed it.
+Only a human promotes to this state, mirroring decision records’ rule
+that authorship and acceptance are separate acts.</li>
+</ul>
+<p>Each <code>unsummarized</code> item carries <strong>quantifiable
+signals alongside the content</strong>, so triage doesn’t require
+reading the content first: source size (word/token count of the
+segment), a concept-tag density (how many
+<code>[[wikilink]]</code>/gazetteer-matched concepts the segment already
+carries — mechanical, no model needed to compute), and, once drafted, a
+confidence value (0.0-1.0, same scale as harvey’s memory confidence
+scores, for consistency across the workspace) recording how much the
+drafting model or human trusts its own output.</p>
+<p>A queue (<code>kb document review list</code>, or similar) surfaces
+<code>unsummarized</code> and <code>drafted</code> items
+ordered/filterable by those signals, so a human can decide two separate
+things at two separate points: <strong>before</strong> drafting, whether
+an item is small/simple enough to route to a model versus needing a
+human to write it directly (the size and tag-density signals inform
+this); and <strong>after</strong> a draft exists, whether to promote it
+to <code>reviewed</code>, send it back, or rewrite it by hand. Nothing
+here requires build-time automation of the triage decision itself for a
+first pass — the queue surfaces the signals, a human still
+decides.</p></li>
+</ol>
+<h2 id="open-questions-for-the-design-cycle">Open questions for the
+design cycle</h2>
+<ul>
+<li><strong>Schema shape for the levels.</strong> One
+<code>documents</code> row plus a child table
+(<code>document_sections</code>, one row per level per document) that
+can each carry independent concept tags and FTS rows? Or a single row
+per document with fixed gist/summary/body columns, trading tagging
+granularity for schema simplicity? The four-writer FTS pattern assumes
+one row per entity today — multiple levels per document is the first
+case that doesn’t fit that assumption cleanly.</li>
+<li><strong>Who ends up drafting a given summary — model or human — is
+decided by the triage step above, not fixed in advance</strong>;
+hand-authored text (a logline is normal authorial practice) always takes
+precedence over a generated one when both exist. What’s still open:
+which model does the drafting when one is used (local/small at ingest
+time, or something bigger invoked out-of-band — see the read/write split
+discussed in the filing conversation: the small model that runs at
+<em>retrieval</em> time should never be the one generating summaries at
+ingest time), and where that model call lives (a <code>kb</code> hook
+that shells out, or a separate harvey-driven job that writes back
+through <code>kb</code>).</li>
+<li><strong>Exact shape of the confidence value.</strong> Self-reported
+by the drafting model, or computed from a heuristic (e.g. how much of
+the segment’s own concept tags actually appear reflected in the summary
+text)? Self-reported confidence from a small model may not be
+trustworthy on its own — worth deciding whether it’s a signal alongside
+the mechanical ones (size, tag density) rather than the sole basis for
+triage.</li>
+<li><strong>Whether any auto-promotion path should exist at
+all</strong>, e.g. a high-confidence, low-complexity draft skipping
+straight to <code>reviewed</code> without a human touching it. Decided
+for a first pass: no — every promotion to <code>reviewed</code> is a
+human action, full stop. Worth revisiting only once there’s enough real
+queue volume to know whether that’s a bottleneck.</li>
+<li><strong>PDF extraction tooling.</strong> Nothing in the workspace
+does this today; needs a decision (Go library vs. shelling out to
+<code>pdftotext</code>) before any PDF-format document can be ingested,
+independent of everything else in this proposal.</li>
+<li><strong>Does full text get indexed in <code>kb_fts</code> at
+all</strong>, or does deep-level retrieval work by reference back to the
+source file (mirroring how <code>sources</code> deliberately stays
+unindexed per DR-0013), with only gist and section levels living in the
+searchable index? This is the same boundary DR-0013 drew for citations,
+being asked again for documents.</li>
+<li><strong>Relationship to
+<code>concept-tag-retrieval-feature-request.md</code>’s query.</strong>
+Does <code>ObservationsByConceptNames</code> widen to cover documents
+(returning gist-level rows by default, with an explicit deeper call for
+more), or does this feature request need its own query? Depends on how
+the existing feature request’s open “records too?” question gets
+resolved.</li>
+<li><strong>Depends on <code>wikilink-tagging-feature-request.md</code>
+landing first</strong>, at least for the tagging mechanism, even though
+this proposal’s consumer (documents, not records) is different from that
+request’s first-pass scope (<code>kb ingest</code> record bodies
+only).</li>
+</ul>
+<h2 id="related">Related</h2>
+<ul>
+<li>Filing conversation, 2026-09-13 (Laboratory root).</li>
+<li><code>wikilink-tagging-feature-request.md</code> — the tagging
+mechanism this reuses.</li>
+<li><code>concept-tag-retrieval-feature-request.md</code> — the
+retrieval query this generalizes to documents; also the doc that first
+raised small-model context-budget motivation.</li>
+<li><code>agents-projects-layout-feature-request.md</code> — the
+template this document follows.</li>
+<li>Raspberry Pi magazine: <a
+href="https://www.raspberrypi.com/news/build-a-digitally-sovereign-second-brain/">Build
+a digitally sovereign second brain</a> (source id 13 in
+<code>agents/knowledge.db</code>, linked from observation 401, project
+<code>knowledge</code>).</li>
+<li><code>knowledge-structures-2026-09-13.md</code> (Laboratory root,
+untracked) — the FTS four-writer mechanics this proposal’s schema
+questions build on.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
