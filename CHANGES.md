@@ -3,6 +3,58 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.6 — 2026-09-13
+
+Three related features, each building on the last, extend `knowledge`
+toward a small-model-friendly knowledge base: inline concept tagging,
+embedder-free concept-based retrieval, and narrative/article ingestion at
+graduated abstraction levels.
+
+### Added
+
+- `kb ingest` resolves `[[Name]]` wikilinks in a record's body, and its
+  previously-unused `tags` frontmatter field, into concepts linked via a
+  new `record_concepts` table — case-insensitive via a new
+  `ResolveConceptName` (kept separate from `AddConcept`/`kb concept add`,
+  which stays exact-match, since a human typing a concept name at the CLI
+  is a deliberate act, unlike capitalization in prose). `kb record concepts
+  RECORD_ID` shows the result.
+- New `retrieval.go`: `MatchConceptNames` finds known concepts mentioned
+  (whole-word, case-insensitive) in arbitrary text, and
+  `RecallByConceptNames` returns observations, records, and documents
+  linked to a given set of concepts, merged and ranked by match count then
+  recency — a cheap, embedder-free first pass for small/CPU-only models,
+  not project-scoped.
+- New `documents`/`document_sections` entity ingests narratives and
+  articles (Markdown, Fountain, plain text — PDF is a reserved format
+  value, not yet supported, since no text-extraction path exists anywhere
+  in this workspace) at graduated abstraction levels: a document-level
+  gist plus one row per structural section (Fountain scene headings via
+  `github.com/rsdoiel/fountain`, the same module harvey already depends
+  on; Markdown headings; a whole file for plain text), each with its own
+  summary lifecycle (`unsummarized` → `drafted` → `reviewed`, mirroring
+  decision records' own author/promote split) via new
+  `kb document ingest/list/show/draft/review` verbs. Frontmatter
+  (title/description/pubDate/author/keywords, matching antennaApp's own
+  documented vocabulary) seeds metadata and an initial gist when present,
+  without ever being required. Re-ingesting a changed file matches
+  sections by heading text and flags a changed one `summary_stale` rather
+  than discarding its summary; a heading with no match is reported, never
+  deleted. Only a reviewed summary is ever indexed for search or returned
+  as trustworthy content by `RecallByConceptNames`.
+- All three features carry through `kb merge` and `kb export`/`kb import`
+  — `record_concepts`, `document_section_concepts`, and
+  `documents`/`document_sections` all appear in every portability path,
+  per the project's standing rule that a table missing from the merge
+  summary is a table whose loss goes unreported.
+
+### Changed
+
+- The independent hand-rolled CLI flag/positional parsers in `ingest`,
+  `record`, `source`, and the new `document ingest` were consolidated into
+  one shared `splitFlags` helper; `source add` now errors on an
+  unrecognized flag instead of silently dropping it.
+
 ## v0.0.5 — 2026-08-28
 
 Decision records now travel on every portability path — `merge`, `export`,

@@ -255,6 +255,44 @@ func TestSegmentFountain_ExtractsTitlePage(t *testing.T) {
 	}
 }
 
+// Regression: standard Fountain reserves [[double-brackets]] for its own
+// Notes syntax (confirmed against github.com/rsdoiel/fountain's isNoteStart/
+// isNoteEnd -- a [[...]] line is classified NoteType, not Action/Dialogue).
+// Harvey's own session-recording convention uses exactly this syntax for
+// file events ([[write: path -- ok]], [[read: path -- ok]]). Before this
+// fix, segmentFountain concatenated every non-scene-heading element's raw
+// text into the section body regardless of type, so a Note's literal
+// "[[...]]" text would survive into the body and then get re-matched by
+// wikilink tagging as a bogus concept name. Notes/Sections/Synopses/
+// Boneyard are annotations, not narrative prose, and must be excluded from
+// the body the same way the fountain library's own String()/ToHTML()
+// treat them as separate, opt-in content.
+func TestSegmentFountain_ExcludesNotesFromBody(t *testing.T) {
+	src := `Title: A Session
+Author: Test
+
+INT. AGENT MODE 2026-05-08 11:45:00
+
+HARVEY
+Harvey modified the following files during this session.
+
+[[write: harvey/rag_support.go -- ok]]
+`
+	sections, _, err := segmentFountain([]byte(src))
+	if err != nil {
+		t.Fatalf("segmentFountain: %v", err)
+	}
+	if len(sections) != 1 {
+		t.Fatalf("sections = %+v, want 1", sections)
+	}
+	if strings.Contains(sections[0].Body, "[[") || strings.Contains(sections[0].Body, "write:") {
+		t.Errorf("Body = %q, want the [[write: ...]] note excluded entirely", sections[0].Body)
+	}
+	if !strings.Contains(sections[0].Body, "Harvey modified the following files") {
+		t.Errorf("Body = %q, want the real dialogue preserved", sections[0].Body)
+	}
+}
+
 func TestSegmentText_IsAlwaysOneSection(t *testing.T) {
 	sections := segmentText("some plain text\nwith multiple lines\n")
 	if len(sections) != 1 || sections[0].Seq != 0 || sections[0].Heading != "" {

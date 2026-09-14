@@ -51,6 +51,14 @@ avoid.</p>
 database and is reported, never deleted — pruning would destroy data on
 a partial or wrong-directory run. Ingest never writes to a record file;
 only record does.</p>
+<p>Every [<a href="#name">Name</a>] found in a record’s body, and every
+entry in its frontmatter tags list, is resolved to a concept and linked
+to the record (kb record concepts shows the result). A name that does
+not match an existing concept creates one; matching is case-insensitive,
+so [[Computer]] and [[computer]] resolve to the same concept regardless
+of where each mention falls in a sentence, and the casing of whichever
+mention is resolved first becomes canonical. This does not change kb
+concept add, which stays exact-match.</p>
 <h1 id="options">OPTIONS</h1>
 <dl>
 <dt>–dry-run</dt>

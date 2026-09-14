@@ -21,6 +21,62 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.6-2026-09-13">v0.0.6 — 2026-09-13</h2>
+<p>Three related features, each building on the last, extend
+<code>knowledge</code> toward a small-model-friendly knowledge base:
+inline concept tagging, embedder-free concept-based retrieval, and
+narrative/article ingestion at graduated abstraction levels.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
+record’s body, and its previously-unused <code>tags</code> frontmatter
+field, into concepts linked via a new <code>record_concepts</code> table
+— case-insensitive via a new <code>ResolveConceptName</code> (kept
+separate from <code>AddConcept</code>/<code>kb concept add</code>, which
+stays exact-match, since a human typing a concept name at the CLI is a
+deliberate act, unlike capitalization in prose).
+<code>kb record concepts RECORD_ID</code> shows the result.</li>
+<li>New <code>retrieval.go</code>: <code>MatchConceptNames</code> finds
+known concepts mentioned (whole-word, case-insensitive) in arbitrary
+text, and <code>RecallByConceptNames</code> returns observations,
+records, and documents linked to a given set of concepts, merged and
+ranked by match count then recency — a cheap, embedder-free first pass
+for small/CPU-only models, not project-scoped.</li>
+<li>New <code>documents</code>/<code>document_sections</code> entity
+ingests narratives and articles (Markdown, Fountain, plain text — PDF is
+a reserved format value, not yet supported, since no text-extraction
+path exists anywhere in this workspace) at graduated abstraction levels:
+a document-level gist plus one row per structural section (Fountain
+scene headings via <code>github.com/rsdoiel/fountain</code>, the same
+module harvey already depends on; Markdown headings; a whole file for
+plain text), each with its own summary lifecycle
+(<code>unsummarized</code> → <code>drafted</code> →
+<code>reviewed</code>, mirroring decision records’ own author/promote
+split) via new <code>kb document ingest/list/show/draft/review</code>
+verbs. Frontmatter (title/description/pubDate/author/keywords, matching
+antennaApp’s own documented vocabulary) seeds metadata and an initial
+gist when present, without ever being required. Re-ingesting a changed
+file matches sections by heading text and flags a changed one
+<code>summary_stale</code> rather than discarding its summary; a heading
+with no match is reported, never deleted. Only a reviewed summary is
+ever indexed for search or returned as trustworthy content by
+<code>RecallByConceptNames</code>.</li>
+<li>All three features carry through <code>kb merge</code> and
+<code>kb export</code>/<code>kb import</code> —
+<code>record_concepts</code>, <code>document_section_concepts</code>,
+and <code>documents</code>/<code>document_sections</code> all appear in
+every portability path, per the project’s standing rule that a table
+missing from the merge summary is a table whose loss goes
+unreported.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li>The independent hand-rolled CLI flag/positional parsers in
+<code>ingest</code>, <code>record</code>, <code>source</code>, and the
+new <code>document ingest</code> were consolidated into one shared
+<code>splitFlags</code> helper; <code>source add</code> now errors on an
+unrecognized flag instead of silently dropping it.</li>
+</ul>
 <h2 id="v0.0.5-2026-08-28">v0.0.5 — 2026-08-28</h2>
 <p>Decision records now travel on every portability path —
 <code>merge</code>, <code>export</code>, <code>import</code> — not just
@@ -28,7 +84,7 @@
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -63,7 +119,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -72,7 +128,7 @@ start a workspace (DR-0021, DR-0022).</p>
 location for a new record, relative to <code>--root</code> like every
 other stored record path.</li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li><code>kb record new --project P</code> (no <code>--dir</code>) now
 writes to <code>agents/projects/P/decisions/</code> instead of
@@ -103,7 +159,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -145,7 +201,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather

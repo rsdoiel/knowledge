@@ -372,6 +372,25 @@ func segmentMarkdown(body string) []DocumentSection {
 	return sections
 }
 
+// fountainAnnotationTypes are element types the fountain library itself
+// treats as out-of-band annotations rather than narrative prose -- its own
+// String()/ToHTML() only include them when a ShowNotes/ShowSection/
+// ShowSynopsis flag is explicitly set (fountain.go). segmentFountain
+// follows the same default: excluded from a section's body entirely, not
+// just hidden from rendering. This matters beyond tidiness -- standard
+// Fountain reserves [[double-brackets]] for Notes, which collides directly
+// with wikilink tagging's own [[Name]] syntax. A Note's raw "[[...]]" text
+// left in the body would otherwise be re-matched as a bogus concept name at
+// tag time (found via a real Harvey session file, whose own [[write: path
+// -- ok]]/[[read: path -- ok]] file-event convention uses exactly this
+// syntax).
+var fountainAnnotationTypes = map[int]bool{
+	fountain.NoteType:     true,
+	fountain.BoneyardType: true,
+	fountain.SectionType:  true,
+	fountain.SynopsisType: true,
+}
+
 // segmentFountain splits a Fountain source on scene headings (design
 // decision 4), using github.com/rsdoiel/fountain -- the same module harvey
 // already depends on, not a second implementation of the same parsing.
@@ -406,6 +425,9 @@ func segmentFountain(src []byte) ([]DocumentSection, map[string]string, error) {
 			heading = strings.TrimSpace(e.Content)
 			body.Reset()
 			haveContent = true
+			continue
+		}
+		if fountainAnnotationTypes[e.Type] {
 			continue
 		}
 		haveContent = true

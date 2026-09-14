@@ -31,6 +31,7 @@
 <p>kb record new –title T –trigger G (–project P | –workspace) [–kind K]
 [–dir DIR] [–root DIR]</p>
 <p>kb record fmt PATH [–dry-run]</p>
+<p>kb record concepts RECORD_ID [–project P] [–workspace]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>A decision record is one file, indexed by ingest. new writes a
 project-scoped record to agents/projects/PROJECT/decisions/ by default
@@ -77,6 +78,12 @@ to say where the need was discovered
 rewrite every record under PATH into canonical form. This is the
 normalisation path ingest deliberately lacks, since ingest never writes
 to a record file
+</dd>
+<dt>concepts</dt>
+<dd>
+list the concepts ingest linked to a record, from [<a
+href="#name">Name</a>] wikilinks in its body and its frontmatter tags
+list
 </dd>
 </dl>
 <p>new, set-status, supersede and fmt are the only commands that write a
