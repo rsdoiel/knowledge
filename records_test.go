@@ -337,6 +337,35 @@ func TestUpdateRecordStatus_UnknownRecord(t *testing.T) {
 	}
 }
 
+func TestUpdateRecordPath(t *testing.T) {
+	kb := openTestKB(t)
+	r := newTestRecord("0148", "Moved later", "2026-08-01")
+	r.Path = "clasm/decisions/0148-moved-later.md"
+	id, err := kb.AddRecord(r)
+	if err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+
+	want := "agents/projects/clasm/decisions/0148-moved-later.md"
+	if err := kb.UpdateRecordPath(id, want); err != nil {
+		t.Fatalf("UpdateRecordPath: %v", err)
+	}
+	got, err := kb.RecordByID(id)
+	if err != nil {
+		t.Fatalf("RecordByID: %v", err)
+	}
+	if got.Path != want {
+		t.Errorf("Path = %q, want %q", got.Path, want)
+	}
+}
+
+func TestUpdateRecordPath_UnknownRecord(t *testing.T) {
+	kb := openTestKB(t)
+	if err := kb.UpdateRecordPath(9999, "x.md"); err == nil {
+		t.Error("UpdateRecordPath on a missing record returned nil, want an error")
+	}
+}
+
 // Only one direction is stored. superseded_by is the inverse of supersedes,
 // computed on read.
 func TestRelationsFor_ReportsBothDirections(t *testing.T) {
@@ -466,6 +495,48 @@ func TestAddRecordRelation_UnknownRecordFails(t *testing.T) {
 	}
 	if err := kb.AddRecordRelation(a, 9999, "relates_to"); err == nil {
 		t.Error("AddRecordRelation against a missing record returned nil, want an error")
+	}
+}
+
+// TODO.md "kb ingest does not prune a relation removed from a record's
+// frontmatter": the fix is a delete-then-insert of a record's own forward
+// edges, scoped to from_id so the other side's own declarations survive.
+func TestClearRecordRelationsFrom_RemovesOnlyForwardEdges(t *testing.T) {
+	kb := openTestKB(t)
+	a, err := kb.AddRecord(newTestRecord("0001", "A", "2026-08-01"))
+	if err != nil {
+		t.Fatalf("AddRecord A: %v", err)
+	}
+	b, err := kb.AddRecord(newTestRecord("0002", "B", "2026-08-02"))
+	if err != nil {
+		t.Fatalf("AddRecord B: %v", err)
+	}
+	if err := kb.AddRecordRelation(a, b, "relates_to"); err != nil {
+		t.Fatalf("AddRecordRelation a->b: %v", err)
+	}
+	if err := kb.AddRecordRelation(b, a, "supersedes"); err != nil {
+		t.Fatalf("AddRecordRelation b->a: %v", err)
+	}
+
+	if err := kb.ClearRecordRelationsFrom(a); err != nil {
+		t.Fatalf("ClearRecordRelationsFrom: %v", err)
+	}
+
+	relsA, err := kb.RelationsFor(a)
+	if err != nil {
+		t.Fatalf("RelationsFor(a): %v", err)
+	}
+	// b->a (supersedes) still shows up from a's point of view, inverted to
+	// superseded_by -- only a's own outgoing edge was cleared.
+	if len(relsA) != 1 || relsA[0].Relationship != "superseded_by" {
+		t.Errorf("relations for a = %+v, want only the inverse of b's own edge", relsA)
+	}
+	relsB, err := kb.RelationsFor(b)
+	if err != nil {
+		t.Fatalf("RelationsFor(b): %v", err)
+	}
+	if len(relsB) != 1 || relsB[0].Relationship != "supersedes" {
+		t.Errorf("relations for b = %+v, want b's own supersedes edge untouched", relsB)
 	}
 }
 

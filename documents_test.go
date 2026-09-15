@@ -566,6 +566,30 @@ func TestLinkDocumentSectionConcept_DuplicateIsNoOp(t *testing.T) {
 	}
 }
 
+// TODO.md "document_section_concepts should be checked for the same gap":
+// the fix is a delete-then-insert on re-ingest, same shape as
+// ClearRecordConcepts.
+func TestClearDocumentSectionConcepts_RemovesLinks(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	docID, _ := kb.AddDocument(Document{ProjectID: pid, Title: "T", Format: "text", Path: "a.txt"})
+	secID, _ := kb.AddDocumentSection(DocumentSection{DocumentID: docID, Level: "section"})
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkDocumentSectionConcept(secID, conceptID); err != nil {
+		t.Fatalf("LinkDocumentSectionConcept: %v", err)
+	}
+	if err := kb.ClearDocumentSectionConcepts(secID); err != nil {
+		t.Fatalf("ClearDocumentSectionConcepts: %v", err)
+	}
+	concepts, err := kb.DocumentSectionConcepts(secID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	if len(concepts) != 0 {
+		t.Errorf("concepts = %+v, want none after ClearDocumentSectionConcepts", concepts)
+	}
+}
+
 func TestLinkDocumentSectionConcept_CascadesOnSectionDelete(t *testing.T) {
 	kb := openTestKB(t)
 	pid, _ := kb.AddProject("alpha", "")

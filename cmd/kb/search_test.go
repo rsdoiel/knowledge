@@ -24,6 +24,16 @@ func TestCmdSearch_FindsObservation(t *testing.T) {
 	}
 }
 
+// TODO.md "kb search exits 0 when it finds nothing": the workspace
+// convention for search-style tools is exit 1 on no match.
+func TestCmdSearch_NoResultsReturnsError(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdSearch(kb, nil, false, []string{"nonexistentzzqqterm"}, &out); err == nil {
+		t.Error("expected an error when search finds nothing, so kb exits 1 per the search-tool convention")
+	}
+}
+
 func TestCmdSearch_RequiresTerm(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer

@@ -301,6 +301,33 @@ func TestCmdIngest_CrossTierRelatesToResolves(t *testing.T) {
 	}
 }
 
+// TODO.md "kb ingest does not prune a relation removed from a record's
+// frontmatter": record_relations only ever grew, since linkRelation inserted
+// what a file declared but never deleted what it no longer declared.
+func TestCmdIngest_RemovedRelatesToIsPruned(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0002", Project: "clasm", RelatesTo: []string{"0003"}}.write(t, dir)
+	testRecord{ID: "0003", Project: "clasm"}.write(t, dir)
+	runIngest(t, kb, dir)
+
+	older := recordDBID(t, kb, "clasm", "0003")
+	if rels, _ := kb.RelationsFor(older); len(rels) != 1 {
+		t.Fatalf("relations for 0003 before removal = %+v, want 1", rels)
+	}
+
+	testRecord{ID: "0002", Project: "clasm"}.write(t, dir) // relates_to dropped
+	runIngest(t, kb, dir)
+
+	rels, err := kb.RelationsFor(older)
+	if err != nil {
+		t.Fatalf("RelationsFor: %v", err)
+	}
+	if len(rels) != 0 {
+		t.Errorf("relations for 0003 after removal = %+v, want none — a relation dropped from the file should not survive re-ingest", rels)
+	}
+}
+
 func TestCmdIngest_WorkspaceQualifiedRelatesToResolves(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	wsDir := filepath.Join(root, "agents", "decisions")
@@ -473,6 +500,67 @@ func TestCmdIngest_VanishedFileIsReportedNotDeleted(t *testing.T) {
 	}
 }
 
+// TODO.md "kb ingest never updates records.path when a record file moves but
+// its body is unchanged": a pure move always skips (the checksum still
+// matches), and the skip branch never wrote the new path.
+func TestCmdIngest_MovedFileUpdatesPath(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	oldDir := filepath.Join(root, "clasm", "decisions")
+	newDir := filepath.Join(root, "agents", "projects", "clasm", "decisions")
+	oldPath := testRecord{ID: "0001", Project: "clasm"}.write(t, oldDir)
+	runIngest(t, kb, oldDir)
+
+	newPath := filepath.Join(newDir, filepath.Base(oldPath))
+	if err := os.MkdirAll(newDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+
+	s := runIngest(t, kb, newDir)
+	if s.Skipped != 1 {
+		t.Fatalf("summary = %+v, want the moved-but-unchanged file to skip", s)
+	}
+
+	p, _ := kb.ProjectByName("clasm")
+	rec, err := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0001")
+	if err != nil {
+		t.Fatalf("RecordByIdentity: %v", err)
+	}
+	want := filepath.Join("agents", "projects", "clasm", "decisions", "0001-fixture.md")
+	if rec.Path != want {
+		t.Errorf("Path = %q, want %q — a pure move must update the stored path", rec.Path, want)
+	}
+}
+
+// TODO.md "the downstream remediation advice is actively dangerous": a
+// record whose file moved out of the ingested prefix looks identical to one
+// whose file was actually deleted, so the message must not assert deletion
+// as the only explanation.
+func TestCmdIngest_MissingFileMessageDoesNotFlatlyRecommendRemoval(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	path := testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+	runIngest(t, kb, dir)
+
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	s := runIngest(t, kb, dir)
+
+	if len(s.Missing) != 1 {
+		t.Fatalf("Missing = %v, want one entry", s.Missing)
+	}
+	msg := s.Missing[0]
+	if strings.Contains(msg, "is gone; use kb record remove to drop it") {
+		t.Errorf("message = %q, asserts deletion as the only cause; a moved file looks identical to a deleted one", msg)
+	}
+	if !strings.Contains(msg, "moved") {
+		t.Errorf("message = %q, want it to name a move as a possible cause", msg)
+	}
+}
+
 // Design decision 3: the initiative field is materialised as a concept link.
 func TestCmdIngest_InitiativeBecomesAConcept(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
@@ -587,6 +675,58 @@ func TestCmdIngest_ReingestUnchangedFileDoesNotDuplicateLinks(t *testing.T) {
 	}
 	if len(concepts) != 1 {
 		t.Errorf("RecordConcepts = %+v, want exactly 1 after re-ingesting an unchanged file", concepts)
+	}
+}
+
+// TODO.md "kb ingest does not prune a concept link removed from a record":
+// same defect as the relation-prune gap above, in record_concepts.
+func TestCmdIngest_RemovedWikilinkConceptIsPruned(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[Foo]].\n"}.write(t, dir)
+	runIngest(t, kb, dir)
+
+	id := recordDBID(t, kb, "clasm", "0001")
+	if concepts, _ := kb.RecordConcepts(id); len(concepts) != 1 {
+		t.Fatalf("concepts before removal = %+v, want 1", concepts)
+	}
+
+	testRecord{ID: "0001", Project: "clasm", Body: "\nNo more mentions.\n"}.write(t, dir)
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(id)
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 0 {
+		t.Errorf("concepts after removal = %+v, want none — a wikilink dropped from the body should not survive re-ingest", concepts)
+	}
+}
+
+// TODO.md "[[NNNN]] in a record body mints a junk concept instead of citing a
+// record": [[0007]] is the natural way to write "see DR-0007", but was
+// silently resolved into a concept named "0007".
+func TestCmdIngest_WikilinkRecordIDWarnsInsteadOfMintingConcept(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0007", Project: "clasm"}.write(t, dir)
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[0007]] and [[DR-0007]].\n"}.write(t, dir)
+
+	s := runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 0 {
+		t.Errorf("concepts = %+v, want none — [[0007]]/[[DR-0007]] should not mint a concept", concepts)
+	}
+	if len(s.Warnings) == 0 {
+		t.Fatal("expected a warning about a record-id-shaped wikilink, got none")
+	}
+	joined := strings.Join(s.Warnings, "\n")
+	if !strings.Contains(joined, "0007") {
+		t.Errorf("warnings = %v, want one naming 0007", s.Warnings)
 	}
 }
 

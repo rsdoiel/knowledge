@@ -26,12 +26,11 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	if err != nil {
 		return err
 	}
+	if len(results) == 0 {
+		return fmt.Errorf("no results for %q", term)
+	}
 	if jsonOut {
 		return printJSON(out, results)
-	}
-	if len(results) == 0 {
-		fmt.Fprintf(out, "no results for %q\n", term)
-		return nil
 	}
 	for _, r := range results {
 		// The bracket shows which table the hit came from, not the hit's own

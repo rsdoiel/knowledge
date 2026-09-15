@@ -1046,6 +1046,27 @@ func (kb *KnowledgeBase) LinkRecordConcept(recordID, conceptID int64) error {
 	return err
 }
 
+/** ClearRecordConcepts deletes every concept link a record carries, without
+ * deleting the concepts themselves — another record or observation may still
+ * reference one. Ingest calls this before re-linking a record's current
+ * wikilinks and tags on every run, so a tag dropped from a file is actually
+ * dropped from the database: without it, record_concepts only ever grew,
+ * exactly as record_relations did before ClearRecordRelationsFrom.
+ *
+ * Parameters:
+ *   recordID (int64) — internal database id of the record (Record.ID, not RecordID).
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   err := kb.ClearRecordConcepts(recordID)
+ */
+func (kb *KnowledgeBase) ClearRecordConcepts(recordID int64) error {
+	_, err := kb.db.Exec(`DELETE FROM record_concepts WHERE record_id = ?`, recordID)
+	return err
+}
+
 /** ResolveConceptName finds an existing concept whose name matches name
  * case-insensitively, or creates one with name exactly as given when none
  * exists. Intended for concept names extracted from free text (inline

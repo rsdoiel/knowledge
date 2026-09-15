@@ -25,6 +25,14 @@ var recordFilePattern = regexp.MustCompile(`^[0-9]{4}-.*\.md$`)
 // non-nested by design decision — see wikilink-tagging-design.md decision 3.
 var wikilinkPattern = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
 
+// recordIDLikeWikilink matches a wikilink name that looks like it was meant
+// to cite a decision record ([[0007]] or [[DR-0007]]) rather than tag a
+// concept. relates_to and supersedes are how a record cites another record;
+// [[Name]] is how it tags a concept — but [[0007]] is the natural way to
+// write "see DR-0007", so it silently minted a concept named "0007" instead
+// of warning. See TODO.md "[[NNNN]] in a record body mints a junk concept".
+var recordIDLikeWikilink = regexp.MustCompile(`(?i)^(dr-)?[0-9]{4}$`)
+
 // ingestSummary is what one ingest run reports, in both JSON and text form.
 // Unresolved, Malformed and Missing are the three ways a run can be
 // incomplete without being a failure.
@@ -248,13 +256,19 @@ func (ing *ingester) upsertAll(files []string) {
 
 		rec := &ingestedRecord{file: rf, projectID: projectID}
 		existing, err := ing.kb.RecordByIdentity(ing.workspace, projectID, rf.Record.Scope, rf.Record.RecordID)
+		moved := err == nil && existing.Path != rf.Record.Path
 		if err == nil {
 			if problem := identityCollision(existing, &rf.Record, name); problem != "" {
 				ing.summary.Failed++
 				ing.summary.Errors = append(ing.summary.Errors, problem)
 				continue
 			}
-			if existing.Path != rf.Record.Path {
+			// A path change alongside a body change is genuinely ambiguous —
+			// a slug may have been regenerated, or two files may claim one
+			// id — and worth flagging. A path change alone is an ordinary
+			// move, handled below without a warning that would otherwise
+			// read like a possible collision.
+			if moved && existing.Checksum != rf.Record.Checksum {
 				ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
 					"%s: DR-%s was stored at %s; a slug may have been regenerated, or two files may claim one id",
 					name, rf.Record.RecordID, existing.Path))
@@ -264,6 +278,12 @@ func (ing *ingester) upsertAll(files []string) {
 		case err == nil && existing.Checksum == rf.Record.Checksum:
 			ing.summary.Skipped++
 			rec.dbID = existing.ID
+			if !ing.dryRun && moved {
+				if uerr := ing.kb.UpdateRecordPath(existing.ID, rf.Record.Path); uerr != nil {
+					ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf(
+						"%s: update path: %v", name, uerr))
+				}
+			}
 		case err == nil:
 			ing.summary.Updated++
 		default:
@@ -352,11 +372,23 @@ func (ing *ingester) linkInitiative(rf *knowledge.RecordFile, projectID int64) {
 // wikilink-tagging-design.md decision 3. Name matching is case-insensitive
 // (decision 4: ResolveConceptName, not AddConcept) because capitalization in
 // prose is often just sentence position, not a deliberate distinction.
-// Idempotent like linkInitiative: safe to call on every ingest run,
-// regardless of whether the record was added, updated, or skipped as
-// unchanged.
+//
+// Clears the record's existing links before re-adding its current set, so a
+// tag dropped from the file is actually dropped from the database — see
+// ClearRecordConcepts. Safe to call on every ingest run regardless of
+// whether the record was added, updated, or skipped as unchanged: an
+// unchanged file re-links the same names it already had.
+//
+// A name shaped like a record id ([[0007]], [[DR-0007]]) is warned about and
+// skipped rather than resolved: it almost always means the author meant to
+// cite a record via supersedes/relates_to, not tag a concept named "0007".
 func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64) {
 	if ing.dryRun || recordDBID == 0 {
+		return
+	}
+	if err := ing.kb.ClearRecordConcepts(recordDBID); err != nil {
+		ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+			"%s: clear concept links: %v", rf.Record.Path, err))
 		return
 	}
 	seen := map[string]bool{}
@@ -376,6 +408,13 @@ func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64
 		}
 	}
 	for _, name := range names {
+		if recordIDLikeWikilink.MatchString(name) {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: [[%s]] looks like a record reference, not a concept tag; "+
+					"cite it via supersedes/relates_to instead — not linked as a concept",
+				rf.Record.Path, name))
+			continue
+		}
 		conceptID, err := ing.kb.ResolveConceptName(name)
 		if err != nil {
 			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
@@ -402,9 +441,22 @@ func (ing *ingester) relativeTo(file string) string {
 // resolveAll is pass two: every record is now stored, so forward references
 // resolve. Skipped records are resolved too — re-running is the documented
 // remedy for a reference whose target had not yet been ingested.
+//
+// Clears each record's own forward edges before re-adding its current set,
+// so a relation dropped from the frontmatter is actually dropped from the
+// database — see ClearRecordRelationsFrom. Without this, record_relations
+// only ever grew: any relation ever ingested was permanent, regardless of
+// whether the file still declared it.
 func (ing *ingester) resolveAll() {
 	for _, rec := range ing.order {
 		name := rec.file.Record.Path
+
+		if !ing.dryRun && rec.dbID != 0 {
+			if err := ing.kb.ClearRecordRelationsFrom(rec.dbID); err != nil {
+				ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf(
+					"%s: clear relations: %v", name, err))
+			}
+		}
 
 		// supersedes and superseded_by are same-tier only, so their entries
 		// are always bare. A qualified one is reported rather than resolved:
@@ -528,6 +580,13 @@ func (ing *ingester) lookup(key identityKey) (int64, bool) {
 // reportMissing lists records whose file is no longer on disk. They are
 // reported, never deleted: pruning on a partial or wrong-directory run would
 // destroy data.
+//
+// A record whose file was genuinely deleted and one whose file simply moved
+// out of this run's prefix look identical from a stale row: both fail the
+// stat below. The message does not assert which one happened — see TODO.md
+// "the downstream remediation advice is actively dangerous", where this used
+// to name kb record remove as the fix and would have deleted five live
+// records that had only moved one directory over.
 func (ing *ingester) reportMissing(dir string) {
 	prefix := ing.relativeTo(dir)
 	records, err := ing.kb.RecordsUnderPath(prefix)
@@ -539,7 +598,8 @@ func (ing *ingester) reportMissing(dir string) {
 			continue
 		}
 		ing.summary.Missing = append(ing.summary.Missing, fmt.Sprintf(
-			"DR-%s (%s) is in the database but its file is gone; use kb record remove to drop it",
+			"DR-%s (%s) is in the database but has no file at that path; "+
+				"if it was deleted, remove it with kb record remove — if it moved, re-run ingest on its new location first",
 			r.RecordID, r.Path))
 	}
 }

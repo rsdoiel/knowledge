@@ -1680,6 +1680,37 @@ func TestLinkRecordConcept_DuplicateIsNoOp(t *testing.T) {
 	}
 }
 
+// TODO.md "kb ingest does not prune a concept link removed from a record":
+// the fix is a delete-then-insert on re-ingest.
+func TestClearRecordConcepts_RemovesLinks(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	recID := seedTestRecord(t, kb, pid, "0001")
+	conceptID, _ := kb.AddConcept("Foo", "")
+	if err := kb.LinkRecordConcept(recID, conceptID); err != nil {
+		t.Fatalf("LinkRecordConcept: %v", err)
+	}
+	if err := kb.ClearRecordConcepts(recID); err != nil {
+		t.Fatalf("ClearRecordConcepts: %v", err)
+	}
+	concepts, err := kb.RecordConcepts(recID)
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 0 {
+		t.Errorf("concepts = %+v, want none after ClearRecordConcepts", concepts)
+	}
+	// The concept row itself survives -- other records or observations may
+	// still reference it; only this record's link is unlinked.
+	var count int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM concepts WHERE id = ?`, conceptID).Scan(&count); err != nil {
+		t.Fatalf("count concepts: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected the concept row to survive ClearRecordConcepts, got %d rows", count)
+	}
+}
+
 func TestLinkRecordConcept_CascadesOnRecordDelete(t *testing.T) {
 	kb := openTestKB(t)
 	pid, _ := kb.AddProject("alpha", "")

@@ -644,6 +644,39 @@ func (kb *KnowledgeBase) UpdateRecordStatus(id int64, status string) error {
 	return nil
 }
 
+/** UpdateRecordPath sets a record's stored path, leaving every other field
+ * alone. This is the write ingest makes when a checksum-matched record's file
+ * has moved: the body is unchanged so nothing else needs updating, but path
+ * itself does, or the database silently diverges from the files that are
+ * supposed to be authoritative.
+ *
+ * Parameters:
+ *   id   (int64)  — the records table primary key.
+ *   path (string) — the new path, relative to the workspace root.
+ *
+ * Returns:
+ *   error — when no such record exists, or on database failure.
+ *
+ * Example:
+ *   err := kb.UpdateRecordPath(id, "agents/projects/clasm/decisions/0001-x.md")
+ */
+func (kb *KnowledgeBase) UpdateRecordPath(id int64, path string) error {
+	res, err := kb.db.Exec(
+		`UPDATE records SET path = ? WHERE id = ?`, path, id,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("knowledge: no record with id %d", id)
+	}
+	return nil
+}
+
 /** AddRecordRelation stores one directed edge between two records. Adding the
  * same edge twice is a no-op.
  *
@@ -682,6 +715,32 @@ func (kb *KnowledgeBase) AddRecordRelation(fromID, toID int64, relationship stri
 		 VALUES (?, ?, ?)`,
 		fromID, toID, relationship,
 	)
+	return err
+}
+
+/** ClearRecordRelationsFrom deletes every relation a record declares as its
+ * own — both supersedes and relates_to — without touching edges other
+ * records declare toward it. Ingest calls this before re-inserting a
+ * record's current set on every run, so a relation dropped from a file's
+ * frontmatter is actually dropped from the database: without it,
+ * record_relations only ever grew, since re-ingest inserted what a file
+ * declared but never deleted what it no longer declared.
+ *
+ * Scoped to fromID so the other side's own declarations survive: deleting by
+ * either endpoint would also erase a relates_to edge the other record still
+ * asserts.
+ *
+ * Parameters:
+ *   fromID (int64) — the citing record's primary key.
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   err := kb.ClearRecordRelationsFrom(recordID)
+ */
+func (kb *KnowledgeBase) ClearRecordRelationsFrom(fromID int64) error {
+	_, err := kb.db.Exec(`DELETE FROM record_relations WHERE from_id = ?`, fromID)
 	return err
 }
 

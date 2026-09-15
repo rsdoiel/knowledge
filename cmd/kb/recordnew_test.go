@@ -107,7 +107,13 @@ func TestCmdIngest_SameUUIDIsNotACollision(t *testing.T) {
 
 // A slug is cosmetic and may be regenerated, so a changed path alone is a
 // warning rather than proof of a collision.
-func TestCmdIngest_ChangedPathWithoutUUIDsWarns(t *testing.T) {
+// A rename with unchanged content is an ordinary move (TODO.md "kb ingest
+// never updates records.path when a record file moves but its body is
+// unchanged"), not a possible id collision, so it updates the stored path
+// silently rather than warning. Ingest still can't tell a slug-only rename
+// from two files claiming the same id when the content *also* differs — that
+// case is covered by TestCmdIngest_ChangedPathAndBodyWarns below.
+func TestCmdIngest_RenamedSlugUpdatesPathWithoutWarning(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	dir := filepath.Join(root, "agents", "decisions")
 	writeRaw(t, dir, "0001-old-slug.md", workspaceRecord("0001", "Same record", ""))
@@ -122,8 +128,39 @@ func TestCmdIngest_ChangedPathWithoutUUIDsWarns(t *testing.T) {
 	if s.Failed != 0 {
 		t.Errorf("summary = %+v, want a renamed slug not to fail", s)
 	}
+	if len(s.Warnings) != 0 {
+		t.Errorf("Warnings = %v, want none — unchanged content means this is an ordinary move, not a possible collision", s.Warnings)
+	}
+	rec, err := kb.RecordByIdentity(kb.Workspace(), 0, "workspace", "0001")
+	if err != nil {
+		t.Fatalf("RecordByIdentity: %v", err)
+	}
+	want := filepath.Join("agents", "decisions", "0001-new-slug.md")
+	if rec.Path != want {
+		t.Errorf("Path = %q, want %q", rec.Path, want)
+	}
+}
+
+// Unlike a pure rename, a path change alongside a body change stays
+// ambiguous — a slug may have been regenerated, or two files may claim one
+// id — so it keeps warning.
+func TestCmdIngest_ChangedPathAndBodyWarns(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "agents", "decisions")
+	writeRaw(t, dir, "0001-old-slug.md", workspaceRecord("0001", "Same record", ""))
+	runIngest(t, kb, dir)
+
+	if err := os.Remove(filepath.Join(dir, "0001-old-slug.md")); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	writeRaw(t, dir, "0001-new-slug.md", workspaceRecord("0001", "A different title", ""))
+	s := runIngest(t, kb, dir)
+
+	if s.Failed != 0 {
+		t.Errorf("summary = %+v, want this not to fail", s)
+	}
 	if len(s.Warnings) == 0 {
-		t.Error("want a warning that the stored path changed")
+		t.Error("want a warning that the stored path changed alongside the content")
 	}
 }
 

@@ -3,6 +3,40 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.7 — 2026-09-15
+
+A bug-fix release: four defects found running v0.0.6 against real corpora
+(clasm, WorkLab, caltechauthors), all in `kb ingest`'s re-run behavior plus
+`kb search`'s exit code.
+
+### Fixed
+
+- `kb ingest` no longer leaves stale edges behind on re-ingest. A
+  `relates_to`/`supersedes` entry removed from a record's frontmatter, or a
+  `[[wikilink]]` concept tag removed from its body, is now actually removed
+  from `record_relations`/`record_concepts` — previously both only ever
+  grew, since re-ingest inserted what a file currently declared but never
+  deleted what it no longer declared. The new `ClearRecordRelationsFrom`/
+  `ClearRecordConcepts` (and `ClearDocumentSectionConcepts` for
+  `kb document ingest`) run before every re-insert.
+- `[[0007]]`/`[[DR-0007]]` in a record body — the natural way to write "see
+  DR-0007" — no longer silently mints a junk concept named after the record
+  id. It is now skipped with a warning pointing at `supersedes`/
+  `relates_to`, the actual way to cite another record.
+- `kb ingest` now updates a record's stored `path` when its file moves but
+  its content is unchanged, rather than leaving `records.path` (and so
+  `kb export`'s `agents/knowledge.jsonl`) silently stale. The "DR-%s was
+  stored at %s" warning now fires only when content changes alongside the
+  path, since a path change alone is an ordinary move, not a possible id
+  collision. The message for a record with no file at its stored path no
+  longer asserts deletion as the only explanation and recommends
+  `kb record remove` outright — a moved file looks identical to a deleted
+  one, and the old wording would have walked a user into deleting live
+  records.
+- `kb search` now exits 1, in both text and `--json` mode, when it finds
+  nothing, matching the workspace's search-tool convention instead of
+  exiting 0 with an empty result.
+
 ## v0.0.6 — 2026-09-13
 
 Three related features, each building on the last, extend `knowledge`

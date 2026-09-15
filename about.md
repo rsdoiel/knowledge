@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.6
+version: 0.0.7
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,25 +33,23 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-09-13
+date_released: 2026-09-15
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.6
+## knowledge 0.0.7
 
-Three related features, each building on the last, extend `knowledge` toward a small-model-friendly knowledge base: inline concept tagging, embedder-free concept-based retrieval, and narrative/article ingestion at graduated abstraction levels.
+A bug-fix release: four defects found running v0.0.6 against real corpora (clasm, WorkLab, caltechauthors), all in `kb ingest`'s re-run behavior plus `kb search`'s exit code.
 
-`kb ingest` now resolves `[[Name]]` wikilinks in a record's body, and its previously-unused `tags` frontmatter field, into concepts linked via a new `record_concepts` table -- case-insensitive via a new `ResolveConceptName` (kept separate from `AddConcept`/`kb concept add`, which stays exact-match, since a human typing a concept name at the CLI is a deliberate act, unlike capitalization in prose). `kb record concepts RECORD_ID` shows the result.
+`kb ingest` no longer leaves stale edges behind on re-ingest. A `relates_to`/`supersedes` entry removed from a record's frontmatter, or a `[[wikilink]]` concept tag removed from its body, is now actually removed from `record_relations`/`record_concepts` -- previously both only ever grew, since re-ingest inserted what a file currently declared but never deleted what it no longer declared. The new `ClearRecordRelationsFrom`/`ClearRecordConcepts` (and `ClearDocumentSectionConcepts` for `kb document ingest`) run before every re-insert.
 
-New `retrieval.go`: `MatchConceptNames` finds known concepts mentioned (whole-word, case-insensitive) in arbitrary text, and `RecallByConceptNames` returns observations, records, and documents linked to a given set of concepts, merged and ranked by match count then recency -- a cheap, embedder-free first pass for small/CPU-only models, not project-scoped.
+`[[0007]]`/`[[DR-0007]]` in a record body -- the natural way to write "see DR-0007" -- no longer silently mints a junk concept named after the record id. It is now skipped with a warning pointing at `supersedes`/`relates_to`, the actual way to cite another record.
 
-New `documents`/`document_sections` entity ingests narratives and articles (Markdown, Fountain, plain text -- PDF is a reserved format value, not yet supported, since no text-extraction path exists anywhere in this workspace) at graduated abstraction levels: a document-level gist plus one row per structural section (Fountain scene headings via github.com/rsdoiel/fountain, the same module harvey already depends on; Markdown headings; a whole file for plain text), each with its own summary lifecycle (unsummarized -> drafted -> reviewed, mirroring decision records' own author/promote split) via new `kb document ingest/list/show/draft/review` verbs. Frontmatter (title/description/pubDate/author/keywords, matching antennaApp's own documented vocabulary) seeds metadata and an initial gist when present, without ever being required. Re-ingesting a changed file matches sections by heading text and flags a changed one summary_stale rather than discarding its summary; a heading with no match is reported, never deleted. Only a reviewed summary is ever indexed for search or returned as trustworthy content by RecallByConceptNames.
+`kb ingest` now updates a record's stored `path` when its file moves but its content is unchanged, rather than leaving `records.path` (and so `kb export`'s `agents/knowledge.jsonl`) silently stale. The "DR-%s was stored at %s" warning now fires only when content changes alongside the path, since a path change alone is an ordinary move, not a possible id collision. The message for a record with no file at its stored path no longer asserts deletion as the only explanation and recommends `kb record remove` outright -- a moved file looks identical to a deleted one, and the old wording would have walked a user into deleting live records.
 
-All three features carry through `kb merge` and `kb export`/`kb import` -- record_concepts, document_section_concepts, and documents/document_sections all appear in every portability path, per the project's standing rule that a table missing from the merge summary is a table whose loss goes unreported.
-
-Also: the independent hand-rolled CLI flag/positional parsers in ingest, record, source, and the new document verb were consolidated into one shared splitFlags helper; `source add` now errors on an unrecognized flag instead of silently dropping it.
+`kb search` now exits 1, in both text and `--json` mode, when it finds nothing, matching the workspace's search-tool convention instead of exiting 0 with an empty result.
 
 ## Authors
 
