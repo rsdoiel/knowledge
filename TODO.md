@@ -151,7 +151,23 @@
   the old and new path — and then does nothing about it. This matters more
   now that `kb export` covers the records tables: `agents/knowledge.jsonl`
   was left holding 172 stale paths and zero current ones, and that is the
-  versioned artifact. Fix is presumably to treat a changed path as its own
+  versioned artifact.
+
+  **WorkLab's data was repaired on 2026-09-15; the bug is untouched.** By
+  then the damage had spread past `clasm` — 184 of 223 rows were stale
+  (`clasm` 172, `cold` 7, `caltechauthors` 5), and only 39 stored paths
+  resolved on disk. Repaired out-of-band by matching each row's identity
+  (scope, project, record id) against the frontmatter of the files actually
+  present and rewriting `path` alone: 184 rows, nothing ambiguous, nothing
+  unmatched, `path` the only field that differed anywhere in the re-export.
+  `CMTools`' 13 rows were correctly left alone — that corpus has not moved.
+  Re-ingesting every corpus afterwards is silent. So the numbers above are
+  the historical finding, not current state, and a fresh reproduction needs a
+  new move rather than a look at WorkLab. The repair also removes the only
+  standing instance of the dangerous advice below, which is worth knowing
+  before testing that half.
+
+  Fix is presumably to treat a changed path as its own
   reason to update — either widen the skip test to require
   `existing.Path == rf.Record.Path` as well as a matching checksum, or write
   the path on the skip branch. Worth deciding at the same time whether the
