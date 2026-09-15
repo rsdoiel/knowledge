@@ -75,6 +75,50 @@
   the `records` table already answers the same question with an explicit
   `supersedes` edge. Mutating `body` in place would decide it by accident.
 
+- [ ] **A mechanism for knowing when `index.md` needs regenerating.** `kb
+  index` regenerates it correctly; nothing says when to run it, and nothing
+  notices when it was not. The index has no checksum, no timestamp compared
+  against the records it summarises, and no `--check` mode. It is generated
+  and never hand-edited, so it can only ever be stale — never wrong in a way
+  someone would spot while reading it.
+
+  It has now drifted twice in WorkLab, both times silently and both times the
+  same way. In August 2026 promoting DR-0004..0006 desynced it. On 2026-09-15
+  `agents/decisions/index.md` **did not list DR-0010 at all**, and that was
+  noticed only because someone thought to look after accepting the record.
+  **The trigger is not "a record was added" — it is any change to a field the
+  index renders**, which is `status`, `kind`, `trigger`, `superseded_by` and
+  the title. So `kb record set-status` and `kb record supersede` both
+  invalidate it, and those are exactly the commands a person runs without
+  thinking about an index.
+
+  **This should cover project-tier corpora too, not just
+  `agents/decisions/`.** WorkLab has four corpora today — the workspace tier
+  plus `agents/projects/{clasm,cold,caltechauthors}/decisions/` — and the
+  project ones are larger. Nothing regenerates those either, and a per-corpus
+  manual habit will not survive four directories.
+
+  Options, roughly in increasing ambition:
+
+  - `kb index --check`, exiting non-zero when the file on disk differs from
+    what would be generated. Cheap, scriptable, fits the workspace's
+    `pre-commit` hook, which already re-exports `knowledge.jsonl` on drift and
+    could do the same here. This is the smallest thing that would have caught
+    both incidents.
+  - Have `set-status`/`supersede` regenerate the index for the corpus they
+    just wrote to, since both already know the record's `path` and therefore
+    its directory. Removes the habit entirely; the cost is a write to a file
+    the caller did not name.
+  - Have `ingest` regenerate it, which is wrong on its own — ingest is the one
+    command that does *not* write record files, and the drift happens on
+    status changes rather than on ingest.
+
+  Worth deciding alongside it: whether the index belongs on disk at all, given
+  that everything in it is a `records` query. It exists so `head`, `grep` and
+  `awk` reach the corpus without kb installed — that is a real affordance and
+  probably decides it — but the staleness only exists because the data is
+  duplicated, and that should be stated rather than assumed.
+
 ## To explore
 
 - [ ] **Two decision-record dialects now exist in one organisation, and `kb`
