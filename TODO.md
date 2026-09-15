@@ -172,9 +172,23 @@
   blocks, which would have killed `const format = outputName` and probably
   `git push`; or write density matches as *suggestions* a human confirms,
   reusing the `unsummarized → drafted → reviewed` gate one level down, which
-  is the option that fits what the documents entity already does. The links
-  were kept as-is rather than filtered by judgement, precisely so this data
-  does not drift from whatever kb eventually implements.
+  is the option that fits what the documents entity already does.
+
+  **The five coincidental links were pruned by hand the same day**, on the
+  author's call, leaving 8. An earlier draft of this item said they had been
+  kept deliberately so the data would not drift from a future kb
+  implementation; that is no longer true, and the trade was made knowingly —
+  a curated corpus now, against having to re-derive the filter later.
+
+  Two things the prune itself showed. **It cost no coverage**: all four ADRs
+  stayed reachable from concept-tag recall, because each retained at least
+  one topical link, so the noisy matches were redundant rather than
+  load-bearing. And `tag_density` is deliberately *not* updated to match —
+  it counts mentions, not links — so gists 19 and 30 now read density 4
+  against 2 links each. That divergence is meaningful and worth preserving if
+  suggestions ever land: density is the raw signal, links are what survived
+  review, and the gap between them is exactly the quantity a suggestion
+  workflow would surface.
 
 ## Done
 
