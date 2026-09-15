@@ -137,6 +137,45 @@
   Whether density alone should be able to produce a link — or at least a
   suggestion — is worth considering as part of this.
 
+  **Evidence, 2026-09-15: density-based linking was run by hand against those
+  four ADRs, and it is useful but lossy — roughly 60% signal.** The script
+  mirrored kb's own semantics rather than inventing new ones: the
+  `(?i)\b<name>\b` whole-word match from `MatchConceptNames`, computed over
+  `wholeDocumentText`, which is what `cmd/kb/document.go` already feeds a
+  gist's density. Confirmation that the mirror was faithful: the match counts
+  came out 3, 2, 4, 4 — identical to the `tag_density` already stored on each
+  gist.
+
+  It produced 13 links from 95 known concepts, and the effect was real. A
+  query naming `cmtools`, `documentation` and `tooling` returned ADR-0004
+  first, above a workspace decision record, where before it returned nothing
+  from either retrieval pass — FTS5 ANDs its tokens, so a conversational
+  question misses a document that has no concept links at all.
+
+  Eight of the thirteen were topical. **Five were coincidental, and the way
+  they fail is the useful part**, because all five are the same failure — a
+  concept name colliding with a word used in a different sense:
+
+  - `format` matched `unsupported format` in a quoted *error message*, and
+    separately matched the variable in `const format = outputName`.
+  - `index` matched "a committed search index", a different sense from the
+    `index` concept (a generated `decisions/index.md`).
+  - `git` matched an incidental `git push` in a sentence about publishing.
+  - `validation` matched a phrase describing a *third* project's domain, not
+    the document's own subject.
+
+  So the lesson is narrower than "density is too noisy." Whole-word matching
+  is not the problem; **short, common, single-word concept names are**, and
+  prose quoting code and error strings makes them worse. Three refinements
+  worth costing, in increasing order of ambition: require more than one
+  occurrence before linking; exclude matches inside code spans and fenced
+  blocks, which would have killed `const format = outputName` and probably
+  `git push`; or write density matches as *suggestions* a human confirms,
+  reusing the `unsummarized → drafted → reviewed` gate one level down, which
+  is the option that fits what the documents entity already does. The links
+  were kept as-is rather than filtered by judgement, precisely so this data
+  does not drift from whatever kb eventually implements.
+
 ## Done
 
 - [x] `kb record new`'s default write path moved to `agents/projects/<project>/decisions/`
