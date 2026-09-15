@@ -21,6 +21,44 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.7-2026-09-15">v0.0.7 — 2026-09-15</h2>
+<p>A bug-fix release: four defects found running v0.0.6 against real
+corpora (clasm, WorkLab, caltechauthors), all in
+<code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
+exit code.</p>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><code>kb ingest</code> no longer leaves stale edges behind on
+re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
+removed from a record’s frontmatter, or a <code>[[wikilink]]</code>
+concept tag removed from its body, is now actually removed from
+<code>record_relations</code>/<code>record_concepts</code> — previously
+both only ever grew, since re-ingest inserted what a file currently
+declared but never deleted what it no longer declared. The new
+<code>ClearRecordRelationsFrom</code>/ <code>ClearRecordConcepts</code>
+(and <code>ClearDocumentSectionConcepts</code> for
+<code>kb document ingest</code>) run before every re-insert.</li>
+<li><code>[[0007]]</code>/<code>[[DR-0007]]</code> in a record body —
+the natural way to write “see DR-0007” — no longer silently mints a junk
+concept named after the record id. It is now skipped with a warning
+pointing at <code>supersedes</code>/ <code>relates_to</code>, the actual
+way to cite another record.</li>
+<li><code>kb ingest</code> now updates a record’s stored
+<code>path</code> when its file moves but its content is unchanged,
+rather than leaving <code>records.path</code> (and so
+<code>kb export</code>’s <code>agents/knowledge.jsonl</code>) silently
+stale. The “DR-%s was stored at %s” warning now fires only when content
+changes alongside the path, since a path change alone is an ordinary
+move, not a possible id collision. The message for a record with no file
+at its stored path no longer asserts deletion as the only explanation
+and recommends <code>kb record remove</code> outright — a moved file
+looks identical to a deleted one, and the old wording would have walked
+a user into deleting live records.</li>
+<li><code>kb search</code> now exits 1, in both text and
+<code>--json</code> mode, when it finds nothing, matching the
+workspace’s search-tool convention instead of exiting 0 with an empty
+result.</li>
+</ul>
 <h2 id="v0.0.6-2026-09-13">v0.0.6 — 2026-09-13</h2>
 <p>Three related features, each building on the last, extend
 <code>knowledge</code> toward a small-model-friendly knowledge base:
@@ -215,7 +253,7 @@ specification: field order, flow-styled sequences, and a double-quoted
 string type for the seven fields the format requires quoted, so every
 writer produces byte-identical output.</li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li>A record path read from the database is confined to the workspace
 root before it is read or written. <code>filepath.Join</code> cleans a

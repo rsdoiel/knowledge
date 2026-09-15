@@ -47,57 +47,44 @@ explicit human review step before being trusted as searchable
 content.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.6</li>
+<li>version: 0.0.7</li>
 <li>status: concept</li>
-<li>released: 2026-09-13</li>
+<li>released: 2026-09-15</li>
 </ul>
-<p>Three related features, each building on the last, extend
-<code>knowledge</code> toward a small-model-friendly knowledge base:
-inline concept tagging, embedder-free concept-based retrieval, and
-narrative/article ingestion at graduated abstraction levels.</p>
-<p><code>kb ingest</code> now resolves <code>[[Name]]</code> wikilinks
-in a record’s body, and its previously-unused <code>tags</code>
-frontmatter field, into concepts linked via a new
-<code>record_concepts</code> table – case-insensitive via a new
-<code>ResolveConceptName</code> (kept separate from
-<code>AddConcept</code>/<code>kb concept add</code>, which stays
-exact-match, since a human typing a concept name at the CLI is a
-deliberate act, unlike capitalization in prose).
-<code>kb record concepts RECORD_ID</code> shows the result.</p>
-<p>New <code>retrieval.go</code>: <code>MatchConceptNames</code> finds
-known concepts mentioned (whole-word, case-insensitive) in arbitrary
-text, and <code>RecallByConceptNames</code> returns observations,
-records, and documents linked to a given set of concepts, merged and
-ranked by match count then recency – a cheap, embedder-free first pass
-for small/CPU-only models, not project-scoped.</p>
-<p>New <code>documents</code>/<code>document_sections</code> entity
-ingests narratives and articles (Markdown, Fountain, plain text – PDF is
-a reserved format value, not yet supported, since no text-extraction
-path exists anywhere in this workspace) at graduated abstraction levels:
-a document-level gist plus one row per structural section (Fountain
-scene headings via github.com/rsdoiel/fountain, the same module harvey
-already depends on; Markdown headings; a whole file for plain text),
-each with its own summary lifecycle (unsummarized -&gt; drafted -&gt;
-reviewed, mirroring decision records’ own author/promote split) via new
-<code>kb document ingest/list/show/draft/review</code> verbs.
-Frontmatter (title/description/pubDate/author/keywords, matching
-antennaApp’s own documented vocabulary) seeds metadata and an initial
-gist when present, without ever being required. Re-ingesting a changed
-file matches sections by heading text and flags a changed one
-summary_stale rather than discarding its summary; a heading with no
-match is reported, never deleted. Only a reviewed summary is ever
-indexed for search or returned as trustworthy content by
-RecallByConceptNames.</p>
-<p>All three features carry through <code>kb merge</code> and
-<code>kb export</code>/<code>kb import</code> – record_concepts,
-document_section_concepts, and documents/document_sections all appear in
-every portability path, per the project’s standing rule that a table
-missing from the merge summary is a table whose loss goes
-unreported.</p>
-<p>Also: the independent hand-rolled CLI flag/positional parsers in
-ingest, record, source, and the new document verb were consolidated into
-one shared splitFlags helper; <code>source add</code> now errors on an
-unrecognized flag instead of silently dropping it.</p>
+<p>A bug-fix release: four defects found running v0.0.6 against real
+corpora (clasm, WorkLab, caltechauthors), all in
+<code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
+exit code.</p>
+<p><code>kb ingest</code> no longer leaves stale edges behind on
+re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
+removed from a record’s frontmatter, or a <code>[[wikilink]]</code>
+concept tag removed from its body, is now actually removed from
+<code>record_relations</code>/<code>record_concepts</code> – previously
+both only ever grew, since re-ingest inserted what a file currently
+declared but never deleted what it no longer declared. The new
+<code>ClearRecordRelationsFrom</code>/<code>ClearRecordConcepts</code>
+(and <code>ClearDocumentSectionConcepts</code> for
+<code>kb document ingest</code>) run before every re-insert.</p>
+<p><code>[[0007]]</code>/<code>[[DR-0007]]</code> in a record body – the
+natural way to write “see DR-0007” – no longer silently mints a junk
+concept named after the record id. It is now skipped with a warning
+pointing at <code>supersedes</code>/<code>relates_to</code>, the actual
+way to cite another record.</p>
+<p><code>kb ingest</code> now updates a record’s stored
+<code>path</code> when its file moves but its content is unchanged,
+rather than leaving <code>records.path</code> (and so
+<code>kb export</code>’s <code>agents/knowledge.jsonl</code>) silently
+stale. The “DR-%s was stored at %s” warning now fires only when content
+changes alongside the path, since a path change alone is an ordinary
+move, not a possible id collision. The message for a record with no file
+at its stored path no longer asserts deletion as the only explanation
+and recommends <code>kb record remove</code> outright – a moved file
+looks identical to a deleted one, and the old wording would have walked
+a user into deleting live records.</p>
+<p><code>kb search</code> now exits 1, in both text and
+<code>--json</code> mode, when it finds nothing, matching the
+workspace’s search-tool convention instead of exiting 0 with an empty
+result.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>
