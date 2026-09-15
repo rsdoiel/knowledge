@@ -98,6 +98,43 @@
   problem — it is written through a different path (`record supersede` writes
   both sides together), so it may not.
 
+- [ ] `kb ingest` does not prune a concept link removed from a record — the
+  same defect as the relation item above, in code that shipped in v0.0.6.
+  Found 2026-09-15 authoring WorkLab's workspace-tier DR-0010. The body cited
+  the record it partially supersedes as `[[0007]]`, which resolved to a
+  concept named `0007` and linked it. Rewriting the citation to plain
+  `DR-0007` — leaving no `[[...]]` in the file at all — and re-running
+  `kb ingest agents/decisions` reported `1 updated`, and
+  `kb record concepts 0010 --workspace` still listed `0007`. Deleted the
+  `record_concepts` row and the concept by hand to finish. `linkWikilinkTags`
+  inserts the links it currently sees and never deletes the ones it no longer
+  sees, so `record_concepts` only ever grows, exactly as `record_relations`
+  does. The fix is the same shape — `DELETE FROM record_concepts WHERE
+  record_id = ?` before re-inserting — and both should probably land together,
+  since a caller who trusts one to be authoritative will trust the other.
+  Note the two differ in blast radius: a stale relation is a wrong edge
+  between two real records, while a stale concept link keeps an entire concept
+  alive that nothing references any more. `document_section_concepts` is
+  written by the same mechanism on re-ingest and should be checked for the
+  same gap while fixing this.
+
+- [ ] `[[NNNN]]` in a record body mints a junk concept instead of citing a
+  record. Found 2026-09-15, same session as the item above, and worth
+  separating from it: the prune gap is why the mess persisted, but this is why
+  it existed. A decision record cites another record through `supersedes` and
+  `relates_to`, which are ids; concepts are tagged inline with `[[Name]]`.
+  The two syntaxes look interchangeable to anyone writing a body, and
+  `[[0007]]` is the natural way to write "see DR-0007" — it is valid input,
+  reports no warning, and silently creates a concept whose name is a record
+  id. Bare numeric ids and the `DR-NNNN` form are both unambiguous enough to
+  detect. Options, roughly in increasing order of cost: document the
+  distinction in kb-record(1) and kb-ingest(1); warn on a wikilink whose name
+  matches `^(DR-)?\d{4}$`; or resolve such a link to a record reference rather
+  than a concept. The warning is probably the right first step, since the
+  third option quietly invents a second citation syntax for something
+  `relates_to` already does. A warning would also have caught this at ingest
+  time rather than at `kb record concepts`.
+
 - [ ] `kb ingest` never updates `records.path` when a record file moves but
   its body is unchanged. Found 2026-08-28 migrating `clasm`'s 173-record
   corpus from `clasm/decisions/` to `agents/projects/clasm/decisions/` under
