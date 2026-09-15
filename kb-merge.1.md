@@ -1,4 +1,4 @@
-%kb-merge(1) user manual | version 0.0.6 bc43cf5
+%kb-merge(1) user manual | version 0.0.6 ed2a2fd
 % R. S. Doiel
 % 2026-09-13
 
