@@ -1,4 +1,4 @@
-%kb-project(1) user manual | version 0.0.7 f37cd64
+%kb-project(1) user manual | version 0.0.7 fe0f6be
 % R. S. Doiel
 % 2026-09-15
 
