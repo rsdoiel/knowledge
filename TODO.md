@@ -75,6 +75,35 @@
   the `records` table already answers the same question with an explicit
   `supersedes` edge. Mutating `body` in place would decide it by accident.
 
+- [ ] **`kb project rename OLD NEW`, and the `kb_fts` orphan that makes its
+  absence worse than it looks.** There is no rename verb. `kb project add` on
+  an existing name is a no-op returning the id, so the only route is SQL
+  against `projects.name` — and that leaves the project **indexed twice**.
+  `set-description`'s reindex deletes the `kb_fts` row by the *new* name, so
+  the row carrying the old name survives and search returns the project under
+  both. Found 2026-09-15 renaming `caltechcampuspubs_static` to
+  `ep3StaticSite` in WorkLab; cleaned up with
+  `DELETE FROM kb_fts WHERE source_type='project' AND label='<old>'`, then
+  checked the `kb_fts` project count equalled the `projects` count again.
+  Nothing in `kb` would have reported the duplicate.
+
+  **The harder half is that a project's name is not only a database value.**
+  A decision record's `project:` frontmatter has to match a `projects.name`,
+  so renaming a project with a corpus desyncs every one of its record files
+  from the database, and the next `ingest` then reads them as belonging to a
+  project that no longer exists. The rename above was safe only because that
+  project owned 0 records — which is luck, not design. A real verb has to
+  either rewrite the frontmatter of every record it owns (the same
+  both-or-neither write `record supersede` already does across files and
+  database), or refuse when a corpus exists and say why. Refusing is probably
+  right for a first pass, and is still far better than the silent SQL path.
+
+  Worth settling the scope at the same time: `concepts` have unique names and
+  `kb_fts` rows too, and `kb concept add` is exact-match with no rename
+  either, so a concept created with a typo can only be fixed in SQL — with
+  the same orphan. Records escape this, being keyed by
+  `(workspace, project, scope, record_id)` rather than by a name.
+
 - [ ] **A mechanism for knowing when `index.md` needs regenerating.** `kb
   index` regenerates it correctly; nothing says when to run it, and nothing
   notices when it was not. The index has no checksum, no timestamp compared
