@@ -852,6 +852,27 @@ func (kb *KnowledgeBase) LinkDocumentSectionConcept(sectionID, conceptID int64) 
 	return err
 }
 
+/** ClearDocumentSectionConcepts deletes every concept link a section carries,
+ * without deleting the concepts themselves. Verbatim shape of
+ * ClearRecordConcepts (knowledge.go): re-ingest calls this before re-tagging
+ * a section's current wikilinks and keywords, so a tag dropped from the
+ * source text is actually dropped from the database rather than only ever
+ * accumulating.
+ *
+ * Parameters:
+ *   sectionID (int64) — ID of the document_sections row.
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   err := kb.ClearDocumentSectionConcepts(sectionID)
+ */
+func (kb *KnowledgeBase) ClearDocumentSectionConcepts(sectionID int64) error {
+	_, err := kb.db.Exec(`DELETE FROM document_section_concepts WHERE section_id = ?`, sectionID)
+	return err
+}
+
 /** DocumentSectionConcepts returns all concepts linked to the given document
  * section id, ordered by concept id. Mirrors RecordConcepts (knowledge.go).
  *

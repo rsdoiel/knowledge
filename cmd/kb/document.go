@@ -305,7 +305,15 @@ func tagDensity(kb *knowledge.KnowledgeBase, text string) (int, error) {
 // case-insensitive dedup as linkWikilinkTags (cmd/kb/ingest.go) for
 // records, applied one level down. keywords is nil for an ordinary
 // section; only the gist row also resolves frontmatter keywords.
+//
+// Clears the section's existing links before re-adding its current set, so a
+// wikilink dropped from a re-ingested section is actually dropped from the
+// database -- see ClearDocumentSectionConcepts and, for the same gap in
+// records, ClearRecordConcepts.
 func tagSection(kb *knowledge.KnowledgeBase, sectionID int64, text string, keywords []string) error {
+	if err := kb.ClearDocumentSectionConcepts(sectionID); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	var names []string
 	for _, m := range wikilinkPattern.FindAllStringSubmatch(text, -1) {

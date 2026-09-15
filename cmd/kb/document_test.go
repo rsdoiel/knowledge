@@ -335,6 +335,41 @@ func TestDocumentIngest_WikilinkInSectionBodyBecomesConcept(t *testing.T) {
 	}
 }
 
+// TODO.md "document_section_concepts should be checked for the same gap":
+// tagSection has the same insert-only defect as linkWikilinkTags for records.
+func TestDocumentIngest_RemovedWikilinkConceptIsPrunedOnReingest(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nSee [[Foo]] for background.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var section knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "section" {
+			section = s
+		}
+	}
+	if concepts, _ := kb.DocumentSectionConcepts(section.ID); len(concepts) != 1 {
+		t.Fatalf("concepts before removal = %+v, want 1", concepts)
+	}
+
+	writeDocFixture(t, root+"/docs", "a.md", "# One\nNo more mentions.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest (2nd): %v", err)
+	}
+
+	concepts, err := kb.DocumentSectionConcepts(section.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	if len(concepts) != 0 {
+		t.Errorf("concepts after removal = %+v, want none — a wikilink dropped from the section should not survive re-ingest", concepts)
+	}
+}
+
 func TestDocumentIngest_GistTaggedFromWholeDocumentText(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	kb.AddProject("alpha", "")
