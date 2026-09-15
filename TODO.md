@@ -208,6 +208,68 @@
   though that section is written for the Deno tools and may not be intended
   to bind `kb`. Worth a decision either way, since scripts branch on it.
 
+## To explore
+
+- [ ] **Two decision-record dialects now exist in one organisation, and `kb`
+  can only read one of them.** Raised 2026-09-15 after pulling
+  `caltechlibrary/CL-Web-Components`, where a colleague has been recording
+  architecture decisions independently. This is a design question, not a bug
+  report: the immediate behaviour is correct, but the situation it produces
+  is not workable.
+
+  **The two shapes.** Ours: `agents/projects/<project>/decisions/NNNN-slug.md`
+  in the *workspace*, YAML frontmatter carrying id/title/date/status/kind/
+  trigger/project/supersedes/superseded_by/relates_to/tags/uuid/origin_host,
+  body in bold-lead sections, three closed vocabularies, deliberately called
+  a Decision Record and not an ADR. Theirs: `docs/decisions/NNNN-slug.md`
+  *inside the project repository*, essentially MADR — an `# N. Title` H1, a
+  two-bullet `- Status:` / `- Date:` block, then `## Context and Problem
+  Statement`, `## Decision`, `## Considered Options`, `## Decision Outcome`,
+  `## Consequences`, `## More Information`, with cross-references as relative
+  Markdown links rather than ids.
+
+  **What happens today.** `kb ingest docs/decisions` reports
+  `0 added, 0 updated, 0 skipped, 4 failed`, one
+  `no frontmatter: file does not start with ---` per file. That is the right
+  refusal — guessing at a foreign format would be worse — but it means there
+  is no partial path and no signal beyond a hard failure.
+
+  **The identity problem is the harder half.** Both dialects number from 0001
+  per project, and our identity is
+  `(workspace, IFNULL(project_id,-1), scope, record_id)`. If their ADR-0001
+  for `CL-Web-Components` were ingested as a record, and we later opened our
+  own corpus for the same project, both would claim
+  `(WorkLab, CL-Web-Components, project, 0001)`. So a format adapter alone is
+  not enough — the scheme needs somewhere to put "whose record is this."
+
+  **The real question to answer first, before any parsing work:** is a
+  colleague's ADR a *record* — a peer, citable from `relates_to`, carrying a
+  status we do not own and must never promote — or a *document*, source
+  material we read and summarise? The answer determines everything else, and
+  the two readings are genuinely different. It is their repository and their
+  decision; we do not get to mark it superseded. That argues for document.
+  But a decision that changes what we do is exactly what `relates_to` exists
+  to express, and a document cannot be cited that way. That argues for record.
+
+  **Options, none costed yet.** A `--format madr` flag or sniffing adapter on
+  `ingest`. A `dialect` column, so a record knows which vocabulary its
+  `status` belongs to. A third `scope` value (`external`?) alongside
+  `project`/`workspace`, which would also fix the identity collision. An
+  `origin_repo`/`upstream_url` field, since a foreign record has a canonical
+  home that is not a path in our tree. Or decline the whole thing and treat
+  foreign ADRs as documents, accepting that they cannot be cited by id.
+
+  **What works today, as a stopgap.** `kb document ingest` reads them without
+  complaint — no frontmatter is required, and it segments on the MADR
+  headings, 5-14 sections each. Two limitations found while testing: with no
+  frontmatter `title:` the document is titled with its *filename* (the `# N.`
+  H1 is not consulted — arguably a small bug worth fixing on its own), and
+  **no concepts are linked**, because linking comes from `[[wikilinks]]` and
+  frontmatter `keywords`, neither of which MADR has. `tag_density` is
+  non-zero, so the mentions are detected and simply have nowhere to go.
+  Whether density alone should be able to produce a link — or at least a
+  suggestion — is worth considering as part of this.
+
 ## Done
 
 - [x] `kb record new`'s default write path moved to `agents/projects/<project>/decisions/`
