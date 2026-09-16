@@ -1,4 +1,4 @@
-%kb-document(1) user manual | version 0.0.8 867372f
+%kb-document(1) user manual | version 0.0.8 a25fbfa
 % R. S. Doiel
 % 2026-09-16
 
