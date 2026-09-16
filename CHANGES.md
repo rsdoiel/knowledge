@@ -3,6 +3,43 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.8 — 2026-09-16
+
+A bug-fix-and-small-features release: closing the `index.md` staleness gap
+at its source, and giving observations a correction path.
+
+### Added
+
+- `kb index PATH --check` compares a fresh render against `PATH/index.md`
+  byte-for-byte and fails with "does not exist" or "is stale" instead of
+  writing, naming `kb index PATH` as the remedy — same exit-code convention
+  as `kb search`'s fix last release.
+- `kb observation update ID BODY...` gives observations a correction path
+  they never had. It does not mutate the old observation — it inserts a
+  new one (inheriting the original's project and kind) and links the two
+  with a new `observation_relations` table, `record_relations`' own shape
+  reused rather than reinvented (see DR-0023, `knowledge/decisions/`,
+  which reverses DR-0012's original observations-stay-immutable stance
+  after review found that an in-place edit destroys history and answers
+  the amend-vs-supersede question by accident). The old observation's
+  body is never rewritten, so history retention is free; no `updated_at`
+  column was added, since the new observation's own `created_at` is the
+  correction timestamp. `kb observation show ID` now resolves and prints
+  `supersedes`/`superseded_by`, mirroring `kb record show`. `kb merge`
+  and JSON-L export/import carry `observation_relations` from this
+  release, not as a follow-on, per the standing rule that a table missing
+  from the merge summary is a table whose loss goes unreported.
+
+### Fixed
+
+- `kb record set-status` and `kb record supersede` now refresh a corpus's
+  `index.md` themselves after a successful write, via the new
+  `regenerateIndexIfPresent`, closing the gap `--check` only detects. Only
+  when one is already present — never creating one where a corpus hasn't
+  opted in. Together with `--check`, this fixes `index.md` silently
+  drifting from `status`/`kind`/`trigger`/`superseded_by`/title changes,
+  which bit WorkLab twice.
+
 ## v0.0.7 — 2026-09-15
 
 A bug-fix release: four defects found running v0.0.6 against real corpora

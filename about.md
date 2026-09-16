@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.7
+version: 0.0.8
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,23 +33,19 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-09-15
+date_released: 2026-09-16
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.7
+## knowledge 0.0.8
 
-A bug-fix release: four defects found running v0.0.6 against real corpora (clasm, WorkLab, caltechauthors), all in `kb ingest`'s re-run behavior plus `kb search`'s exit code.
+A bug-fix-and-small-features release: closing the index.md staleness gap at its source, and giving observations a correction path.
 
-`kb ingest` no longer leaves stale edges behind on re-ingest. A `relates_to`/`supersedes` entry removed from a record's frontmatter, or a `[[wikilink]]` concept tag removed from its body, is now actually removed from `record_relations`/`record_concepts` -- previously both only ever grew, since re-ingest inserted what a file currently declared but never deleted what it no longer declared. The new `ClearRecordRelationsFrom`/`ClearRecordConcepts` (and `ClearDocumentSectionConcepts` for `kb document ingest`) run before every re-insert.
+`kb index PATH --check` compares a fresh render against `PATH/index.md` byte-for-byte and fails with "does not exist" or "is stale" instead of writing, naming `kb index PATH` as the remedy -- same exit-code convention as `kb search`'s fix last release. `kb record set-status` and `kb record supersede` go a step further and close the gap `--check` only detects: both now refresh a corpus's `index.md` themselves after a successful write, via the new `regenerateIndexIfPresent`, but only when one is already present -- never creating one where a corpus hasn't opted in. Together these fix `index.md` silently drifting from `status`/`kind`/`trigger`/`superseded_by`/title changes, which bit WorkLab twice.
 
-`[[0007]]`/`[[DR-0007]]` in a record body -- the natural way to write "see DR-0007" -- no longer silently mints a junk concept named after the record id. It is now skipped with a warning pointing at `supersedes`/`relates_to`, the actual way to cite another record.
-
-`kb ingest` now updates a record's stored `path` when its file moves but its content is unchanged, rather than leaving `records.path` (and so `kb export`'s `agents/knowledge.jsonl`) silently stale. The "DR-%s was stored at %s" warning now fires only when content changes alongside the path, since a path change alone is an ordinary move, not a possible id collision. The message for a record with no file at its stored path no longer asserts deletion as the only explanation and recommends `kb record remove` outright -- a moved file looks identical to a deleted one, and the old wording would have walked a user into deleting live records.
-
-`kb search` now exits 1, in both text and `--json` mode, when it finds nothing, matching the workspace's search-tool convention instead of exiting 0 with an empty result.
+`kb observation update ID BODY...` gives observations a correction path they never had. It does not mutate the old observation -- it inserts a new one (inheriting the original's project and kind) and links the two with a new `observation_relations` table, `record_relations`' own shape reused rather than reinvented (see DR-0023, `knowledge/decisions/`, which reverses DR-0012's original observations-stay-immutable stance after review found that an in-place edit destroys history and answers the amend-vs-supersede question by accident). The old observation's body is never rewritten, so history retention is free; no `updated_at` column was added, since the new observation's own `created_at` is the correction timestamp. `kb observation show ID` now resolves and prints `supersedes`/`superseded_by`, mirroring `kb record show`. `kb merge` and JSON-L export/import carry `observation_relations` from this release, not as a follow-on, per the standing rule that a table missing from the merge summary is a table whose loss goes unreported.
 
 ## Authors
 
