@@ -359,6 +359,54 @@ func TestMergeKnowledgeBases_ObservationConceptsSurvive(t *testing.T) {
 	}
 }
 
+// DR-0023: observation_relations mirrors record_relations' own merge shape,
+// remapped through observation uuids the same way.
+func TestMergeKnowledgeBases_ObservationRelationsSurvive(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	pid, err := a.AddProject("proj", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	older, err := a.AddObservation(pid, "note", "original wording")
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	newer, err := a.AddObservation(pid, "note", "corrected wording")
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	if err := a.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("AddObservationRelation: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	mp, err := merged.ProjectByName("proj")
+	if err != nil || mp == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	obs, err := merged.Observations(mp.ID)
+	if err != nil {
+		t.Fatalf("Observations: %v", err)
+	}
+	var mergedNewer int64
+	for _, o := range obs {
+		if o.Body == "corrected wording" {
+			mergedNewer = o.ID
+		}
+	}
+	if mergedNewer == 0 {
+		t.Fatal("corrected observation did not survive the merge")
+	}
+	rels, err := merged.ObservationRelationsFor(mergedNewer)
+	if err != nil {
+		t.Fatalf("ObservationRelationsFor: %v", err)
+	}
+	if len(rels) != 1 || rels[0].Relationship != "supersedes" {
+		t.Errorf("relations = %+v, want one supersedes edge remapped through observation uuids", rels)
+	}
+}
+
 func TestMergeKnowledgeBases_ProjectConceptsSurvive(t *testing.T) {
 	a := openTestKB(t)
 	b := openTestKB(t)
@@ -988,13 +1036,14 @@ func TestMergeKnowledgeBases_SummaryIncludesRecordTables(t *testing.T) {
 	for _, want := range []string{
 		"records", "record_relations", "record_concepts",
 		"documents", "document_sections", "document_section_concepts",
+		"observation_relations",
 	} {
 		if !seen[want] {
 			t.Errorf("summary omits %s: %v", want, seen)
 		}
 	}
-	if len(summary) != 13 {
-		t.Errorf("summary covers %d tables, want 13 (every table that travels)", len(summary))
+	if len(summary) != 14 {
+		t.Errorf("summary covers %d tables, want 14 (every table that travels)", len(summary))
 	}
 }
 

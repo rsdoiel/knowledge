@@ -295,11 +295,12 @@ type MergeTableSummary struct {
  * UNIQUE constraint, and for records by their four-column identity). aPath and
  * bPath are opened read-only via ATTACH; neither is modified.
  *
- * All thirteen tables that travel are carried: projects, concepts, sources,
- * observations, records and documents, plus the seven join/child tables
+ * All fourteen tables that travel are carried: projects, concepts, sources,
+ * observations, records and documents, plus the eight join/child tables
  * (record_relations, record_concepts, document_sections,
  * document_section_concepts, observation_concepts, project_concepts,
- * observation_sources). Every one appears in the returned summary, so a
+ * observation_sources, observation_relations). Every one appears in the
+ * returned summary, so a
  * table that loses rows says so — records were once absent from both the
  * merge and the summary, and a merge that dropped them reported success
  * (DR-0013).
@@ -456,6 +457,21 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 
 	for _, src := range []string{"a", "b"} {
 		if _, err := db.Exec(fmt.Sprintf(`
+			INSERT OR IGNORE INTO observation_relations (from_id, to_id, relationship)
+			SELECT mf.id, mt.id, j.relationship
+			FROM %s.observation_relations j
+			JOIN %s.observations sf ON sf.id = j.from_id
+			JOIN %s.observations st ON st.id = j.to_id
+			JOIN observations mf ON mf.uuid = sf.uuid
+			JOIN observations mt ON mt.uuid = st.uuid`,
+			src, src, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge observation_relations from %s: %w", src, err)
+		}
+	}
+
+	for _, src := range []string{"a", "b"} {
+		if _, err := db.Exec(fmt.Sprintf(`
 			INSERT OR IGNORE INTO observation_concepts (observation_id, concept_id)
 			SELECT mo.id, mc.id
 			FROM %s.observation_concepts j
@@ -528,7 +544,7 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 	allTables := []string{
 		"projects", "concepts", "sources", "observations", "records",
 		"observation_concepts", "project_concepts", "observation_sources",
-		"record_relations", "record_concepts",
+		"observation_relations", "record_relations", "record_concepts",
 		"documents", "document_sections", "document_section_concepts",
 	}
 	var summary []MergeTableSummary

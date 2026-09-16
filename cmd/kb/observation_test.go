@@ -97,6 +97,110 @@ func TestCmdObservation_ShowNotFound(t *testing.T) {
 	}
 }
 
+// ─── update (DR-0023) ────────────────────────────────────────────────────────
+
+func TestCmdObservation_UpdateInsertsNewObservationAndSupersedes(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("proj", "")
+	old, _ := kb.AddObservation(pid, "finding", "original wording")
+
+	var out bytes.Buffer
+	if err := cmdObservation(kb, nil, false, []string{"update", fmt.Sprint(old), "corrected", "wording"}, &out); err != nil {
+		t.Fatalf("observation update: %v", err)
+	}
+
+	obs, err := kb.Observations(pid)
+	if err != nil {
+		t.Fatalf("Observations: %v", err)
+	}
+	if len(obs) != 2 {
+		t.Fatalf("got %d observations, want 2 (old one untouched, new one added)", len(obs))
+	}
+	oldNow, err := kb.ObservationByID(old)
+	if err != nil {
+		t.Fatalf("ObservationByID(old): %v", err)
+	}
+	if oldNow.Body != "original wording" {
+		t.Errorf("old observation body = %q, want it untouched", oldNow.Body)
+	}
+
+	var newer *knowledge.Observation
+	for i := range obs {
+		if obs[i].ID != old {
+			newer = &obs[i]
+		}
+	}
+	if newer == nil || newer.Body != "corrected wording" {
+		t.Fatalf("new observation = %+v, want body %q", newer, "corrected wording")
+	}
+	if newer.Kind != "finding" {
+		t.Errorf("new observation kind = %q, want it inherited from the old one (%q)", newer.Kind, "finding")
+	}
+
+	rels, err := kb.ObservationRelationsFor(newer.ID)
+	if err != nil {
+		t.Fatalf("ObservationRelationsFor: %v", err)
+	}
+	if len(rels) != 1 || rels[0].Relationship != "supersedes" || rels[0].ObservationID != old {
+		t.Errorf("relations for new observation = %+v, want one supersedes edge to %d", rels, old)
+	}
+}
+
+func TestCmdObservation_UpdateRequiresIDAndBody(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("proj", "")
+	id, _ := kb.AddObservation(pid, "note", "a")
+
+	var out bytes.Buffer
+	if err := cmdObservation(kb, nil, false, []string{"update", fmt.Sprint(id)}, &out); err == nil {
+		t.Error("expected an error when BODY is missing")
+	}
+	if err := cmdObservation(kb, nil, false, nil, &out); err == nil {
+		t.Error("expected an error for observation update with no arguments")
+	}
+}
+
+func TestCmdObservation_UpdateUnknownObservationFails(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdObservation(kb, nil, false, []string{"update", "999999", "a", "new", "body"}, &out); err == nil {
+		t.Error("expected an error for a nonexistent observation id")
+	}
+}
+
+func TestCmdObservation_ShowResolvesSupersessionRelations(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("proj", "")
+	old, _ := kb.AddObservation(pid, "note", "original")
+
+	var updateOut bytes.Buffer
+	if err := cmdObservation(kb, nil, true, []string{"update", fmt.Sprint(old), "corrected"}, &updateOut); err != nil {
+		t.Fatalf("observation update: %v", err)
+	}
+	var updated struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(updateOut.Bytes(), &updated); err != nil {
+		t.Fatalf("decoding update output: %v (%q)", err, updateOut.String())
+	}
+
+	var oldOut bytes.Buffer
+	if err := cmdObservation(kb, nil, false, []string{"show", fmt.Sprint(old)}, &oldOut); err != nil {
+		t.Fatalf("observation show (old): %v", err)
+	}
+	if !strings.Contains(oldOut.String(), fmt.Sprint(updated.ID)) {
+		t.Errorf("show(old) output = %q, want it to name the superseding observation %d", oldOut.String(), updated.ID)
+	}
+
+	var newOut bytes.Buffer
+	if err := cmdObservation(kb, nil, false, []string{"show", fmt.Sprint(updated.ID)}, &newOut); err != nil {
+		t.Fatalf("observation show (new): %v", err)
+	}
+	if !strings.Contains(newOut.String(), fmt.Sprint(old)) {
+		t.Errorf("show(new) output = %q, want it to name the superseded observation %d", newOut.String(), old)
+	}
+}
+
 func TestCmdObservation_Sources(t *testing.T) {
 	kb := openTestKB(t)
 	pid, _ := kb.AddProject("proj", "")

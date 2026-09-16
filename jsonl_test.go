@@ -772,6 +772,97 @@ func TestImportJSONL_DocumentSectionConcepts_UnresolvableEndpointSkippedNotFatal
 	}
 }
 
+// ─── observation_relations (DR-0023) ────────────────────────────────────────
+
+func TestExportJSONL_ObservationRelations_Included(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("proj", "")
+	older, _ := kb.AddObservation(pid, "note", "original wording")
+	newer, _ := kb.AddObservation(pid, "note", "corrected wording")
+	if err := kb.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("AddObservationRelation: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := ExportJSONL(kb, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+	types := parseJSONLTypes(t, buf.Bytes())
+	if got := countType(types, "observation_relation"); got != 1 {
+		t.Errorf("observation_relation count = %d, want 1", got)
+	}
+}
+
+func TestImportJSONL_ObservationRelations_RoundTrip(t *testing.T) {
+	src := openTestKB(t)
+	pid, _ := src.AddProject("proj", "")
+	older, _ := src.AddObservation(pid, "note", "original wording")
+	newer, _ := src.AddObservation(pid, "note", "corrected wording")
+	if err := src.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("AddObservationRelation: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	dst := openTestKB(t)
+	summary, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	if s := byTable["observation_relation"]; s.Imported != 1 || s.Skipped != 0 {
+		t.Errorf("observation_relation summary = %+v, want Imported=1 Skipped=0", s)
+	}
+
+	p, err := dst.ProjectByName("proj")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	obs, err := dst.Observations(p.ID)
+	if err != nil {
+		t.Fatalf("Observations: %v", err)
+	}
+	var mergedNewer int64
+	for _, o := range obs {
+		if o.Body == "corrected wording" {
+			mergedNewer = o.ID
+		}
+	}
+	if mergedNewer == 0 {
+		t.Fatal("corrected observation did not import")
+	}
+	rels, err := dst.ObservationRelationsFor(mergedNewer)
+	if err != nil {
+		t.Fatalf("ObservationRelationsFor: %v", err)
+	}
+	if len(rels) != 1 || rels[0].Relationship != "supersedes" {
+		t.Errorf("relations = %+v, want one supersedes edge", rels)
+	}
+}
+
+func TestImportJSONL_ObservationRelations_UnresolvableEndpointSkippedNotFatal(t *testing.T) {
+	dst := openTestKB(t)
+	input := `{"type":"project","uuid":"00000000-0000-7000-8000-000000000000","origin_host":"h","name":"proj","description":"","status":"active","created_at":""}
+{"type":"observation","uuid":"11111111-1111-7111-8111-111111111111","origin_host":"h","project_uuid":"00000000-0000-7000-8000-000000000000","kind":"note","body":"b","source_doi":"","created_at":""}
+{"type":"observation_relation","from_uuid":"11111111-1111-7111-8111-111111111111","to_uuid":"does-not-exist","relationship":"supersedes"}
+`
+	summary, err := ImportJSONL(dst, strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	byTable := summaryByTable(summary)
+	or := byTable["observation_relation"]
+	if or.Read != 1 || or.Imported != 0 || or.Skipped != 1 {
+		t.Errorf("observation_relation summary = %+v, want Read=1 Imported=0 Skipped=1", or)
+	}
+	if obsS := byTable["observation"]; obsS.Imported != 1 {
+		t.Errorf("observation summary = %+v, want the observation itself to still import", obsS)
+	}
+}
+
 func TestImportJSONL_Records_ReimportIsNoOp(t *testing.T) {
 	src, _, _, _ := newJSONLRecordsFixture(t)
 	var buf bytes.Buffer

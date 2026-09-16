@@ -324,6 +324,8 @@ const ObservationHelpText = `%{app_name}-observation(1) user manual | version {v
 
 {app_name} observation show ID
 
+{app_name} observation update ID BODY...
+
 {app_name} observation sources ID
 
 # DESCRIPTION
@@ -339,7 +341,18 @@ list
 : list a project's observations, most recent first
 
 show
-: show a single observation by id
+: show a single observation by id, including its resolved supersedes/
+  superseded_by relations if it has any
+
+update
+: correct an observation by superseding it, not by mutating it. ID's body
+  is never touched; a new observation is inserted with BODY, inheriting ID's
+  project and kind, and linked to ID by a supersedes edge. The original
+  wording survives unchanged, so nothing needs a separate revision history --
+  see DR-0023 (knowledge/decisions/). Cross-machine reconciliation carries
+  the new supersedes edge the same as every other relation in this schema;
+  there is no per-field last-writer-wins here, unlike
+  {app_name}-project(1)'s set-description
 
 sources
 : list the sources cited by an observation (see {app_name}-source(1))
@@ -581,8 +594,8 @@ everything reachable from it — its concepts, sources, observations and
 decision records) as newline-delimited JSON to -out, or to stdout when
 -out is omitted. Every line is self-describing via a "type" field
 (project, concept, source, observation, observation_concept,
-project_concept, observation_source, record, record_relation), in
-dependency order.
+observation_relation, project_concept, observation_source, record,
+record_relation), in dependency order.
 
 A -project export carries only that project's decision records — a
 workspace-tier record belongs to no project, so it has no principled claim
@@ -778,12 +791,16 @@ show
 
 set-status
 : set a record's status in both its file and the database. The promotion path
-  from proposed to accepted
+  from proposed to accepted. Also refreshes the corpus's index.md if one is
+  already present, since status is one of the fields it renders — never
+  creates one where the corpus has not already opted in
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on
   OLD, the relation, and unless --partial, OLD's superseded status. Both
-  files and the database are written together or not at all
+  files and the database are written together or not at all. Also refreshes
+  index.md, same as set-status, for both NEW's and OLD's corpora if either
+  already has one
 
 new
 : scaffold a record: allocate the next id for the tier, fill the fields a

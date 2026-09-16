@@ -156,6 +156,44 @@ func checkIndex(target, want string, out io.Writer) error {
 	return nil
 }
 
+// regenerateIndexIfPresent refreshes dir/index.md in place if one already
+// exists there, and does nothing otherwise — it never creates one, so a
+// corpus that has not opted into the generated-index convention does not
+// suddenly get a file it never asked for.
+//
+// record set-status and supersede call this after a successful write, to
+// close the staleness TODO.md's index-regeneration item describes at its
+// source rather than leaving --check as the only way to notice it: status,
+// kind, trigger, superseded_by and title are exactly the fields those two
+// commands change, and exactly what the index renders.
+//
+// A failure here is reported but not fatal — the record file and database
+// write already succeeded, and index.md is a derived, always-regenerable
+// artifact; refusing the whole operation over it would be a worse failure
+// mode than a stale index the next `kb index` or `--check` will still catch.
+func regenerateIndexIfPresent(dir string) error {
+	target := filepath.Join(dir, "index.md")
+	if _, err := os.Stat(target); err != nil {
+		return nil
+	}
+	files, err := collectRecordFilesIn(dir)
+	if err != nil {
+		return err
+	}
+	records := make([]*knowledge.RecordFile, 0, len(files))
+	for _, path := range files {
+		rf, err := knowledge.ParseRecordFile(path)
+		if err != nil {
+			return fmt.Errorf("cannot regenerate index: %w", err)
+		}
+		records = append(records, rf)
+	}
+	if err := os.WriteFile(target, []byte(renderIndex(records)), 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", target, err)
+	}
+	return nil
+}
+
 // renderIndex builds the whole index file: a heading, a tool-neutral
 // attribution, and a fenced block of one row per record, newest first.
 //

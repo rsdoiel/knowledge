@@ -16,7 +16,7 @@ func init() {
 
 func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: observation <add|list|show|sources> ...")
+		return fmt.Errorf("usage: observation <add|list|show|update|sources> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -26,6 +26,8 @@ func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 		return cmdObservationList(kb, dl, jsonOut, rest, out)
 	case "show":
 		return cmdObservationShow(kb, dl, jsonOut, rest, out)
+	case "update":
+		return cmdObservationUpdate(kb, dl, jsonOut, rest, out)
 	case "sources":
 		return cmdObservationSources(kb, dl, jsonOut, rest, out)
 	default:
@@ -116,6 +118,17 @@ func cmdObservationList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 	return nil
 }
 
+// observationDetail is what `observation show` prints, in both JSON and text
+// form — the observation itself plus its resolved supersession relations
+// (DR-0023), mirroring recordDetail (record.go) one level down.
+// *knowledge.Observation is embedded so its fields marshal at the top level,
+// same as `observation show` returned before relations existed.
+type observationDetail struct {
+	*knowledge.Observation
+	Supersedes   []int64 `json:"supersedes,omitempty"`
+	SupersededBy []int64 `json:"superseded_by,omitempty"`
+}
+
 func cmdObservationShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: observation show ID")
@@ -130,13 +143,77 @@ func cmdObservationShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 	if err != nil {
 		return fmt.Errorf("observation %d not found", id)
 	}
+	rels, err := logKBCall(dl, "ObservationRelationsFor", map[string]any{"id": id}, func() ([]knowledge.RelatedObservation, error) {
+		return kb.ObservationRelationsFor(id)
+	})
+	if err != nil {
+		return err
+	}
+	detail := observationDetail{Observation: o}
+	for _, rel := range rels {
+		switch rel.Relationship {
+		case "supersedes":
+			detail.Supersedes = append(detail.Supersedes, rel.ObservationID)
+		case "superseded_by":
+			detail.SupersededBy = append(detail.SupersededBy, rel.ObservationID)
+		}
+	}
+
 	if jsonOut {
-		return printJSON(out, o)
+		return printJSON(out, detail)
 	}
 	fmt.Fprintf(out, "[%s] %s\n", o.Kind, o.Body)
 	if o.SourceDOI != "" {
 		fmt.Fprintf(out, "  DOI (legacy): %s\n", o.SourceDOI)
 	}
+	for _, id := range detail.Supersedes {
+		fmt.Fprintf(out, "  supersedes: %d\n", id)
+	}
+	for _, id := range detail.SupersededBy {
+		fmt.Fprintf(out, "  superseded_by: %d\n", id)
+	}
+	return nil
+}
+
+// cmdObservationUpdate implements `observation update ID BODY...` (DR-0023):
+// it never mutates row ID. It inserts a new observation with BODY, inheriting
+// ID's project and kind, and links the two via a supersedes edge, so the
+// original wording survives unchanged and the correction is just the new
+// row plus this edge.
+func cmdObservationUpdate(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: observation update ID BODY...")
+	}
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid observation id %q", args[0])
+	}
+	body := strings.Join(args[1:], " ")
+
+	old, err := logKBCall(dl, "ObservationByID", map[string]any{"id": id}, func() (*knowledge.Observation, error) {
+		return kb.ObservationByID(id)
+	})
+	if err != nil {
+		return fmt.Errorf("observation %d not found", id)
+	}
+	newID, err := logKBCall(dl, "AddObservation", map[string]any{"project_id": old.ProjectID, "kind": old.Kind}, func() (int64, error) {
+		return kb.AddObservation(old.ProjectID, old.Kind, body)
+	})
+	if err != nil {
+		return err
+	}
+	if err := logKBCallErr(dl, "AddObservationRelation", map[string]any{"from_id": newID, "to_id": id, "relationship": "supersedes"}, func() error {
+		return kb.AddObservationRelation(newID, id, "supersedes")
+	}); err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, struct {
+			ID         int64 `json:"id"`
+			Supersedes int64 `json:"supersedes"`
+		}{ID: newID, Supersedes: id})
+	}
+	fmt.Fprintf(out, "observation recorded (id=%d), supersedes %d\n", newID, id)
 	return nil
 }
 

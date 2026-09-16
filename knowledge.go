@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS observation_concepts (
     PRIMARY KEY (observation_id, concept_id)
 );
 
+CREATE TABLE IF NOT EXISTS observation_relations (
+    from_id      INTEGER NOT NULL REFERENCES observations(id) ON DELETE CASCADE,
+    to_id        INTEGER NOT NULL REFERENCES observations(id) ON DELETE CASCADE,
+    relationship TEXT    NOT NULL,
+    PRIMARY KEY (from_id, to_id, relationship)
+);
+
 CREATE TABLE IF NOT EXISTS project_concepts (
     project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
     concept_id INTEGER REFERENCES concepts(id) ON DELETE CASCADE,
@@ -856,6 +863,100 @@ func (kb *KnowledgeBase) ObservationByID(id int64) (*Observation, error) {
 	}
 	o.CreatedAt = parseTimestamp(ts)
 	return &o, nil
+}
+
+// RelatedObservation is one relation touching an observation, described from
+// that observation's point of view — mirrors RelatedRecord (records.go).
+type RelatedObservation struct {
+	ObservationID int64
+	Relationship  string
+}
+
+/** AddObservationRelation stores one directed edge between two observations.
+ * Adding the same edge twice is a no-op. Mirrors AddRecordRelation exactly,
+ * one level down — see DR-0023: an observation is corrected by superseding
+ * it with a new one, never by mutating its body, so the old row stays
+ * exactly as originally recorded and the correction is just this edge plus
+ * the new row's own timestamp.
+ *
+ * Parameters:
+ *   fromID       (int64)  — the newer, correcting observation's primary key.
+ *   toID         (int64)  — the older, corrected observation's primary key.
+ *   relationship (string) — "supersedes"; the only relationship observations
+ *                           carry today.
+ *
+ * Returns:
+ *   error — when either observation is missing, or on database failure.
+ *
+ * Example:
+ *   err := kb.AddObservationRelation(newerID, olderID, "supersedes")
+ */
+func (kb *KnowledgeBase) AddObservationRelation(fromID, toID int64, relationship string) error {
+	for _, id := range []int64{fromID, toID} {
+		var n int
+		if err := kb.db.QueryRow(
+			`SELECT COUNT(*) FROM observations WHERE id = ?`, id,
+		).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("knowledge: no observation with id %d", id)
+		}
+	}
+	_, err := kb.db.Exec(
+		`INSERT OR IGNORE INTO observation_relations (from_id, to_id, relationship)
+		 VALUES (?, ?, ?)`,
+		fromID, toID, relationship,
+	)
+	return err
+}
+
+/** ObservationRelationsFor returns every relation touching an observation,
+ * described from that observation's point of view. Mirrors RelationsFor
+ * (records.go): an edge where it is the source is reported as stored; an
+ * edge where it is the target is inverted, so "supersedes" becomes
+ * "superseded_by".
+ *
+ * Parameters:
+ *   id (int64) — the observations table primary key.
+ *
+ * Returns:
+ *   []RelatedObservation — matching relations; empty when the observation has none.
+ *   error                — on database failure.
+ *
+ * Example:
+ *   rels, err := kb.ObservationRelationsFor(id)
+ *   for _, rel := range rels {
+ *       fmt.Printf("%s %d\n", rel.Relationship, rel.ObservationID)
+ *   }
+ */
+func (kb *KnowledgeBase) ObservationRelationsFor(id int64) ([]RelatedObservation, error) {
+	rows, err := kb.db.Query(
+		`SELECT other, rel FROM (
+		     SELECT to_id AS other, relationship AS rel
+		     FROM observation_relations WHERE from_id = ?
+		     UNION ALL
+		     SELECT from_id AS other,
+		            CASE relationship WHEN 'supersedes' THEN 'superseded_by'
+		                              ELSE relationship END AS rel
+		     FROM observation_relations WHERE to_id = ?
+		 ) ORDER BY other, rel`,
+		id, id,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []RelatedObservation
+	for rows.Next() {
+		var rel RelatedObservation
+		if err := rows.Scan(&rel.ObservationID, &rel.Relationship); err != nil {
+			return nil, err
+		}
+		out = append(out, rel)
+	}
+	return out, rows.Err()
 }
 
 // ─── Concepts ────────────────────────────────────────────────────────────────

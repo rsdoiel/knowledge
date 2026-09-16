@@ -17,6 +17,7 @@ const (
 	recSource                 = "source"
 	recObservation            = "observation"
 	recObservationConcept     = "observation_concept"
+	recObservationRelation    = "observation_relation"
 	recProjectConcept         = "project_concept"
 	recObservationSource      = "observation_source"
 	recRecord                 = "record"
@@ -88,6 +89,19 @@ type observationConceptRecord struct {
 	Type            string `json:"type"`
 	ObservationUUID string `json:"observation_uuid"`
 	ConceptUUID     string `json:"concept_uuid"`
+}
+
+// observationRelationRecord is the JSON-L shape of one observation_relations
+// row (DR-0023). Endpoints travel by the observation's own uuid, resolved
+// the same way observation_concepts/observation_sources resolve theirs:
+// directly against the local observations table by uuid, since observations
+// have no name-based identity to dedupe against import order the way
+// projects/concepts do -- see resolveLocalID's nil-cache path.
+type observationRelationRecord struct {
+	Type         string `json:"type"`
+	FromUUID     string `json:"from_uuid"`
+	ToUUID       string `json:"to_uuid"`
+	Relationship string `json:"relationship"`
 }
 
 // projectConceptRecord is the JSON-L shape of one project_concepts join row.
@@ -272,6 +286,9 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 		return err
 	}
 	if err := exportObservationSources(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
+	if err := exportObservationRelations(kb, enc, scoped, projectID); err != nil {
 		return err
 	}
 	if err := exportRecordRelations(kb, enc, scoped, projectID); err != nil {
@@ -695,6 +712,36 @@ func exportObservationSources(kb *KnowledgeBase, enc *json.Encoder, scoped bool,
 	return rows.Err()
 }
 
+// exportObservationRelations writes every observation_relations row whose
+// endpoints both survive scope (DR-0023) -- same "both ends in scope" rule
+// exportRecordRelations uses, one level down.
+func exportObservationRelations(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT of.uuid, ot.uuid, j.relationship
+	          FROM observation_relations j
+	          JOIN observations of ON of.id = j.from_id
+	          JOIN observations ot ON ot.id = j.to_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE of.project_id = ? AND ot.project_id = ?`
+		args = append(args, projectID, projectID)
+	}
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export observation_relations: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := observationRelationRecord{Type: recObservationRelation}
+		if err := rows.Scan(&r.FromUUID, &r.ToUUID, &r.Relationship); err != nil {
+			return fmt.Errorf("knowledge: export observation_relations: %w", err)
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export observation_relations: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
 // ─── Import ───────────────────────────────────────────────────────────────
 
 /** ImportTableSummary reports, per JSON-L record type, how many lines were
@@ -742,6 +789,7 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		sources                 []sourceRecord
 		observations            []observationRecord
 		obsConcepts             []observationConceptRecord
+		obsRelations            []observationRelationRecord
 		projConcepts            []projectConceptRecord
 		obsSources              []observationSourceRecord
 		records                 []decisionRecord
@@ -805,6 +853,12 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
 			}
 			obsConcepts = append(obsConcepts, rec)
+		case recObservationRelation:
+			var rec observationRelationRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			obsRelations = append(obsRelations, rec)
 		case recProjectConcept:
 			var rec projectConceptRecord
 			if err := json.Unmarshal(line, &rec); err != nil {
@@ -1047,6 +1101,25 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship) VALUES (?, ?, ?)`, obsID, sourceID, rec.Relationship)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import observation_source: %w", err)
+		}
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recObservationRelation)
+	for _, rec := range obsRelations {
+		fromID, ok := resolveLocalID(kb, nil, "observations", rec.FromUUID)
+		toID, tok := resolveLocalID(kb, nil, "observations", rec.ToUUID)
+		if !ok || !tok {
+			s.Skipped++
+			continue
+		}
+		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO observation_relations (from_id, to_id, relationship) VALUES (?, ?, ?)`, fromID, toID, rec.Relationship)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import observation_relation: %w", err)
 		}
 		if isNew {
 			s.Imported++

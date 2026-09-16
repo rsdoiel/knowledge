@@ -17,8 +17,8 @@ everything reachable from it — its concepts, sources, observations and
 decision records) as newline-delimited JSON to -out, or to stdout when
 -out is omitted. Every line is self-describing via a "type" field
 (project, concept, source, observation, observation_concept,
-project_concept, observation_source, record, record_relation), in
-dependency order.
+observation_relation, project_concept, observation_source, record,
+record_relation), in dependency order.
 
 A -project export carries only that project's decision records — a
 workspace-tier record belongs to no project, so it has no principled claim

@@ -74,6 +74,98 @@ func TestObservationByID_CreatedAtIsNonZero(t *testing.T) {
 	}
 }
 
+// ─── observation_relations (DR-0023) ────────────────────────────────────────
+
+func TestAddObservationRelation_CreatesLink(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	older, _ := kb.AddObservation(pid, "note", "original wording")
+	newer, _ := kb.AddObservation(pid, "note", "corrected wording")
+
+	if err := kb.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("AddObservationRelation: %v", err)
+	}
+
+	rels, err := kb.ObservationRelationsFor(newer)
+	if err != nil {
+		t.Fatalf("ObservationRelationsFor(newer): %v", err)
+	}
+	if len(rels) != 1 || rels[0].Relationship != "supersedes" || rels[0].ObservationID != older {
+		t.Errorf("relations for newer = %+v, want one {ObservationID:%d Relationship:supersedes}", rels, older)
+	}
+}
+
+// Only one direction is stored; superseded_by is the inverse, computed on
+// read — mirrors TestRelationsFor_ReportsBothDirections (records_test.go).
+func TestObservationRelationsFor_ReportsBothDirections(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	older, _ := kb.AddObservation(pid, "note", "original wording")
+	newer, _ := kb.AddObservation(pid, "note", "corrected wording")
+
+	if err := kb.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("AddObservationRelation: %v", err)
+	}
+
+	fromOlder, err := kb.ObservationRelationsFor(older)
+	if err != nil {
+		t.Fatalf("ObservationRelationsFor(older): %v", err)
+	}
+	if len(fromOlder) != 1 || fromOlder[0].Relationship != "superseded_by" || fromOlder[0].ObservationID != newer {
+		t.Errorf("relations for older = %+v, want {ObservationID:%d Relationship:superseded_by}", fromOlder, newer)
+	}
+}
+
+func TestAddObservationRelation_DuplicateIsNoOp(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	older, _ := kb.AddObservation(pid, "note", "a")
+	newer, _ := kb.AddObservation(pid, "note", "b")
+
+	if err := kb.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("first AddObservationRelation: %v", err)
+	}
+	if err := kb.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("second AddObservationRelation should be a no-op, got: %v", err)
+	}
+	rels, err := kb.ObservationRelationsFor(newer)
+	if err != nil {
+		t.Fatalf("ObservationRelationsFor: %v", err)
+	}
+	if len(rels) != 1 {
+		t.Errorf("got %d relations after adding the same edge twice, want 1", len(rels))
+	}
+}
+
+func TestAddObservationRelation_UnknownObservationFails(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	id, _ := kb.AddObservation(pid, "note", "a")
+	if err := kb.AddObservationRelation(id, 9999, "supersedes"); err == nil {
+		t.Error("AddObservationRelation against a missing observation returned nil, want an error")
+	}
+}
+
+func TestAddObservationRelation_CascadesOnObservationDelete(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	older, _ := kb.AddObservation(pid, "note", "a")
+	newer, _ := kb.AddObservation(pid, "note", "b")
+	if err := kb.AddObservationRelation(newer, older, "supersedes"); err != nil {
+		t.Fatalf("AddObservationRelation: %v", err)
+	}
+	if _, err := kb.db.Exec(`DELETE FROM observations WHERE id = ?`, older); err != nil {
+		t.Fatalf("delete observation: %v", err)
+	}
+	var count int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM observation_relations WHERE to_id = ?`, older).Scan(&count); err != nil {
+		t.Fatalf("count observation_relations: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected observation_relations to cascade-delete with the observation, got %d rows", count)
+	}
+}
+
 func TestOpen_SetsBusyTimeout(t *testing.T) {
 	kb := openTestKB(t)
 	var ms int

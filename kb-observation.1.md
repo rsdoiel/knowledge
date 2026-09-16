@@ -14,6 +14,8 @@ kb observation list --project NAME
 
 kb observation show ID
 
+kb observation update ID BODY...
+
 kb observation sources ID
 
 # DESCRIPTION
@@ -29,7 +31,18 @@ list
 : list a project's observations, most recent first
 
 show
-: show a single observation by id
+: show a single observation by id, including its resolved supersedes/
+  superseded_by relations if it has any
+
+update
+: correct an observation by superseding it, not by mutating it. ID's body
+  is never touched; a new observation is inserted with BODY, inheriting ID's
+  project and kind, and linked to ID by a supersedes edge. The original
+  wording survives unchanged, so nothing needs a separate revision history --
+  see DR-0023 (knowledge/decisions/). Cross-machine reconciliation carries
+  the new supersedes edge the same as every other relation in this schema;
+  there is no per-field last-writer-wins here, unlike
+  kb-project(1)'s set-description
 
 sources
 : list the sources cited by an observation (see kb-source(1))

@@ -44,12 +44,16 @@ show
 
 set-status
 : set a record's status in both its file and the database. The promotion path
-  from proposed to accepted
+  from proposed to accepted. Also refreshes the corpus's index.md if one is
+  already present, since status is one of the fields it renders — never
+  creates one where the corpus has not already opted in
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on
   OLD, the relation, and unless --partial, OLD's superseded status. Both
-  files and the database are written together or not at all
+  files and the database are written together or not at all. Also refreshes
+  index.md, same as set-status, for both NEW's and OLD's corpora if either
+  already has one
 
 new
 : scaffold a record: allocate the next id for the tier, fill the fields a

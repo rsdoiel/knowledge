@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0023  2026-09-16  accepted     decision     request          -     An observation is corrected by superseding it, not by mutating its body
 DR-0022  2026-08-28  accepted     decision     plan-review      -     DR-0021's ambient-open guard applies only when --db is not given; explicit --db PATH keeps today's auto-create behavior
 DR-0021  2026-08-28  accepted     decision     request          -     kb record new defaults to the project-first agents/projects/<project>/ layout; kb requires an initialized workspace rather than silently creating one
 DR-0020  2026-08-28  accepted     decision     implementation   -     W5/W6 records portability: decisionRecord/decisionRecordRelation naming, project resolved by name, relation endpoints by same-import uuid cache
@@ -13,7 +14,7 @@ DR-0016  2026-08-27  accepted     decision     implementation   -     A record w
 DR-0015  2026-08-27  accepted     correction   implementation   -     kb index indexes the directory it is given, and a live corpus is asserted by property rather than by remembered count
 DR-0014  2026-08-27  accepted     decision     plan-review      -     merge normalises throwaway copies of its inputs, and the workspace name travels from the original path rather than the temp directory
 DR-0013  2026-08-27  accepted     decision     design           -     Decision records travel on every portability path, workspace tier included, and a diverged body is reported not silently resolved
-DR-0012  2026-08-26  accepted     decision     request          -     A project description is correctable in place; a concept description is not clobbered by an empty one
+DR-0012  2026-08-26  accepted     decision     request          sup   A project description is correctable in place; a concept description is not clobbered by an empty one
 DR-0011  2026-08-26  accepted     decision     design           -     A record's identity gains the workspace name, derived from the root rather than stored in frontmatter
 DR-0010  2026-08-26  accepted     correction   implementation   -     Standard options come from a FlagSet and are answered before any database exists
 DR-0009  2026-08-26  accepted     correction   release-review   -     The Makefile is hand-maintained despite its generated header, and the grounding query was truncating records not filtering them

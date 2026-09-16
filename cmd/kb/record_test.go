@@ -290,6 +290,40 @@ func TestCmdRecord_SetStatusRejectsUnknownRecord(t *testing.T) {
 	}
 }
 
+// TODO.md "a mechanism for knowing when index.md needs regenerating": the
+// smallest option (--check) shipped last release; this is the next one —
+// set-status regenerates a corpus's index.md itself when one is already
+// present, closing the staleness at its source rather than only detecting it.
+
+func TestCmdRecord_SetStatusRegeneratesExistingIndex(t *testing.T) {
+	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Status: "proposed"})
+	dir := filepath.Join(root, "clasm", "decisions")
+	if err := cmdIndex(kb, nil, false, []string{dir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding index: %v", err)
+	}
+
+	runRecord(t, kb, "set-status", "0001", "accepted")
+
+	got, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatalf("ReadFile index.md: %v", err)
+	}
+	if !strings.Contains(string(got), "accepted") {
+		t.Errorf("index.md = %q, want it to reflect the new status", got)
+	}
+}
+
+func TestCmdRecord_SetStatusDoesNotCreateIndexWhenAbsent(t *testing.T) {
+	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Status: "proposed"})
+	dir := filepath.Join(root, "clasm", "decisions")
+
+	runRecord(t, kb, "set-status", "0001", "accepted")
+
+	if _, err := os.Stat(filepath.Join(dir, "index.md")); !os.IsNotExist(err) {
+		t.Error("set-status must not create index.md in a corpus that never had one")
+	}
+}
+
 func TestCmdRecord_SetStatusRequiresTwoArguments(t *testing.T) {
 	kb, _ := fixtureWorkspace(t, "clasm", testRecord{ID: "0001"})
 	var out bytes.Buffer
@@ -332,6 +366,41 @@ func TestCmdRecord_SupersedeWritesBothSides(t *testing.T) {
 	}
 	if olderRec.Status != "superseded" {
 		t.Errorf("database status = %q, want superseded", olderRec.Status)
+	}
+}
+
+func TestCmdRecord_SupersedeRegeneratesExistingIndex(t *testing.T) {
+	kb, root := fixtureWorkspace(t, "clasm",
+		testRecord{ID: "0148", Status: "accepted"},
+		testRecord{ID: "0149", Status: "accepted"},
+	)
+	dir := filepath.Join(root, "clasm", "decisions")
+	if err := cmdIndex(kb, nil, false, []string{dir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding index: %v", err)
+	}
+
+	runRecord(t, kb, "supersede", "0149", "0148")
+
+	got, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatalf("ReadFile index.md: %v", err)
+	}
+	if !strings.Contains(string(got), "sup") {
+		t.Errorf("index.md = %q, want it to show the sup flag on DR-0148", got)
+	}
+}
+
+func TestCmdRecord_SupersedeDoesNotCreateIndexWhenAbsent(t *testing.T) {
+	kb, root := fixtureWorkspace(t, "clasm",
+		testRecord{ID: "0148", Status: "accepted"},
+		testRecord{ID: "0149", Status: "accepted"},
+	)
+	dir := filepath.Join(root, "clasm", "decisions")
+
+	runRecord(t, kb, "supersede", "0149", "0148")
+
+	if _, err := os.Stat(filepath.Join(dir, "index.md")); !os.IsNotExist(err) {
+		t.Error("supersede must not create index.md in a corpus that never had one")
 	}
 }
 

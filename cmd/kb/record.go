@@ -449,6 +449,16 @@ func normalisationNote(rf *knowledge.RecordFile, raw []byte, path string) string
 	return fmt.Sprintf("note: %s was not in canonical form and has also been normalised", path)
 }
 
+// joinNotes appends an advisory to an existing single-string note field,
+// newline-separated, without introducing a leading blank when note is still
+// empty.
+func joinNotes(note, addition string) string {
+	if note == "" {
+		return addition
+	}
+	return note + "\n" + addition
+}
+
 // recordSetStatus writes a record's status to both the file and the database.
 func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
 	if len(f.args) < 2 {
@@ -470,6 +480,9 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if _, err := saveRecordFile(kb, root, rec, rf); err != nil {
 		_ = os.WriteFile(filepath.Join(root, rec.Path), raw, 0o644)
 		return err
+	}
+	if regenErr := regenerateIndexIfPresent(filepath.Dir(filepath.Join(root, rec.Path))); regenErr != nil {
+		note = joinNotes(note, fmt.Sprintf("index.md could not be refreshed: %v", regenErr))
 	}
 
 	result := map[string]any{"record_id": rec.RecordID, "status": status, "path": rec.Path}
@@ -555,6 +568,15 @@ func recordSupersede(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if err := kb.AddRecordRelation(newer.ID, older.ID, "supersedes"); err != nil {
 		restore()
 		return err
+	}
+	dirs := []string{filepath.Dir(filepath.Join(root, newer.Path))}
+	if olderDir := filepath.Dir(filepath.Join(root, older.Path)); olderDir != dirs[0] {
+		dirs = append(dirs, olderDir)
+	}
+	for _, dir := range dirs {
+		if regenErr := regenerateIndexIfPresent(dir); regenErr != nil {
+			notes = append(notes, fmt.Sprintf("index.md could not be refreshed in %s: %v", dir, regenErr))
+		}
 	}
 
 	result := map[string]any{

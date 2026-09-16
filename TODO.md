@@ -69,12 +69,6 @@
   faithfully, so the groundwork is in place; nothing reads it across machines
   yet, and `kb-project(1)` says so under CAVEATS.
 
-- [ ] Whether an observation body should be correctable at all, and if so
-  whether by amendment or by supersession. Deliberately left out of DR-0012:
-  an observation is a *timestamped* note, append-only by construction, and
-  the `records` table already answers the same question with an explicit
-  `supersedes` edge. Mutating `body` in place would decide it by accident.
-
 - [ ] **`kb project rename OLD NEW`, and the `kb_fts` orphan that makes its
   absence worse than it looks.** There is no rename verb. `kb project add` on
   an existing name is a no-op returning the id, so the only route is SQL
@@ -137,13 +131,22 @@
     a fresh render against `PATH/index.md` byte-for-byte, never writes, and
     fails with "does not exist" or "is stale" naming the remedy (`kb index
     PATH`) rather than doing it — same exit-code shape as `kb search`'s fix
-    this release. This covers one corpus per invocation, so the two items
-    below are still open: it does not run itself on `set-status`/`supersede`,
-    and it does not yet know about more than one corpus at a time.
+    this release. This covers one corpus per invocation, so multi-corpus
+    discovery (below) is still open, but the other gap — nothing running on
+    `set-status`/`supersede` — is closed by the next item.
   - Have `set-status`/`supersede` regenerate the index for the corpus they
     just wrote to, since both already know the record's `path` and therefore
     its directory. Removes the habit entirely; the cost is a write to a file
-    the caller did not name.
+    the caller did not name. **Shipped 2026-09-16**: the new
+    `regenerateIndexIfPresent(dir)` runs after either command's file+database
+    write succeeds, but only refreshes an `index.md` that already exists —
+    never creates one, so the "cost" above does not apply to a corpus that
+    has not opted in. `supersede` covers both NEW's and OLD's directories,
+    deduped when they're the same tier's corpus. A regen failure is reported
+    as a note rather than failing the whole command, since the record write
+    it is downstream of already succeeded and the index is always
+    re-derivable. Multi-corpus discovery (below) and the on-disk-at-all
+    question are still open.
   - Have `ingest` regenerate it, which is wrong on its own — ingest is the one
     command that does *not* write record files, and the drift happens on
     status changes rather than on ingest.
@@ -343,3 +346,20 @@
   Fixed 2026-09-15: `cmdSearch` returns an error instead of printing "no
   results" and returning nil, so it now exits 1 in both text and `--json`
   mode.
+
+- [x] `kb observation update` didn't exist — reached for in real usage
+  2026-09-16, the same amend-vs-supersede question DR-0012 deliberately left
+  open for observations. See DR-0023 (`knowledge/decisions/`): an observation
+  is corrected by superseding it, never by mutating its body. Shipped
+  2026-09-16: `kb observation update ID BODY...` inserts a new observation
+  (inheriting `ID`'s project and kind) and links it to `ID` via a new
+  `observation_relations` table — `record_relations`' own shape, reused —
+  with `AddObservationRelation`/`ObservationRelationsFor` mirroring
+  `AddRecordRelation`/`RelationsFor`. The old observation's body is never
+  touched, so history retention is free; no `updated_at` column was added,
+  since the new observation's own `created_at` is the correction timestamp.
+  `kb observation show ID` now resolves and prints `supersedes`/
+  `superseded_by`, mirroring `kb record show`. `kb merge` and JSON-L
+  export/import carry `observation_relations` from this release, not as a
+  follow-on, per the standing rule that a table missing from the merge
+  summary is a table whose loss goes unreported.

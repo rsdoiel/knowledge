@@ -8,7 +8,7 @@ trigger: request
 project: knowledge
 phase: "1"
 supersedes: []
-superseded_by: []
+superseded_by: ["0023"]
 relates_to: ["0003"]
 initiative: ""
 session: ""
