@@ -24,6 +24,7 @@
 <p>kb observation add –project NAME KIND BODY [–source-doi DOI]</p>
 <p>kb observation list –project NAME</p>
 <p>kb observation show ID</p>
+<p>kb observation update ID BODY…</p>
 <p>kb observation sources ID</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>An observation is a timestamped note attached to a project. KIND is
@@ -40,7 +41,19 @@ list a project’s observations, most recent first
 </dd>
 <dt>show</dt>
 <dd>
-show a single observation by id
+show a single observation by id, including its resolved supersedes/
+superseded_by relations if it has any
+</dd>
+<dt>update</dt>
+<dd>
+correct an observation by superseding it, not by mutating it. ID’s body
+is never touched; a new observation is inserted with BODY, inheriting
+ID’s project and kind, and linked to ID by a supersedes edge. The
+original wording survives unchanged, so nothing needs a separate
+revision history – see DR-0023 (knowledge/decisions/). Cross-machine
+reconciliation carries the new supersedes edge the same as every other
+relation in this schema; there is no per-field last-writer-wins here,
+unlike kb-project(1)’s set-description
 </dd>
 <dt>sources</dt>
 <dd>

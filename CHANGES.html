@@ -21,12 +21,55 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.8-2026-09-16">v0.0.8 — 2026-09-16</h2>
+<p>A bug-fix-and-small-features release: closing the
+<code>index.md</code> staleness gap at its source, and giving
+observations a correction path.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><code>kb index PATH --check</code> compares a fresh render against
+<code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
+or “is stale” instead of writing, naming <code>kb index PATH</code> as
+the remedy — same exit-code convention as <code>kb search</code>’s fix
+last release.</li>
+<li><code>kb observation update ID BODY...</code> gives observations a
+correction path they never had. It does not mutate the old observation —
+it inserts a new one (inheriting the original’s project and kind) and
+links the two with a new <code>observation_relations</code> table,
+<code>record_relations</code>’ own shape reused rather than reinvented
+(see DR-0023, <code>knowledge/decisions/</code>, which reverses
+DR-0012’s original observations-stay-immutable stance after review found
+that an in-place edit destroys history and answers the
+amend-vs-supersede question by accident). The old observation’s body is
+never rewritten, so history retention is free; no
+<code>updated_at</code> column was added, since the new observation’s
+own <code>created_at</code> is the correction timestamp.
+<code>kb observation show ID</code> now resolves and prints
+<code>supersedes</code>/<code>superseded_by</code>, mirroring
+<code>kb record show</code>. <code>kb merge</code> and JSON-L
+export/import carry <code>observation_relations</code> from this
+release, not as a follow-on, per the standing rule that a table missing
+from the merge summary is a table whose loss goes unreported.</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><code>kb record set-status</code> and
+<code>kb record supersede</code> now refresh a corpus’s
+<code>index.md</code> themselves after a successful write, via the new
+<code>regenerateIndexIfPresent</code>, closing the gap
+<code>--check</code> only detects. Only when one is already present —
+never creating one where a corpus hasn’t opted in. Together with
+<code>--check</code>, this fixes <code>index.md</code> silently drifting
+from
+<code>status</code>/<code>kind</code>/<code>trigger</code>/<code>superseded_by</code>/title
+changes, which bit WorkLab twice.</li>
+</ul>
 <h2 id="v0.0.7-2026-09-15">v0.0.7 — 2026-09-15</h2>
 <p>A bug-fix release: four defects found running v0.0.6 against real
 corpora (clasm, WorkLab, caltechauthors), all in
 <code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
 exit code.</p>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li><code>kb ingest</code> no longer leaves stale edges behind on
 re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
@@ -64,7 +107,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -122,7 +165,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -157,7 +200,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -197,7 +240,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -253,7 +296,7 @@ specification: field order, flow-styled sequences, and a double-quoted
 string type for the seven fields the format requires quoted, so every
 writer produces byte-identical output.</li>
 </ul>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li>A record path read from the database is confined to the workspace
 root before it is read or written. <code>filepath.Join</code> cleans a

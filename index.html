@@ -47,44 +47,43 @@ explicit human review step before being trusted as searchable
 content.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.7</li>
+<li>version: 0.0.8</li>
 <li>status: concept</li>
-<li>released: 2026-09-15</li>
+<li>released: 2026-09-16</li>
 </ul>
-<p>A bug-fix release: four defects found running v0.0.6 against real
-corpora (clasm, WorkLab, caltechauthors), all in
-<code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
-exit code.</p>
-<p><code>kb ingest</code> no longer leaves stale edges behind on
-re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
-removed from a record’s frontmatter, or a <code>[[wikilink]]</code>
-concept tag removed from its body, is now actually removed from
-<code>record_relations</code>/<code>record_concepts</code> – previously
-both only ever grew, since re-ingest inserted what a file currently
-declared but never deleted what it no longer declared. The new
-<code>ClearRecordRelationsFrom</code>/<code>ClearRecordConcepts</code>
-(and <code>ClearDocumentSectionConcepts</code> for
-<code>kb document ingest</code>) run before every re-insert.</p>
-<p><code>[[0007]]</code>/<code>[[DR-0007]]</code> in a record body – the
-natural way to write “see DR-0007” – no longer silently mints a junk
-concept named after the record id. It is now skipped with a warning
-pointing at <code>supersedes</code>/<code>relates_to</code>, the actual
-way to cite another record.</p>
-<p><code>kb ingest</code> now updates a record’s stored
-<code>path</code> when its file moves but its content is unchanged,
-rather than leaving <code>records.path</code> (and so
-<code>kb export</code>’s <code>agents/knowledge.jsonl</code>) silently
-stale. The “DR-%s was stored at %s” warning now fires only when content
-changes alongside the path, since a path change alone is an ordinary
-move, not a possible id collision. The message for a record with no file
-at its stored path no longer asserts deletion as the only explanation
-and recommends <code>kb record remove</code> outright – a moved file
-looks identical to a deleted one, and the old wording would have walked
-a user into deleting live records.</p>
-<p><code>kb search</code> now exits 1, in both text and
-<code>--json</code> mode, when it finds nothing, matching the
-workspace’s search-tool convention instead of exiting 0 with an empty
-result.</p>
+<p>A bug-fix-and-small-features release: closing the index.md staleness
+gap at its source, and giving observations a correction path.</p>
+<p><code>kb index PATH --check</code> compares a fresh render against
+<code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
+or “is stale” instead of writing, naming <code>kb index PATH</code> as
+the remedy – same exit-code convention as <code>kb search</code>’s fix
+last release. <code>kb record set-status</code> and
+<code>kb record supersede</code> go a step further and close the gap
+<code>--check</code> only detects: both now refresh a corpus’s
+<code>index.md</code> themselves after a successful write, via the new
+<code>regenerateIndexIfPresent</code>, but only when one is already
+present – never creating one where a corpus hasn’t opted in. Together
+these fix <code>index.md</code> silently drifting from
+<code>status</code>/<code>kind</code>/<code>trigger</code>/<code>superseded_by</code>/title
+changes, which bit WorkLab twice.</p>
+<p><code>kb observation update ID BODY...</code> gives observations a
+correction path they never had. It does not mutate the old observation –
+it inserts a new one (inheriting the original’s project and kind) and
+links the two with a new <code>observation_relations</code> table,
+<code>record_relations</code>’ own shape reused rather than reinvented
+(see DR-0023, <code>knowledge/decisions/</code>, which reverses
+DR-0012’s original observations-stay-immutable stance after review found
+that an in-place edit destroys history and answers the
+amend-vs-supersede question by accident). The old observation’s body is
+never rewritten, so history retention is free; no
+<code>updated_at</code> column was added, since the new observation’s
+own <code>created_at</code> is the correction timestamp.
+<code>kb observation show ID</code> now resolves and prints
+<code>supersedes</code>/<code>superseded_by</code>, mirroring
+<code>kb record show</code>. <code>kb merge</code> and JSON-L
+export/import carry <code>observation_relations</code> from this
+release, not as a follow-on, per the standing rule that a table missing
+from the merge summary is a table whose loss goes unreported.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>

@@ -22,7 +22,7 @@
 <p>kb-index — generate a decisions/index.md from a directory of
 records</p>
 <h1 id="synopsis">SYNOPSIS</h1>
-<p>kb index PATH [–stdout]</p>
+<p>kb index PATH [–stdout|–check]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>Regenerates PATH/index.md: one greppable line per record, newest
 first. The file is generated and never hand-edited.</p>
@@ -55,16 +55,26 @@ Dropping one silently would make the index lie about what the corpus
 contains.</p>
 <p>This command writes index.md and nothing else. The format has no
 decisions/README.md, so one is never created.</p>
+<p>–check compares PATH/index.md against a fresh render and reports
+drift as an error instead of writing: missing, or different from what
+the current records would produce. It exits non-zero either way, so it
+fits a pre-commit hook or CI step; the remedy either way is running
+index without –check. –check and –stdout cannot be combined.</p>
 <h1 id="options">OPTIONS</h1>
 <dl>
 <dt>–stdout</dt>
 <dd>
 write the index to standard output instead of index.md
 </dd>
+<dt>–check</dt>
+<dd>
+verify index.md is current without writing it; non-zero exit on drift
+</dd>
 </dl>
 <h1 id="examples">EXAMPLES</h1>
 <pre class="shell"><code>kb index clasm/decisions
-kb index agents/decisions --stdout | head</code></pre>
+kb index agents/decisions --stdout | head
+kb index agents/decisions --check</code></pre>
 </section>
 <footer>
 <p>knowledge</p>
