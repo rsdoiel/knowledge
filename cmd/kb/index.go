@@ -29,7 +29,7 @@ const (
 	indexSupersededOn = "sup"
 )
 
-/** cmdIndex implements `kb index PATH [--stdout]`: it regenerates
+/** cmdIndex implements `kb index PATH [--stdout|--check]`: it regenerates
  * PATH/index.md, one greppable line per record, newest first.
  *
  * Newest-first and one-line-per-record preserve the affordance a single
@@ -41,20 +41,28 @@ const (
  * command writes — the format has no decisions/README.md, so one is never
  * created.
  *
+ * --check never writes. It compares PATH/index.md against a fresh render and
+ * reports drift as an error instead — see TODO.md "a mechanism for knowing
+ * when index.md needs regenerating", where nothing noticed index.md silently
+ * falling out of sync with `status`/`kind`/`trigger`/`superseded_by`/title
+ * changes made through `kb record set-status`/`supersede`. Exit code follows
+ * kb search's convention: 0 when there is nothing to report, 1 when there is.
+ *
  * Parameters:
  *   kb      (*knowledge.KnowledgeBase) — unused; the index is built from the
  *                                        files, so it works before any ingest.
  *   dl      (*DebugLog)                — debug log, may be nil.
  *   jsonOut (bool)                     — unused; the index has one format.
- *   args    ([]string)                 — PATH plus optional --stdout.
+ *   args    ([]string)                 — PATH plus optional --stdout or --check.
  *   out     (io.Writer)                — where --stdout writes, and where the
  *                                        confirmation line goes otherwise.
  *
  * Returns:
- *   error — on a usage error, an unreadable tree, or a malformed record. A
- *           record that cannot be parsed is fatal here, unlike in ingest:
- *           silently dropping one from the index would make the index lie
- *           about what the corpus contains.
+ *   error — on a usage error, an unreadable tree, a malformed record, or
+ *           (under --check) a missing or stale index.md. A record that
+ *           cannot be parsed is fatal here, unlike in ingest: silently
+ *           dropping one from the index would make the index lie about what
+ *           the corpus contains.
  *
  * Example:
  *   err := cmdIndex(kb, nil, false, []string{"clasm/decisions"}, os.Stdout)
@@ -62,10 +70,13 @@ const (
 func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	var dir string
 	toStdout := false
+	check := false
 	for _, arg := range args {
 		switch arg {
 		case "--stdout", "-stdout":
 			toStdout = true
+		case "--check", "-check":
+			check = true
 		default:
 			if strings.HasPrefix(arg, "-") {
 				return fmt.Errorf("unknown flag %q", arg)
@@ -78,6 +89,9 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 	}
 	if dir == "" {
 		return fmt.Errorf("index requires a PATH; see kb help index")
+	}
+	if check && toStdout {
+		return fmt.Errorf("--check and --stdout cannot be combined")
 	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -101,13 +115,16 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 	}
 
 	index := renderIndex(records)
-	dl.Log("index", map[string]any{"path": abs, "records": len(records), "stdout": toStdout})
+	target := filepath.Join(abs, "index.md")
+	dl.Log("index", map[string]any{"path": abs, "records": len(records), "stdout": toStdout, "check": check})
 
+	if check {
+		return checkIndex(target, index, out)
+	}
 	if toStdout {
 		_, err := io.WriteString(out, index)
 		return err
 	}
-	target := filepath.Join(abs, "index.md")
 	if err := os.WriteFile(target, []byte(index), 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", target, err)
 	}
@@ -116,6 +133,26 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 		plural = ""
 	}
 	fmt.Fprintf(out, "%d record%s indexed to %s\n", len(records), plural, target)
+	return nil
+}
+
+// checkIndex compares a freshly rendered index against what is on disk at
+// target, without ever writing to it. Drift is reported as an error rather
+// than fixed, matching kb search's convention: --check is meant to gate a
+// pre-commit hook or CI step, where a non-zero exit is the signal and
+// "kb index PATH" is the documented remedy.
+func checkIndex(target, want string, out io.Writer) error {
+	got, err := os.ReadFile(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%s does not exist; run kb index to generate it", target)
+		}
+		return err
+	}
+	if string(got) != want {
+		return fmt.Errorf("%s is stale; run kb index to regenerate it", target)
+	}
+	fmt.Fprintf(out, "%s is up to date\n", target)
 	return nil
 }
 

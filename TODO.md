@@ -133,7 +133,13 @@
     what would be generated. Cheap, scriptable, fits the workspace's
     `pre-commit` hook, which already re-exports `knowledge.jsonl` on drift and
     could do the same here. This is the smallest thing that would have caught
-    both incidents.
+    both incidents. **Shipped 2026-09-15**: `kb index PATH --check` compares
+    a fresh render against `PATH/index.md` byte-for-byte, never writes, and
+    fails with "does not exist" or "is stale" naming the remedy (`kb index
+    PATH`) rather than doing it — same exit-code shape as `kb search`'s fix
+    this release. This covers one corpus per invocation, so the two items
+    below are still open: it does not run itself on `set-status`/`supersede`,
+    and it does not yet know about more than one corpus at a time.
   - Have `set-status`/`supersede` regenerate the index for the corpus they
     just wrote to, since both already know the record's `path` and therefore
     its directory. Removes the habit entirely; the cost is a write to a file

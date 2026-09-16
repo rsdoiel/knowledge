@@ -235,6 +235,88 @@ func TestCmdIndex_RequiresAPath(t *testing.T) {
 	}
 }
 
+// TODO.md "a mechanism for knowing when index.md needs regenerating": kb
+// index --check is the smallest thing that would have caught index.md
+// silently drifting from the records it summarises.
+
+func TestCmdIndex_CheckPassesWhenUpToDate(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+
+	if err := cmdIndex(kb, nil, false, []string{dir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("generating index: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{dir, "--check"}, &out); err != nil {
+		t.Errorf("--check on an up-to-date index returned an error: %v", err)
+	}
+}
+
+func TestCmdIndex_CheckFailsWhenStale(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+	if err := cmdIndex(kb, nil, false, []string{dir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("generating index: %v", err)
+	}
+
+	// A field the index renders changes (status), without regenerating.
+	testRecord{ID: "0001", Project: "clasm", Status: "superseded",
+		SupersededBy: []string{"0002"}}.write(t, dir)
+
+	var out bytes.Buffer
+	err := cmdIndex(kb, nil, false, []string{dir, "--check"}, &out)
+	if err == nil {
+		t.Fatal("--check on a stale index returned nil, want an error naming the drift")
+	}
+	if !strings.Contains(err.Error(), "stale") {
+		t.Errorf("error = %q, want it to say the index is stale", err.Error())
+	}
+}
+
+func TestCmdIndex_CheckFailsWhenMissing(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+
+	var out bytes.Buffer
+	err := cmdIndex(kb, nil, false, []string{dir, "--check"}, &out)
+	if err == nil {
+		t.Fatal("--check with no index.md on disk returned nil, want an error")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("error = %q, want it to say the index does not exist", err.Error())
+	}
+}
+
+func TestCmdIndex_CheckNeverWrites(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+
+	var out bytes.Buffer
+	_ = cmdIndex(kb, nil, false, []string{dir, "--check"}, &out)
+
+	if _, err := os.Stat(filepath.Join(dir, "index.md")); err == nil {
+		t.Error("--check must never write index.md, but it exists on disk")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("Stat: %v", err)
+	}
+}
+
+func TestCmdIndex_CheckConflictsWithStdout(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{dir, "--check", "--stdout"}, &out); err == nil {
+		t.Error("expected a usage error combining --check and --stdout")
+	}
+}
+
 func TestCmdIndex_MalformedRecordIsAnError(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	dir := filepath.Join(root, "clasm", "decisions")

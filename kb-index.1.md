@@ -8,7 +8,7 @@ kb-index — generate a decisions/index.md from a directory of records
 
 # SYNOPSIS
 
-kb index PATH [--stdout]
+kb index PATH [--stdout|--check]
 
 # DESCRIPTION
 
@@ -47,15 +47,25 @@ silently would make the index lie about what the corpus contains.
 This command writes index.md and nothing else. The format has no
 decisions/README.md, so one is never created.
 
+--check compares PATH/index.md against a fresh render and reports drift as an
+error instead of writing: missing, or different from what the current records
+would produce. It exits non-zero either way, so it fits a pre-commit hook or
+CI step; the remedy either way is running index without --check. --check and
+--stdout cannot be combined.
+
 # OPTIONS
 
 --stdout
 : write the index to standard output instead of index.md
+
+--check
+: verify index.md is current without writing it; non-zero exit on drift
 
 # EXAMPLES
 
 ~~~shell
 kb index clasm/decisions
 kb index agents/decisions --stdout | head
+kb index agents/decisions --check
 ~~~
 
