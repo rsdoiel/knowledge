@@ -15,7 +15,7 @@ func init() {
 
 func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: project <add|list|show|concepts|set-status|set-description> ...")
+		return fmt.Errorf("usage: project <add|list|show|concepts|set-status|set-description|rename> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -31,6 +31,8 @@ func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 		return cmdProjectSetStatus(kb, dl, jsonOut, rest, out)
 	case "set-description":
 		return cmdProjectSetDescription(kb, dl, jsonOut, rest, out)
+	case "rename":
+		return cmdProjectRename(kb, dl, jsonOut, rest, out)
 	default:
 		return fmt.Errorf("unknown project subcommand %q", sub)
 	}
@@ -116,6 +118,30 @@ func cmdProjectSetDescription(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut
 		}{Name: name, Description: desc})
 	}
 	fmt.Fprintf(out, "project %q description updated\n", name)
+	return nil
+}
+
+// cmdProjectRename implements `project rename OLD NEW` (DR-0024): OLD and
+// NEW are positional, not joined the way set-description's trailing words
+// are, since a project name is a single token, not free text.
+func cmdProjectRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	if len(args) != 2 {
+		return fmt.Errorf("usage: project rename OLD NEW")
+	}
+	old, new := args[0], args[1]
+	err := logKBCallErr(dl, "RenameProject", map[string]any{"old": old, "new": new}, func() error {
+		return kb.RenameProject(old, new)
+	})
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, struct {
+			Old string `json:"old"`
+			New string `json:"new"`
+		}{Old: old, New: new})
+	}
+	fmt.Fprintf(out, "project %q renamed to %q\n", old, new)
 	return nil
 }
 

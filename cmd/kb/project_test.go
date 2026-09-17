@@ -229,6 +229,65 @@ func TestCmdProject_SetDescriptionNotFound(t *testing.T) {
 	}
 }
 
+// ─── rename (DR-0024) ────────────────────────────────────────────────────────
+
+func TestCmdProject_Rename(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", "a project"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"rename", "oldname", "newname"}, &out); err != nil {
+		t.Fatalf("project rename: %v", err)
+	}
+	p, err := kb.ProjectByName("newname")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName(newname): %v", err)
+	}
+}
+
+func TestCmdProject_RenameJSON(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, true, []string{"rename", "oldname", "newname"}, &out); err != nil {
+		t.Fatalf("project rename: %v", err)
+	}
+	assertValidJSON(t, out.Bytes())
+	var got struct {
+		Old string `json:"old"`
+		New string `json:"new"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output not valid JSON: %v (%q)", err, out.String())
+	}
+	if got.Old != "oldname" || got.New != "newname" {
+		t.Errorf("got = %+v, want Old=oldname New=newname", got)
+	}
+}
+
+func TestCmdProject_RenameRequiresTwoArguments(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"rename", "oldname"}, &out); err == nil {
+		t.Error("expected an error when NEW is missing")
+	}
+}
+
+// DR-0024's corpus safeguard, reachable through the CLI layer.
+func TestCmdProject_RenameRefusesWhenProjectOwnsRecords(t *testing.T) {
+	kb, _ := fixtureWorkspace(t, "hasrecords", testRecord{ID: "0001"})
+	var out bytes.Buffer
+	if err := cmdProject(kb, nil, false, []string{"rename", "hasrecords", "newname"}, &out); err == nil {
+		t.Error("expected an error when the project owns records")
+	}
+}
+
 // Every project subcommand has to appear in the verb's own usage line, or it
 // is undiscoverable from the error you get by running the verb bare.
 func TestCmdProject_UsageListsEverySubcommand(t *testing.T) {
@@ -238,7 +297,7 @@ func TestCmdProject_UsageListsEverySubcommand(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a usage error for a bare project verb")
 	}
-	for _, sub := range []string{"add", "list", "show", "concepts", "set-status", "set-description"} {
+	for _, sub := range []string{"add", "list", "show", "concepts", "set-status", "set-description", "rename"} {
 		if !strings.Contains(err.Error(), sub) {
 			t.Errorf("usage %q does not mention subcommand %q", err.Error(), sub)
 		}
@@ -250,6 +309,12 @@ func TestCmdProject_UsageListsEverySubcommand(t *testing.T) {
 func TestProjectHelpText_DocumentsSetDescription(t *testing.T) {
 	if !strings.Contains(ProjectHelpText, "set-description") {
 		t.Error("ProjectHelpText does not document set-description")
+	}
+}
+
+func TestProjectHelpText_DocumentsRename(t *testing.T) {
+	if !strings.Contains(ProjectHelpText, "rename") {
+		t.Error("ProjectHelpText does not document rename")
 	}
 }
 

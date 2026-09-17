@@ -682,6 +682,60 @@ func (kb *KnowledgeBase) SetProjectDescription(name, description string) error {
 	return nil
 }
 
+/** RenameProject changes a project's name, refreshing its kb_fts row via the
+ * same refreshProjectFTS a description correction already uses. Refuses
+ * outright when the project owns any records: a decision record's project:
+ * frontmatter has to match projects.name, and kb ingest resolves that field
+ * by name on every run, so a rename with no corresponding rewrite of the
+ * corpus's files makes the next ingest mint a phantom project under the old
+ * name and duplicate every record under it — reproduced and recorded in
+ * DR-0024. Rewriting a corpus automatically is out of scope here; refusing
+ * is the safe default until that lands.
+ *
+ * Parameters:
+ *   old (string) — the project's current name.
+ *   new (string) — the replacement name.
+ *
+ * Returns:
+ *   error — if old does not exist, new already names another project, the
+ *           project owns any records, or on database failure.
+ *
+ * Example:
+ *   err := kb.RenameProject("caltechcampuspubs_static", "ep3StaticSite")
+ */
+func (kb *KnowledgeBase) RenameProject(old, new string) error {
+	var id int64
+	var description string
+	err := kb.db.QueryRow(`SELECT id, description FROM projects WHERE name = ?`, old).Scan(&id, &description)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("knowledge: project %q not found", old)
+	}
+	if err != nil {
+		return fmt.Errorf("knowledge: rename project: %w", err)
+	}
+	var taken int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM projects WHERE name = ?`, new).Scan(&taken); err != nil {
+		return fmt.Errorf("knowledge: rename project: %w", err)
+	}
+	if taken > 0 {
+		return fmt.Errorf("knowledge: project %q already exists", new)
+	}
+	var records int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM records WHERE project_id = ?`, id).Scan(&records); err != nil {
+		return fmt.Errorf("knowledge: rename project: %w", err)
+	}
+	if records > 0 {
+		return fmt.Errorf(
+			"knowledge: project %q owns %d record(s); renaming would desync its corpus's project: frontmatter from the database on the next ingest — rewrite the corpus's frontmatter and re-ingest first",
+			old, records)
+	}
+	if _, err := kb.db.Exec(`UPDATE projects SET name = ? WHERE id = ?`, new, id); err != nil {
+		return fmt.Errorf("knowledge: rename project: %w", err)
+	}
+	kb.refreshProjectFTS(id, new, description)
+	return nil
+}
+
 /** Projects returns all projects ordered by creation date.
  *
  * Returns:
@@ -1039,15 +1093,69 @@ func (kb *KnowledgeBase) AddConceptWithIdentifier(name, description, identifierT
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add concept: %w", err)
 	}
-	if kb.ftsAvailable {
-		_, _ = kb.db.Exec(
-			`DELETE FROM kb_fts WHERE source_type = 'concept' AND source_id = ?`, id)
-		_, _ = kb.db.Exec(
-			`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
-			 VALUES (?, 'concept', ?, ?, 'concept', ?, 0)`,
-			name+" "+stored, name, stored, id)
-	}
+	kb.refreshConceptFTS(id, name, stored)
 	return id, nil
+}
+
+// refreshConceptFTS replaces the concept's kb_fts row so search reflects its
+// current name and description. Delete-then-insert by source_id, mirroring
+// refreshProjectFTS exactly, for the same reason: kb_fts is a contentless
+// FTS5 table with no unique key to upsert against, and deleting by name
+// rather than by the stable id would leave a stale row behind on rename.
+// Factored out of AddConceptWithIdentifier's own inline version so
+// RenameConcept (DR-0024) can reuse it.
+func (kb *KnowledgeBase) refreshConceptFTS(id int64, name, description string) {
+	if !kb.ftsAvailable {
+		return
+	}
+	_, _ = kb.db.Exec(
+		`DELETE FROM kb_fts WHERE source_type = 'concept' AND source_id = ?`, id)
+	_, _ = kb.db.Exec(
+		`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
+		 VALUES (?, 'concept', ?, ?, 'concept', ?, 0)`,
+		name+" "+description, name, description, id)
+}
+
+/** RenameConcept changes a concept's name, refreshing its kb_fts row via
+ * refreshConceptFTS. Unlike RenameProject, nothing refuses this: every
+ * reference to a concept (record_concepts, observation_concepts,
+ * project_concepts, document_section_concepts) is a foreign key to
+ * concepts.id, never a name matched from an external file, so a concept has
+ * no corpus to desync — see DR-0024.
+ *
+ * Parameters:
+ *   old (string) — the concept's current name.
+ *   new (string) — the replacement name.
+ *
+ * Returns:
+ *   error — if old does not exist, new already names another concept, or on
+ *           database failure.
+ *
+ * Example:
+ *   err := kb.RenameConcept("wal-mdoe", "wal-mode")
+ */
+func (kb *KnowledgeBase) RenameConcept(old, new string) error {
+	var id int64
+	var description string
+	err := kb.db.QueryRow(`SELECT id, description FROM concepts WHERE name = ?`, old).Scan(&id, &description)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("knowledge: concept %q not found", old)
+	}
+	if err != nil {
+		return fmt.Errorf("knowledge: rename concept: %w", err)
+	}
+	var taken int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM concepts WHERE name = ?`, new).Scan(&taken); err != nil {
+		return fmt.Errorf("knowledge: rename concept: %w", err)
+	}
+	if taken > 0 {
+		return fmt.Errorf("knowledge: concept %q already exists", new)
+	}
+	if _, err := kb.db.Exec(`UPDATE concepts SET name = ? WHERE id = ?`, new, id); err != nil {
+		return fmt.Errorf("knowledge: rename concept: %w", err)
+	}
+	kb.refreshConceptFTS(id, new, description)
+	return nil
 }
 
 /** Concepts returns all concepts ordered by name.

@@ -1224,6 +1224,207 @@ func TestSetProjectDescription_NotFound(t *testing.T) {
 	}
 }
 
+// ─── RenameProject / RenameConcept (DR-0024) ────────────────────────────────
+
+func TestRenameProject(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", "a project"); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.RenameProject("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProject: %v", err)
+	}
+	p, err := kb.ProjectByName("newname")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName(newname): %v", err)
+	}
+	if p.Description != "a project" {
+		t.Errorf("Description = %q, want it preserved across the rename", p.Description)
+	}
+	old, err := kb.ProjectByName("oldname")
+	if err != nil {
+		t.Fatalf("ProjectByName(oldname): %v", err)
+	}
+	if old != nil {
+		t.Errorf("old name still resolves to %+v, want it gone", old)
+	}
+}
+
+// The repro behind DR-0024: refreshProjectFTS deletes by source_id, so a
+// rename must not leave a second kb_fts row behind under the old label.
+func TestRenameProject_RefreshesFTSWithoutDuplicating(t *testing.T) {
+	kb := openTestKB(t)
+	id, err := kb.AddProject("oldname", "mentions zzstalezz")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.RenameProject("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProject: %v", err)
+	}
+	var n int
+	if err := kb.db.QueryRow(
+		`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'project' AND source_id = ?`, id,
+	).Scan(&n); err != nil {
+		t.Fatalf("count kb_fts rows: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("kb_fts holds %d rows for the project, want 1", n)
+	}
+	stale, err := kb.Search("oldname")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(stale) != 0 {
+		t.Errorf("project still searchable under its old name: %+v", stale)
+	}
+	fresh, err := kb.Search("newname")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(fresh) != 1 {
+		t.Errorf("Search for the new name returned %d results, want 1", len(fresh))
+	}
+}
+
+func TestRenameProject_RefusesWhenNewNameExists(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := kb.AddProject("taken", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.RenameProject("oldname", "taken"); err == nil {
+		t.Error("expected an error when NEW already names another project")
+	}
+}
+
+func TestRenameProject_NotFound(t *testing.T) {
+	kb := openTestKB(t)
+	if err := kb.RenameProject("nonexistent", "newname"); err == nil {
+		t.Error("expected an error for a nonexistent project")
+	}
+}
+
+// The DR-0024 repro: renaming a project that owns records and re-ingesting
+// its corpus mints a phantom project and duplicates the record. Refusing
+// outright is the safeguard.
+func TestRenameProject_RefusesWhenProjectOwnsRecords(t *testing.T) {
+	kb := openTestKB(t)
+	pid, err := kb.AddProject("oldname", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := kb.AddRecord(Record{
+		RecordID: "0001", ProjectID: pid, Scope: "project",
+		Path: "decisions/0001-x.md", Title: "t", Date: "2026-09-17",
+		Status: "accepted", Kind: "decision", Body: "b", Checksum: "c",
+	}); err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+	if err := kb.RenameProject("oldname", "newname"); err == nil {
+		t.Error("expected an error when the project owns records")
+	}
+	p, err := kb.ProjectByName("oldname")
+	if err != nil || p == nil {
+		t.Errorf("ProjectByName(oldname) = %+v, %v, want the refused rename to leave the name untouched", p, err)
+	}
+}
+
+func TestRenameConcept(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("oldname", "a concept"); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := kb.RenameConcept("oldname", "newname"); err != nil {
+		t.Fatalf("RenameConcept: %v", err)
+	}
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	names := map[string]bool{}
+	for _, c := range concepts {
+		names[c.Name] = true
+		if c.Name == "newname" && c.Description != "a concept" {
+			t.Errorf("Description = %q, want it preserved across the rename", c.Description)
+		}
+	}
+	if names["oldname"] {
+		t.Error("old concept name still exists, want it gone")
+	}
+	if !names["newname"] {
+		t.Error("new concept name not found")
+	}
+}
+
+func TestRenameConcept_RefreshesFTSWithoutDuplicating(t *testing.T) {
+	kb := openTestKB(t)
+	id, err := kb.AddConcept("oldname", "mentions zzstalezz")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := kb.RenameConcept("oldname", "newname"); err != nil {
+		t.Fatalf("RenameConcept: %v", err)
+	}
+	var n int
+	if err := kb.db.QueryRow(
+		`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'concept' AND source_id = ?`, id,
+	).Scan(&n); err != nil {
+		t.Fatalf("count kb_fts rows: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("kb_fts holds %d rows for the concept, want 1", n)
+	}
+}
+
+// Concepts have no corpus, so nothing blocks a rename the way records block
+// RenameProject -- links follow the concept's stable id, not its name.
+func TestRenameConcept_LinksSurvive(t *testing.T) {
+	kb := openTestKB(t)
+	pid, err := kb.AddProject("proj", "")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	cid, err := kb.AddConcept("oldname", "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := kb.LinkProjectConcept(pid, cid); err != nil {
+		t.Fatalf("LinkProjectConcept: %v", err)
+	}
+	if err := kb.RenameConcept("oldname", "newname"); err != nil {
+		t.Fatalf("RenameConcept: %v", err)
+	}
+	concepts, err := kb.ProjectConcepts(pid)
+	if err != nil {
+		t.Fatalf("ProjectConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "newname" {
+		t.Errorf("ProjectConcepts = %+v, want one concept named newname", concepts)
+	}
+}
+
+func TestRenameConcept_RefusesWhenNewNameExists(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("oldname", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.AddConcept("taken", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if err := kb.RenameConcept("oldname", "taken"); err == nil {
+		t.Error("expected an error when NEW already names another concept")
+	}
+}
+
+func TestRenameConcept_NotFound(t *testing.T) {
+	kb := openTestKB(t)
+	if err := kb.RenameConcept("nonexistent", "newname"); err == nil {
+		t.Error("expected an error for a nonexistent concept")
+	}
+}
+
 // AddConcept's ON CONFLICT clause updated the description unconditionally,
 // so `kb concept add name` with no DESCRIPTION wiped the stored one. The
 // identifier columns were already guarded this way; the description was not.

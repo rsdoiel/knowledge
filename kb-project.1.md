@@ -20,6 +20,8 @@ kb project set-status NAME STATUS
 
 kb project set-description NAME DESCRIPTION
 
+kb project rename OLD NEW
+
 # DESCRIPTION
 
 A project is the top-level container observations and concepts attach to.
@@ -51,6 +53,16 @@ set-description
   show prints and what search returns -- so this is how one that has gone
   stale gets corrected. Trailing words are joined with a space, as in add;
   pass an explicit empty string to clear the description entirely.
+
+rename
+: rename a project and reindex it for search. Refuses if NEW already names
+  another project, or if the project owns any records -- a decision
+  record's project: frontmatter has to match the project's name, and
+  renaming without rewriting the corpus's files would make the next
+  kb-ingest(1) mint a phantom project under the old name and
+  duplicate every record under it. See DR-0024 (knowledge/decisions/).
+  Rewrite the corpus's project: frontmatter and re-ingest before renaming
+  a project that owns records.
 
 # CAVEATS
 

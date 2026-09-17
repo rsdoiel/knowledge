@@ -12,6 +12,8 @@ kb concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]
 
 kb concept list
 
+kb concept rename OLD NEW
+
 # DESCRIPTION
 
 A concept is a named idea or term that can be linked to projects and
@@ -27,6 +29,14 @@ for --identifier-type and --identifier-value.
 A concept may also represent a scholarly entity — a paper, person,
 institution, or funder — by setting --identifier-type (e.g. doi, orcid,
 ror, fundref) and --identifier-value (the normalized identifier).
+
+rename
+: rename a concept and reindex it for search. Refuses only if NEW already
+  names another concept -- unlike kb-project(1)'s rename, a concept
+  has no corpus of external files to desync, since every link to it
+  (record_concepts, observation_concepts, project_concepts,
+  document_section_concepts) is a foreign key, never a name matched from a
+  file. See DR-0024 (knowledge/decisions/).
 
 # SEE ALSO
 

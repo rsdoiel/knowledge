@@ -259,6 +259,8 @@ const ProjectHelpText = `%{app_name}-project(1) user manual | version {version} 
 
 {app_name} project set-description NAME DESCRIPTION
 
+{app_name} project rename OLD NEW
+
 # DESCRIPTION
 
 A project is the top-level container observations and concepts attach to.
@@ -290,6 +292,16 @@ set-description
   show prints and what search returns -- so this is how one that has gone
   stale gets corrected. Trailing words are joined with a space, as in add;
   pass an explicit empty string to clear the description entirely.
+
+rename
+: rename a project and reindex it for search. Refuses if NEW already names
+  another project, or if the project owns any records -- a decision
+  record's project: frontmatter has to match the project's name, and
+  renaming without rewriting the corpus's files would make the next
+  {app_name}-ingest(1) mint a phantom project under the old name and
+  duplicate every record under it. See DR-0024 (knowledge/decisions/).
+  Rewrite the corpus's project: frontmatter and re-ingest before renaming
+  a project that owns records.
 
 # CAVEATS
 
@@ -379,6 +391,8 @@ const ConceptHelpText = `%{app_name}-concept(1) user manual | version {version} 
 
 {app_name} concept list
 
+{app_name} concept rename OLD NEW
+
 # DESCRIPTION
 
 A concept is a named idea or term that can be linked to projects and
@@ -394,6 +408,14 @@ for --identifier-type and --identifier-value.
 A concept may also represent a scholarly entity — a paper, person,
 institution, or funder — by setting --identifier-type (e.g. doi, orcid,
 ror, fundref) and --identifier-value (the normalized identifier).
+
+rename
+: rename a concept and reindex it for search. Refuses only if NEW already
+  names another concept -- unlike {app_name}-project(1)'s rename, a concept
+  has no corpus of external files to desync, since every link to it
+  (record_concepts, observation_concepts, project_concepts,
+  document_section_concepts) is a foreign key, never a name matched from a
+  file. See DR-0024 (knowledge/decisions/).
 
 # SEE ALSO
 

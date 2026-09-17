@@ -15,7 +15,7 @@ func init() {
 
 func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: concept <add|list> ...")
+		return fmt.Errorf("usage: concept <add|list|rename> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -23,6 +23,8 @@ func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 		return cmdConceptAdd(kb, dl, jsonOut, rest, out)
 	case "list":
 		return cmdConceptList(kb, dl, jsonOut, rest, out)
+	case "rename":
+		return cmdConceptRename(kb, dl, jsonOut, rest, out)
 	default:
 		return fmt.Errorf("unknown concept subcommand %q", sub)
 	}
@@ -63,6 +65,30 @@ func cmdConceptAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 		}{ID: id, Name: name})
 	}
 	fmt.Fprintf(out, "concept %q added (id=%d)\n", name, id)
+	return nil
+}
+
+// cmdConceptRename implements `concept rename OLD NEW` (DR-0024). Unlike
+// project rename, nothing refuses this beyond a name collision: a concept
+// has no corpus of external files to desync.
+func cmdConceptRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	if len(args) != 2 {
+		return fmt.Errorf("usage: concept rename OLD NEW")
+	}
+	old, new := args[0], args[1]
+	err := logKBCallErr(dl, "RenameConcept", map[string]any{"old": old, "new": new}, func() error {
+		return kb.RenameConcept(old, new)
+	})
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, struct {
+			Old string `json:"old"`
+			New string `json:"new"`
+		}{Old: old, New: new})
+	}
+	fmt.Fprintf(out, "concept %q renamed to %q\n", old, new)
 	return nil
 }
 
