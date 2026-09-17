@@ -317,6 +317,209 @@ func TestCmdIndex_CheckConflictsWithStdout(t *testing.T) {
 	}
 }
 
+// TODO.md "a mechanism for knowing when index.md needs regenerating":
+// kb index --all is the multi-corpus half -- --check and the
+// set-status/supersede auto-regen only ever covered one corpus per
+// invocation. --all discovers every directory that already has an
+// index.md (the corpora that opted in) and refreshes or checks each one,
+// never creating one where a corpus hasn't opted in -- same rule
+// regenerateIndexIfPresent already follows.
+
+func TestCmdIndex_AllRewritesEveryIndexedCorpus(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	clasmDir := filepath.Join(root, "clasm", "decisions")
+	coldDir := filepath.Join(root, "cold", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, clasmDir)
+	testRecord{ID: "0001", Project: "cold"}.write(t, coldDir)
+	if err := cmdIndex(kb, nil, false, []string{clasmDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding clasm index: %v", err)
+	}
+	if err := cmdIndex(kb, nil, false, []string{coldDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding cold index: %v", err)
+	}
+
+	// A field the index renders changes in clasm, without regenerating.
+	testRecord{ID: "0001", Project: "clasm", Status: "superseded",
+		SupersededBy: []string{"0002"}}.write(t, clasmDir)
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{root, "--all"}, &out); err != nil {
+		t.Fatalf("index --all: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(clasmDir, "index.md"))
+	if err != nil {
+		t.Fatalf("ReadFile clasm index.md: %v", err)
+	}
+	if !strings.Contains(string(got), "superseded") {
+		t.Errorf("clasm index.md = %q, want it refreshed to show the new status", got)
+	}
+}
+
+func TestCmdIndex_AllSkipsCorporaWithoutIndex(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	indexedDir := filepath.Join(root, "clasm", "decisions")
+	unindexedDir := filepath.Join(root, "cold", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, indexedDir)
+	testRecord{ID: "0001", Project: "cold"}.write(t, unindexedDir)
+	if err := cmdIndex(kb, nil, false, []string{indexedDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding clasm index: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{root, "--all"}, &out); err != nil {
+		t.Fatalf("index --all: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(unindexedDir, "index.md")); !os.IsNotExist(err) {
+		t.Error("--all must not create index.md in a corpus that never opted in")
+	}
+}
+
+// Found running --all live against a real, larger tree: an index.md can
+// exist for a reason that has nothing to do with kb (a docs site, a blog
+// front page) in a directory --all has no business touching. Matching on
+// the filename alone reported several such files as "stale" corpora under
+// --check, and would have overwritten them outright in write mode.
+func TestCmdIndex_AllSkipsUnrelatedIndexFileWithNoRecords(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	unrelatedDir := filepath.Join(root, "docs")
+	if err := os.MkdirAll(unrelatedDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	unrelatedContent := "# Some Other Project\n\nNot a decision-record corpus.\n"
+	if err := os.WriteFile(filepath.Join(unrelatedDir, "index.md"), []byte(unrelatedContent), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{root, "--all"}, &out); err != nil {
+		t.Fatalf("index --all: %v", err)
+	}
+	if strings.Contains(out.String(), unrelatedDir) {
+		t.Errorf("output = %q, want the unrelated index.md's directory never mentioned", out.String())
+	}
+
+	got, err := os.ReadFile(filepath.Join(unrelatedDir, "index.md"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != unrelatedContent {
+		t.Error("--all overwrote an unrelated index.md that was never a decision-record corpus")
+	}
+}
+
+// Same finding, exercised through --check: an unrelated index.md must not
+// be reported as stale, or a pre-commit hook using --all --check would fail
+// on every repo that happens to have a docs/blog index.md anywhere in it.
+func TestCmdIndex_AllCheckSkipsUnrelatedIndexFile(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	unrelatedDir := filepath.Join(root, "docs")
+	if err := os.MkdirAll(unrelatedDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(unrelatedDir, "index.md"), []byte("# Some Other Project\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{root, "--all", "--check"}, &out); err != nil {
+		t.Errorf("index --all --check on a workspace with only an unrelated index.md returned an error: %v", err)
+	}
+}
+
+func TestCmdIndex_AllCheckFailsWhenAnyCorpusIsStale(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	upToDateDir := filepath.Join(root, "clasm", "decisions")
+	staleDir := filepath.Join(root, "cold", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, upToDateDir)
+	testRecord{ID: "0001", Project: "cold"}.write(t, staleDir)
+	if err := cmdIndex(kb, nil, false, []string{upToDateDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding clasm index: %v", err)
+	}
+	if err := cmdIndex(kb, nil, false, []string{staleDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding cold index: %v", err)
+	}
+	testRecord{ID: "0001", Project: "cold", Status: "superseded",
+		SupersededBy: []string{"0002"}}.write(t, staleDir)
+
+	var out bytes.Buffer
+	err := cmdIndex(kb, nil, false, []string{root, "--all", "--check"}, &out)
+	if err == nil {
+		t.Fatal("expected an error when any discovered corpus is stale")
+	}
+	if !strings.Contains(out.String(), "up to date") {
+		t.Errorf("output = %q, want the up-to-date corpus reported too, not just the stale one", out.String())
+	}
+	if !strings.Contains(err.Error(), staleDir) && !strings.Contains(out.String(), "stale") {
+		t.Errorf("neither output %q nor error %q names the stale corpus", out.String(), err.Error())
+	}
+}
+
+func TestCmdIndex_AllCheckPassesWhenEveryIndexedCorpusIsCurrent(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+	if err := cmdIndex(kb, nil, false, []string{dir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding index: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{root, "--all", "--check"}, &out); err != nil {
+		t.Errorf("--all --check on an all-current workspace returned an error: %v", err)
+	}
+}
+
+func TestCmdIndex_AllRequiresRootPath(t *testing.T) {
+	kb, _ := openWorkspaceKB(t)
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{"--all"}, &out); err == nil {
+		t.Error("expected a usage error for --all with no ROOT")
+	}
+}
+
+func TestCmdIndex_AllConflictsWithStdout(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{root, "--all", "--stdout"}, &out); err == nil {
+		t.Error("expected a usage error combining --all and --stdout")
+	}
+}
+
+// Nested corpora each get their own index.md and their own entry -- --all
+// keys off "directory contains an index.md" directly, so it never risks
+// folding a nested corpus into its parent's, unlike a plain recursive walk.
+func TestCmdIndex_AllHandlesNestedCorporaIndependently(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	outerDir := filepath.Join(root, "agents", "decisions")
+	innerDir := filepath.Join(root, "agents", "decisions", "caltechauthors")
+	testRecord{ID: "0001", Project: ""}.write(t, outerDir)
+	testRecord{ID: "0001", Project: "caltechauthors"}.write(t, innerDir)
+	if err := cmdIndex(kb, nil, false, []string{outerDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding outer index: %v", err)
+	}
+	if err := cmdIndex(kb, nil, false, []string{innerDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding inner index: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := cmdIndex(kb, nil, false, []string{root, "--all", "--check"}, &out); err != nil {
+		t.Errorf("--all --check on two current, nested corpora returned an error: %v", err)
+	}
+	// outerDir is a path-prefix of innerDir, so counting occurrences of the
+	// bare string would double-count the outer line's substring inside the
+	// inner line; count only lines that start with it instead.
+	outerCount := 0
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, outerDir+":") {
+			outerCount++
+		}
+	}
+	if outerCount != 1 {
+		t.Errorf("outer corpus reported on %d lines, want exactly 1 (not folded with the inner one)", outerCount)
+	}
+}
+
 func TestCmdIndex_MalformedRecordIsAnError(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	dir := filepath.Join(root, "clasm", "decisions")

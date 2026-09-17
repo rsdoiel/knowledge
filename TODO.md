@@ -51,65 +51,6 @@
   `UnifiedMemory.Recall`, and building an eventual interactive/dialogic
   re-ingest mode in harvey, remain explicitly out of scope here.
 
-- [ ] **A mechanism for knowing when `index.md` needs regenerating.** `kb
-  index` regenerates it correctly; nothing says when to run it, and nothing
-  notices when it was not. The index has no checksum, no timestamp compared
-  against the records it summarises, and no `--check` mode. It is generated
-  and never hand-edited, so it can only ever be stale — never wrong in a way
-  someone would spot while reading it.
-
-  It has now drifted twice in WorkLab, both times silently and both times the
-  same way. In August 2026 promoting DR-0004..0006 desynced it. On 2026-09-15
-  `agents/decisions/index.md` **did not list DR-0010 at all**, and that was
-  noticed only because someone thought to look after accepting the record.
-  **The trigger is not "a record was added" — it is any change to a field the
-  index renders**, which is `status`, `kind`, `trigger`, `superseded_by` and
-  the title. So `kb record set-status` and `kb record supersede` both
-  invalidate it, and those are exactly the commands a person runs without
-  thinking about an index.
-
-  **This should cover project-tier corpora too, not just
-  `agents/decisions/`.** WorkLab has four corpora today — the workspace tier
-  plus `agents/projects/{clasm,cold,caltechauthors}/decisions/` — and the
-  project ones are larger. Nothing regenerates those either, and a per-corpus
-  manual habit will not survive four directories.
-
-  Options, roughly in increasing ambition:
-
-  - `kb index --check`, exiting non-zero when the file on disk differs from
-    what would be generated. Cheap, scriptable, fits the workspace's
-    `pre-commit` hook, which already re-exports `knowledge.jsonl` on drift and
-    could do the same here. This is the smallest thing that would have caught
-    both incidents. **Shipped 2026-09-15**: `kb index PATH --check` compares
-    a fresh render against `PATH/index.md` byte-for-byte, never writes, and
-    fails with "does not exist" or "is stale" naming the remedy (`kb index
-    PATH`) rather than doing it — same exit-code shape as `kb search`'s fix
-    this release. This covers one corpus per invocation, so multi-corpus
-    discovery (below) is still open, but the other gap — nothing running on
-    `set-status`/`supersede` — is closed by the next item.
-  - Have `set-status`/`supersede` regenerate the index for the corpus they
-    just wrote to, since both already know the record's `path` and therefore
-    its directory. Removes the habit entirely; the cost is a write to a file
-    the caller did not name. **Shipped 2026-09-16**: the new
-    `regenerateIndexIfPresent(dir)` runs after either command's file+database
-    write succeeds, but only refreshes an `index.md` that already exists —
-    never creates one, so the "cost" above does not apply to a corpus that
-    has not opted in. `supersede` covers both NEW's and OLD's directories,
-    deduped when they're the same tier's corpus. A regen failure is reported
-    as a note rather than failing the whole command, since the record write
-    it is downstream of already succeeded and the index is always
-    re-derivable. Multi-corpus discovery (below) and the on-disk-at-all
-    question are still open.
-  - Have `ingest` regenerate it, which is wrong on its own — ingest is the one
-    command that does *not* write record files, and the drift happens on
-    status changes rather than on ingest.
-
-  Worth deciding alongside it: whether the index belongs on disk at all, given
-  that everything in it is a `records` query. It exists so `head`, `grep` and
-  `awk` reach the corpus without kb installed — that is a real affordance and
-  probably decides it — but the staleness only exists because the data is
-  duplicated, and that should be stated rather than assumed.
-
 ## To explore
 
 - [ ] **Two decision-record dialects now exist in one organisation, and `kb`
@@ -368,3 +309,32 @@
   actually happens: descriptions/status reconcile by timestamp; a *rename*
   crossing machines still does not, since `merge`/`import` dedupe by name —
   filed as its own follow-on in DR-0025, not solved here.
+
+- [x] A mechanism for knowing when `index.md` needs regenerating — the
+  single-corpus half (`--check`, and `set-status`/`supersede` auto-refresh)
+  shipped 2026-09-15/16; the multi-corpus half shipped 2026-09-17.
+  `kb index ROOT --all [--check]` discovers every corpus under `ROOT` and
+  refreshes or checks each one, continuing past one corpus's failure so it
+  does not hide the rest, then exits non-zero if any needed attention — one
+  call for a whole workspace instead of naming each corpus by hand.
+
+  **Found running it live against the real workspace, before it shipped:
+  matching on the filename `index.md` alone is unsafe.** The first version
+  walked for any file named `index.md`; against the real Laboratory tree it
+  also matched several files with nothing to do with `kb` — a llamafile
+  docs-site front page, a Jekyll blog index — and reported them as "stale"
+  corpora under `--check`. In write mode it would have silently overwritten
+  them with an empty decision-records template. Fixed before ever running in
+  write mode against real data, by requiring both signals together: the
+  file's own content has to open with this format's generated-file heading,
+  *and* the directory has to hold at least one record file. Regression tests
+  cover both the check and write paths directly, since this is exactly the
+  kind of bug a test written after the fact would not have caught with
+  confidence.
+
+  Resolves the "does the index belong on disk at all" question left open
+  alongside this item, by default rather than by new argument: `--check` and
+  `--all` remove the staleness that was the only real cost of keeping it, so
+  the existing case for it — `head`, `grep`, `awk` reach a corpus without
+  `kb` installed — stands uncontested. Removing the file was never
+  implemented or seriously pursued.

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -71,12 +72,15 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 	var dir string
 	toStdout := false
 	check := false
+	all := false
 	for _, arg := range args {
 		switch arg {
 		case "--stdout", "-stdout":
 			toStdout = true
 		case "--check", "-check":
 			check = true
+		case "--all", "-all":
+			all = true
 		default:
 			if strings.HasPrefix(arg, "-") {
 				return fmt.Errorf("unknown flag %q", arg)
@@ -86,6 +90,15 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 			}
 			dir = arg
 		}
+	}
+	if all {
+		if dir == "" {
+			return fmt.Errorf("index --all requires a ROOT; see kb help index")
+		}
+		if toStdout {
+			return fmt.Errorf("--all and --stdout cannot be combined")
+		}
+		return cmdIndexAll(dl, jsonOut, dir, check, out)
 	}
 	if dir == "" {
 		return fmt.Errorf("index requires a PATH; see kb help index")
@@ -101,22 +114,12 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 		return fmt.Errorf("%s is not a directory", dir)
 	}
 
-	files, err := collectRecordFilesIn(abs)
+	index, count, err := renderCorpusIndex(abs)
 	if err != nil {
 		return err
 	}
-	records := make([]*knowledge.RecordFile, 0, len(files))
-	for _, path := range files {
-		rf, err := knowledge.ParseRecordFile(path)
-		if err != nil {
-			return fmt.Errorf("cannot index %s: %w", filepath.Base(path), err)
-		}
-		records = append(records, rf)
-	}
-
-	index := renderIndex(records)
 	target := filepath.Join(abs, "index.md")
-	dl.Log("index", map[string]any{"path": abs, "records": len(records), "stdout": toStdout, "check": check})
+	dl.Log("index", map[string]any{"path": abs, "records": count, "stdout": toStdout, "check": check})
 
 	if check {
 		return checkIndex(target, index, out)
@@ -129,11 +132,223 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 		return fmt.Errorf("writing %s: %w", target, err)
 	}
 	plural := "s"
-	if len(records) == 1 {
+	if count == 1 {
 		plural = ""
 	}
-	fmt.Fprintf(out, "%d record%s indexed to %s\n", len(records), plural, target)
+	fmt.Fprintf(out, "%d record%s indexed to %s\n", count, plural, target)
 	return nil
+}
+
+// renderCorpusIndex reads every record file directly in dir and renders
+// what its index.md should contain, alongside the record count -- the
+// single-corpus rendering step shared by cmdIndex, regenerateIndexIfPresent,
+// and cmdIndexAll, so all three agree on what "current" means.
+func renderCorpusIndex(dir string) (index string, count int, err error) {
+	files, err := collectRecordFilesIn(dir)
+	if err != nil {
+		return "", 0, err
+	}
+	records := make([]*knowledge.RecordFile, 0, len(files))
+	for _, path := range files {
+		rf, err := knowledge.ParseRecordFile(path)
+		if err != nil {
+			return "", 0, fmt.Errorf("cannot index %s: %w", filepath.Base(path), err)
+		}
+		records = append(records, rf)
+	}
+	return renderIndex(records), len(records), nil
+}
+
+// indexAllSummary is what `kb index ROOT --all` reports, in both JSON and
+// text form.
+type indexAllSummary struct {
+	Root    string              `json:"root"`
+	Check   bool                `json:"check"`
+	Corpora []indexCorpusResult `json:"corpora"`
+}
+
+// indexCorpusResult is one discovered corpus's outcome. Status is one of
+// "written", "up_to_date", "stale", or "error" -- never "missing", since
+// discoverIndexedCorpora only ever returns directories that already have an
+// index.md.
+type indexCorpusResult struct {
+	Dir     string `json:"dir"`
+	Records int    `json:"records,omitempty"`
+	Status  string `json:"status"`
+	Detail  string `json:"detail,omitempty"`
+}
+
+/** cmdIndexAll implements `kb index ROOT --all [--check]`: it discovers
+ * every corpus under ROOT that already has an index.md and refreshes or
+ * checks each one, continuing past an individual corpus's failure so one
+ * bad corpus does not hide the rest — matching `kb record fmt`'s own
+ * keep-going, summarize-at-the-end shape rather than aborting on the first
+ * problem. A corpus that has never had an index.md is silently left alone,
+ * the same rule regenerateIndexIfPresent follows for a single corpus.
+ *
+ * Parameters:
+ *   dl      (*DebugLog) — debug log, may be nil.
+ *   jsonOut (bool)      — emit the summary as JSON instead of one line per
+ *                         corpus.
+ *   root    (string)    — directory to search under for indexed corpora.
+ *   check   (bool)      — report drift instead of writing.
+ *   out     (io.Writer) — where the summary is written.
+ *
+ * Returns:
+ *   error — on a usage error or an unreadable root, or when any discovered
+ *           corpus errored or (under --check) drifted — so a pre-commit
+ *           hook can gate on the whole workspace in one call.
+ *
+ * Example:
+ *   err := cmdIndexAll(nil, false, "agents", true, os.Stdout)
+ */
+func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Writer) error {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory", root)
+	}
+	dirs, err := discoverIndexedCorpora(abs)
+	if err != nil {
+		return err
+	}
+
+	summary := indexAllSummary{Root: abs, Check: check}
+	needsAttention := 0
+	for _, dir := range dirs {
+		r := indexCorpusResult{Dir: dir}
+		index, count, err := renderCorpusIndex(dir)
+		if err != nil {
+			r.Status, r.Detail = "error", err.Error()
+			summary.Corpora = append(summary.Corpora, r)
+			needsAttention++
+			continue
+		}
+		r.Records = count
+		target := filepath.Join(dir, "index.md")
+		if check {
+			got, rerr := os.ReadFile(target)
+			switch {
+			case rerr != nil:
+				r.Status, r.Detail = "error", rerr.Error()
+				needsAttention++
+			case string(got) != index:
+				r.Status = "stale"
+				needsAttention++
+			default:
+				r.Status = "up_to_date"
+			}
+			summary.Corpora = append(summary.Corpora, r)
+			continue
+		}
+		if err := os.WriteFile(target, []byte(index), 0o644); err != nil {
+			r.Status, r.Detail = "error", err.Error()
+			summary.Corpora = append(summary.Corpora, r)
+			needsAttention++
+			continue
+		}
+		r.Status = "written"
+		summary.Corpora = append(summary.Corpora, r)
+	}
+
+	dl.Log("index_all", map[string]any{"root": abs, "check": check, "corpora": len(summary.Corpora), "needs_attention": needsAttention})
+
+	if jsonOut {
+		if err := printJSON(out, summary); err != nil {
+			return err
+		}
+	} else {
+		writeIndexAllText(out, summary)
+	}
+	if needsAttention > 0 {
+		return fmt.Errorf("%d of %d corpora need attention; see above", needsAttention, len(summary.Corpora))
+	}
+	return nil
+}
+
+// discoverIndexedCorpora walks root and returns every directory that
+// already contains an index.md, sorted. Keying off the file's actual
+// presence, rather than grouping record files by directory, is what keeps a
+// nested corpus from ever being folded into its parent's: each directory
+// with its own index.md is found and reported independently, exactly
+// mirroring how kb index itself treats one directory as one corpus
+// (collectRecordFilesIn does not recurse, for the same reason).
+func discoverIndexedCorpora(root string) ([]string, error) {
+	var dirs []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if !looksLikeGeneratedIndex(filepath.Join(p, "index.md")) {
+			return nil
+		}
+		entries, err := os.ReadDir(p)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if !e.IsDir() && recordFilePattern.MatchString(e.Name()) {
+				dirs = append(dirs, p)
+				break
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walking %s: %w", root, err)
+	}
+	sort.Strings(dirs)
+	return dirs, nil
+}
+
+// looksLikeGeneratedIndex reports whether path exists and opens with this
+// format's own heading -- the cheapest signal that it is a kb-generated
+// index.md rather than some other file that happens to share the name.
+// Required alongside the record-file check in discoverIndexedCorpora, not
+// instead of it: an index.md can exist for a reason that has nothing to do
+// with kb (a docs site, a blog front page) in a directory --all has no
+// business touching, found running it live against a real, larger tree —
+// filename alone reported several such files as corpora, and a naive
+// content check alone would still touch a directory whose real corpus
+// files had all been deleted out from under a stale, coincidentally
+// matching index.md.
+func looksLikeGeneratedIndex(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(string(data), "# Decision Records — index")
+}
+
+// writeIndexAllText prints the --all summary in human-readable form, one
+// line per corpus plus a final count.
+func writeIndexAllText(out io.Writer, s indexAllSummary) {
+	for _, c := range s.Corpora {
+		switch c.Status {
+		case "written":
+			plural := "s"
+			if c.Records == 1 {
+				plural = ""
+			}
+			fmt.Fprintf(out, "%s: %d record%s indexed\n", c.Dir, c.Records, plural)
+		case "up_to_date":
+			fmt.Fprintf(out, "%s: up to date\n", c.Dir)
+		case "stale":
+			fmt.Fprintf(out, "%s: stale; run kb index %s to regenerate it\n", c.Dir, c.Dir)
+		case "error":
+			fmt.Fprintf(out, "%s: error: %s\n", c.Dir, c.Detail)
+		}
+	}
+	word := "corpora"
+	if len(s.Corpora) == 1 {
+		word = "corpus"
+	}
+	fmt.Fprintf(out, "%d %s processed\n", len(s.Corpora), word)
 }
 
 // checkIndex compares a freshly rendered index against what is on disk at
@@ -176,19 +391,11 @@ func regenerateIndexIfPresent(dir string) error {
 	if _, err := os.Stat(target); err != nil {
 		return nil
 	}
-	files, err := collectRecordFilesIn(dir)
+	index, _, err := renderCorpusIndex(dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot regenerate index: %w", err)
 	}
-	records := make([]*knowledge.RecordFile, 0, len(files))
-	for _, path := range files {
-		rf, err := knowledge.ParseRecordFile(path)
-		if err != nil {
-			return fmt.Errorf("cannot regenerate index: %w", err)
-		}
-		records = append(records, rf)
-	}
-	if err := os.WriteFile(target, []byte(renderIndex(records)), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte(index), 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", target, err)
 	}
 	return nil

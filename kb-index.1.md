@@ -10,6 +10,8 @@ kb-index — generate a decisions/index.md from a directory of records
 
 kb index PATH [--stdout|--check]
 
+kb index ROOT --all [--check]
+
 # DESCRIPTION
 
 Regenerates PATH/index.md: one greppable line per record, newest first. The
@@ -53,13 +55,29 @@ would produce. It exits non-zero either way, so it fits a pre-commit hook or
 CI step; the remedy either way is running index without --check. --check and
 --stdout cannot be combined.
 
+--all walks ROOT and processes every directory that already has an index.md
+-- the corpora that have opted into this convention -- refreshing or, with
+--check, checking each one. A directory with record files but no index.md
+yet is silently left alone: --all never creates one, the same rule
+kb record set-status/supersede's own automatic refresh follows. Nested
+corpora (each with their own index.md) are handled independently, never
+folded together. One bad corpus does not stop the rest: --all keeps going
+and reports every corpus, then exits non-zero if any needed attention, so a
+pre-commit hook can gate on the whole workspace in one call rather than
+naming each corpus by hand. --all and --stdout cannot be combined. See
+TODO.md's index-regeneration item (index --check and the auto-refresh on
+set-status/supersede) for the single-corpus half this completes.
+
 # OPTIONS
 
 --stdout
-: write the index to standard output instead of index.md
+: write the index to standard output instead of index.md (PATH form only)
 
 --check
 : verify index.md is current without writing it; non-zero exit on drift
+
+--all
+: process every already-indexed corpus under ROOT instead of one PATH
 
 # EXAMPLES
 
@@ -67,5 +85,7 @@ CI step; the remedy either way is running index without --check. --check and
 kb index clasm/decisions
 kb index agents/decisions --stdout | head
 kb index agents/decisions --check
+kb index . --all
+kb index . --all --check
 ~~~
 
