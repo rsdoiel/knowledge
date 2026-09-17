@@ -38,6 +38,7 @@ type projectRecord struct {
 	Description string `json:"description"`
 	Status      string `json:"status"`
 	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 // conceptRecord is the JSON-L shape of one concepts row.
@@ -50,6 +51,7 @@ type conceptRecord struct {
 	IdentifierType  string `json:"identifier_type"`
 	IdentifierValue string `json:"identifier_value"`
 	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 // sourceRecord is the JSON-L shape of one sources row.
@@ -310,7 +312,7 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 }
 
 func exportProjects(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
-	query := `SELECT id, uuid, origin_host, name, description, status, created_at FROM projects`
+	query := `SELECT id, uuid, origin_host, name, description, status, created_at, updated_at FROM projects`
 	args := []any{}
 	if scoped {
 		query += ` WHERE id = ?`
@@ -325,7 +327,7 @@ func exportProjects(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID
 	for rows.Next() {
 		var id int64
 		r := projectRecord{Type: recProject}
-		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.Name, &r.Description, &r.Status, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.Name, &r.Description, &r.Status, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return fmt.Errorf("knowledge: export projects: %w", err)
 		}
 		if err := enc.Encode(r); err != nil {
@@ -535,7 +537,7 @@ func exportDocumentSectionConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped 
 }
 
 func exportConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
-	query := `SELECT id, uuid, origin_host, name, description, identifier_type, identifier_value, created_at FROM concepts`
+	query := `SELECT id, uuid, origin_host, name, description, identifier_type, identifier_value, created_at, updated_at FROM concepts`
 	args := []any{}
 	if scoped {
 		query += ` WHERE id IN (
@@ -556,7 +558,7 @@ func exportConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID
 	for rows.Next() {
 		var id int64
 		r := conceptRecord{Type: recConcept}
-		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.Name, &r.Description, &r.IdentifierType, &r.IdentifierValue, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.Name, &r.Description, &r.IdentifierType, &r.IdentifierValue, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return fmt.Errorf("knowledge: export concepts: %w", err)
 		}
 		if err := enc.Encode(r); err != nil {
@@ -1198,9 +1200,31 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 // rec's own uuid/origin_host/created_at so a later cross-machine merge can
 // still recognize it. See jsonl-export-design.md's "Import identity key"
 // section for why this differs from the uuid-keyed observations path.
+// importProject resolves rec by name. An existing local row is updated in
+// place only when rec.UpdatedAt is strictly later than the local row's
+// (DR-0025's last-writer-wins rule) -- otherwise it wins as-is, unchanged
+// from the pre-DR-0025 behavior. isNew and the returned localID still mean
+// what they did before: isNew is true only for a freshly inserted row, so
+// callers use it to decide add vs skip; the adopt-vs-keep decision is a
+// property this function handles internally rather than exposing a third
+// state.
 func importProject(kb *KnowledgeBase, rec projectRecord) (localID int64, isNew bool, err error) {
-	err = kb.db.QueryRow(`SELECT id FROM projects WHERE name = ?`, rec.Name).Scan(&localID)
+	var localUpdatedAt string
+	err = kb.db.QueryRow(`SELECT id, updated_at FROM projects WHERE name = ?`, rec.Name).Scan(&localID, &localUpdatedAt)
 	if err == nil {
+		if rec.UpdatedAt > localUpdatedAt {
+			status := rec.Status
+			if !validProjectStatuses[status] {
+				status = "active"
+			}
+			if _, err := kb.db.Exec(
+				`UPDATE projects SET description = ?, status = ?, updated_at = ?, origin_host = ? WHERE id = ?`,
+				rec.Description, status, rec.UpdatedAt, rec.OriginHost, localID,
+			); err != nil {
+				return 0, false, err
+			}
+			kb.refreshProjectFTS(localID, rec.Name, rec.Description)
+		}
 		return localID, false, nil
 	}
 	if err != sql.ErrNoRows {
@@ -1211,8 +1235,8 @@ func importProject(kb *KnowledgeBase, rec projectRecord) (localID int64, isNew b
 		status = "active"
 	}
 	res, err := kb.db.Exec(
-		`INSERT INTO projects (name, description, status, created_at, uuid, origin_host) VALUES (?, ?, ?, ?, ?, ?)`,
-		rec.Name, rec.Description, status, rec.CreatedAt, rec.UUID, rec.OriginHost,
+		`INSERT INTO projects (name, description, status, created_at, updated_at, uuid, origin_host) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		rec.Name, rec.Description, status, rec.CreatedAt, rec.UpdatedAt, rec.UUID, rec.OriginHost,
 	)
 	if err != nil {
 		return 0, false, err
@@ -1230,19 +1254,30 @@ func importProject(kb *KnowledgeBase, rec projectRecord) (localID int64, isNew b
 	return localID, true, nil
 }
 
-// importConcept mirrors importProject's name-keyed identity rule.
+// importConcept mirrors importProject's name-keyed identity rule and its
+// DR-0025 last-writer-wins update.
 func importConcept(kb *KnowledgeBase, rec conceptRecord) (localID int64, isNew bool, err error) {
-	err = kb.db.QueryRow(`SELECT id FROM concepts WHERE name = ?`, rec.Name).Scan(&localID)
+	var localUpdatedAt string
+	err = kb.db.QueryRow(`SELECT id, updated_at FROM concepts WHERE name = ?`, rec.Name).Scan(&localID, &localUpdatedAt)
 	if err == nil {
+		if rec.UpdatedAt > localUpdatedAt {
+			if _, err := kb.db.Exec(
+				`UPDATE concepts SET description = ?, identifier_type = ?, identifier_value = ?, updated_at = ?, origin_host = ? WHERE id = ?`,
+				rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.UpdatedAt, rec.OriginHost, localID,
+			); err != nil {
+				return 0, false, err
+			}
+			kb.refreshConceptFTS(localID, rec.Name, rec.Description)
+		}
 		return localID, false, nil
 	}
 	if err != sql.ErrNoRows {
 		return 0, false, err
 	}
 	res, err := kb.db.Exec(
-		`INSERT INTO concepts (name, description, identifier_type, identifier_value, created_at, uuid, origin_host)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		rec.Name, rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.CreatedAt, rec.UUID, rec.OriginHost,
+		`INSERT INTO concepts (name, description, identifier_type, identifier_value, created_at, updated_at, uuid, origin_host)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		rec.Name, rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.CreatedAt, rec.UpdatedAt, rec.UUID, rec.OriginHost,
 	)
 	if err != nil {
 		return 0, false, err

@@ -345,20 +345,70 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		return nil, fmt.Errorf("knowledge: attach %s: %w", bPath, err)
 	}
 
-	parentCols := map[string]string{
-		"projects": "name, description, status, created_at, updated_at, uuid, origin_host",
-		"concepts": "name, description, created_at, identifier_type, identifier_value, uuid, origin_host",
-		"sources":  "title, identifier_type, identifier_value, authors, published_date, publisher, rights, version, retracted, retraction_note, first_seen_at, last_checked_at, uuid, origin_host",
+	// projects and concepts (DR-0025): a name conflict is resolved by
+	// updated_at, not by which side (a or b) is applied first. Two
+	// statements per side rather than one INSERT ... SELECT ... ON CONFLICT
+	// DO UPDATE: this driver's SQLite parser rejects an UPSERT clause after
+	// a SELECT-form INSERT ("near DO: syntax error"), even though the same
+	// UPSERT works fine after a VALUES-form INSERT elsewhere in this
+	// package. INSERT OR IGNORE adds a row that does not exist locally yet;
+	// UPDATE ... FROM, guarded the same way DO UPDATE ... WHERE would be,
+	// conditionally overwrites one that does. Together a's pass and b's
+	// pass can run in either order and land on the same result -- whichever
+	// row is actually newer wins, rather than whichever one the loop
+	// reaches first.
+	const projectCols = "name, description, status, created_at, updated_at, uuid, origin_host"
+	for _, src := range []string{"a", "b"} {
+		if _, err := db.Exec(fmt.Sprintf(
+			`INSERT OR IGNORE INTO projects (%s) SELECT %s FROM %s.projects`,
+			projectCols, projectCols, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge projects from %s: %w", src, err)
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`UPDATE projects SET
+			     description = src.description,
+			     status = src.status,
+			     updated_at = src.updated_at,
+			     origin_host = src.origin_host
+			 FROM %s.projects AS src
+			 WHERE projects.name = src.name AND src.updated_at > projects.updated_at`,
+			src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge projects (conflict update) from %s: %w", src, err)
+		}
 	}
-	for _, table := range []string{"projects", "concepts", "sources"} {
-		cols := parentCols[table]
-		for _, src := range []string{"a", "b"} {
-			if _, err := db.Exec(fmt.Sprintf(
-				`INSERT OR IGNORE INTO %s (%s) SELECT %s FROM %s.%s`,
-				table, cols, cols, src, table,
-			)); err != nil {
-				return nil, fmt.Errorf("knowledge: merge %s from %s: %w", table, src, err)
-			}
+
+	const conceptCols = "name, description, created_at, identifier_type, identifier_value, uuid, origin_host, updated_at"
+	for _, src := range []string{"a", "b"} {
+		if _, err := db.Exec(fmt.Sprintf(
+			`INSERT OR IGNORE INTO concepts (%s) SELECT %s FROM %s.concepts`,
+			conceptCols, conceptCols, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge concepts from %s: %w", src, err)
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`UPDATE concepts SET
+			     description = src.description,
+			     identifier_type = src.identifier_type,
+			     identifier_value = src.identifier_value,
+			     updated_at = src.updated_at,
+			     origin_host = src.origin_host
+			 FROM %s.concepts AS src
+			 WHERE concepts.name = src.name AND src.updated_at > concepts.updated_at`,
+			src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge concepts (conflict update) from %s: %w", src, err)
+		}
+	}
+
+	const sourceCols = "title, identifier_type, identifier_value, authors, published_date, publisher, rights, version, retracted, retraction_note, first_seen_at, last_checked_at, uuid, origin_host"
+	for _, src := range []string{"a", "b"} {
+		if _, err := db.Exec(fmt.Sprintf(
+			`INSERT OR IGNORE INTO sources (%s) SELECT %s FROM %s.sources`,
+			sourceCols, sourceCols, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge sources from %s: %w", src, err)
 		}
 	}
 

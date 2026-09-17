@@ -223,6 +223,164 @@ func TestMergeKnowledgeBases_ProjectsDedupSharedUUID(t *testing.T) {
 	}
 }
 
+// ─── DR-0025: last-writer-wins on projects/concepts conflict ───────────────
+
+func TestMergeKnowledgeBases_ProjectLastWriterWins(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddProject("shared", "old description"); err != nil {
+		t.Fatalf("AddProject a: %v", err)
+	}
+	if _, err := a.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date a: %v", err)
+	}
+	if _, err := b.AddProject("shared", "new description"); err != nil {
+		t.Fatalf("AddProject b: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	p, err := merged.ProjectByName("shared")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "new description" {
+		t.Errorf("Description = %q, want b's newer description to win even though a is applied first", p.Description)
+	}
+	// The merged db's kb_fts starts empty, so rebuildFTSIfNeeded indexes
+	// from the real table on next Open -- confirming the winning
+	// description, not a stale pre-conflict one, is what search finds.
+	results, err := merged.Search("new description")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("Search for the winning description returned %d results, want 1", len(results))
+	}
+}
+
+func TestMergeKnowledgeBases_ProjectOlderIncomingDoesNotOverwriteNewer(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddProject("shared", "current description"); err != nil {
+		t.Fatalf("AddProject a: %v", err)
+	}
+	if _, err := b.AddProject("shared", "stale description"); err != nil {
+		t.Fatalf("AddProject b: %v", err)
+	}
+	if _, err := b.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date b: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	p, err := merged.ProjectByName("shared")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "current description" {
+		t.Errorf("Description = %q, want a's newer description preserved, not b's stale one", p.Description)
+	}
+}
+
+// order-independence: swapping which side runs first must not change which
+// description wins -- only the timestamp should decide.
+func TestMergeKnowledgeBases_ProjectLastWriterWinsRegardlessOfOrder(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddProject("shared", "newer, from a"); err != nil {
+		t.Fatalf("AddProject a: %v", err)
+	}
+	if _, err := b.AddProject("shared", "older, from b"); err != nil {
+		t.Fatalf("AddProject b: %v", err)
+	}
+	if _, err := b.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date b: %v", err)
+	}
+
+	// Merge b-then-a by swapping the arguments -- MergeKnowledgeBases always
+	// applies its first argument as "a", so this exercises the opposite
+	// application order from the test above.
+	mergedPath := filepath.Join(t.TempDir(), "merged.db")
+	if _, err := MergeKnowledgeBases(b.Path(), a.Path(), mergedPath); err != nil {
+		t.Fatalf("MergeKnowledgeBases: %v", err)
+	}
+	merged, err := Open(mergedPath)
+	if err != nil {
+		t.Fatalf("open merged: %v", err)
+	}
+	t.Cleanup(func() { merged.Close() })
+
+	p, err := merged.ProjectByName("shared")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "newer, from a" {
+		t.Errorf("Description = %q, want the newer description to win regardless of which side is applied first", p.Description)
+	}
+}
+
+func TestMergeKnowledgeBases_ConceptLastWriterWins(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddConcept("shared", "old description"); err != nil {
+		t.Fatalf("AddConcept a: %v", err)
+	}
+	if _, err := a.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date a: %v", err)
+	}
+	if _, err := b.AddConcept("shared", "new description"); err != nil {
+		t.Fatalf("AddConcept b: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	concepts, err := merged.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	var got string
+	found := false
+	for _, c := range concepts {
+		if c.Name == "shared" {
+			got = c.Description
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("concept %q not found in merged db", "shared")
+	}
+	if got != "new description" {
+		t.Errorf("Description = %q, want b's newer description to win", got)
+	}
+}
+
+func TestMergeKnowledgeBases_ConceptOlderIncomingDoesNotOverwriteNewer(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddConcept("shared", "current description"); err != nil {
+		t.Fatalf("AddConcept a: %v", err)
+	}
+	if _, err := b.AddConcept("shared", "stale description"); err != nil {
+		t.Fatalf("AddConcept b: %v", err)
+	}
+	if _, err := b.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date b: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	concepts, err := merged.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	var got string
+	for _, c := range concepts {
+		if c.Name == "shared" {
+			got = c.Description
+		}
+	}
+	if got != "current description" {
+		t.Errorf("Description = %q, want a's newer description preserved", got)
+	}
+}
+
 func TestMergeKnowledgeBases_ConceptsAndSourcesUnion(t *testing.T) {
 	a := openTestKB(t)
 	b := openTestKB(t)

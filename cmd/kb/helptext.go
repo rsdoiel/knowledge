@@ -305,11 +305,13 @@ rename
 
 # CAVEATS
 
-A description edited on two machines does not yet reconcile. Both
-{app_name}-merge(1) and {app_name}-import(1) resolve a conflict in favour of
-the row already present, without consulting timestamps, so a merge keeps one
-edit and drops the other. set-description records updated_at against a later
-last-writer-wins pass, but nothing reads it across machines today.
+A description or status edited on two machines now reconciles: both
+{app_name}-merge(1) and {app_name}-import(1) adopt whichever side's
+updated_at is later (DR-0025), so a merge keeps the newer edit rather than
+always keeping the first one applied. A *rename* is not covered by this --
+merge/import still dedupe projects by name, so a project renamed on one
+machine and left untouched on another arrives as two separate projects,
+not one renamed one. See DR-0024/DR-0025 (knowledge/decisions/).
 
 # SEE ALSO
 
@@ -416,6 +418,14 @@ rename
   (record_concepts, observation_concepts, project_concepts,
   document_section_concepts) is a foreign key, never a name matched from a
   file. See DR-0024 (knowledge/decisions/).
+
+# CAVEATS
+
+A description edited on two machines now reconciles: both
+{app_name}-merge(1) and {app_name}-import(1) adopt whichever side's
+updated_at is later (DR-0025). A *rename* is not covered -- merge/import
+still dedupe concepts by name, so a concept renamed on one machine and left
+untouched on another arrives as two separate concepts, not one renamed one.
 
 # SEE ALSO
 

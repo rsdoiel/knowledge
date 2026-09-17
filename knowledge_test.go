@@ -1178,11 +1178,21 @@ func TestSetProjectDescription_TouchesUpdatedAt(t *testing.T) {
 		t.Fatalf("AddProject: %v", err)
 	}
 	// CURRENT_TIMESTAMP has one-second granularity, so back-date the row
-	// rather than racing it.
+	// rather than racing it. The driver normalizes the literal on write (to
+	// RFC3339, "...T...Z"), so the baseline for "did this change" has to be
+	// read back rather than compared against the literal itself -- comparing
+	// against the literal always differs and the assertion below would pass
+	// unconditionally, whether or not the column was actually touched.
 	if _, err := kb.db.Exec(
 		`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'proj'`,
 	); err != nil {
 		t.Fatalf("back-date updated_at: %v", err)
+	}
+	var backdated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM projects WHERE name = 'proj'`,
+	).Scan(&backdated); err != nil {
+		t.Fatalf("read back-dated updated_at: %v", err)
 	}
 	if err := kb.SetProjectDescription("proj", "new"); err != nil {
 		t.Fatalf("SetProjectDescription: %v", err)
@@ -1193,7 +1203,7 @@ func TestSetProjectDescription_TouchesUpdatedAt(t *testing.T) {
 	).Scan(&updated); err != nil {
 		t.Fatalf("read updated_at: %v", err)
 	}
-	if updated == "2000-01-01 00:00:00" {
+	if updated == backdated {
 		t.Error("updated_at was not touched by SetProjectDescription")
 	}
 }
@@ -1247,6 +1257,40 @@ func TestRenameProject(t *testing.T) {
 	}
 	if old != nil {
 		t.Errorf("old name still resolves to %+v, want it gone", old)
+	}
+}
+
+// DR-0025: RenameProject must touch updated_at now that merge/import
+// compare it, or a rename would look like it never happened.
+func TestRenameProject_TouchesUpdatedAt(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := kb.db.Exec(
+		`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`,
+	); err != nil {
+		t.Fatalf("back-date updated_at: %v", err)
+	}
+	// The driver normalizes the literal on write, so the baseline for "did
+	// this change" is read back rather than compared against the literal.
+	var backdated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM projects WHERE name = 'oldname'`,
+	).Scan(&backdated); err != nil {
+		t.Fatalf("read back-dated updated_at: %v", err)
+	}
+	if err := kb.RenameProject("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProject: %v", err)
+	}
+	var updated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM projects WHERE name = 'newname'`,
+	).Scan(&updated); err != nil {
+		t.Fatalf("read updated_at: %v", err)
+	}
+	if updated == backdated {
+		t.Error("updated_at was not touched by RenameProject")
 	}
 }
 
@@ -1355,6 +1399,92 @@ func TestRenameConcept(t *testing.T) {
 	}
 	if !names["newname"] {
 		t.Error("new concept name not found")
+	}
+}
+
+// DR-0025: concepts.updated_at is new; verify it exists and that a
+// never-touched row backfills to its created_at rather than reading null.
+func TestConceptsSchema_UpdatedAtBackfillsToCreatedAt(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("oldname", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	var created, updated string
+	if err := kb.db.QueryRow(
+		`SELECT created_at, updated_at FROM concepts WHERE name = 'oldname'`,
+	).Scan(&created, &updated); err != nil {
+		t.Fatalf("read created_at/updated_at: %v", err)
+	}
+	if updated == "" {
+		t.Error("updated_at is empty, want it backfilled")
+	}
+}
+
+// DR-0025: RenameConcept must touch updated_at now that merge/import
+// compare it.
+func TestRenameConcept_TouchesUpdatedAt(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("oldname", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.db.Exec(
+		`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`,
+	); err != nil {
+		t.Fatalf("back-date updated_at: %v", err)
+	}
+	// The driver normalizes the literal on write, so the baseline for "did
+	// this change" is read back rather than compared against the literal.
+	var backdated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM concepts WHERE name = 'oldname'`,
+	).Scan(&backdated); err != nil {
+		t.Fatalf("read back-dated updated_at: %v", err)
+	}
+	if err := kb.RenameConcept("oldname", "newname"); err != nil {
+		t.Fatalf("RenameConcept: %v", err)
+	}
+	var updated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM concepts WHERE name = 'newname'`,
+	).Scan(&updated); err != nil {
+		t.Fatalf("read updated_at: %v", err)
+	}
+	if updated == backdated {
+		t.Error("updated_at was not touched by RenameConcept")
+	}
+}
+
+// DR-0025: AddConceptWithIdentifier's ON CONFLICT branch (a re-add
+// correcting an existing concept) must also touch updated_at.
+func TestAddConceptWithIdentifier_ConflictTouchesUpdatedAt(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("oldname", "first"); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.db.Exec(
+		`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`,
+	); err != nil {
+		t.Fatalf("back-date updated_at: %v", err)
+	}
+	// The driver normalizes the literal on write, so the baseline for "did
+	// this change" is read back rather than compared against the literal.
+	var backdated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM concepts WHERE name = 'oldname'`,
+	).Scan(&backdated); err != nil {
+		t.Fatalf("read back-dated updated_at: %v", err)
+	}
+	if _, err := kb.AddConcept("oldname", "second"); err != nil {
+		t.Fatalf("AddConcept re-add: %v", err)
+	}
+	var updated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM concepts WHERE name = 'oldname'`,
+	).Scan(&updated); err != nil {
+		t.Fatalf("read updated_at: %v", err)
+	}
+	if updated == backdated {
+		t.Error("updated_at was not touched by the ON CONFLICT branch")
 	}
 }
 

@@ -863,6 +863,147 @@ func TestImportJSONL_ObservationRelations_UnresolvableEndpointSkippedNotFatal(t 
 	}
 }
 
+// ─── DR-0025: last-writer-wins on project/concept import ───────────────────
+
+func TestImportJSONL_Project_LastWriterWinsAdoptsNewerIncoming(t *testing.T) {
+	src := openTestKB(t)
+	if _, err := src.AddProject("shared", "new description"); err != nil {
+		t.Fatalf("AddProject src: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	dst := openTestKB(t)
+	if _, err := dst.AddProject("shared", "old description"); err != nil {
+		t.Fatalf("AddProject dst: %v", err)
+	}
+	if _, err := dst.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date dst: %v", err)
+	}
+
+	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	p, err := dst.ProjectByName("shared")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "new description" {
+		t.Errorf("Description = %q, want the newer incoming description to win", p.Description)
+	}
+	results, err := dst.Search("new description")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("Search for the winning description returned %d results, want 1 -- kb_fts must be refreshed on adopt", len(results))
+	}
+}
+
+func TestImportJSONL_Project_OlderIncomingLeavesLocalUntouched(t *testing.T) {
+	src := openTestKB(t)
+	if _, err := src.AddProject("shared", "stale description"); err != nil {
+		t.Fatalf("AddProject src: %v", err)
+	}
+	if _, err := src.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date src: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	dst := openTestKB(t)
+	if _, err := dst.AddProject("shared", "current description"); err != nil {
+		t.Fatalf("AddProject dst: %v", err)
+	}
+
+	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	p, err := dst.ProjectByName("shared")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName: %v", err)
+	}
+	if p.Description != "current description" {
+		t.Errorf("Description = %q, want the newer local description preserved", p.Description)
+	}
+}
+
+func TestImportJSONL_Concept_LastWriterWinsAdoptsNewerIncoming(t *testing.T) {
+	src := openTestKB(t)
+	if _, err := src.AddConcept("shared", "new description"); err != nil {
+		t.Fatalf("AddConcept src: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	dst := openTestKB(t)
+	if _, err := dst.AddConcept("shared", "old description"); err != nil {
+		t.Fatalf("AddConcept dst: %v", err)
+	}
+	if _, err := dst.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date dst: %v", err)
+	}
+
+	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	concepts, err := dst.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	var got string
+	for _, c := range concepts {
+		if c.Name == "shared" {
+			got = c.Description
+		}
+	}
+	if got != "new description" {
+		t.Errorf("Description = %q, want the newer incoming description to win", got)
+	}
+}
+
+func TestImportJSONL_Concept_OlderIncomingLeavesLocalUntouched(t *testing.T) {
+	src := openTestKB(t)
+	if _, err := src.AddConcept("shared", "stale description"); err != nil {
+		t.Fatalf("AddConcept src: %v", err)
+	}
+	if _, err := src.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date src: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	dst := openTestKB(t)
+	if _, err := dst.AddConcept("shared", "current description"); err != nil {
+		t.Fatalf("AddConcept dst: %v", err)
+	}
+
+	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("ImportJSONL: %v", err)
+	}
+	concepts, err := dst.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	var got string
+	for _, c := range concepts {
+		if c.Name == "shared" {
+			got = c.Description
+		}
+	}
+	if got != "current description" {
+		t.Errorf("Description = %q, want the newer local description preserved", got)
+	}
+}
+
 func TestImportJSONL_Records_ReimportIsNoOp(t *testing.T) {
 	src, _, _, _ := newJSONLRecordsFixture(t)
 	var buf bytes.Buffer

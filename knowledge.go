@@ -243,6 +243,9 @@ var kbAlterStmts = []string{
 	// every real-world legacy concepts table does. Existing rows are
 	// backfilled separately, below.
 	`ALTER TABLE concepts ADD COLUMN created_at DATETIME`,
+	// Same reasoning as created_at above: no default, backfilled separately.
+	// See DR-0025.
+	`ALTER TABLE concepts ADD COLUMN updated_at DATETIME`,
 	`ALTER TABLE concepts ADD COLUMN identifier_type TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE concepts ADD COLUMN identifier_value TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE projects ADD COLUMN uuid TEXT NOT NULL DEFAULT ''`,
@@ -360,6 +363,10 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 	// (see the comment on the ALTER statement above). Idempotent: once every
 	// row has a non-null created_at, the UPDATE matches no rows.
 	_, _ = db.Exec(`UPDATE concepts SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`)
+	// Same for updated_at (DR-0025): a row that predates the column, or has
+	// never been touched since, reads as "last touched at creation" rather
+	// than null.
+	_, _ = db.Exec(`UPDATE concepts SET updated_at = created_at WHERE updated_at IS NULL`)
 	if _, err := db.Exec(sourcesSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: apply sources schema: %w", err)
@@ -729,7 +736,7 @@ func (kb *KnowledgeBase) RenameProject(old, new string) error {
 			"knowledge: project %q owns %d record(s); renaming would desync its corpus's project: frontmatter from the database on the next ingest — rewrite the corpus's frontmatter and re-ingest first",
 			old, records)
 	}
-	if _, err := kb.db.Exec(`UPDATE projects SET name = ? WHERE id = ?`, new, id); err != nil {
+	if _, err := kb.db.Exec(`UPDATE projects SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, new, id); err != nil {
 		return fmt.Errorf("knowledge: rename project: %w", err)
 	}
 	kb.refreshProjectFTS(id, new, description)
@@ -1082,11 +1089,12 @@ func (kb *KnowledgeBase) AddConceptWithIdentifier(name, description, identifierT
 	var id int64
 	var stored string
 	err = kb.db.QueryRow(
-		`INSERT INTO concepts (name, description, identifier_type, identifier_value, uuid, origin_host) VALUES (?, ?, ?, ?, ?, ?)
+		`INSERT INTO concepts (name, description, identifier_type, identifier_value, uuid, origin_host, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		 ON CONFLICT(name) DO UPDATE SET
 		     description = CASE WHEN excluded.description = '' THEN concepts.description ELSE excluded.description END,
 		     identifier_type = CASE WHEN excluded.identifier_type = '' THEN concepts.identifier_type ELSE excluded.identifier_type END,
-		     identifier_value = CASE WHEN excluded.identifier_value = '' THEN concepts.identifier_value ELSE excluded.identifier_value END
+		     identifier_value = CASE WHEN excluded.identifier_value = '' THEN concepts.identifier_value ELSE excluded.identifier_value END,
+		     updated_at = CURRENT_TIMESTAMP
 		 RETURNING id, description`,
 		name, description, identifierType, identifierValue, u.String(), host,
 	).Scan(&id, &stored)
@@ -1151,7 +1159,7 @@ func (kb *KnowledgeBase) RenameConcept(old, new string) error {
 	if taken > 0 {
 		return fmt.Errorf("knowledge: concept %q already exists", new)
 	}
-	if _, err := kb.db.Exec(`UPDATE concepts SET name = ? WHERE id = ?`, new, id); err != nil {
+	if _, err := kb.db.Exec(`UPDATE concepts SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, new, id); err != nil {
 		return fmt.Errorf("knowledge: rename concept: %w", err)
 	}
 	kb.refreshConceptFTS(id, new, description)

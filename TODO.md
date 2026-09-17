@@ -51,24 +51,6 @@
   `UnifiedMemory.Recall`, and building an eventual interactive/dialogic
   re-ingest mode in harvey, remain explicitly out of scope here.
 
-- [ ] Cross-machine reconciliation of an edited description. Deferred out of
-  the `set-description` work (see DR-0012) because it is a policy inversion
-  rather than a column touch. Today `MergeKnowledgeBases` is `INSERT OR
-  IGNORE` set-union deduped by `uuid`/`name`, inserting `a` before `b` for
-  every table, so **A wins deterministically** and `updated_at` is never
-  consulted; `importProject` is explicitly the same policy, argued for in
-  DR-0003 ("an existing local row wins as-is"). Beyond the policy, the
-  columns are not there: only `projects` has `updated_at` — `concepts` and
-  `observations` have no such column, and the JSONL export selects
-  `created_at` without it on both tables. Doing it means (a) a lazy `ALTER
-  TABLE concepts ADD COLUMN updated_at`, (b) adding it to `parentCols` in
-  `MergeKnowledgeBases` and to the JSONL record structs, and (c) reversing
-  first-wins to last-writer-wins in both `merge` and `import` for the mutable
-  columns. Needs its own decision record, since it supersedes part of
-  DR-0003. `kb project set-description` already records `updated_at`
-  faithfully, so the groundwork is in place; nothing reads it across machines
-  yet, and `kb-project(1)` says so under CAVEATS.
-
 - [ ] **A mechanism for knowing when `index.md` needs regenerating.** `kb
   index` regenerates it correctly; nothing says when to run it, and nothing
   notices when it was not. The index has no checksum, no timestamp compared
@@ -357,3 +339,32 @@
   inline version. Rewriting a corpus's frontmatter automatically to lift the
   refusal remains open, filed as its own future record in DR-0024's
   Rejected alternatives.
+
+- [x] Cross-machine reconciliation of an edited project or concept
+  description. Deferred out of the `set-description` work (DR-0012) as a
+  policy inversion. **Two of this item's own claims were stale by the time
+  it was picked up**: `updated_at` already travelled through `merge` for
+  `projects` — the bug was `INSERT OR IGNORE` never consulting it, insertion
+  order alone deciding the winner, not a missing column; and observations
+  need none of this at all, since DR-0023 already resolved observation
+  correction via supersession, retiring the question this item was still
+  asking. See DR-0025 (`knowledge/decisions/`) for both corrections in full,
+  and its repros. Shipped 2026-09-17: `concepts` gained `updated_at`
+  (lazily migrated, backfilled to `created_at`, mirroring how
+  `concepts.created_at` itself was added). `kb merge`'s `projects`/`concepts`
+  passes changed from `INSERT OR IGNORE` to `INSERT OR IGNORE` (new rows)
+  plus a guarded `UPDATE ... FROM ... WHERE incoming.updated_at >
+  existing.updated_at` (conflicts) — two statements rather than one
+  `INSERT ... SELECT ... ON CONFLICT DO UPDATE`, because the pure-Go SQLite
+  driver this project uses rejects an UPSERT clause after a SELECT-form
+  INSERT ("near DO: syntax error"), confirmed live, even though the same
+  UPSERT works after a VALUES-form INSERT elsewhere in this codebase.
+  `importProject`/`importConcept` gained the matching comparison at the Go
+  level, plus a new `UpdatedAt` field on `projectRecord`/`conceptRecord`.
+  `RenameProject`, `RenameConcept`, and `AddConceptWithIdentifier`'s
+  `ON CONFLICT` branch now touch `updated_at`, closing two gaps DR-0024 and
+  DR-0012 left open now that the column is compared for real.
+  `kb-project(1)`/`kb-concept(1)`'s CAVEATS sections now describe what
+  actually happens: descriptions/status reconcile by timestamp; a *rename*
+  crossing machines still does not, since `merge`/`import` dedupe by name —
+  filed as its own follow-on in DR-0025, not solved here.

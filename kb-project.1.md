@@ -66,11 +66,13 @@ rename
 
 # CAVEATS
 
-A description edited on two machines does not yet reconcile. Both
-kb-merge(1) and kb-import(1) resolve a conflict in favour of
-the row already present, without consulting timestamps, so a merge keeps one
-edit and drops the other. set-description records updated_at against a later
-last-writer-wins pass, but nothing reads it across machines today.
+A description or status edited on two machines now reconciles: both
+kb-merge(1) and kb-import(1) adopt whichever side's
+updated_at is later (DR-0025), so a merge keeps the newer edit rather than
+always keeping the first one applied. A *rename* is not covered by this --
+merge/import still dedupe projects by name, so a project renamed on one
+machine and left untouched on another arrives as two separate projects,
+not one renamed one. See DR-0024/DR-0025 (knowledge/decisions/).
 
 # SEE ALSO
 

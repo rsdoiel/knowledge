@@ -38,6 +38,14 @@ rename
   document_section_concepts) is a foreign key, never a name matched from a
   file. See DR-0024 (knowledge/decisions/).
 
+# CAVEATS
+
+A description edited on two machines now reconciles: both
+kb-merge(1) and kb-import(1) adopt whichever side's
+updated_at is later (DR-0025). A *rename* is not covered -- merge/import
+still dedupe concepts by name, so a concept renamed on one machine and left
+untouched on another arrives as two separate concepts, not one renamed one.
+
 # SEE ALSO
 
 kb-link(1), kb-project(1)
