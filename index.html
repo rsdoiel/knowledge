@@ -47,43 +47,63 @@ explicit human review step before being trusted as searchable
 content.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.8</li>
+<li>version: 0.0.9</li>
 <li>status: concept</li>
-<li>released: 2026-09-16</li>
+<li>released: 2026-09-17</li>
 </ul>
-<p>A bug-fix-and-small-features release: closing the index.md staleness
-gap at its source, and giving observations a correction path.</p>
-<p><code>kb index PATH --check</code> compares a fresh render against
-<code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
-or “is stale” instead of writing, naming <code>kb index PATH</code> as
-the remedy – same exit-code convention as <code>kb search</code>’s fix
-last release. <code>kb record set-status</code> and
-<code>kb record supersede</code> go a step further and close the gap
-<code>--check</code> only detects: both now refresh a corpus’s
-<code>index.md</code> themselves after a successful write, via the new
-<code>regenerateIndexIfPresent</code>, but only when one is already
-present – never creating one where a corpus hasn’t opted in. Together
-these fix <code>index.md</code> silently drifting from
-<code>status</code>/<code>kind</code>/<code>trigger</code>/<code>superseded_by</code>/title
-changes, which bit WorkLab twice.</p>
-<p><code>kb observation update ID BODY...</code> gives observations a
-correction path they never had. It does not mutate the old observation –
-it inserts a new one (inheriting the original’s project and kind) and
-links the two with a new <code>observation_relations</code> table,
-<code>record_relations</code>’ own shape reused rather than reinvented
-(see DR-0023, <code>knowledge/decisions/</code>, which reverses
-DR-0012’s original observations-stay-immutable stance after review found
-that an in-place edit destroys history and answers the
-amend-vs-supersede question by accident). The old observation’s body is
-never rewritten, so history retention is free; no
-<code>updated_at</code> column was added, since the new observation’s
-own <code>created_at</code> is the correction timestamp.
-<code>kb observation show ID</code> now resolves and prints
-<code>supersedes</code>/<code>superseded_by</code>, mirroring
-<code>kb record show</code>. <code>kb merge</code> and JSON-L
-export/import carry <code>observation_relations</code> from this
-release, not as a follow-on, per the standing rule that a table missing
-from the merge summary is a table whose loss goes unreported.</p>
+<p>Rename verbs for projects and concepts, cross-machine reconciliation
+for their mutable fields, and a multi-corpus mode for index.md – three
+items closed out of TODO.md, two of them correcting their own original
+diagnosis along the way.</p>
+<p><code>kb project rename OLD NEW</code> and
+<code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
+route, raw SQL against
+<code>projects.name</code>/<code>concepts.name</code>.
+<code>project rename</code> refuses if <code>NEW</code> already exists
+or if the project owns any records: a decision record’s
+<code>project:</code> frontmatter has to match the project’s name, and a
+live repro showed that renaming a project with a corpus and then
+re-ingesting it silently mints a phantom project under the old name and
+duplicates the record under it – data corruption, not just a stale
+search label. <code>concept rename</code> has no such corpus to desync,
+since every link to a concept is a foreign key, and ships
+unconditionally beyond the name collision every rename needs. Both reuse
+the existing <code>refreshProjectFTS</code>/a new
+<code>refreshConceptFTS</code> so search never lags a rename.</p>
+<p>Cross-machine reconciliation (DR-0025) gives <code>kb merge</code>
+and <code>kb import</code> a real last-writer-wins policy for a project
+or concept’s mutable fields, replacing a conflict rule that was really
+just loop order: <code>INSERT OR IGNORE</code> silently kept whichever
+side was applied first regardless of which edit was newer.
+<code>concepts</code> gains <code>updated_at</code> (lazily migrated,
+mirroring how <code>created_at</code> was itself added);
+<code>merge</code>’s conflict path becomes <code>INSERT OR IGNORE</code>
+for new rows plus a guarded
+<code>UPDATE ... FROM ... WHERE incoming.updated_at &gt; existing.updated_at</code>
+for existing ones – two statements rather than one upsert, because this
+project’s pure-Go SQLite driver rejects an UPSERT clause after a
+SELECT-form INSERT, confirmed live.
+<code>importProject</code>/<code>importConcept</code> gained the
+matching comparison, and
+<code>RenameProject</code>/<code>RenameConcept</code>/<code>AddConceptWithIdentifier</code>’s
+<code>ON CONFLICT</code> branch now touch <code>updated_at</code>,
+closing gaps DR-0024 and DR-0012 left open now that the column is
+compared for real. Observations needed none of this: DR-0023 already
+resolved observation correction via supersession, retiring the question
+before this record was even picked up.</p>
+<p><code>kb index ROOT --all [--check]</code> closes the index-staleness
+item’s multi-corpus half – <code>--check</code> and the
+<code>set-status</code>/<code>supersede</code> auto-refresh, shipped
+last release, only ever covered one corpus per invocation.
+<code>--all</code> discovers every corpus under <code>ROOT</code> that
+already has an <code>index.md</code>, refreshes or checks each one,
+keeps going past an individual corpus’s failure, and exits non-zero if
+any needed attention. Running it live against the real workspace caught
+a real bug before it shipped: matching on the filename
+<code>index.md</code> alone picked up several files with nothing to do
+with <code>kb</code> (a docs-site front page, a blog index) and would
+have silently overwritten them in write mode. Fixed by requiring both a
+content-heading match and an actual record file in the directory.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>

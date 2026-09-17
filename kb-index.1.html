@@ -23,6 +23,7 @@
 records</p>
 <h1 id="synopsis">SYNOPSIS</h1>
 <p>kb index PATH [–stdout|–check]</p>
+<p>kb index ROOT –all [–check]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>Regenerates PATH/index.md: one greppable line per record, newest
 first. The file is generated and never hand-edited.</p>
@@ -60,21 +61,40 @@ drift as an error instead of writing: missing, or different from what
 the current records would produce. It exits non-zero either way, so it
 fits a pre-commit hook or CI step; the remedy either way is running
 index without –check. –check and –stdout cannot be combined.</p>
+<p>–all walks ROOT and processes every directory that already has an
+index.md – the corpora that have opted into this convention – refreshing
+or, with –check, checking each one. A directory with record files but no
+index.md yet is silently left alone: –all never creates one, the same
+rule kb record set-status/supersede’s own automatic refresh follows.
+Nested corpora (each with their own index.md) are handled independently,
+never folded together. One bad corpus does not stop the rest: –all keeps
+going and reports every corpus, then exits non-zero if any needed
+attention, so a pre-commit hook can gate on the whole workspace in one
+call rather than naming each corpus by hand. –all and –stdout cannot be
+combined. See TODO.md’s index-regeneration item (index –check and the
+auto-refresh on set-status/supersede) for the single-corpus half this
+completes.</p>
 <h1 id="options">OPTIONS</h1>
 <dl>
 <dt>–stdout</dt>
 <dd>
-write the index to standard output instead of index.md
+write the index to standard output instead of index.md (PATH form only)
 </dd>
 <dt>–check</dt>
 <dd>
 verify index.md is current without writing it; non-zero exit on drift
 </dd>
+<dt>–all</dt>
+<dd>
+process every already-indexed corpus under ROOT instead of one PATH
+</dd>
 </dl>
 <h1 id="examples">EXAMPLES</h1>
 <pre class="shell"><code>kb index clasm/decisions
 kb index agents/decisions --stdout | head
-kb index agents/decisions --check</code></pre>
+kb index agents/decisions --check
+kb index . --all
+kb index . --all --check</code></pre>
 </section>
 <footer>
 <p>knowledge</p>
