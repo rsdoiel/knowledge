@@ -3,6 +3,43 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.9 — 2026-09-17
+
+Rename verbs for projects and concepts, cross-machine reconciliation for
+their mutable fields, and a multi-corpus mode for `index.md` — three items
+closed out of `TODO.md`, two of them correcting their own original
+diagnosis along the way.
+
+### Added
+
+- `kb project rename OLD NEW` and `kb concept rename OLD NEW` (DR-0024)
+  replace the only prior route, raw SQL against `projects.name`/
+  `concepts.name`. `project rename` refuses if `NEW` already exists or if
+  the project owns any records — a live repro showed that renaming a
+  project with a corpus and then re-ingesting it silently mints a phantom
+  project under the old name and duplicates the record under it, data
+  corruption rather than just a stale search label. `concept rename` has
+  no such corpus to desync and ships unconditionally beyond the name
+  collision every rename needs. Both reuse `refreshProjectFTS`/a new
+  `refreshConceptFTS` so search never lags a rename.
+- Cross-machine last-writer-wins for a project or concept's mutable
+  fields (DR-0025). `concepts` gains `updated_at`; `kb merge`'s conflict
+  path becomes `INSERT OR IGNORE` for new rows plus a guarded
+  `UPDATE ... FROM ... WHERE incoming.updated_at > existing.updated_at`
+  for existing ones, so whichever side is actually newer wins regardless
+  of which side is applied first. `kb import` gained the matching
+  comparison. Observations needed none of this — DR-0023 already resolved
+  observation correction via supersession.
+- `kb index ROOT --all [--check]` discovers every corpus under `ROOT`
+  that already has an `index.md`, refreshes or checks each one, keeps
+  going past an individual corpus's failure, and exits non-zero if any
+  needed attention — closing the index-staleness item's multi-corpus
+  half. Running it live against the real workspace caught a bug before it
+  shipped: matching on the filename alone picked up unrelated `index.md`
+  files (a docs site, a blog) and would have silently overwritten them in
+  write mode. Fixed by requiring both a content-heading match and an
+  actual record file in the directory.
+
 ## v0.0.8 — 2026-09-16
 
 A bug-fix-and-small-features release: closing the `index.md` staleness gap

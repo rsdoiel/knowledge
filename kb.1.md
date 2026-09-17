@@ -1,6 +1,6 @@
-%kb(1) user manual | version 0.0.8 a25fbfa
+%kb(1) user manual | version 0.0.9 eb5c4e8
 % R. S. Doiel
-% 2026-09-16
+% 2026-09-17
 
 # NAME
 
