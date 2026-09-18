@@ -1,4 +1,4 @@
-%kb-document(1) user manual | version 0.0.10 1e753e5
+%kb-document(1) user manual | version 0.0.10 6b869a4
 % R. S. Doiel
 % 2026-09-18
 
