@@ -166,6 +166,83 @@
   review, and the gap between them is exactly the quantity a suggestion
   workflow would surface.
 
+- [ ] **`kb project rename`'s documented escape hatch does not work, so the
+  refusal is absolute for any project that owns records.** Found 2026-09-17
+  from WorkLab, trying to carry out that workspace's `codemeta` →
+  `codemetatools` rename (WorkLab `codemeta` DR-0006, accepted, and now
+  accepted-but-unexecuted). Verified on three throwaway copies of
+  `knowledge.db`; the real database and corpus were not touched. Reproduced
+  with `kb 0.0.9 a42912c` on `MACMINI-RD.local`; wren has `0.0.9 da17fb5`,
+  the same version string at a different build, which is worth reconciling
+  before trusting a repro either way.
+
+  The rename item under **Done** above says the refusal ships deliberately
+  and that "rewriting a corpus's frontmatter automatically to lift the
+  refusal remains open." That is still the right framing. What is new is that
+  **the manual path the refusal tells you to take is itself blocked**, so
+  there is currently no way — automatic or manual — to rename a project with
+  a corpus.
+
+  **The deadlock.** Two guards point at each other:
+
+      kb project rename codemeta codemetatools
+      -> project "codemeta" owns 6 record(s); renaming would desync its
+         corpus's project: frontmatter from the database on the next ingest
+         -- rewrite the corpus's frontmatter and re-ingest first
+
+      (rewrite project: codemeta -> project: codemetatools; re-ingest)
+      -> error: 0002-....md: constraint failed:
+         UNIQUE constraint failed: records.uuid (2067)
+
+  There is no `--force`.
+
+  **Root cause, isolated on a single-file copy.** A record's ingest identity
+  is `(workspace, project, scope, record_id)`, so changing `project:` makes
+  the file look like a *new* record — but it carries a stable `uuid` in its
+  frontmatter and `records.uuid` is UNIQUE, already held by the row under the
+  old project. The INSERT collides. Proven by changing only `project:` (fails
+  on `records.uuid`) and then additionally giving the file a fresh uuid
+  (succeeds — and yields DR-0002 **twice**, once under each project, with two
+  different uuids). So editing uuids to get past it would duplicate the
+  corpus and destroy record identity. It is not a workaround.
+
+  **A second effect makes a first attempt worse than a no-op.** The failed
+  ingest still **mints an empty project under the new name** — `codemetatools`
+  appeared with `status active` owning zero records, while all six records
+  stayed under `codemeta`. That empty row then trips rename's *other* guard
+  (`project "codemetatools" already exists`) permanently. So the naive attempt
+  leaves the database in a state where even a fixed ingest could not proceed
+  until the stray project is deleted by hand, and there is no verb for that
+  either. Whatever the fix, **ingest should not create a project as a side
+  effect of a run that failed.**
+
+  **Two candidate shapes.** Making `rename` do the whole job in one
+  transaction looks better: it already owns the row, so it can re-point the
+  records' `project_id` *and* rewrite the corpus's `project:` frontmatter
+  together, which is the both-or-neither contract `kb record supersede`
+  already honours for files and database. The alternative — having `ingest`
+  match on `uuid` first and UPDATE `project_id` when it differs — would
+  quietly re-home records on any frontmatter typo, which is a worse default.
+
+  **Worth settling the cross-machine half in the same pass**, per the author,
+  2026-09-17. `~/Laboratory` exists on two machines, with wren now canonical,
+  and DR-0025 already left "a rename crossing machines does not reconcile,
+  since merge/import dedupe by name" as its own filed follow-on. A rename
+  that rewrites files as well as rows makes this sharper, not softer: the
+  files travel by git and the rows travel by `merge`, so the two halves can
+  arrive separately and in either order. The question to answer before
+  coding is whether a rename needs to be *recorded* as an event the way a
+  supersession is, rather than inferred from a name that no longer matches
+  anything.
+
+  **Also spotted while reproducing this.** `reportMissing`'s advice still
+  reads "remove it with `kb record remove`", but `kb record` has no `remove`
+  verb in 0.0.9's synopsis (`list`, `show`, `set-status`, `supersede`, `new`,
+  `fmt`, `concepts`). The **Done** item above records that message being
+  softened so it no longer asserts deletion as the only explanation; it still
+  names a command that does not exist. Impossible rather than destructive,
+  which is the better failure, but still wrong.
+
 ## Done
 
 - [x] `kb record new`'s default write path moved to `agents/projects/<project>/decisions/`
