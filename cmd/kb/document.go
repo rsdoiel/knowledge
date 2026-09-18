@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -330,6 +332,11 @@ func tagSection(kb *knowledge.KnowledgeBase, sectionID int64, text string, keywo
 			names = append(names, name)
 		}
 	}
+	densityNames, err := densityLinkCandidates(kb, text, seen)
+	if err != nil {
+		return err
+	}
+	names = append(names, densityNames...)
 	for _, name := range names {
 		conceptID, err := kb.ResolveConceptName(name)
 		if err != nil {
@@ -340,6 +347,60 @@ func tagSection(kb *knowledge.KnowledgeBase, sectionID int64, text string, keywo
 		}
 	}
 	return nil
+}
+
+// fencedCodeBlockPattern and inlineCodeSpanPattern isolate Markdown code,
+// for densityLinkCandidates only -- TagDensity itself is left counting the
+// raw text, since it is the signal a threshold is applied to, not the
+// threshold's own output (TODO.md's MADR item: "density is the raw signal,
+// links are what survived review").
+var (
+	fencedCodeBlockPattern = regexp.MustCompile("(?s)```.*?```")
+	inlineCodeSpanPattern  = regexp.MustCompile("`[^`\n]*`")
+)
+
+// stripCodeSpans removes fenced code blocks and inline code spans from
+// text, replacing each with a single space so word boundaries on either
+// side survive a removed span.
+func stripCodeSpans(text string) string {
+	text = fencedCodeBlockPattern.ReplaceAllString(text, " ")
+	text = inlineCodeSpanPattern.ReplaceAllString(text, " ")
+	return text
+}
+
+// densityLinkCandidates returns known concept names mentioned more than
+// once in text, outside of code spans -- TODO.md's MADR item, "threshold +
+// code-span exclusion": a document with no [[wikilinks]] or frontmatter
+// keywords (an MADR-style ADR is the motivating case) would otherwise link
+// no concepts at all, even when its prose clearly and repeatedly names a
+// known one. A hand-run prototype found unfiltered density linking
+// roughly 60% signal; the two false-positive patterns it found -- a short,
+// common concept name colliding with a word used in a different sense
+// inside quoted code or an error string, and a one-off incidental mention
+// -- are exactly what the code-span exclusion and >1 threshold catch.
+//
+// A name already in seen (an explicit wikilink or frontmatter keyword) is
+// skipped: that is a deliberate signal that bypasses the threshold
+// entirely, not one this mechanical pass should second-guess. Unlike a
+// wikilink, this can only link to a concept that already exists --
+// MatchConceptNameCounts never mints one -- so it connects prose to
+// established vocabulary rather than discovering new concepts, which is a
+// separate, uncosted question (see TODO.md). Sorted for deterministic
+// linking order, since ResolveConceptName's call order should not depend
+// on Go's randomized map iteration.
+func densityLinkCandidates(kb *knowledge.KnowledgeBase, text string, seen map[string]bool) ([]string, error) {
+	counts, err := kb.MatchConceptNameCounts(stripCodeSpans(text))
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for name, count := range counts {
+		if count > 1 && !seen[strings.ToLower(name)] {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // ingestNewDocument writes a brand-new document: the documents row, a gist

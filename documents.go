@@ -340,6 +340,25 @@ func detectFormat(path string) string {
 // markdownHeadingPattern matches an ATX-style Markdown heading line.
 var markdownHeadingPattern = regexp.MustCompile(`^#{1,6}\s+(.*)$`)
 
+// markdownH1Pattern matches only a true H1 (a single '#'), the level a
+// fallback title has to come from -- a deeper heading names a section, not
+// the document.
+var markdownH1Pattern = regexp.MustCompile(`^#\s+(.*)$`)
+
+// firstH1Heading returns the first true H1 heading in body, or "" if none.
+// Used as a Markdown document's title when frontmatter supplies none (a
+// colleague's MADR-style ADR being the motivating case, but this is a
+// general fallback): a document's own text almost always names it better
+// than the caller's filepath.Base would.
+func firstH1Heading(body string) string {
+	for _, line := range strings.Split(body, "\n") {
+		if m := markdownH1Pattern.FindStringSubmatch(line); m != nil {
+			return strings.TrimSpace(m[1])
+		}
+	}
+	return ""
+}
+
 // segmentMarkdown splits body on ATX headings (design decision 4). A body
 // with no headings at all becomes a single section with no heading, the
 // same degenerate case segmentText always produces.
@@ -566,6 +585,9 @@ func ParseDocumentFile(path, formatOverride string) (*ParsedDocument, error) {
 		pd.GistSeed = fields["description"]
 		pd.Keywords = keywords
 		pd.Warning = warning
+		if pd.Title == "" {
+			pd.Title = firstH1Heading(body)
+		}
 		pd.Sections = segmentMarkdown(body)
 	case "fountain":
 		sections, titlePage, err := segmentFountain(data)

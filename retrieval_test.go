@@ -289,6 +289,50 @@ func TestMatchConceptNames_MatchesAtWordBoundaryPunctuation(t *testing.T) {
 	}
 }
 
+// ─── MatchConceptNameCounts (MADR density-linking, TODO.md) ────────────────
+
+func TestMatchConceptNameCounts_CountsOccurrences(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("Foo", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	counts, err := kb.MatchConceptNameCounts("foo showed up, then foo again, and foo a third time")
+	if err != nil {
+		t.Fatalf("MatchConceptNameCounts: %v", err)
+	}
+	if counts["Foo"] != 3 {
+		t.Errorf("counts[Foo] = %d, want 3", counts["Foo"])
+	}
+}
+
+func TestMatchConceptNameCounts_AbsentConceptIsNotInMap(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("Foo", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	counts, err := kb.MatchConceptNameCounts("nothing relevant here")
+	if err != nil {
+		t.Fatalf("MatchConceptNameCounts: %v", err)
+	}
+	if _, ok := counts["Foo"]; ok {
+		t.Errorf("counts = %v, want Foo absent, not zero", counts)
+	}
+}
+
+func TestMatchConceptNameCounts_DoesNotFalsePositiveOnSubstring(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("RAG", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	counts, err := kb.MatchConceptNameCounts("we need more storage, then even more storage")
+	if err != nil {
+		t.Fatalf("MatchConceptNameCounts: %v", err)
+	}
+	if _, ok := counts["RAG"]; ok {
+		t.Errorf("counts = %v, want RAG absent -- must not substring-match inside storage", counts)
+	}
+}
+
 // ─── W6 (narrative-documents-plan.md): widen RecallByConceptNames to documents ──
 
 func TestRecallByConceptNames_ReturnsLinkedDocumentSection(t *testing.T) {

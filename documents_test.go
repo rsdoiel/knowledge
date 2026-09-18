@@ -399,6 +399,47 @@ func TestParseDocumentFile_Markdown_UsesFrontmatter(t *testing.T) {
 	}
 }
 
+// A titleless Markdown document -- an MADR-style ADR is the motivating
+// case, but this is a general fallback, not MADR-specific -- falls back to
+// its first H1 heading rather than the caller's filepath.Base, since a
+// document's own text almost always names it better than its filename does.
+func TestParseDocumentFile_Markdown_FallsBackToFirstH1WhenNoFrontmatterTitle(t *testing.T) {
+	path := writeTempFile(t, "0004-use-cmtools.md", "# 4. Use CMTools for release metadata\n\n- Status: accepted\n\n## Context\n\nSome context.\n")
+	pd, err := ParseDocumentFile(path, "")
+	if err != nil {
+		t.Fatalf("ParseDocumentFile: %v", err)
+	}
+	if pd.Title != "4. Use CMTools for release metadata" {
+		t.Errorf("Title = %q, want the first H1 heading", pd.Title)
+	}
+}
+
+// A frontmatter title, when present, still wins -- the fallback only fires
+// when there is nothing more authoritative to use.
+func TestParseDocumentFile_Markdown_FrontmatterTitleWinsOverH1(t *testing.T) {
+	path := writeTempFile(t, "post.md", antennaFrontmatterFixture)
+	pd, err := ParseDocumentFile(path, "")
+	if err != nil {
+		t.Fatalf("ParseDocumentFile: %v", err)
+	}
+	if pd.Title != "A Test Post" {
+		t.Errorf("Title = %q, want the frontmatter title preserved", pd.Title)
+	}
+}
+
+// A second-level (or deeper) heading is a section heading, not a document
+// title -- only a true H1 (a single '#') qualifies as the fallback.
+func TestParseDocumentFile_Markdown_H2DoesNotFallBackAsTitle(t *testing.T) {
+	path := writeTempFile(t, "note.md", "## Not a title\n\nsome body\n")
+	pd, err := ParseDocumentFile(path, "")
+	if err != nil {
+		t.Fatalf("ParseDocumentFile: %v", err)
+	}
+	if pd.Title != "" {
+		t.Errorf("Title = %q, want empty -- an H2 must not satisfy the H1 fallback", pd.Title)
+	}
+}
+
 func TestParseDocumentFile_Fountain_UsesTitlePage(t *testing.T) {
 	path := writeTempFile(t, "scene.fountain", fountainFixture)
 	pd, err := ParseDocumentFile(path, "")

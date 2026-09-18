@@ -470,6 +470,167 @@ func TestDocumentIngest_GistDensityCountsSelfIntroducedConcept(t *testing.T) {
 	}
 }
 
+// ─── density-based concept linking (TODO.md's MADR item) ───────────────────
+
+func TestDocumentIngest_DensityLinkingRequiresMoreThanOneOccurrence(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	if _, err := kb.AddConcept("Bar", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nBar showed up here, then bar came up again later.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var sec knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "section" {
+			sec = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(sec.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	found := false
+	for _, c := range concepts {
+		if c.Name == "Bar" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("section concepts = %+v, want Bar auto-linked from two mentions", concepts)
+	}
+}
+
+func TestDocumentIngest_DensityLinkingDoesNotLinkOnSingleMention(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	if _, err := kb.AddConcept("Foo", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nMentions Foo here, just once.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var sec knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "section" {
+			sec = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(sec.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	for _, c := range concepts {
+		if c.Name == "Foo" {
+			t.Errorf("section concepts = %+v, want Foo NOT auto-linked from a single mention", concepts)
+		}
+	}
+	// TagDensity itself is unaffected by the threshold -- it's the raw
+	// signal, links are what survived the filter (TODO.md's own framing).
+	if sec.TagDensity != 1 {
+		t.Errorf("TagDensity = %d, want 1 (the threshold gates linking, not the density metric)", sec.TagDensity)
+	}
+}
+
+func TestDocumentIngest_DensityLinkingExcludesInlineCodeSpans(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	if _, err := kb.AddConcept("format", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nSaw `unsupported format` once, then `const format = x` again.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var sec knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "section" {
+			sec = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(sec.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	for _, c := range concepts {
+		if c.Name == "format" {
+			t.Errorf("section concepts = %+v, want format NOT linked -- both mentions are inside inline code spans", concepts)
+		}
+	}
+}
+
+func TestDocumentIngest_DensityLinkingExcludesFencedCodeBlocks(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	if _, err := kb.AddConcept("git", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	body := "# One\n```\ngit push\ngit pull\n```\n"
+	path := writeDocFixture(t, root+"/docs", "a.md", body)
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var sec knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "section" {
+			sec = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(sec.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	for _, c := range concepts {
+		if c.Name == "git" {
+			t.Errorf("section concepts = %+v, want git NOT linked -- both mentions are inside a fenced code block", concepts)
+		}
+	}
+}
+
+// An explicit [[wikilink]] is a deliberate signal, so it bypasses the
+// density threshold entirely -- unlike density-inferred links, it also
+// mints a brand-new concept, which MatchConceptNameCounts could never do.
+func TestDocumentIngest_ExplicitWikilinkBypassesDensityThreshold(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("alpha", "")
+	path := writeDocFixture(t, root+"/docs", "a.md", "# One\nSee [[Widget]] once.\n")
+	if _, err := runDocument(t, kb, false, "ingest", path, "--project", "alpha"); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	sections, _ := kb.DocumentSections(d.ID)
+	var sec knowledge.DocumentSection
+	for _, s := range sections {
+		if s.Level == "section" {
+			sec = s
+		}
+	}
+	concepts, err := kb.DocumentSectionConcepts(sec.ID)
+	if err != nil {
+		t.Fatalf("DocumentSectionConcepts: %v", err)
+	}
+	found := false
+	for _, c := range concepts {
+		if c.Name == "Widget" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("section concepts = %+v, want Widget linked from a single explicit wikilink mention", concepts)
+	}
+}
+
 func TestDocumentIngest_ReingestUnchangedDoesNotDuplicateLinks(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	kb.AddProject("alpha", "")

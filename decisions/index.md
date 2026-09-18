@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0027  2026-09-18  accepted     decision     request          -     Foreign ADRs stay documents; MADR title and density-linking gaps closed
 DR-0026  2026-09-18  accepted     decision     live-test        -     kb project rename completes for a project with records; rename reconciles across merge and import
 DR-0025  2026-09-17  accepted     decision     request          sup   Cross-machine last-writer-wins for a project or concept's mutable fields
 DR-0024  2026-09-17  accepted     decision     request          sup   kb project rename and kb concept rename, refusing when a corpus exists

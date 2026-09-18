@@ -249,3 +249,41 @@ func (kb *KnowledgeBase) MatchConceptNames(text string) ([]string, error) {
 	}
 	return matched, nil
 }
+
+/** MatchConceptNameCounts is MatchConceptNames with an occurrence count
+ * instead of a presence flag, for a caller that needs to threshold on
+ * frequency rather than just detect a mention — document ingest's
+ * density-based concept linking (TODO.md's MADR item) is the motivating
+ * caller: a single incidental mention is too weak a signal to auto-link,
+ * but several are not.
+ *
+ * Parameters:
+ *   text (string) — free text to search, e.g. a document section's body.
+ *
+ * Returns:
+ *   map[string]int — concept name to occurrence count; a concept with zero
+ *                     occurrences is absent from the map, not present at 0.
+ *   error          — on database failure.
+ *
+ * Example:
+ *   counts, err := kb.MatchConceptNameCounts(sectionBody)
+ *   if counts["RAG"] > 1 { fmt.Println("link it") }
+ */
+func (kb *KnowledgeBase) MatchConceptNameCounts(text string) (map[string]int, error) {
+	concepts, err := kb.Concepts()
+	if err != nil {
+		return nil, err
+	}
+	counts := map[string]int{}
+	for _, c := range concepts {
+		pattern := `(?i)\b` + regexp.QuoteMeta(c.Name) + `\b`
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			continue
+		}
+		if n := len(re.FindAllStringIndex(text, -1)); n > 0 {
+			counts[c.Name] = n
+		}
+	}
+	return counts, nil
+}

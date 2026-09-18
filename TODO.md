@@ -53,6 +53,40 @@
 
 ## To explore
 
+- [ ] **Programmatic corpus-improvement techniques, as the corpus grows.**
+  Raised 2026-09-18 while discussing the MADR item below: decision records
+  already benefit from being surfaced through multiple routes (frontmatter,
+  `[[wikilinks]]`, `relates_to`), and documents are new and still being
+  tuned (see DR-0026/DR-0027's density-linking work). Worth a standing
+  question, not a single ticket: what other mechanical, no-dependency
+  techniques could improve corpus linkage as it scales past what a human
+  curating by hand keeps up with?
+
+  Two concrete candidates raised so far, neither costed:
+
+  - **Corpus-wide term-frequency/distinctiveness scoring** (TF-IDF or
+    similar) to surface *candidate* concepts — terms frequent in one
+    document but rare elsewhere — for a human to review via
+    `kb concept add`, rather than auto-creating them. This is the
+    keyword/topic-discovery half of what density-linking (DR-0026/DR-0027)
+    cannot do: `MatchConceptNameCounts` only matches text against concepts
+    that already exist, it can't propose new ones.
+  - **Levenshtein (or similar fuzzy) matching of concept names against
+    record/document prose**, to surface records or documents that are
+    topically relevant but unlinked because the wording differs from the
+    concept's exact name (`MatchConceptNames`/`MatchConceptNameCounts` are
+    both exact whole-word matches, so a near-miss — a typo, a plural, a
+    close paraphrase — currently links nothing).
+
+  Both fit the pattern already established for document summaries and
+  decision records: a mechanical pass surfaces candidates, a human curates
+  rather than the pass auto-committing. The alternative — embeddings or an
+  LLM call for either keyword extraction or fuzzy relevance — would likely
+  do better, but pulls in exactly the kind of dependency (a vector store,
+  network calls, nondeterminism) this module has deliberately avoided so
+  far; worth weighing explicitly if either of the above turns out too weak
+  in practice, not assumed as the starting point.
+
 - [ ] **Two decision-record dialects now exist in one organisation, and `kb`
   can only read one of them.** Raised 2026-09-15 after pulling
   `caltechlibrary/CL-Web-Components`, where a colleague has been recording
@@ -104,14 +138,17 @@
 
   **What works today, as a stopgap.** `kb document ingest` reads them without
   complaint — no frontmatter is required, and it segments on the MADR
-  headings, 5-14 sections each. Two limitations found while testing: with no
-  frontmatter `title:` the document is titled with its *filename* (the `# N.`
-  H1 is not consulted — arguably a small bug worth fixing on its own), and
-  **no concepts are linked**, because linking comes from `[[wikilinks]]` and
-  frontmatter `keywords`, neither of which MADR has. `tag_density` is
-  non-zero, so the mentions are detected and simply have nowhere to go.
-  Whether density alone should be able to produce a link — or at least a
-  suggestion — is worth considering as part of this.
+  headings, 5-14 sections each. Two limitations found while testing, **both
+  closed 2026-09-18, see DR-0027**: with no frontmatter `title:` the
+  document used to be titled with its *filename* — `ParseDocumentFile` now
+  falls back to the document's first true H1 heading (general, not
+  MADR-specific); and no concepts used to be linked at all, since linking
+  came only from `[[wikilinks]]` and frontmatter `keywords`, neither of
+  which MADR has — document ingest now also auto-links a known concept
+  mentioned more than once outside code spans (`MatchConceptNameCounts`),
+  the threshold-plus-code-span-exclusion refinement costed just below. This
+  closes the two stopgap gaps only; the identity-collision/format-adapter
+  question the rest of this item raises is still open and still uncosted.
 
   **Evidence, 2026-09-15: density-based linking was run by hand against those
   four ADRs, and it is useful but lossy — roughly 60% signal.** The script
