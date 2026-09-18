@@ -369,7 +369,7 @@ func TestCmdConcept_SuggestRespectsLimit(t *testing.T) {
 	if _, err := kb.AddRecord(knowledge.Record{
 		RecordID: "0001", ProjectID: pid, Scope: "project", Path: "decisions/0001-x.md",
 		Title: "t", Date: "2026-09-18", Status: "accepted", Kind: "decision",
-		Body: "alpha alpha bravo bravo charlie charlie delta delta echo echo distinct distinct",
+		Body:     "alpha alpha bravo bravo charlie charlie delta delta echo echo distinct distinct",
 		Checksum: "c1",
 	}); err != nil {
 		t.Fatalf("AddRecord: %v", err)
@@ -377,7 +377,7 @@ func TestCmdConcept_SuggestRespectsLimit(t *testing.T) {
 	if _, err := kb.AddRecord(knowledge.Record{
 		RecordID: "0002", ProjectID: pid, Scope: "project", Path: "decisions/0002-y.md",
 		Title: "t", Date: "2026-09-18", Status: "accepted", Kind: "decision",
-		Body: "just filler text so these terms are not present in every item",
+		Body:     "just filler text so these terms are not present in every item",
 		Checksum: "c2",
 	}); err != nil {
 		t.Fatalf("AddRecord: %v", err)

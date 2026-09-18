@@ -47,63 +47,104 @@ explicit human review step before being trusted as searchable
 content.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.9</li>
+<li>version: 0.0.10</li>
 <li>status: concept</li>
-<li>released: 2026-09-17</li>
+<li>released: 2026-09-18</li>
 </ul>
-<p>Rename verbs for projects and concepts, cross-machine reconciliation
-for their mutable fields, and a multi-corpus mode for index.md – three
-items closed out of TODO.md, two of them correcting their own original
-diagnosis along the way.</p>
-<p><code>kb project rename OLD NEW</code> and
-<code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
-route, raw SQL against
-<code>projects.name</code>/<code>concepts.name</code>.
-<code>project rename</code> refuses if <code>NEW</code> already exists
-or if the project owns any records: a decision record’s
-<code>project:</code> frontmatter has to match the project’s name, and a
-live repro showed that renaming a project with a corpus and then
-re-ingesting it silently mints a phantom project under the old name and
-duplicates the record under it – data corruption, not just a stale
-search label. <code>concept rename</code> has no such corpus to desync,
-since every link to a concept is a foreign key, and ships
-unconditionally beyond the name collision every rename needs. Both reuse
-the existing <code>refreshProjectFTS</code>/a new
-<code>refreshConceptFTS</code> so search never lags a rename.</p>
-<p>Cross-machine reconciliation (DR-0025) gives <code>kb merge</code>
-and <code>kb import</code> a real last-writer-wins policy for a project
-or concept’s mutable fields, replacing a conflict rule that was really
-just loop order: <code>INSERT OR IGNORE</code> silently kept whichever
-side was applied first regardless of which edit was newer.
-<code>concepts</code> gains <code>updated_at</code> (lazily migrated,
-mirroring how <code>created_at</code> was itself added);
-<code>merge</code>’s conflict path becomes <code>INSERT OR IGNORE</code>
-for new rows plus a guarded
-<code>UPDATE ... FROM ... WHERE incoming.updated_at &gt; existing.updated_at</code>
-for existing ones – two statements rather than one upsert, because this
-project’s pure-Go SQLite driver rejects an UPSERT clause after a
-SELECT-form INSERT, confirmed live.
-<code>importProject</code>/<code>importConcept</code> gained the
-matching comparison, and
-<code>RenameProject</code>/<code>RenameConcept</code>/<code>AddConceptWithIdentifier</code>’s
-<code>ON CONFLICT</code> branch now touch <code>updated_at</code>,
-closing gaps DR-0024 and DR-0012 left open now that the column is
-compared for real. Observations needed none of this: DR-0023 already
-resolved observation correction via supersession, retiring the question
-before this record was even picked up.</p>
-<p><code>kb index ROOT --all [--check]</code> closes the index-staleness
-item’s multi-corpus half – <code>--check</code> and the
-<code>set-status</code>/<code>supersede</code> auto-refresh, shipped
-last release, only ever covered one corpus per invocation.
-<code>--all</code> discovers every corpus under <code>ROOT</code> that
-already has an <code>index.md</code>, refreshes or checks each one,
-keeps going past an individual corpus’s failure, and exits non-zero if
-any needed attention. Running it live against the real workspace caught
-a real bug before it shipped: matching on the filename
-<code>index.md</code> alone picked up several files with nothing to do
-with <code>kb</code> (a docs-site front page, a blog index) and would
-have silently overwritten them in write mode. Fixed by requiring both a
-content-heading match and an actual record file in the directory.</p>
+<p>Four decision records’ worth of work: the project-rename completion
+this module had refused to do since v0.0.9, an answer to the foreign-ADR
+question that had been open since 2026-09-15, and two corpus-improvement
+verbs that surface candidates for a human to confirm rather than
+committing anything themselves.</p>
+<p><code>kb project rename OLD NEW</code> now completes for a project
+that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
+is smaller than either shape originally sketched:
+<code>records.project_id</code> never needs to change on a rename, since
+it is a stable foreign key and only <code>projects.name</code> moves, so
+the corpus rewrite is a pure file operation – every owned record’s
+<code>project:</code> frontmatter edited in place, both-or-neither,
+<code>--dry-run</code> supported – and the next ordinary
+<code>kb ingest</code> sees a changed checksum against an unchanged
+identity, the ordinary UPDATE path rather than the INSERT that collided.
+Tracing merge and import while designing this turned up two further bugs
+neither anticipated nor merely suspected: <code>kb merge</code> could
+silently keep a stale name or drop a side outright depending on merge
+order, because <code>INSERT OR IGNORE</code> cannot distinguish a uuid
+collision from a name collision, and <code>kb import</code> hard-failed
+the <em>entire</em> import rather than one row on the same collision.
+Both are fixed in the same pass – shipping the rename without them would
+have made the corruption risk worse by making the trigger routine.
+Conflict resolution for projects and concepts moves from name-keyed to
+uuid-primary, reconciling <code>name</code> by <code>updated_at</code>
+the same way <code>description</code> and <code>status</code> already
+did.</p>
+<p>A colleague’s MADR-format ADR, pulled from another repository, is
+modeled as a <strong>document</strong>, not a record (DR-0027). We do
+not own its status and can never promote or supersede it, and a document
+is exactly the shape for source material we read and summarise.
+Answering it that way dissolves the identity collision the question had
+been stuck on – both dialects number from 0001, but a document never
+enters the records identity tuple at all – so the <code>dialect</code>
+column, the <code>external</code> scope value and the
+<code>--format madr</code> adapter are moot rather than deferred. Two
+real gaps in the stopgap closed with it: <code>ParseDocumentFile</code>
+falls back to a document’s first true H1 when frontmatter supplies no
+<code>title:</code> (general, not MADR-specific, but MADR is what
+surfaced it, having no frontmatter at all), where the document used to
+be titled with its filename; and document ingest gains density-based
+concept linking, auto-linking a known concept mentioned more than once
+outside code spans and fenced blocks. The threshold and the code-span
+exclusion are not guesses – a by-hand run against four real foreign ADRs
+scored roughly 60% signal, and all five of its bad links were the same
+failure, a short common concept name matching a word used in a different
+sense inside quoted code or an error string. The accepted cost, stated
+rather than glossed: a document cannot be cited from
+<code>relates_to</code>, so a record responding to a foreign ADR links
+it in prose.</p>
+<p><code>kb concept suggest [--project NAME] [--limit N]</code>
+(DR-0028) scans every record body and document section body and prints
+candidate <em>new</em> concepts ranked by corpus-wide distinctiveness –
+a TF-IDF shape: occurring several times, confined to relatively few
+items. It closes the half of corpus improvement that density-linking
+cannot reach, since <code>MatchConceptNameCounts</code> only matches
+text against concepts that already exist and can never propose one. It
+never writes to the database. Live-tested against the real workspace
+corpus it is a roughly-50%-signal mechanical pass – <code>rename</code>,
+<code>harvey</code>, <code>divergence</code>, <code>collision</code>,
+<code>uuid</code> genuinely useful alongside generic nouns like
+<code>row</code> and <code>table</code> – the same character as
+DR-0027’s own prototype. A human still curates; this does not close the
+loop on its own.</p>
+<p><code>kb document tag --project NAME [--concept NAME,...] [--dry-run]</code>
+(DR-0029) gives that judgment somewhere to land in the corpus itself. It
+inserts an explicit <code>[[Name]]</code> wikilink at the first safe
+occurrence of each eligible concept in every already-ingested document
+for a project, so the next <code>kb document ingest</code> links it
+through the wikilink path that already exists. Eligibility reuses
+DR-0027’s density threshold verbatim with no <code>--concept</code>
+given, or is bypassed for explicitly named ones. It is a minimal
+position-based edit on the raw file bytes with no parse-and-rerender
+cycle, excluding frontmatter, fenced blocks, inline code spans, anything
+already inside <code>[[...]]</code>, and – found live, smoke-testing
+against a real document – the document’s own first H1, so a concept
+mention in the title is never wrapped. Writes across a project’s
+document set are both-or-neither, and a second run is a no-op.</p>
+<p>One test repair worth naming, because of what it was hiding
+(DR-0030). <code>TestParseRecordFile_RoundTripsEveryLiveRecord</code>
+named five fixed corpus paths, three of which went stale when DR-0021’s
+<code>agents/projects/&lt;project&gt;/decisions/</code> layout was
+rolled out. It had quietly stopped exercising four fifths of the live
+corpus – 54 records of 267 – and reported that as a count shortfall
+rather than a discovery failure. Corpora are now discovered rather than
+listed, using the same two-signal rule <code>kb index --all</code>
+settled on (a record-shaped filename <em>and</em> real frontmatter in
+the file), which also keeps a foreign MADR corpus out of a round-trip
+test it would fail by construction, and the remembered count floor is
+gone in favour of the per-file property the test was always really
+asserting. <code>user_manual.md</code>’s verb table, six verbs out of
+date and pointing at a <code>DECISIONS.md</code> removed when this
+module became the decision-record format’s first conversion pilot, is
+current again.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>

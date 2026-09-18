@@ -29,6 +29,7 @@ abstraction levels</p>
 <p>kb document review list [–project P] [–status S]</p>
 <p>kb document draft SECTION_ID BODY –by WHO [–confidence N]</p>
 <p>kb document review promote SECTION_ID</p>
+<p>kb document tag –project P [–concept NAME,…] [–dry-run]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>A document is a narrative or article (Markdown, Fountain, or plain
 text) ingested into two tables: one documents row plus one
@@ -84,6 +85,22 @@ promote a drafted summary to reviewed – the only human action that makes
 a summary trusted. Only a reviewed summary is indexed for search or
 returned as content by a concept-tag query; a section’s raw body is
 never indexed at all, only its reviewed summary
+</dd>
+<dt>tag</dt>
+<dd>
+a pure file operation over every already-ingested document in –project:
+inserts an explicit <code>[[Name]]</code> wikilink, at its first safe
+occurrence, for each eligible concept. Never writes to the database –
+the next ingest of a changed file links it through the wikilink path
+above, unchanged. With no –concept, eligible means mentioned more than
+once in the file outside code spans (the same threshold density-linking
+already applies); –concept NAME,… forces exactly those names regardless
+of occurrence count, but each must already be a known concept, checked
+before any file is touched. A name already wikilinked anywhere in a file
+is left alone, so a second run is a no-op; YAML frontmatter and the
+document’s own first H1 heading (its title) are never written into
+either, even if a concept name genuinely occurs there. –dry-run reports
+without writing. See DR-0029 (knowledge/decisions/).
 </dd>
 </dl>
 <h1 id="vocabularies">VOCABULARIES</h1>

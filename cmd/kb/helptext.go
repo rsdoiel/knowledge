@@ -23,8 +23,9 @@ const HelpText = `%{app_name}(1) user manual | version {version} {release_hash}
 # DESCRIPTION
 
 {app_name} reads and writes a github.com/rsdoiel/knowledge knowledge base:
-projects, observations, concepts, and sources, with full-text search and a
-cross-machine merge tool. Every verb follows the "TOOL VERB PARAMETERS"
+projects, observations, concepts, sources, decision records and narrative
+documents, with full-text search and a cross-machine merge tool. Every verb
+follows the "TOOL VERB PARAMETERS"
 model (the same shape as git and go), so scripts and other language-model
 harnesses can drive it directly, not just people at a terminal.
 
@@ -115,8 +116,8 @@ record
   supersede, fmt — see {app_name}-record(1)
 
 document
-: ingest, review and draft summaries for narrative documents (Markdown,
-  Fountain, text) at graduated abstraction levels — see {app_name}-document(1)
+: ingest, draft, review and tag narrative documents (Markdown, Fountain,
+  text) at graduated abstraction levels — see {app_name}-document(1)
 
 index
 : generate a decisions/index.md from a directory of records — see
@@ -141,7 +142,8 @@ init
 {app_name}-project(1), {app_name}-observation(1), {app_name}-concept(1),
 {app_name}-link(1), {app_name}-source(1), {app_name}-search(1),
 {app_name}-merge(1), {app_name}-export(1), {app_name}-import(1),
-{app_name}-init(1)
+{app_name}-ingest(1), {app_name}-record(1), {app_name}-document(1),
+{app_name}-index(1), {app_name}-init(1), {app_name}-topics(1)
 
 `
 
@@ -177,14 +179,14 @@ const DocumentHelpText = `%{app_name}-document(1) user manual | version {version
 
 A document is a narrative or article (Markdown, Fountain, or plain text)
 ingested into two tables: one documents row plus one document_sections row
-per structural unit, always including one `+"`level = 'gist'`"+` row for the
+per structural unit, always including one ` + "`level = 'gist'`" + ` row for the
 whole document. Unlike a decision record, a document takes no required
 frontmatter -- title/author/publication-date/keywords are recognized when
 present (antennaApp's own frontmatter vocabulary: title, description,
 pubDate, author, keywords) but never required, since a story or screenplay
 usually has none.
 
-Every `+"`[[Name]]`"+` wikilink in a section's body, and every frontmatter
+Every ` + "`[[Name]]`" + ` wikilink in a section's body, and every frontmatter
 keyword, resolves to a concept and links to the record the same way
 {app_name}-ingest(1) tags decision records -- case-insensitive, and
 matching case becomes canonical for later mentions. A section's
@@ -227,7 +229,7 @@ review promote
 
 tag
 : a pure file operation over every already-ingested document in --project:
-  inserts an explicit `+"`[[Name]]`"+` wikilink, at its first safe occurrence,
+  inserts an explicit ` + "`[[Name]]`" + ` wikilink, at its first safe occurrence,
   for each eligible concept. Never writes to the database -- the next
   ingest of a changed file links it through the wikilink path above,
   unchanged. With no --concept, eligible means mentioned more than once in
@@ -1165,7 +1167,7 @@ record
 : read and maintain decision records
 
 document
-: ingest, review and draft summaries for narrative documents at graduated
+: ingest, draft, review and tag narrative documents at graduated
   abstraction levels
 
 index

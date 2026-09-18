@@ -1,6 +1,6 @@
-%kb-topics(1) user manual | version 0.0.9 ab8a11d
+%kb-topics(1) user manual | version 0.0.10 1e753e5
 % R. S. Doiel
-% 2026-09-17
+% 2026-09-18
 
 # NAME
 
@@ -50,7 +50,7 @@ record
 : read and maintain decision records
 
 document
-: ingest, review and draft summaries for narrative documents at graduated
+: ingest, draft, review and tag narrative documents at graduated
   abstraction levels
 
 index

@@ -1,6 +1,8 @@
 package knowledge
 
 import (
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -425,29 +427,123 @@ func warnsAbout(warnings []string, needle string) bool {
 	return false
 }
 
-// corpusDirs returns the live decision-record directories present on this
-// machine, skipping the test when none are.
-func corpusDirs(t *testing.T) []string {
-	t.Helper()
-	home, err := os.UserHomeDir()
+// recordFilesIn returns the record-shaped files (NNNN-slug.md) directly in
+// dir, non-recursively — the same shape `kb index` collects.
+func recordFilesIn(dir string) []string {
+	files, err := filepath.Glob(filepath.Join(dir, "[0-9]*.md"))
 	if err != nil {
-		t.Skipf("no home directory: %v", err)
+		return nil
 	}
-	candidates := []string{
-		filepath.Join(home, "WorkLab", "clasm", "decisions"),
-		filepath.Join(home, "WorkLab", "CMTools", "decisions"),
-		filepath.Join(home, "WorkLab", "cold", "decisions"),
-		filepath.Join(home, "WorkLab", "agents", "decisions"),
-		filepath.Join(home, "Laboratory", "knowledge", "decisions"),
-	}
-	var out []string
-	for _, d := range candidates {
-		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
-			out = append(out, d)
+	return files
+}
+
+// isOurCorpus reports whether dir holds this format's decision records, as
+// opposed to a foreign dialect's. The test is the same two-signal rule
+// `kb index --all` settled on after matching a filename alone picked up
+// unrelated files: the directory must hold a record-shaped file, and that
+// file must actually open with YAML frontmatter.
+//
+// This is what keeps a colleague's MADR corpus (`docs/decisions/NNNN-*.md`,
+// an `# N. Title` H1 and no frontmatter at all) out of a round-trip test it
+// would fail by construction. Under DR-0027 those are documents, not records,
+// so excluding them here is the policy, not a convenience.
+func isOurCorpus(dir string) bool {
+	for _, path := range recordFilesIn(dir) {
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		var head [3]byte
+		n, _ := io.ReadFull(f, head[:])
+		f.Close()
+		if n == 3 && string(head[:]) == "---" {
+			return true
 		}
 	}
+	return false
+}
+
+// corpusDirs returns the live decision-record directories present on this
+// machine, skipping the test when none are.
+//
+// The corpora are *discovered*, not listed. An earlier version named five
+// fixed paths, three of which went stale the moment DR-0021's
+// agents/projects/<project>/decisions/ layout was rolled out: the test kept
+// passing its own file-count floor for a while and then failed with
+// "only found 54 records", by which point it had quietly stopped exercising
+// four fifths of the live corpus. Discovery is the same lesson DR-0015 drew
+// about counts — describe the property, not the snapshot.
+func corpusDirs(t *testing.T) []string {
+	t.Helper()
+
+	// The in-tree corpus is the one anchor that cannot drift: it travels
+	// with the checkout, whatever machine this runs on.
+	var candidates []string
+	if isOurCorpus("decisions") {
+		candidates = append(candidates, "decisions")
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		for _, root := range []string{
+			filepath.Join(home, "WorkLab"),
+			filepath.Join(home, "Laboratory"),
+		} {
+			candidates = append(candidates, discoverCorpora(t, root)...)
+		}
+	}
+
+	// The in-tree corpus is normally reached twice — once as the anchor,
+	// once by the walk of ~/Laboratory — and counting its records twice
+	// would be a silent inflation of the very total this test checks.
+	seen := map[string]bool{}
+	var out []string
+	for _, dir := range candidates {
+		key, err := filepath.Abs(dir)
+		if err != nil {
+			key = dir
+		}
+		if resolved, err := filepath.EvalSymlinks(key); err == nil {
+			key = resolved
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, key)
+	}
+
 	if len(out) == 0 {
 		t.Skip("no decision-record corpora on this machine")
+	}
+	return out
+}
+
+// discoverCorpora walks root for directories named "decisions" that hold this
+// format's records. Hidden directories are skipped, which is what keeps a git
+// worktree's copy of a corpus (.claude/worktrees/...) from being counted a
+// second time under a different path.
+func discoverCorpora(t *testing.T, root string) []string {
+	t.Helper()
+	var out []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // an unreadable subtree is not this test's business
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if path != root && (strings.HasPrefix(name, ".") || name == "node_modules") {
+			return fs.SkipDir
+		}
+		if name == "decisions" && isOurCorpus(path) {
+			out = append(out, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Logf("walking %s: %v", root, err)
 	}
 	return out
 }
@@ -474,9 +570,9 @@ func TestParseRecordFile_RoundTripsEveryLiveRecord(t *testing.T) {
 
 	for _, dir := range dirs {
 		corpus := filepath.Base(filepath.Dir(dir))
-		files, err := filepath.Glob(filepath.Join(dir, "[0-9]*.md"))
-		if err != nil {
-			t.Fatalf("globbing %s: %v", dir, err)
+		files := recordFilesIn(dir)
+		if len(files) == 0 {
+			t.Errorf("%s: discovered as a corpus but holds no record files", dir)
 		}
 		for _, path := range files {
 			total++
@@ -517,9 +613,18 @@ func TestParseRecordFile_RoundTripsEveryLiveRecord(t *testing.T) {
 		}
 	}
 
-	if total < 190 {
-		t.Fatalf("only found %d records across %d corpora; expected ~198", total, len(dirs))
+	// No count floor. A remembered total is what DR-0015 retired: it fails
+	// for the wrong reason when a corpus grows, and — as this very test
+	// proved when the layout moved under it — it reports a *discovery*
+	// failure as a shortfall, long after the coverage was already gone. The
+	// property that matters is that every record file found parses and
+	// renders back byte-identically, which the loop above asserts one file
+	// at a time. What is worth pinning is that the discovery found
+	// something at all.
+	if total == 0 {
+		t.Fatalf("discovered %d corpora but parsed no records at all", len(dirs))
 	}
+	t.Logf("corpora: %v", dirs)
 
 	for key := range diverged {
 		if !normalizesOnRender[key] {

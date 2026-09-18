@@ -116,86 +116,69 @@
   far; worth weighing explicitly if either of the above turns out too weak
   in practice, not assumed as the starting point.
 
-- [ ] **Two decision-record dialects now exist in one organisation, and `kb`
+## Done
+
+- [x] **Two decision-record dialects now exist in one organisation, and `kb`
   can only read one of them.** Raised 2026-09-15 after pulling
-  `caltechlibrary/CL-Web-Components`, where a colleague has been recording
-  architecture decisions independently. This is a design question, not a bug
-  report: the immediate behaviour is correct, but the situation it produces
-  is not workable.
+  `caltechlibrary/CL-Web-Components`, where a colleague had been recording
+  architecture decisions independently; by 2026-09-18 it was two repositories
+  and twelve records, `workflows/docs/decisions` being the second. Filed as a
+  design question rather than a bug: the refusal `kb ingest` gave
+  (`no frontmatter: file does not start with ---`, one per file) was always
+  the right refusal, but it left no partial path.
 
-  **The two shapes.** Ours: `agents/projects/<project>/decisions/NNNN-slug.md`
-  in the *workspace*, YAML frontmatter carrying id/title/date/status/kind/
-  trigger/project/supersedes/superseded_by/relates_to/tags/uuid/origin_host,
-  body in bold-lead sections, three closed vocabularies, deliberately called
-  a Decision Record and not an ADR. Theirs: `docs/decisions/NNNN-slug.md`
-  *inside the project repository*, essentially MADR — an `# N. Title` H1, a
-  two-bullet `- Status:` / `- Date:` block, then `## Context and Problem
-  Statement`, `## Decision`, `## Considered Options`, `## Decision Outcome`,
-  `## Consequences`, `## More Information`, with cross-references as relative
-  Markdown links rather than ids.
+  **Closed 2026-09-18 by DR-0027**, which answered what this item itself
+  called "the real question to answer first": a colleague's ADR is a
+  **document**, not a record. We do not own its status and can never promote
+  or supersede it, and a document is exactly the shape for source material we
+  read and summarise. `kb document ingest` reads MADR without complaint — no
+  frontmatter required, segmenting on its `## Context and Problem Statement` /
+  `## Decision` / `## Consequences` headings, 5-14 sections each.
 
-  **What happens today.** `kb ingest docs/decisions` reports
-  `0 added, 0 updated, 0 skipped, 4 failed`, one
-  `no frontmatter: file does not start with ---` per file. That is the right
-  refusal — guessing at a foreign format would be worse — but it means there
-  is no partial path and no signal beyond a hard failure.
+  **Answering it that way dissolves most of what this item was worried
+  about.** The identity collision — both dialects numbering from 0001, both
+  claiming `(WorkLab, CL-Web-Components, project, 0001)` — cannot arise,
+  because a document never enters the records identity tuple at all. So the
+  `dialect` column, the third `external` scope value, and the `--format madr`
+  adapter are all moot rather than deferred: each existed only to make a
+  foreign ADR safe *as a record*.
 
-  **The identity problem is the harder half.** Both dialects number from 0001
-  per project, and our identity is
-  `(workspace, IFNULL(project_id,-1), scope, record_id)`. If their ADR-0001
-  for `CL-Web-Components` were ingested as a record, and we later opened our
-  own corpus for the same project, both would claim
-  `(WorkLab, CL-Web-Components, project, 0001)`. So a format adapter alone is
-  not enough — the scheme needs somewhere to put "whose record is this."
+  **Two gaps in the stopgap were real and were fixed in the same pass** (also
+  DR-0027): with no frontmatter `title:`, a document used to be titled with
+  its *filename* — `ParseDocumentFile` now falls back to the first true H1,
+  general rather than MADR-specific; and no concepts used to be linked at all,
+  since linking came only from `[[wikilinks]]` and frontmatter `keywords`,
+  neither of which MADR has. Document ingest now also auto-links a known
+  concept mentioned more than once outside code spans
+  (`MatchConceptNameCounts`).
 
-  **The real question to answer first, before any parsing work:** is a
-  colleague's ADR a *record* — a peer, citable from `relates_to`, carrying a
-  status we do not own and must never promote — or a *document*, source
-  material we read and summarise? The answer determines everything else, and
-  the two readings are genuinely different. It is their repository and their
-  decision; we do not get to mark it superseded. That argues for document.
-  But a decision that changes what we do is exactly what `relates_to` exists
-  to express, and a document cannot be cited that way. That argues for record.
-
-  **Options, none costed yet.** A `--format madr` flag or sniffing adapter on
-  `ingest`. A `dialect` column, so a record knows which vocabulary its
-  `status` belongs to. A third `scope` value (`external`?) alongside
-  `project`/`workspace`, which would also fix the identity collision. An
-  `origin_repo`/`upstream_url` field, since a foreign record has a canonical
-  home that is not a path in our tree. Or decline the whole thing and treat
-  foreign ADRs as documents, accepting that they cannot be cited by id.
-
-  **What works today, as a stopgap.** `kb document ingest` reads them without
-  complaint — no frontmatter is required, and it segments on the MADR
-  headings, 5-14 sections each. Two limitations found while testing, **both
-  closed 2026-09-18, see DR-0027**: with no frontmatter `title:` the
-  document used to be titled with its *filename* — `ParseDocumentFile` now
-  falls back to the document's first true H1 heading (general, not
-  MADR-specific); and no concepts used to be linked at all, since linking
-  came only from `[[wikilinks]]` and frontmatter `keywords`, neither of
-  which MADR has — document ingest now also auto-links a known concept
-  mentioned more than once outside code spans (`MatchConceptNameCounts`),
-  the threshold-plus-code-span-exclusion refinement costed just below. This
-  closes the two stopgap gaps only; the identity-collision/format-adapter
-  question the rest of this item raises is still open and still uncosted.
+  **The cost accepted, stated plainly: a document cannot be cited from
+  `relates_to`.** That is the one thing the record reading would have bought.
+  There is no `document_relations` table and no record-to-document edge, so a
+  decision record of ours cannot formally point at the colleague's ADR it is
+  responding to — the link has to live in prose. This is a known, accepted
+  limitation of DR-0027, not an oversight; it is worth reopening only if
+  citing a foreign ADR by id turns out to be something we actually reach for
+  repeatedly, and reaching for it twice is a better trigger than predicting it
+  now.
 
   **Evidence, 2026-09-15: density-based linking was run by hand against those
-  four ADRs, and it is useful but lossy — roughly 60% signal.** The script
-  mirrored kb's own semantics rather than inventing new ones: the
-  `(?i)\b<name>\b` whole-word match from `MatchConceptNames`, computed over
-  `wholeDocumentText`, which is what `cmd/kb/document.go` already feeds a
-  gist's density. Confirmation that the mirror was faithful: the match counts
-  came out 3, 2, 4, 4 — identical to the `tag_density` already stored on each
-  gist.
+  four ADRs before any of it shipped, and it was useful but lossy — roughly
+  60% signal.** This is what set DR-0027's threshold, so it is kept here
+  rather than summarised away. The script mirrored kb's own semantics rather
+  than inventing new ones: the `(?i)\b<name>\b` whole-word match from
+  `MatchConceptNames`, computed over `wholeDocumentText`. Confirmation the
+  mirror was faithful: the match counts came out 3, 2, 4, 4 — identical to the
+  `tag_density` already stored on each gist.
 
-  It produced 13 links from 95 known concepts, and the effect was real. A
+  It produced 13 links from 95 known concepts, and the effect was real: a
   query naming `cmtools`, `documentation` and `tooling` returned ADR-0004
   first, above a workspace decision record, where before it returned nothing
   from either retrieval pass — FTS5 ANDs its tokens, so a conversational
-  question misses a document that has no concept links at all.
+  question misses a document with no concept links at all.
 
   Eight of the thirteen were topical. **Five were coincidental, and the way
-  they fail is the useful part**, because all five are the same failure — a
+  they failed is the useful part**, because all five are the same failure — a
   concept name colliding with a word used in a different sense:
 
   - `format` matched `unsupported format` in a quoted *error message*, and
@@ -206,33 +189,25 @@
   - `validation` matched a phrase describing a *third* project's domain, not
     the document's own subject.
 
-  So the lesson is narrower than "density is too noisy." Whole-word matching
+  So the lesson was narrower than "density is too noisy". Whole-word matching
   is not the problem; **short, common, single-word concept names are**, and
-  prose quoting code and error strings makes them worse. Three refinements
-  worth costing, in increasing order of ambition: require more than one
-  occurrence before linking; exclude matches inside code spans and fenced
-  blocks, which would have killed `const format = outputName` and probably
-  `git push`; or write density matches as *suggestions* a human confirms,
-  reusing the `unsummarized → drafted → reviewed` gate one level down, which
-  is the option that fits what the documents entity already does.
+  prose quoting code and error strings makes them worse. Of the three
+  refinements costed at the time, DR-0027 shipped the first two — require more
+  than one occurrence, and exclude matches inside code spans and fenced blocks
+  — which between them kill `const format = outputName` and probably
+  `git push`. The third, writing density matches as *suggestions* a human
+  confirms, was not built; `kb document tag` (DR-0029) covers the same ground
+  from the other end, by making a confirmed link explicit in the file.
 
-  **The five coincidental links were pruned by hand the same day**, on the
-  author's call, leaving 8. An earlier draft of this item said they had been
-  kept deliberately so the data would not drift from a future kb
-  implementation; that is no longer true, and the trade was made knowingly —
-  a curated corpus now, against having to re-derive the filter later.
-
-  Two things the prune itself showed. **It cost no coverage**: all four ADRs
-  stayed reachable from concept-tag recall, because each retained at least
-  one topical link, so the noisy matches were redundant rather than
-  load-bearing. And `tag_density` is deliberately *not* updated to match —
-  it counts mentions, not links — so gists 19 and 30 now read density 4
-  against 2 links each. That divergence is meaningful and worth preserving if
-  suggestions ever land: density is the raw signal, links are what survived
+  **The five coincidental links were pruned by hand the same day.** Two things
+  the prune showed. It cost no coverage: all four ADRs stayed reachable from
+  concept-tag recall, because each retained at least one topical link, so the
+  noisy matches were redundant rather than load-bearing. And `tag_density` is
+  deliberately *not* updated to match — it counts mentions, not links — so
+  gists 19 and 30 read density 4 against 2 links each. DR-0027 preserved that
+  divergence on purpose: density is the raw signal, links are what survived
   review, and the gap between them is exactly the quantity a suggestion
   workflow would surface.
-
-## Done
 
 - [x] **`kb project rename`'s documented escape hatch didn't work, so the
   refusal was absolute for any project that owns records.** Found 2026-09-17

@@ -1,6 +1,6 @@
-%kb(1) user manual | version 0.0.9 ab8a11d
+%kb(1) user manual | version 0.0.10 1e753e5
 % R. S. Doiel
-% 2026-09-17
+% 2026-09-18
 
 # NAME
 
@@ -19,8 +19,9 @@ kb
 # DESCRIPTION
 
 kb reads and writes a github.com/rsdoiel/knowledge knowledge base:
-projects, observations, concepts, and sources, with full-text search and a
-cross-machine merge tool. Every verb follows the "TOOL VERB PARAMETERS"
+projects, observations, concepts, sources, decision records and narrative
+documents, with full-text search and a cross-machine merge tool. Every verb
+follows the "TOOL VERB PARAMETERS"
 model (the same shape as git and go), so scripts and other language-model
 harnesses can drive it directly, not just people at a terminal.
 
@@ -111,8 +112,8 @@ record
   supersede, fmt — see kb-record(1)
 
 document
-: ingest, review and draft summaries for narrative documents (Markdown,
-  Fountain, text) at graduated abstraction levels — see kb-document(1)
+: ingest, draft, review and tag narrative documents (Markdown, Fountain,
+  text) at graduated abstraction levels — see kb-document(1)
 
 index
 : generate a decisions/index.md from a directory of records — see
@@ -137,5 +138,6 @@ init
 kb-project(1), kb-observation(1), kb-concept(1),
 kb-link(1), kb-source(1), kb-search(1),
 kb-merge(1), kb-export(1), kb-import(1),
-kb-init(1)
+kb-ingest(1), kb-record(1), kb-document(1),
+kb-index(1), kb-init(1), kb-topics(1)
 

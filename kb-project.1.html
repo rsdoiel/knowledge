@@ -28,7 +28,7 @@ href="#description">DESCRIPTION</a></p>
 <p>kb project concepts NAME</p>
 <p>kb project set-status NAME STATUS</p>
 <p>kb project set-description NAME DESCRIPTION</p>
-<p>kb project rename OLD NEW</p>
+<p>kb project rename [–root PATH] [–dry-run] OLD NEW</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>A project is the top-level container observations and concepts attach
 to. Names are unique; adding a project with an existing name is a no-op
@@ -70,23 +70,25 @@ an explicit empty string to clear the description entirely.
 <dt>rename</dt>
 <dd>
 rename a project and reindex it for search. Refuses if NEW already names
-another project, or if the project owns any records – a decision
-record’s project: frontmatter has to match the project’s name, and
-renaming without rewriting the corpus’s files would make the next
-kb-ingest(1) mint a phantom project under the old name and duplicate
-every record under it. See DR-0024 (knowledge/decisions/). Rewrite the
-corpus’s project: frontmatter and re-ingest before renaming a project
-that owns records.
+another project. If the project owns records, first rewrites every owned
+record’s project: frontmatter to NEW – both-or-neither, rolling back
+every file already written if any write fails – before renaming the
+project row; no record’s database row is touched, so the next
+kb-ingest(1) of that corpus sees a changed checksum against an unchanged
+identity and updates in place rather than minting a phantom project.
+–dry-run reports which files would be rewritten without writing
+anything. –root sets the workspace root record paths are relative to
+(default: inferred from the database path). See DR-0026
+(knowledge/decisions/), which supersedes DR-0024’s outright refusal.
 </dd>
 </dl>
 <h1 id="caveats">CAVEATS</h1>
-<p>A description or status edited on two machines now reconciles: both
-kb-merge(1) and kb-import(1) adopt whichever side’s updated_at is later
-(DR-0025), so a merge keeps the newer edit rather than always keeping
-the first one applied. A <em>rename</em> is not covered by this –
-merge/import still dedupe projects by name, so a project renamed on one
-machine and left untouched on another arrives as two separate projects,
-not one renamed one. See DR-0024/DR-0025 (knowledge/decisions/).</p>
+<p>A description, status, or name edited on two machines now reconciles:
+both kb-merge(1) and kb-import(1) adopt whichever side’s updated_at is
+later (DR-0025, generalized to name by DR-0026), so a project renamed on
+one machine and left untouched on another arrives as one renamed
+project, not two, regardless of merge/import order. See
+DR-0024/DR-0025/DR-0026 (knowledge/decisions/).</p>
 <h1 id="see-also">SEE ALSO</h1>
 <p>kb-observation(1), kb-link(1), kb-search(1), kb-merge(1)</p>
 </section>

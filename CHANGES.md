@@ -3,6 +3,102 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.10 — 2026-09-18
+
+The project-rename completion this module had refused to do since v0.0.9,
+an answer to the foreign-ADR question open since 2026-09-15, and two
+corpus-improvement verbs that surface candidates for a human to confirm
+rather than committing anything themselves.
+
+### Added
+
+- `kb concept suggest [--project NAME] [--limit N]` (DR-0028), a
+  read-only verb that scans every record body and document section body
+  and prints candidate *new* concepts, ranked by corpus-wide
+  distinctiveness — a TF-IDF shape: occurring several times, confined to
+  relatively few items. It closes the half of corpus improvement that
+  density-linking cannot reach, since `MatchConceptNameCounts` only
+  matches against concepts that already exist and can never propose one.
+  Never writes to the database. Live-tested against the real workspace
+  corpus it is a roughly-50%-signal mechanical pass — `rename`,
+  `harvey`, `divergence`, `collision`, `uuid` genuinely useful alongside
+  generic nouns like `row` and `table` — so a human still curates.
+- `kb document tag --project NAME [--concept NAME,...] [--dry-run]`
+  (DR-0029), a pure file operation that gives that judgment somewhere to
+  land in the corpus itself: it inserts an explicit `[[Name]]` wikilink
+  at the first safe occurrence of each eligible concept in every
+  already-ingested document for a project, so the next
+  `kb document ingest` links it through the wikilink path that already
+  exists. Eligibility reuses DR-0027's density threshold verbatim with no
+  `--concept` given. A minimal position-based edit on the raw bytes, no
+  parse-and-rerender cycle, excluding frontmatter, fenced blocks, inline
+  code spans, anything already inside `[[...]]`, and — found live,
+  smoke-testing against a real document — the document's own first H1.
+  Both-or-neither across a project's document set; a second run is a
+  no-op.
+- Density-based concept linking on document ingest (DR-0027): a known
+  concept mentioned more than once in a section, outside inline code
+  spans and fenced blocks, is auto-linked. `tag_density` is deliberately
+  left counting the unfiltered text — it is the raw signal the threshold
+  is applied to, not the threshold's output.
+
+### Changed
+
+- `kb project rename OLD NEW` now completes for a project that owns
+  records (DR-0026), lifting v0.0.9's outright refusal. The fix is
+  smaller than either shape originally sketched: `records.project_id`
+  never needs to change, since it is a stable foreign key and only
+  `projects.name` moves, so the corpus rewrite is a pure file operation —
+  every owned record's `project:` frontmatter edited in place,
+  both-or-neither, `--dry-run` and `--root` supported — and the next
+  ordinary `kb ingest` takes the UPDATE path rather than the INSERT that
+  collided. New `RenameProjectRow` library method does the DB-only rename
+  without the records-owning guard, called only after every file is
+  confirmed rewritten.
+- A colleague's MADR-format ADR is modeled as a **document**, not a
+  record (DR-0027). We do not own its status and can never promote or
+  supersede it. Answering it that way dissolves the identity collision
+  the question had been stuck on — both dialects number from 0001, but a
+  document never enters the records identity tuple at all — so the
+  `dialect` column, the `external` scope value and the `--format madr`
+  adapter are moot rather than deferred. Accepted cost, stated rather
+  than glossed: a document cannot be cited from `relates_to`, so a record
+  responding to a foreign ADR links it in prose.
+- `ParseDocumentFile` falls back to a document's first true H1 when
+  frontmatter supplies no `title:`, instead of the caller's filename
+  (DR-0027). General rather than MADR-specific, but MADR is what
+  surfaced it, having no frontmatter at all.
+- `user_manual.md`'s verb table is current again — it was six verbs out
+  of date (`ingest`, `record`, `index`, `document`, `init`, `topics`) and
+  linked a `DECISIONS.md` removed when this module became the decision-
+  record format's first conversion pilot. `kb(1)`'s DESCRIPTION and SEE
+  ALSO now name records and documents too.
+
+### Fixed
+
+- `kb merge` could silently keep a stale project or concept name, or drop
+  a side outright, depending on merge order, because `INSERT OR IGNORE`
+  cannot distinguish a uuid collision from a name collision; `kb import`
+  hard-failed the *entire* import rather than one row on the same
+  collision (DR-0026). Conflict resolution for both moves from name-keyed
+  to uuid-primary, reconciling `name` by `updated_at` the same way
+  `description` and `status` already did, with a name-keyed fallback
+  retained for two genuinely independent, never-synced entities that
+  happen to share a name. Both were traced live, not merely suspected,
+  and shipping the rename completion without them would have made the
+  corruption risk worse by making the trigger routine.
+- `TestParseRecordFile_RoundTripsEveryLiveRecord` (DR-0030) named five
+  fixed corpus paths, three of which went stale when DR-0021's
+  `agents/projects/<project>/decisions/` layout was rolled out. It had
+  quietly stopped exercising four fifths of the live corpus — 54 records
+  of 267 — and reported that as a count shortfall rather than a discovery
+  failure. Corpora are now discovered rather than listed, using the same
+  two-signal rule `kb index --all` settled on (a record-shaped filename
+  *and* real frontmatter in the file), which also keeps a foreign MADR
+  corpus out of a round-trip test it would fail by construction. The
+  remembered count floor is gone, in favour of the per-file property the
+  test was always really asserting — the same lesson DR-0015 drew.
+
 ## v0.0.9 — 2026-09-17
 
 Rename verbs for projects and concepts, cross-machine reconciliation for

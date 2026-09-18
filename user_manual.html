@@ -20,10 +20,11 @@
 <section id="main-content">
 <h1 id="knowledge-user-manual">knowledge User Manual</h1>
 <p>A standalone SQLite3-backed knowledge base for tracking projects,
-observations, and concepts across independent experiments.
-<code>cmd/kb</code> is a single <code>kb VERB ARGS</code> binary
-(matching the <code>git</code>/<code>go</code> command model) covering
-the full API, plus a read-mostly interactive TUI.</p>
+observations, concepts, decision records and narrative documents across
+independent experiments. <code>cmd/kb</code> is a single
+<code>kb VERB ARGS</code> binary (matching the
+<code>git</code>/<code>go</code> command model) covering the full API,
+plus a read-mostly interactive TUI.</p>
 <hr />
 <h2 id="quick-start">Quick Start</h2>
 <ol type="1">
@@ -56,20 +57,28 @@ every verb below has its own man page, also reachable via
 </thead>
 <tbody>
 <tr>
+<td><code>init</code></td>
+<td><a href="kb-init.1.html">kb-init(1)</a></td>
+<td>create a new, empty workspace</td>
+</tr>
+<tr>
 <td><code>project</code></td>
 <td><a href="kb-project.1.html">kb-project(1)</a></td>
-<td>add, list, show projects; list a project’s concepts</td>
+<td>add, list, show, rename projects; set status/description; list a
+project’s concepts</td>
 </tr>
 <tr>
 <td><code>observation</code></td>
 <td><a href="kb-observation.1.html">kb-observation(1)</a></td>
-<td>add, list, show observations; list an observation’s sources</td>
+<td>add, list, show, update observations; list an observation’s
+sources</td>
 </tr>
 <tr>
 <td><code>concept</code></td>
 <td><a href="kb-concept.1.html">kb-concept(1)</a></td>
-<td>add, list concepts — including scholarly identifiers (DOI, ORCID,
-ROR, Fundref)</td>
+<td>add, list, rename concepts — including scholarly identifiers (DOI,
+ORCID, ROR, Fundref) — and <code>suggest</code> candidate new ones from
+the corpus</td>
 </tr>
 <tr>
 <td><code>link</code></td>
@@ -85,6 +94,30 @@ ROR, Fundref)</td>
 <td><code>search</code>, <code>summary</code>, <code>format</code></td>
 <td><a href="kb-search.1.html">kb-search(1)</a></td>
 <td>full-text search (FTS5) and assembled Markdown views</td>
+</tr>
+<tr>
+<td><code>ingest</code></td>
+<td><a href="kb-ingest.1.html">kb-ingest(1)</a></td>
+<td>index a tree of decision records into the database</td>
+</tr>
+<tr>
+<td><code>record</code></td>
+<td><a href="kb-record.1.html">kb-record(1)</a></td>
+<td>author and maintain decision records — new, list, show, set-status,
+supersede, fmt, concepts</td>
+</tr>
+<tr>
+<td><code>index</code></td>
+<td><a href="kb-index.1.html">kb-index(1)</a></td>
+<td>generate a corpus’s <code>decisions/index.md</code>;
+<code>--check</code> for staleness, <code>--all</code> for a whole
+tree</td>
+</tr>
+<tr>
+<td><code>document</code></td>
+<td><a href="kb-document.1.html">kb-document(1)</a></td>
+<td>ingest, draft, review and tag narrative documents (Markdown,
+Fountain, text) at graduated abstraction levels</td>
 </tr>
 <tr>
 <td><code>merge</code></td>
@@ -103,6 +136,11 @@ independently (e.g. across machines)</td>
 <td><a href="kb-import.1.html">kb-import(1)</a></td>
 <td>apply a JSON-L snapshot (from <code>export</code>) to the
 database</td>
+</tr>
+<tr>
+<td><code>topics</code></td>
+<td><a href="kb-topics.1.html">kb-topics(1)</a></td>
+<td>list every help topic, one man page per verb</td>
 </tr>
 </tbody>
 </table>
@@ -131,11 +169,14 @@ description.</p>
 <p>These documents record why <code>kb</code> is shaped the way it is —
 useful if you’re extending it, not required to use it:</p>
 <ul>
-<li><strong><a href="DECISIONS.html">DECISIONS.md</a></strong> —
-architecture/UX decision log: the module extraction, the CLI/TUI design,
-the <code>--debug</code> tracing feature, and the JSON-L export/import
-format, each with rejected alternatives and real bugs found along the
-way</li>
+<li><strong><a
+href="decisions/index.html">decisions/index.md</a></strong> — the
+decision-record corpus: every architecture/UX decision this module has
+made, each with its rejected alternatives and the real bugs found along
+the way. It replaces the old flat <code>DECISIONS.md</code>, which was
+split into records when this module became the format’s first conversion
+pilot; <code>kb search</code> reaches the reasoning inside them, not
+just their titles</li>
 <li><a
 href="module-extraction-design.html">module-extraction-design.md</a> /
 <a href="module-extraction-plan.html">-plan.md</a> — pulling this module
@@ -150,6 +191,31 @@ JSONL trace</li>
 href="jsonl-export-plan.html">-plan.md</a> — the
 <code>export</code>/<code>import</code> JSON-L format and
 identity/conflict rules</li>
+<li><a
+href="decision-records-design.html">decision-records-design.md</a> / <a
+href="decision-records-plan.html">-plan.md</a> — <code>ingest</code>,
+<code>record</code> and <code>index</code>: decision records as
+first-class rows</li>
+<li><a
+href="records-portability-design.html">records-portability-design.md</a>
+/ <a href="records-portability-plan.html">-plan.md</a> — carrying
+records and their relations through <code>merge</code>,
+<code>export</code> and <code>import</code></li>
+<li><a
+href="wikilink-tagging-design.html">wikilink-tagging-design.md</a> / <a
+href="wikilink-tagging-plan.html">-plan.md</a> — <code>[[Name]]</code>
+inline tagging and frontmatter tags resolving to concepts at ingest
+time</li>
+<li><a
+href="concept-tag-retrieval-design.html">concept-tag-retrieval-design.md</a>
+/ <a href="concept-tag-retrieval-plan.html">-plan.md</a> —
+<code>MatchConceptNames</code>/<code>RecallByConceptNames</code>, an
+embedder-free retrieval path for small models</li>
+<li><a
+href="narrative-documents-design.html">narrative-documents-design.md</a>
+/ <a href="narrative-documents-plan.html">-plan.md</a> — the
+<code>documents</code> entity, graduated abstraction levels, and the
+summary review workflow</li>
 </ul>
 <hr />
 <h2 id="cant-find-what-you-need">Can’t Find What You Need?</h2>

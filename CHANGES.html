@@ -21,12 +21,114 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.10-2026-09-18">v0.0.10 — 2026-09-18</h2>
+<p>The project-rename completion this module had refused to do since
+v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
+two corpus-improvement verbs that surface candidates for a human to
+confirm rather than committing anything themselves.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><code>kb concept suggest [--project NAME] [--limit N]</code>
+(DR-0028), a read-only verb that scans every record body and document
+section body and prints candidate <em>new</em> concepts, ranked by
+corpus-wide distinctiveness — a TF-IDF shape: occurring several times,
+confined to relatively few items. It closes the half of corpus
+improvement that density-linking cannot reach, since
+<code>MatchConceptNameCounts</code> only matches against concepts that
+already exist and can never propose one. Never writes to the database.
+Live-tested against the real workspace corpus it is a roughly-50%-signal
+mechanical pass — <code>rename</code>, <code>harvey</code>,
+<code>divergence</code>, <code>collision</code>, <code>uuid</code>
+genuinely useful alongside generic nouns like <code>row</code> and
+<code>table</code> — so a human still curates.</li>
+<li><code>kb document tag --project NAME [--concept NAME,...] [--dry-run]</code>
+(DR-0029), a pure file operation that gives that judgment somewhere to
+land in the corpus itself: it inserts an explicit <code>[[Name]]</code>
+wikilink at the first safe occurrence of each eligible concept in every
+already-ingested document for a project, so the next
+<code>kb document ingest</code> links it through the wikilink path that
+already exists. Eligibility reuses DR-0027’s density threshold verbatim
+with no <code>--concept</code> given. A minimal position-based edit on
+the raw bytes, no parse-and-rerender cycle, excluding frontmatter,
+fenced blocks, inline code spans, anything already inside
+<code>[[...]]</code>, and — found live, smoke-testing against a real
+document — the document’s own first H1. Both-or-neither across a
+project’s document set; a second run is a no-op.</li>
+<li>Density-based concept linking on document ingest (DR-0027): a known
+concept mentioned more than once in a section, outside inline code spans
+and fenced blocks, is auto-linked. <code>tag_density</code> is
+deliberately left counting the unfiltered text — it is the raw signal
+the threshold is applied to, not the threshold’s output.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><code>kb project rename OLD NEW</code> now completes for a project
+that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
+is smaller than either shape originally sketched:
+<code>records.project_id</code> never needs to change, since it is a
+stable foreign key and only <code>projects.name</code> moves, so the
+corpus rewrite is a pure file operation — every owned record’s
+<code>project:</code> frontmatter edited in place, both-or-neither,
+<code>--dry-run</code> and <code>--root</code> supported — and the next
+ordinary <code>kb ingest</code> takes the UPDATE path rather than the
+INSERT that collided. New <code>RenameProjectRow</code> library method
+does the DB-only rename without the records-owning guard, called only
+after every file is confirmed rewritten.</li>
+<li>A colleague’s MADR-format ADR is modeled as a
+<strong>document</strong>, not a record (DR-0027). We do not own its
+status and can never promote or supersede it. Answering it that way
+dissolves the identity collision the question had been stuck on — both
+dialects number from 0001, but a document never enters the records
+identity tuple at all — so the <code>dialect</code> column, the
+<code>external</code> scope value and the <code>--format madr</code>
+adapter are moot rather than deferred. Accepted cost, stated rather than
+glossed: a document cannot be cited from <code>relates_to</code>, so a
+record responding to a foreign ADR links it in prose.</li>
+<li><code>ParseDocumentFile</code> falls back to a document’s first true
+H1 when frontmatter supplies no <code>title:</code>, instead of the
+caller’s filename (DR-0027). General rather than MADR-specific, but MADR
+is what surfaced it, having no frontmatter at all.</li>
+<li><code>user_manual.md</code>’s verb table is current again — it was
+six verbs out of date (<code>ingest</code>, <code>record</code>,
+<code>index</code>, <code>document</code>, <code>init</code>,
+<code>topics</code>) and linked a <code>DECISIONS.md</code> removed when
+this module became the decision- record format’s first conversion pilot.
+<code>kb(1)</code>’s DESCRIPTION and SEE ALSO now name records and
+documents too.</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><code>kb merge</code> could silently keep a stale project or concept
+name, or drop a side outright, depending on merge order, because
+<code>INSERT OR IGNORE</code> cannot distinguish a uuid collision from a
+name collision; <code>kb import</code> hard-failed the <em>entire</em>
+import rather than one row on the same collision (DR-0026). Conflict
+resolution for both moves from name-keyed to uuid-primary, reconciling
+<code>name</code> by <code>updated_at</code> the same way
+<code>description</code> and <code>status</code> already did, with a
+name-keyed fallback retained for two genuinely independent, never-synced
+entities that happen to share a name. Both were traced live, not merely
+suspected, and shipping the rename completion without them would have
+made the corruption risk worse by making the trigger routine.</li>
+<li><code>TestParseRecordFile_RoundTripsEveryLiveRecord</code> (DR-0030)
+named five fixed corpus paths, three of which went stale when DR-0021’s
+<code>agents/projects/&lt;project&gt;/decisions/</code> layout was
+rolled out. It had quietly stopped exercising four fifths of the live
+corpus — 54 records of 267 — and reported that as a count shortfall
+rather than a discovery failure. Corpora are now discovered rather than
+listed, using the same two-signal rule <code>kb index --all</code>
+settled on (a record-shaped filename <em>and</em> real frontmatter in
+the file), which also keeps a foreign MADR corpus out of a round-trip
+test it would fail by construction. The remembered count floor is gone,
+in favour of the per-file property the test was always really asserting
+— the same lesson DR-0015 drew.</li>
+</ul>
 <h2 id="v0.0.9-2026-09-17">v0.0.9 — 2026-09-17</h2>
 <p>Rename verbs for projects and concepts, cross-machine reconciliation
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -64,7 +166,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -90,7 +192,7 @@ export/import carry <code>observation_relations</code> from this
 release, not as a follow-on, per the standing rule that a table missing
 from the merge summary is a table whose loss goes unreported.</li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li><code>kb record set-status</code> and
 <code>kb record supersede</code> now refresh a corpus’s
@@ -108,7 +210,7 @@ changes, which bit WorkLab twice.</li>
 corpora (clasm, WorkLab, caltechauthors), all in
 <code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
 exit code.</p>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li><code>kb ingest</code> no longer leaves stale edges behind on
 re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
@@ -146,7 +248,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -189,7 +291,7 @@ every portability path, per the project’s standing rule that a table
 missing from the merge summary is a table whose loss goes
 unreported.</li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li>The independent hand-rolled CLI flag/positional parsers in
 <code>ingest</code>, <code>record</code>, <code>source</code>, and the
@@ -204,7 +306,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -239,7 +341,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-4">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -248,7 +350,7 @@ start a workspace (DR-0021, DR-0022).</p>
 location for a new record, relative to <code>--root</code> like every
 other stored record path.</li>
 </ul>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><code>kb record new --project P</code> (no <code>--dir</code>) now
 writes to <code>agents/projects/P/decisions/</code> instead of
@@ -279,7 +381,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-5">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -321,7 +423,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed-2">Changed</h3>
+<h3 id="changed-3">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather
@@ -335,7 +437,7 @@ specification: field order, flow-styled sequences, and a double-quoted
 string type for the seven fields the format requires quoted, so every
 writer produces byte-identical output.</li>
 </ul>
-<h3 id="fixed-2">Fixed</h3>
+<h3 id="fixed-3">Fixed</h3>
 <ul>
 <li>A record path read from the database is confined to the workspace
 root before it is read or written. <code>filepath.Join</code> cleans a
