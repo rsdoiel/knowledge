@@ -1375,6 +1375,121 @@ func TestRenameProject_RefusesWhenProjectOwnsRecords(t *testing.T) {
 	}
 }
 
+// DR-0026 Phase 1: RenameProjectRow is the bare database rename, callable
+// even when the project owns records, since it is only reached after a
+// caller (the CLI) has already rewritten every owned record's file.
+func TestRenameProjectRow_SucceedsWhenProjectOwnsRecords(t *testing.T) {
+	kb := openTestKB(t)
+	pid, err := kb.AddProject("oldname", "a project")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := kb.AddRecord(Record{
+		RecordID: "0001", ProjectID: pid, Scope: "project",
+		Path: "decisions/0001-x.md", Title: "t", Date: "2026-09-17",
+		Status: "accepted", Kind: "decision", Body: "b", Checksum: "c",
+	}); err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+	if err := kb.RenameProjectRow("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProjectRow: %v", err)
+	}
+	p, err := kb.ProjectByName("newname")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName(newname): %v", err)
+	}
+	if p.Description != "a project" {
+		t.Errorf("Description = %q, want it preserved across the rename", p.Description)
+	}
+	old, err := kb.ProjectByName("oldname")
+	if err != nil {
+		t.Fatalf("ProjectByName(oldname): %v", err)
+	}
+	if old != nil {
+		t.Errorf("old name still resolves to %+v, want it gone", old)
+	}
+}
+
+func TestRenameProjectRow_RefusesWhenNewNameExists(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := kb.AddProject("taken", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.RenameProjectRow("oldname", "taken"); err == nil {
+		t.Error("expected an error when NEW already names another project")
+	}
+}
+
+func TestRenameProjectRow_NotFound(t *testing.T) {
+	kb := openTestKB(t)
+	if err := kb.RenameProjectRow("nonexistent", "newname"); err == nil {
+		t.Error("expected an error for a nonexistent project")
+	}
+}
+
+func TestRenameProjectRow_TouchesUpdatedAt(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := kb.db.Exec(
+		`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`,
+	); err != nil {
+		t.Fatalf("back-date updated_at: %v", err)
+	}
+	var backdated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM projects WHERE name = 'oldname'`,
+	).Scan(&backdated); err != nil {
+		t.Fatalf("read back-dated updated_at: %v", err)
+	}
+	if err := kb.RenameProjectRow("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProjectRow: %v", err)
+	}
+	var updated string
+	if err := kb.db.QueryRow(
+		`SELECT updated_at FROM projects WHERE name = 'newname'`,
+	).Scan(&updated); err != nil {
+		t.Fatalf("read updated_at: %v", err)
+	}
+	if updated == backdated {
+		t.Error("updated_at was not touched by RenameProjectRow")
+	}
+}
+
+// Mirrors TestRenameProject_RefreshesFTSWithoutDuplicating: RenameProjectRow
+// must share the same refreshProjectFTS repair path, not a second copy that
+// could drift from it.
+func TestRenameProjectRow_RefreshesFTSWithoutDuplicating(t *testing.T) {
+	kb := openTestKB(t)
+	id, err := kb.AddProject("oldname", "mentions zzstalezz")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if err := kb.RenameProjectRow("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProjectRow: %v", err)
+	}
+	var n int
+	if err := kb.db.QueryRow(
+		`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'project' AND source_id = ?`, id,
+	).Scan(&n); err != nil {
+		t.Fatalf("count kb_fts rows: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("kb_fts holds %d rows for the project, want 1", n)
+	}
+	fresh, err := kb.Search("newname")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(fresh) != 1 {
+		t.Errorf("Search for the new name returned %d results, want 1", len(fresh))
+	}
+}
+
 func TestRenameConcept(t *testing.T) {
 	kb := openTestKB(t)
 	if _, err := kb.AddConcept("oldname", "a concept"); err != nil {

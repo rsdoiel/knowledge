@@ -870,19 +870,23 @@ func TestImportJSONL_Project_LastWriterWinsAdoptsNewerIncoming(t *testing.T) {
 	if _, err := src.AddProject("shared", "new description"); err != nil {
 		t.Fatalf("AddProject src: %v", err)
 	}
-	var buf bytes.Buffer
-	if err := ExportJSONL(src, &buf, ""); err != nil {
-		t.Fatalf("ExportJSONL: %v", err)
-	}
 
 	dst := openTestKB(t)
 	if _, err := dst.AddProject("shared", "old description"); err != nil {
 		t.Fatalf("AddProject dst: %v", err)
 	}
+	// DR-0026: import resolves by uuid first, so these must be the same
+	// entity reconciling, not two coincidentally-named ones (that case is
+	// TestImportJSONL_SameNameDifferentUUIDMergesUnderLocalProject).
+	syncProjectUUID(t, src, dst, "shared")
 	if _, err := dst.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
 		t.Fatalf("back-date dst: %v", err)
 	}
 
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
 	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
 		t.Fatalf("ImportJSONL: %v", err)
 	}
@@ -910,16 +914,17 @@ func TestImportJSONL_Project_OlderIncomingLeavesLocalUntouched(t *testing.T) {
 	if _, err := src.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
 		t.Fatalf("back-date src: %v", err)
 	}
-	var buf bytes.Buffer
-	if err := ExportJSONL(src, &buf, ""); err != nil {
-		t.Fatalf("ExportJSONL: %v", err)
-	}
 
 	dst := openTestKB(t)
 	if _, err := dst.AddProject("shared", "current description"); err != nil {
 		t.Fatalf("AddProject dst: %v", err)
 	}
+	syncProjectUUID(t, src, dst, "shared")
 
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
 	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
 		t.Fatalf("ImportJSONL: %v", err)
 	}
@@ -937,19 +942,20 @@ func TestImportJSONL_Concept_LastWriterWinsAdoptsNewerIncoming(t *testing.T) {
 	if _, err := src.AddConcept("shared", "new description"); err != nil {
 		t.Fatalf("AddConcept src: %v", err)
 	}
-	var buf bytes.Buffer
-	if err := ExportJSONL(src, &buf, ""); err != nil {
-		t.Fatalf("ExportJSONL: %v", err)
-	}
 
 	dst := openTestKB(t)
 	if _, err := dst.AddConcept("shared", "old description"); err != nil {
 		t.Fatalf("AddConcept dst: %v", err)
 	}
+	syncConceptUUID(t, src, dst, "shared")
 	if _, err := dst.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
 		t.Fatalf("back-date dst: %v", err)
 	}
 
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
 	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
 		t.Fatalf("ImportJSONL: %v", err)
 	}
@@ -976,16 +982,17 @@ func TestImportJSONL_Concept_OlderIncomingLeavesLocalUntouched(t *testing.T) {
 	if _, err := src.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
 		t.Fatalf("back-date src: %v", err)
 	}
-	var buf bytes.Buffer
-	if err := ExportJSONL(src, &buf, ""); err != nil {
-		t.Fatalf("ExportJSONL: %v", err)
-	}
 
 	dst := openTestKB(t)
 	if _, err := dst.AddConcept("shared", "current description"); err != nil {
 		t.Fatalf("AddConcept dst: %v", err)
 	}
+	syncConceptUUID(t, src, dst, "shared")
 
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
 	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
 		t.Fatalf("ImportJSONL: %v", err)
 	}
@@ -1001,6 +1008,99 @@ func TestImportJSONL_Concept_OlderIncomingLeavesLocalUntouched(t *testing.T) {
 	}
 	if got != "current description" {
 		t.Errorf("Description = %q, want the newer local description preserved", got)
+	}
+}
+
+// ─── DR-0026: import resolves projects/concepts by uuid before name ────────
+
+// The import-side bug DR-0026 traced live: a renamed project's new name
+// does not match anything locally, so under name-keyed lookup it fell to a
+// plain, unguarded INSERT that collided on the uuid index -- a real SQL
+// error that aborted the *entire* ImportJSONL call, not just this one row.
+// Resolving by uuid first reconciles the rename in place instead.
+func TestImportJSONL_Project_RenameReconciledByUUIDDoesNotAbortImport(t *testing.T) {
+	src := openTestKB(t)
+	dst := openTestKB(t)
+	if _, err := src.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject src: %v", err)
+	}
+	if _, err := dst.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject dst: %v", err)
+	}
+	syncProjectUUID(t, dst, src, "oldname")
+	if _, err := dst.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`); err != nil {
+		t.Fatalf("back-date dst: %v", err)
+	}
+	if err := src.RenameProject("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProject: %v", err)
+	}
+	if _, err := src.AddProject("unrelated", ""); err != nil {
+		t.Fatalf("AddProject unrelated: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+
+	summary, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("ImportJSONL: %v, want the rename to reconcile rather than abort the whole import", err)
+	}
+	if s := (summaryByTable(summary))["project"]; s.Read != 2 {
+		t.Errorf("project summary = %+v, want Read=2 (the renamed project and the unrelated one)", s)
+	}
+
+	p, err := dst.ProjectByName("newname")
+	if err != nil || p == nil {
+		t.Fatalf("ProjectByName(newname): %v", err)
+	}
+	if old, err := dst.ProjectByName("oldname"); err != nil || old != nil {
+		t.Errorf("old name still resolves to %+v, %v, want it gone", old, err)
+	}
+	if u, err := dst.ProjectByName("unrelated"); err != nil || u == nil {
+		t.Errorf("ProjectByName(unrelated) = %+v, %v, want the unrelated project to have imported too, not been dropped by an aborted call", u, err)
+	}
+	projects, err := dst.Projects()
+	if err != nil {
+		t.Fatalf("Projects: %v", err)
+	}
+	if len(projects) != 2 {
+		t.Errorf("got %d projects, want exactly 2 (no phantom, no duplicate)", len(projects))
+	}
+}
+
+func TestImportJSONL_Concept_RenameReconciledByUUIDDoesNotAbortImport(t *testing.T) {
+	src := openTestKB(t)
+	dst := openTestKB(t)
+	if _, err := src.AddConcept("oldname", ""); err != nil {
+		t.Fatalf("AddConcept src: %v", err)
+	}
+	if _, err := dst.AddConcept("oldname", ""); err != nil {
+		t.Fatalf("AddConcept dst: %v", err)
+	}
+	syncConceptUUID(t, dst, src, "oldname")
+	if _, err := dst.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`); err != nil {
+		t.Fatalf("back-date dst: %v", err)
+	}
+	if err := src.RenameConcept("oldname", "newname"); err != nil {
+		t.Fatalf("RenameConcept: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := ExportJSONL(src, &buf, ""); err != nil {
+		t.Fatalf("ExportJSONL: %v", err)
+	}
+	if _, err := ImportJSONL(dst, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("ImportJSONL: %v, want the rename to reconcile rather than abort the whole import", err)
+	}
+
+	concepts, err := dst.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "newname" {
+		t.Errorf("concepts = %+v, want exactly one named %q", concepts, "newname")
 	}
 }
 

@@ -1,4 +1,4 @@
-%kb-import(1) user manual | version 0.0.9 b78cc1b
+%kb-import(1) user manual | version 0.0.9 3e593d0
 % R. S. Doiel
 % 2026-09-17
 
@@ -14,9 +14,12 @@ kb import [-in PATH]
 
 import reads a JSON-L stream produced by export — from -in, or stdin when
 -in is omitted — and applies it to the already-open --db database.
-Projects and concepts are matched by name (an existing local row always
+Projects and concepts are matched by uuid first (DR-0026): a match
+reconciles name/description/status by whichever side's updated_at is
+later, the same last-writer-wins rule merge uses. A uuid miss falls back
+to matching by name (DR-0003) -- an existing local row under that name
 wins as-is; a genuinely new one keeps its original uuid, for future
-cross-machine merge compatibility). Sources are matched by identifier when
+cross-machine merge compatibility. Sources are matched by identifier when
 one is present. Observations and links are matched by uuid, so re-running
 import against the same file is a no-op the second time.
 

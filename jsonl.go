@@ -1194,22 +1194,44 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 	return out, nil
 }
 
-// importProject resolves rec by name (the same identity key AddProject
-// itself uses): an existing local row wins as-is (isNew=false, its own
-// uuid/description untouched), otherwise a new row is inserted carrying
-// rec's own uuid/origin_host/created_at so a later cross-machine merge can
-// still recognize it. See jsonl-export-design.md's "Import identity key"
-// section for why this differs from the uuid-keyed observations path.
-// importProject resolves rec by name. An existing local row is updated in
-// place only when rec.UpdatedAt is strictly later than the local row's
-// (DR-0025's last-writer-wins rule) -- otherwise it wins as-is, unchanged
-// from the pre-DR-0025 behavior. isNew and the returned localID still mean
-// what they did before: isNew is true only for a freshly inserted row, so
-// callers use it to decide add vs skip; the adopt-vs-keep decision is a
-// property this function handles internally rather than exposing a third
-// state.
+// importProject resolves rec by uuid first (DR-0026): a match means the
+// same entity, reconciled by updated_at the same way DR-0025 already
+// reconciled description/status, now including name -- a project renamed
+// on one machine used to fall through to a plain, unguarded INSERT that
+// collided on the uuid index and aborted the whole import, since its new
+// name matched nothing locally. A uuid miss falls back to rec's name, the
+// original DR-0003 identity key: an existing local row under that name
+// wins as-is (isNew=false, its own uuid/description untouched), otherwise a
+// new row is inserted carrying rec's own uuid/origin_host/created_at so a
+// later cross-machine merge can still recognize it. See
+// jsonl-export-design.md's "Import identity key" section for why this
+// differs from the uuid-only observations path. isNew and the returned
+// localID mean what they did before: isNew is true only for a freshly
+// inserted row, so callers use it to decide add vs skip; the
+// adopt-vs-keep decision is a property this function handles internally
+// rather than exposing a third state.
 func importProject(kb *KnowledgeBase, rec projectRecord) (localID int64, isNew bool, err error) {
 	var localUpdatedAt string
+	err = kb.db.QueryRow(`SELECT id, updated_at FROM projects WHERE uuid = ?`, rec.UUID).Scan(&localID, &localUpdatedAt)
+	if err == nil {
+		if rec.UpdatedAt > localUpdatedAt {
+			status := rec.Status
+			if !validProjectStatuses[status] {
+				status = "active"
+			}
+			if _, err := kb.db.Exec(
+				`UPDATE projects SET name = ?, description = ?, status = ?, updated_at = ?, origin_host = ? WHERE id = ?`,
+				rec.Name, rec.Description, status, rec.UpdatedAt, rec.OriginHost, localID,
+			); err != nil {
+				return 0, false, err
+			}
+			kb.refreshProjectFTS(localID, rec.Name, rec.Description)
+		}
+		return localID, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, false, err
+	}
 	err = kb.db.QueryRow(`SELECT id, updated_at FROM projects WHERE name = ?`, rec.Name).Scan(&localID, &localUpdatedAt)
 	if err == nil {
 		if rec.UpdatedAt > localUpdatedAt {
@@ -1254,10 +1276,27 @@ func importProject(kb *KnowledgeBase, rec projectRecord) (localID int64, isNew b
 	return localID, true, nil
 }
 
-// importConcept mirrors importProject's name-keyed identity rule and its
-// DR-0025 last-writer-wins update.
+// importConcept mirrors importProject's DR-0026 uuid-first identity rule,
+// falling back to name (DR-0025's last-writer-wins update, unchanged) on a
+// uuid miss.
 func importConcept(kb *KnowledgeBase, rec conceptRecord) (localID int64, isNew bool, err error) {
 	var localUpdatedAt string
+	err = kb.db.QueryRow(`SELECT id, updated_at FROM concepts WHERE uuid = ?`, rec.UUID).Scan(&localID, &localUpdatedAt)
+	if err == nil {
+		if rec.UpdatedAt > localUpdatedAt {
+			if _, err := kb.db.Exec(
+				`UPDATE concepts SET name = ?, description = ?, identifier_type = ?, identifier_value = ?, updated_at = ?, origin_host = ? WHERE id = ?`,
+				rec.Name, rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.UpdatedAt, rec.OriginHost, localID,
+			); err != nil {
+				return 0, false, err
+			}
+			kb.refreshConceptFTS(localID, rec.Name, rec.Description)
+		}
+		return localID, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, false, err
+	}
 	err = kb.db.QueryRow(`SELECT id, updated_at FROM concepts WHERE name = ?`, rec.Name).Scan(&localID, &localUpdatedAt)
 	if err == nil {
 		if rec.UpdatedAt > localUpdatedAt {

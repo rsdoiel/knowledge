@@ -711,21 +711,9 @@ func (kb *KnowledgeBase) SetProjectDescription(name, description string) error {
  *   err := kb.RenameProject("caltechcampuspubs_static", "ep3StaticSite")
  */
 func (kb *KnowledgeBase) RenameProject(old, new string) error {
-	var id int64
-	var description string
-	err := kb.db.QueryRow(`SELECT id, description FROM projects WHERE name = ?`, old).Scan(&id, &description)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("knowledge: project %q not found", old)
-	}
+	id, description, err := kb.resolveProjectRename(old, new)
 	if err != nil {
-		return fmt.Errorf("knowledge: rename project: %w", err)
-	}
-	var taken int
-	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM projects WHERE name = ?`, new).Scan(&taken); err != nil {
-		return fmt.Errorf("knowledge: rename project: %w", err)
-	}
-	if taken > 0 {
-		return fmt.Errorf("knowledge: project %q already exists", new)
+		return err
 	}
 	var records int
 	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM records WHERE project_id = ?`, id).Scan(&records); err != nil {
@@ -736,6 +724,58 @@ func (kb *KnowledgeBase) RenameProject(old, new string) error {
 			"knowledge: project %q owns %d record(s); renaming would desync its corpus's project: frontmatter from the database on the next ingest — rewrite the corpus's frontmatter and re-ingest first",
 			old, records)
 	}
+	return kb.renameProjectRow(id, new, description)
+}
+
+/** RenameProjectRow renames a project's row and refreshes its kb_fts entry,
+ * exactly like RenameProject, but skips the records-owning guard. It exists
+ * for a caller that has already rewritten every owned record's project:
+ * frontmatter on disk itself — cmd/kb's `kb project rename` orchestration,
+ * per DR-0026 — and must therefore run only after that corpus rewrite is
+ * confirmed complete, never on its own against a project with records whose
+ * files have not been touched: that is exactly the corruption RenameProject
+ * refuses to cause.
+ *
+ * Parameters:
+ *   old (string) — the project's current name.
+ *   new (string) — the replacement name.
+ *
+ * Returns:
+ *   error — if old does not exist, new already names another project, or on
+ *           database failure.
+ *
+ * Example:
+ *   err := kb.RenameProjectRow("caltechcampuspubs_static", "ep3StaticSite")
+ */
+func (kb *KnowledgeBase) RenameProjectRow(old, new string) error {
+	id, description, err := kb.resolveProjectRename(old, new)
+	if err != nil {
+		return err
+	}
+	return kb.renameProjectRow(id, new, description)
+}
+
+func (kb *KnowledgeBase) resolveProjectRename(old, new string) (int64, string, error) {
+	var id int64
+	var description string
+	err := kb.db.QueryRow(`SELECT id, description FROM projects WHERE name = ?`, old).Scan(&id, &description)
+	if err == sql.ErrNoRows {
+		return 0, "", fmt.Errorf("knowledge: project %q not found", old)
+	}
+	if err != nil {
+		return 0, "", fmt.Errorf("knowledge: rename project: %w", err)
+	}
+	var taken int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM projects WHERE name = ?`, new).Scan(&taken); err != nil {
+		return 0, "", fmt.Errorf("knowledge: rename project: %w", err)
+	}
+	if taken > 0 {
+		return 0, "", fmt.Errorf("knowledge: project %q already exists", new)
+	}
+	return id, description, nil
+}
+
+func (kb *KnowledgeBase) renameProjectRow(id int64, new, description string) error {
 	if _, err := kb.db.Exec(`UPDATE projects SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, new, id); err != nil {
 		return fmt.Errorf("knowledge: rename project: %w", err)
 	}

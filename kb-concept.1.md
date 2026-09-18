@@ -1,4 +1,4 @@
-%kb-concept(1) user manual | version 0.0.9 b78cc1b
+%kb-concept(1) user manual | version 0.0.9 3e593d0
 % R. S. Doiel
 % 2026-09-17
 
@@ -40,11 +40,11 @@ rename
 
 # CAVEATS
 
-A description edited on two machines now reconciles: both
+A description or name edited on two machines now reconciles: both
 kb-merge(1) and kb-import(1) adopt whichever side's
-updated_at is later (DR-0025). A *rename* is not covered -- merge/import
-still dedupe concepts by name, so a concept renamed on one machine and left
-untouched on another arrives as two separate concepts, not one renamed one.
+updated_at is later (DR-0025, generalized to name by DR-0026), so a concept
+renamed on one machine and left untouched on another arrives as one renamed
+concept, not two, regardless of merge/import order.
 
 # SEE ALSO
 

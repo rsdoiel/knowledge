@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	knowledge "github.com/rsdoiel/knowledge"
@@ -121,27 +123,158 @@ func cmdProjectSetDescription(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut
 	return nil
 }
 
-// cmdProjectRename implements `project rename OLD NEW` (DR-0024): OLD and
-// NEW are positional, not joined the way set-description's trailing words
-// are, since a project name is a single token, not free text.
+// cmdProjectRename implements `project rename [--root PATH] [--dry-run] OLD
+// NEW`. OLD and NEW are positional, not joined the way set-description's
+// trailing words are, since a project name is a single token, not free text.
+//
+// A project with no records renames via the library's own RenameProject
+// (DR-0024). A project that owns records goes through DR-0026's corpus
+// rewrite instead of DR-0024's outright refusal: every owned record's file
+// gets its project: frontmatter rewritten to NEW, written both-or-neither —
+// any write failure rolls back every file already written — and only once
+// every file is confirmed on disk does the project row itself rename, via
+// RenameProjectRow. No record's database row is touched in the process; the
+// checksum mismatch that rewrite leaves behind is exactly what the next
+// ordinary `kb ingest` of that corpus is for.
 func cmdProjectRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) != 2 {
-		return fmt.Errorf("usage: project rename OLD NEW")
+	fs := flag.NewFlagSet("project rename", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	root := fs.String("root", "", "workspace root record paths are relative to (default: inferred from the database path)")
+	dryRun := fs.Bool("dry-run", false, "report what a rename would rewrite without writing anything")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	old, new := args[0], args[1]
-	err := logKBCallErr(dl, "RenameProject", map[string]any{"old": old, "new": new}, func() error {
-		return kb.RenameProject(old, new)
-	})
+	rest := fs.Args()
+	if len(rest) != 2 {
+		return fmt.Errorf("usage: project rename [--root PATH] [--dry-run] OLD NEW")
+	}
+	old, new := rest[0], rest[1]
+
+	p, err := kb.ProjectByName(old)
 	if err != nil {
 		return err
 	}
-	if jsonOut {
-		return printJSON(out, struct {
-			Old string `json:"old"`
-			New string `json:"new"`
-		}{Old: old, New: new})
+	if p == nil {
+		return fmt.Errorf("knowledge: project %q not found", old)
 	}
-	fmt.Fprintf(out, "project %q renamed to %q\n", old, new)
+	existing, err := kb.ProjectByName(new)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return fmt.Errorf("knowledge: project %q already exists", new)
+	}
+
+	records, err := kb.RecordsByProject(p.ID)
+	if err != nil {
+		return err
+	}
+
+	if len(records) == 0 {
+		if *dryRun {
+			fmt.Fprintf(out, "would rename project %q to %q (owns no records; no corpus rewrite needed)\n", old, new)
+			return nil
+		}
+		err := logKBCallErr(dl, "RenameProject", map[string]any{"old": old, "new": new}, func() error {
+			return kb.RenameProject(old, new)
+		})
+		if err != nil {
+			return err
+		}
+		if jsonOut {
+			return printJSON(out, struct {
+				Old string `json:"old"`
+				New string `json:"new"`
+			}{Old: old, New: new})
+		}
+		fmt.Fprintf(out, "project %q renamed to %q\n", old, new)
+		return nil
+	}
+
+	rootDir := recordRoot(kb, recordFlags{root: *root})
+	type stagedFile struct {
+		path     string
+		raw      []byte
+		rendered []byte
+	}
+	files := make([]stagedFile, 0, len(records))
+	dirs := map[string]bool{}
+	for i := range records {
+		rec := records[i]
+		rf, raw, err := loadRecordFile(rootDir, &rec)
+		if err != nil {
+			return err
+		}
+		rf.ProjectName = new
+		rendered, err := knowledge.RenderRecordFile(rf)
+		if err != nil {
+			return fmt.Errorf("rendering DR-%s: %w", rec.RecordID, err)
+		}
+		path, err := resolveWithinRoot(rootDir, rec.Path)
+		if err != nil {
+			return err
+		}
+		files = append(files, stagedFile{path: path, raw: raw, rendered: rendered})
+		dirs[filepath.Dir(path)] = true
+	}
+
+	if *dryRun {
+		paths := make([]string, len(files))
+		for i, f := range files {
+			paths[i] = f.path
+		}
+		if jsonOut {
+			return printJSON(out, map[string]any{
+				"old": old, "new": new, "dry_run": true,
+				"records": len(files), "paths": paths,
+			})
+		}
+		fmt.Fprintf(out, "would rewrite %d record(s) and rename project %q to %q:\n", len(files), old, new)
+		for _, path := range paths {
+			fmt.Fprintf(out, "  %s\n", path)
+		}
+		return nil
+	}
+
+	written := make([]stagedFile, 0, len(files))
+	rollback := func() {
+		for _, f := range written {
+			_ = os.WriteFile(f.path, f.raw, 0o644)
+		}
+	}
+	for _, f := range files {
+		if err := os.WriteFile(f.path, f.rendered, 0o644); err != nil {
+			rollback()
+			return fmt.Errorf("writing %s: %w", f.path, err)
+		}
+		written = append(written, f)
+	}
+
+	if err := logKBCallErr(dl, "RenameProjectRow", map[string]any{"old": old, "new": new}, func() error {
+		return kb.RenameProjectRow(old, new)
+	}); err != nil {
+		rollback()
+		return err
+	}
+
+	var notes []string
+	for dir := range dirs {
+		if regenErr := regenerateIndexIfPresent(dir); regenErr != nil {
+			notes = append(notes, fmt.Sprintf("index.md could not be refreshed in %s: %v", dir, regenErr))
+		}
+	}
+
+	if jsonOut {
+		result := map[string]any{"old": old, "new": new, "records_rewritten": len(files)}
+		if len(notes) > 0 {
+			result["notes"] = notes
+		}
+		return printJSON(out, result)
+	}
+	fmt.Fprintf(out, "project %q renamed to %q (%d record(s) rewritten)\n", old, new, len(files))
+	for _, n := range notes {
+		fmt.Fprintln(out, n)
+	}
 	return nil
 }
 

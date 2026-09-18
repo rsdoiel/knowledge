@@ -259,7 +259,7 @@ const ProjectHelpText = `%{app_name}-project(1) user manual | version {version} 
 
 {app_name} project set-description NAME DESCRIPTION
 
-{app_name} project rename OLD NEW
+{app_name} project rename [--root PATH] [--dry-run] OLD NEW
 
 # DESCRIPTION
 
@@ -295,23 +295,25 @@ set-description
 
 rename
 : rename a project and reindex it for search. Refuses if NEW already names
-  another project, or if the project owns any records -- a decision
-  record's project: frontmatter has to match the project's name, and
-  renaming without rewriting the corpus's files would make the next
-  {app_name}-ingest(1) mint a phantom project under the old name and
-  duplicate every record under it. See DR-0024 (knowledge/decisions/).
-  Rewrite the corpus's project: frontmatter and re-ingest before renaming
-  a project that owns records.
+  another project. If the project owns records, first rewrites every owned
+  record's project: frontmatter to NEW -- both-or-neither, rolling back
+  every file already written if any write fails -- before renaming the
+  project row; no record's database row is touched, so the next
+  {app_name}-ingest(1) of that corpus sees a changed checksum against an
+  unchanged identity and updates in place rather than minting a phantom
+  project. --dry-run reports which files would be rewritten without
+  writing anything. --root sets the workspace root record paths are
+  relative to (default: inferred from the database path). See DR-0026
+  (knowledge/decisions/), which supersedes DR-0024's outright refusal.
 
 # CAVEATS
 
-A description or status edited on two machines now reconciles: both
+A description, status, or name edited on two machines now reconciles: both
 {app_name}-merge(1) and {app_name}-import(1) adopt whichever side's
-updated_at is later (DR-0025), so a merge keeps the newer edit rather than
-always keeping the first one applied. A *rename* is not covered by this --
-merge/import still dedupe projects by name, so a project renamed on one
-machine and left untouched on another arrives as two separate projects,
-not one renamed one. See DR-0024/DR-0025 (knowledge/decisions/).
+updated_at is later (DR-0025, generalized to name by DR-0026), so a project
+renamed on one machine and left untouched on another arrives as one renamed
+project, not two, regardless of merge/import order. See
+DR-0024/DR-0025/DR-0026 (knowledge/decisions/).
 
 # SEE ALSO
 
@@ -421,11 +423,11 @@ rename
 
 # CAVEATS
 
-A description edited on two machines now reconciles: both
+A description or name edited on two machines now reconciles: both
 {app_name}-merge(1) and {app_name}-import(1) adopt whichever side's
-updated_at is later (DR-0025). A *rename* is not covered -- merge/import
-still dedupe concepts by name, so a concept renamed on one machine and left
-untouched on another arrives as two separate concepts, not one renamed one.
+updated_at is later (DR-0025, generalized to name by DR-0026), so a concept
+renamed on one machine and left untouched on another arrives as one renamed
+concept, not two, regardless of merge/import order.
 
 # SEE ALSO
 
@@ -671,9 +673,12 @@ const ImportHelpText = `%{app_name}-import(1) user manual | version {version} {r
 
 import reads a JSON-L stream produced by export — from -in, or stdin when
 -in is omitted — and applies it to the already-open --db database.
-Projects and concepts are matched by name (an existing local row always
+Projects and concepts are matched by uuid first (DR-0026): a match
+reconciles name/description/status by whichever side's updated_at is
+later, the same last-writer-wins rule merge uses. A uuid miss falls back
+to matching by name (DR-0003) -- an existing local row under that name
 wins as-is; a genuinely new one keeps its original uuid, for future
-cross-machine merge compatibility). Sources are matched by identifier when
+cross-machine merge compatibility. Sources are matched by identifier when
 one is present. Observations and links are matched by uuid, so re-running
 import against the same file is a no-op the second time.
 

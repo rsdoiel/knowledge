@@ -225,17 +225,46 @@ func TestMergeKnowledgeBases_ProjectsDedupSharedUUID(t *testing.T) {
 
 // ─── DR-0025: last-writer-wins on projects/concepts conflict ───────────────
 
+// syncProjectUUID copies a project's uuid from one side to the other, by
+// name, so two independently AddProject'd rows represent the same
+// real-world entity reconciling across machines (DR-0026 moved conflict
+// resolution to uuid-primary; without a shared uuid these are two different
+// entities that happen to share a name, DR-0003's separate, narrower case).
+func syncProjectUUID(t *testing.T, from, to *KnowledgeBase, name string) {
+	t.Helper()
+	var uuid string
+	if err := from.db.QueryRow(`SELECT uuid FROM projects WHERE name = ?`, name).Scan(&uuid); err != nil {
+		t.Fatalf("select uuid: %v", err)
+	}
+	if _, err := to.db.Exec(`UPDATE projects SET uuid = ? WHERE name = ?`, uuid, name); err != nil {
+		t.Fatalf("sync uuid: %v", err)
+	}
+}
+
+// syncConceptUUID is syncProjectUUID's concepts counterpart.
+func syncConceptUUID(t *testing.T, from, to *KnowledgeBase, name string) {
+	t.Helper()
+	var uuid string
+	if err := from.db.QueryRow(`SELECT uuid FROM concepts WHERE name = ?`, name).Scan(&uuid); err != nil {
+		t.Fatalf("select uuid: %v", err)
+	}
+	if _, err := to.db.Exec(`UPDATE concepts SET uuid = ? WHERE name = ?`, uuid, name); err != nil {
+		t.Fatalf("sync uuid: %v", err)
+	}
+}
+
 func TestMergeKnowledgeBases_ProjectLastWriterWins(t *testing.T) {
 	a := openTestKB(t)
 	b := openTestKB(t)
 	if _, err := a.AddProject("shared", "old description"); err != nil {
 		t.Fatalf("AddProject a: %v", err)
 	}
-	if _, err := a.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
-		t.Fatalf("back-date a: %v", err)
-	}
 	if _, err := b.AddProject("shared", "new description"); err != nil {
 		t.Fatalf("AddProject b: %v", err)
+	}
+	syncProjectUUID(t, a, b, "shared")
+	if _, err := a.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date a: %v", err)
 	}
 
 	merged := openMergedTestKB(t, a, b)
@@ -267,6 +296,7 @@ func TestMergeKnowledgeBases_ProjectOlderIncomingDoesNotOverwriteNewer(t *testin
 	if _, err := b.AddProject("shared", "stale description"); err != nil {
 		t.Fatalf("AddProject b: %v", err)
 	}
+	syncProjectUUID(t, a, b, "shared")
 	if _, err := b.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
 		t.Fatalf("back-date b: %v", err)
 	}
@@ -292,6 +322,7 @@ func TestMergeKnowledgeBases_ProjectLastWriterWinsRegardlessOfOrder(t *testing.T
 	if _, err := b.AddProject("shared", "older, from b"); err != nil {
 		t.Fatalf("AddProject b: %v", err)
 	}
+	syncProjectUUID(t, a, b, "shared")
 	if _, err := b.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
 		t.Fatalf("back-date b: %v", err)
 	}
@@ -324,11 +355,12 @@ func TestMergeKnowledgeBases_ConceptLastWriterWins(t *testing.T) {
 	if _, err := a.AddConcept("shared", "old description"); err != nil {
 		t.Fatalf("AddConcept a: %v", err)
 	}
-	if _, err := a.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
-		t.Fatalf("back-date a: %v", err)
-	}
 	if _, err := b.AddConcept("shared", "new description"); err != nil {
 		t.Fatalf("AddConcept b: %v", err)
+	}
+	syncConceptUUID(t, a, b, "shared")
+	if _, err := a.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
+		t.Fatalf("back-date a: %v", err)
 	}
 
 	merged := openMergedTestKB(t, a, b)
@@ -361,6 +393,7 @@ func TestMergeKnowledgeBases_ConceptOlderIncomingDoesNotOverwriteNewer(t *testin
 	if _, err := b.AddConcept("shared", "stale description"); err != nil {
 		t.Fatalf("AddConcept b: %v", err)
 	}
+	syncConceptUUID(t, a, b, "shared")
 	if _, err := b.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'shared'`); err != nil {
 		t.Fatalf("back-date b: %v", err)
 	}
@@ -378,6 +411,142 @@ func TestMergeKnowledgeBases_ConceptOlderIncomingDoesNotOverwriteNewer(t *testin
 	}
 	if got != "current description" {
 		t.Errorf("Description = %q, want a's newer description preserved", got)
+	}
+}
+
+// ─── DR-0026: uuid-primary conflict resolution reconciles name too ─────────
+
+// The bug DR-0026 traced live: a project renamed on one machine but not the
+// other used to be dropped or kept stale depending on merge order, because
+// INSERT OR IGNORE could not distinguish a uuid collision from a name
+// collision. name is now a reconciled field like description/status, keyed
+// by uuid.
+func TestMergeKnowledgeBases_ProjectRenameReconciledByUUID(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddProject("oldname", "shared project"); err != nil {
+		t.Fatalf("AddProject a: %v", err)
+	}
+	if _, err := b.AddProject("oldname", "shared project"); err != nil {
+		t.Fatalf("AddProject b: %v", err)
+	}
+	syncProjectUUID(t, a, b, "oldname")
+	// a renames after the sync -- a newer edit than b's untouched row.
+	if err := a.RenameProject("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProject: %v", err)
+	}
+	if _, err := b.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`); err != nil {
+		t.Fatalf("back-date b: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	projects, err := merged.Projects()
+	if err != nil {
+		t.Fatalf("Projects: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("got %d projects, want exactly 1 (a rename must not split into two rows): %+v", len(projects), projects)
+	}
+	if projects[0].Name != "newname" {
+		t.Errorf("merged project name = %q, want %q (the newer edit)", projects[0].Name, "newname")
+	}
+}
+
+// Order-independence for a rename: merging b-then-a must land on the same
+// winning name as a-then-b, since only updated_at should decide.
+func TestMergeKnowledgeBases_ProjectRenameReconciledByUUIDRegardlessOfOrder(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject a: %v", err)
+	}
+	if _, err := b.AddProject("oldname", ""); err != nil {
+		t.Fatalf("AddProject b: %v", err)
+	}
+	syncProjectUUID(t, a, b, "oldname")
+	if err := a.RenameProject("oldname", "newname"); err != nil {
+		t.Fatalf("RenameProject: %v", err)
+	}
+	if _, err := b.db.Exec(`UPDATE projects SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`); err != nil {
+		t.Fatalf("back-date b: %v", err)
+	}
+
+	mergedPath := filepath.Join(t.TempDir(), "merged.db")
+	if _, err := MergeKnowledgeBases(b.Path(), a.Path(), mergedPath); err != nil {
+		t.Fatalf("MergeKnowledgeBases: %v", err)
+	}
+	merged, err := Open(mergedPath)
+	if err != nil {
+		t.Fatalf("open merged: %v", err)
+	}
+	t.Cleanup(func() { merged.Close() })
+
+	projects, err := merged.Projects()
+	if err != nil {
+		t.Fatalf("Projects: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("got %d projects, want exactly 1: %+v", len(projects), projects)
+	}
+	if projects[0].Name != "newname" {
+		t.Errorf("merged project name = %q, want %q regardless of merge order", projects[0].Name, "newname")
+	}
+}
+
+func TestMergeKnowledgeBases_ConceptRenameReconciledByUUID(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddConcept("oldname", ""); err != nil {
+		t.Fatalf("AddConcept a: %v", err)
+	}
+	if _, err := b.AddConcept("oldname", ""); err != nil {
+		t.Fatalf("AddConcept b: %v", err)
+	}
+	syncConceptUUID(t, a, b, "oldname")
+	if err := a.RenameConcept("oldname", "newname"); err != nil {
+		t.Fatalf("RenameConcept: %v", err)
+	}
+	if _, err := b.db.Exec(`UPDATE concepts SET updated_at = '2000-01-01 00:00:00' WHERE name = 'oldname'`); err != nil {
+		t.Fatalf("back-date b: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	concepts, err := merged.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	if len(concepts) != 1 {
+		t.Fatalf("got %d concepts, want exactly 1: %+v", len(concepts), concepts)
+	}
+	if concepts[0].Name != "newname" {
+		t.Errorf("merged concept name = %q, want %q", concepts[0].Name, "newname")
+	}
+}
+
+// DR-0003's original policy for two genuinely different, never-synced
+// projects that happen to share a name is unchanged by DR-0026: with no
+// shared uuid, whichever side's insert lands first keeps the name, and the
+// later insert is silently ignored on the name collision.
+func TestMergeKnowledgeBases_ProjectSameNameDifferentUUIDFallsBackToNamePolicy(t *testing.T) {
+	a := openTestKB(t)
+	b := openTestKB(t)
+	if _, err := a.AddProject("shared", "from a"); err != nil {
+		t.Fatalf("AddProject a: %v", err)
+	}
+	if _, err := b.AddProject("shared", "from b"); err != nil {
+		t.Fatalf("AddProject b: %v", err)
+	}
+
+	merged := openMergedTestKB(t, a, b)
+	projects, err := merged.Projects()
+	if err != nil {
+		t.Fatalf("Projects: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("got %d projects, want exactly 1 (name collision, first insert wins): %+v", len(projects), projects)
+	}
+	if projects[0].Description != "from a" {
+		t.Errorf("Description = %q, want a's row (applied first) to have survived the name collision", projects[0].Description)
 	}
 }
 

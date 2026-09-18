@@ -3,8 +3,9 @@
 Generated file. Do not hand-edit.
 
 ```
-DR-0025  2026-09-17  accepted     decision     request          -     Cross-machine last-writer-wins for a project or concept's mutable fields
-DR-0024  2026-09-17  accepted     decision     request          -     kb project rename and kb concept rename, refusing when a corpus exists
+DR-0026  2026-09-18  accepted     decision     live-test        -     kb project rename completes for a project with records; rename reconciles across merge and import
+DR-0025  2026-09-17  accepted     decision     request          sup   Cross-machine last-writer-wins for a project or concept's mutable fields
+DR-0024  2026-09-17  accepted     decision     request          sup   kb project rename and kb concept rename, refusing when a corpus exists
 DR-0023  2026-09-16  accepted     decision     request          -     An observation is corrected by superseding it, not by mutating its body
 DR-0022  2026-08-28  accepted     decision     plan-review      -     DR-0021's ambient-open guard applies only when --db is not given; explicit --db PATH keeps today's auto-create behavior
 DR-0021  2026-08-28  accepted     decision     request          -     kb record new defaults to the project-first agents/projects/<project>/ layout; kb requires an initialized workspace rather than silently creating one

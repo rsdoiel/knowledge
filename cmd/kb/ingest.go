@@ -599,7 +599,7 @@ func (ing *ingester) reportMissing(dir string) {
 		}
 		ing.summary.Missing = append(ing.summary.Missing, fmt.Sprintf(
 			"DR-%s (%s) is in the database but has no file at that path; "+
-				"if it was deleted, remove it with kb record remove — if it moved, re-run ingest on its new location first",
+				"if it moved, re-run ingest on its new location first — if it was deleted, kb has no verb yet to remove the row",
 			r.RecordID, r.Path))
 	}
 }

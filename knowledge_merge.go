@@ -345,60 +345,74 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		return nil, fmt.Errorf("knowledge: attach %s: %w", bPath, err)
 	}
 
-	// projects and concepts (DR-0025): a name conflict is resolved by
-	// updated_at, not by which side (a or b) is applied first. Two
-	// statements per side rather than one INSERT ... SELECT ... ON CONFLICT
-	// DO UPDATE: this driver's SQLite parser rejects an UPSERT clause after
-	// a SELECT-form INSERT ("near DO: syntax error"), even though the same
-	// UPSERT works fine after a VALUES-form INSERT elsewhere in this
-	// package. INSERT OR IGNORE adds a row that does not exist locally yet;
-	// UPDATE ... FROM, guarded the same way DO UPDATE ... WHERE would be,
-	// conditionally overwrites one that does. Together a's pass and b's
-	// pass can run in either order and land on the same result -- whichever
-	// row is actually newer wins, rather than whichever one the loop
-	// reaches first.
+	// projects and concepts (DR-0026, generalizing DR-0025): a conflict is
+	// resolved by uuid, not by name, since a rename changes name without
+	// changing identity -- name-keyed resolution could not tell a renamed
+	// row from a genuinely new one, and could silently keep a stale name or
+	// drop a side outright depending on which side's INSERT OR IGNORE
+	// reached the uuid-unique row first. Two statements per side rather
+	// than one INSERT ... SELECT ... ON CONFLICT DO UPDATE: this driver's
+	// SQLite parser rejects an UPSERT clause after a SELECT-form INSERT
+	// ("near DO: syntax error"), even though the same UPSERT works fine
+	// after a VALUES-form INSERT elsewhere in this package. The UPDATE
+	// reconciles every mutable field -- including name now -- for a uuid
+	// already present locally; the INSERT, guarded by an explicit
+	// WHERE NOT EXISTS on uuid, adds a row genuinely new to the target.
+	// OR IGNORE remains on the INSERT as a fallback for the one case a
+	// uuid match cannot resolve: two independently created, never-synced
+	// projects that happen to share a name (DR-0003, unchanged) -- whichever
+	// side's insert reaches that name first keeps it. Together a's pass and
+	// b's pass can run in either order and land on the same result --
+	// whichever row is actually newer wins, rather than whichever one the
+	// loop reaches first.
 	const projectCols = "name, description, status, created_at, updated_at, uuid, origin_host"
 	for _, src := range []string{"a", "b"} {
 		if _, err := db.Exec(fmt.Sprintf(
-			`INSERT OR IGNORE INTO projects (%s) SELECT %s FROM %s.projects`,
-			projectCols, projectCols, src,
-		)); err != nil {
-			return nil, fmt.Errorf("knowledge: merge projects from %s: %w", src, err)
-		}
-		if _, err := db.Exec(fmt.Sprintf(
 			`UPDATE projects SET
+			     name = src.name,
 			     description = src.description,
 			     status = src.status,
 			     updated_at = src.updated_at,
 			     origin_host = src.origin_host
 			 FROM %s.projects AS src
-			 WHERE projects.name = src.name AND src.updated_at > projects.updated_at`,
+			 WHERE projects.uuid = src.uuid AND src.updated_at > projects.updated_at`,
 			src,
 		)); err != nil {
-			return nil, fmt.Errorf("knowledge: merge projects (conflict update) from %s: %w", src, err)
+			return nil, fmt.Errorf("knowledge: merge projects (uuid conflict update) from %s: %w", src, err)
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`INSERT OR IGNORE INTO projects (%s)
+			 SELECT %s FROM %s.projects AS src
+			 WHERE NOT EXISTS (SELECT 1 FROM projects p WHERE p.uuid = src.uuid)`,
+			projectCols, projectCols, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge projects from %s: %w", src, err)
 		}
 	}
 
 	const conceptCols = "name, description, created_at, identifier_type, identifier_value, uuid, origin_host, updated_at"
 	for _, src := range []string{"a", "b"} {
 		if _, err := db.Exec(fmt.Sprintf(
-			`INSERT OR IGNORE INTO concepts (%s) SELECT %s FROM %s.concepts`,
-			conceptCols, conceptCols, src,
-		)); err != nil {
-			return nil, fmt.Errorf("knowledge: merge concepts from %s: %w", src, err)
-		}
-		if _, err := db.Exec(fmt.Sprintf(
 			`UPDATE concepts SET
+			     name = src.name,
 			     description = src.description,
 			     identifier_type = src.identifier_type,
 			     identifier_value = src.identifier_value,
 			     updated_at = src.updated_at,
 			     origin_host = src.origin_host
 			 FROM %s.concepts AS src
-			 WHERE concepts.name = src.name AND src.updated_at > concepts.updated_at`,
+			 WHERE concepts.uuid = src.uuid AND src.updated_at > concepts.updated_at`,
 			src,
 		)); err != nil {
-			return nil, fmt.Errorf("knowledge: merge concepts (conflict update) from %s: %w", src, err)
+			return nil, fmt.Errorf("knowledge: merge concepts (uuid conflict update) from %s: %w", src, err)
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`INSERT OR IGNORE INTO concepts (%s)
+			 SELECT %s FROM %s.concepts AS src
+			 WHERE NOT EXISTS (SELECT 1 FROM concepts c WHERE c.uuid = src.uuid)`,
+			conceptCols, conceptCols, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge concepts from %s: %w", src, err)
 		}
 	}
 
