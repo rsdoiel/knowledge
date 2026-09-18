@@ -1,4 +1,4 @@
-%kb-concept(1) user manual | version 0.0.9 3e593d0
+%kb-concept(1) user manual | version 0.0.9 ab8a11d
 % R. S. Doiel
 % 2026-09-17
 
@@ -13,6 +13,8 @@ kb concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]
 kb concept list
 
 kb concept rename OLD NEW
+
+kb concept suggest [--project NAME] [--limit N]
 
 # DESCRIPTION
 
@@ -37,6 +39,19 @@ rename
   (record_concepts, observation_concepts, project_concepts,
   document_section_concepts) is a foreign key, never a name matched from a
   file. See DR-0024 (knowledge/decisions/).
+
+suggest
+: read-only: scans every record body and document section body (scoped to
+  one project with --project) and prints candidate new concepts, ranked by
+  corpus-wide distinctiveness -- a term mentioned several times but
+  confined to relatively few items, rather than spread evenly across
+  nearly all of them (not distinctive) or mentioned only once anywhere
+  (too weak a signal alone). Code spans and fenced code blocks are
+  excluded, a name already naming an existing concept is never suggested
+  again, and a bare record reference (dr-0013, adr-0004) is filtered
+  outright rather than scored. --limit caps the number printed (default
+  20). Never writes anything -- a suggestion becomes a real concept only
+  when a human runs concept add. See DR-0028 (knowledge/decisions/).
 
 # CAVEATS
 

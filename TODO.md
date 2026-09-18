@@ -62,7 +62,7 @@
   techniques could improve corpus linkage as it scales past what a human
   curating by hand keeps up with?
 
-  Two concrete candidates raised so far, neither costed:
+  Two concrete candidates raised so far:
 
   - **Corpus-wide term-frequency/distinctiveness scoring** (TF-IDF or
     similar) to surface *candidate* concepts — terms frequent in one
@@ -70,13 +70,42 @@
     `kb concept add`, rather than auto-creating them. This is the
     keyword/topic-discovery half of what density-linking (DR-0026/DR-0027)
     cannot do: `MatchConceptNameCounts` only matches text against concepts
-    that already exist, it can't propose new ones.
+    that already exist, it can't propose new ones. **Shipped 2026-09-18,
+    see DR-0028**: `kb concept suggest [--project NAME] [--limit N]`, a
+    new read-only verb, scores every record body and document section body
+    this way and prints a ranked candidate list; never writes to the
+    database. Live-tested against the real `agents/knowledge.db`: a real,
+    roughly-50%-signal mechanical pass (`rename`/`harvey`/`divergence`/
+    `collision`/`uuid` genuinely useful, alongside generic nouns like
+    `row`/`name`/`table`/`test`), the same character as DR-0027's own
+    density-linking prototype — a human still curates the output, this
+    does not close the loop on its own.
   - **Levenshtein (or similar fuzzy) matching of concept names against
     record/document prose**, to surface records or documents that are
     topically relevant but unlinked because the wording differs from the
     concept's exact name (`MatchConceptNames`/`MatchConceptNameCounts` are
     both exact whole-word matches, so a near-miss — a typo, a plural, a
     close paraphrase — currently links nothing).
+
+  A follow-on question surfaced once `concept suggest` had a real output:
+  once a candidate list is confirmed real (`kb concept add`), there was
+  nowhere for that judgment to land in the corpus itself — a concept gets
+  linked implicitly on the next ingest (density-linking), but invisibly,
+  with no durable record in the source file of *why* it applies. **Shipped
+  2026-09-18, see DR-0029**: `kb document tag --project NAME [--concept
+  NAME,...] [--dry-run]`, a new pure-file-operation verb, inserts an
+  explicit `[[Name]]` wikilink at the first safe occurrence of each
+  eligible concept per document — eligibility reuses DR-0027's
+  density-linking threshold verbatim with no `--concept` given, or bypasses
+  it for explicitly-named concepts. Never writes to the database; both-or-
+  neither across a project's whole document set; idempotent on re-run.
+  Live-smoke-tested against a scratch copy of a real document, which
+  surfaced and got a real fix: a concept mention inside the document's own
+  H1 title was getting wikilinked, mechanically correct but stylistically
+  wrong, now excluded alongside frontmatter/code spans/existing wikilinks.
+  A frontmatter-`keywords:`-only alternative was considered and set aside
+  (DR-0029's Rejected alternatives) — worth revisiting only if a corpus
+  specifically wants a no-prose-edit option.
 
   Both fit the pattern already established for document summaries and
   decision records: a mechanical pass surfaces candidates, a human curates

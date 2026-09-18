@@ -1,4 +1,4 @@
-%kb-document(1) user manual | version 0.0.9 3e593d0
+%kb-document(1) user manual | version 0.0.9 ab8a11d
 % R. S. Doiel
 % 2026-09-17
 
@@ -19,6 +19,8 @@ kb document review list [--project P] [--status S]
 kb document draft SECTION_ID BODY --by WHO [--confidence N]
 
 kb document review promote SECTION_ID
+
+kb document tag --project P [--concept NAME,...] [--dry-run]
 
 # DESCRIPTION
 
@@ -71,6 +73,21 @@ review promote
   makes a summary trusted. Only a reviewed summary is indexed for search
   or returned as content by a concept-tag query; a section's raw body is
   never indexed at all, only its reviewed summary
+
+tag
+: a pure file operation over every already-ingested document in --project:
+  inserts an explicit `[[Name]]` wikilink, at its first safe occurrence,
+  for each eligible concept. Never writes to the database -- the next
+  ingest of a changed file links it through the wikilink path above,
+  unchanged. With no --concept, eligible means mentioned more than once in
+  the file outside code spans (the same threshold density-linking already
+  applies); --concept NAME,... forces exactly those names regardless of
+  occurrence count, but each must already be a known concept, checked
+  before any file is touched. A name already wikilinked anywhere in a file
+  is left alone, so a second run is a no-op; YAML frontmatter and the
+  document's own first H1 heading (its title) are never written into
+  either, even if a concept name genuinely occurs there. --dry-run reports
+  without writing. See DR-0029 (knowledge/decisions/).
 
 # VOCABULARIES
 

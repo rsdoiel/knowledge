@@ -3,6 +3,8 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0029  2026-09-18  accepted     decision     request          -     kb document tag: explicit wikilink insertion from known concepts
+DR-0028  2026-09-18  accepted     decision     request          -     kb concept suggest: corpus-wide term-frequency candidate discovery
 DR-0027  2026-09-18  accepted     decision     request          -     Foreign ADRs stay documents; MADR title and density-linking gaps closed
 DR-0026  2026-09-18  accepted     decision     live-test        -     kb project rename completes for a project with records; rename reconciles across merge and import
 DR-0025  2026-09-17  accepted     decision     request          sup   Cross-machine last-writer-wins for a project or concept's mutable fields
