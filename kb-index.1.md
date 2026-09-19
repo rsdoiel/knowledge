@@ -1,4 +1,4 @@
-%kb-index(1) user manual | version 0.0.10 1ba3acd
+%kb-index(1) user manual | version 0.0.10 f3d323d
 % R. S. Doiel
 % 2026-09-18
 
