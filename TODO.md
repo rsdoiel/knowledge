@@ -116,6 +116,52 @@
   far; worth weighing explicitly if either of the above turns out too weak
   in practice, not assumed as the starting point.
 
+## Planned for v0.0.11
+
+Scoped 2026-09-19. Four items, none started yet.
+
+- [ ] **`kb document tag` gains fuzzy (Levenshtein or similar) concept-name
+  matching**, promoted from the corpus-improvement-techniques item above.
+  An *enhancement to tagging*, not a separate command: `MatchConceptNames`/
+  `MatchConceptNameCounts` are exact whole-word matches today, so a typo, a
+  plural, or a close paraphrase of a concept's name currently links
+  nothing. Scope stays inside `kb document tag`'s existing shape — surface
+  a near-miss as an eligible-but-fuzzy match, human still curates via
+  `--concept`/`--dry-run`, no auto-linking on a fuzzy hit without
+  confirmation.
+
+- [ ] **A standalone frontmatter-generator command, for documents.**
+  Explicitly *not* an alternative to `kb document tag` and not folded into
+  it — tagging links known concepts into existing prose; this is a
+  separate, more general documentation-maintenance tool for
+  producing/maintaining a document's frontmatter block on its own terms.
+  Filed as `frontmatter-generator-feature-request.md` (2026-09-19):
+  propose-then-accept for `title`/`author`/`dateCreated`/`keywords`, plus a
+  **new `dateModified` field** added to the document frontmatter schema as
+  part of this work. Keyword proposals split into known-concept matches
+  (plain write) and new candidate concepts (must be explicitly created on
+  accept, never silently auto-minted at next ingest). Verb name, per-
+  document distinctiveness scoring, and whether this takes a new `git`
+  shell-out dependency are all still open — see the feature request's
+  open questions.
+
+- [ ] **`kb project rename OLD NEW` refuses outright when `NEW` already
+  exists**, with no path forward, when the real fix is to let the rename
+  proceed by rewriting the colliding corpus's `project:` frontmatter.
+  Identified as a real gap and explicitly deferred in DR-0024's rejected
+  alternatives ("filed as its own future record") — never picked back up.
+  Flagged 2026-09-19 as an oversight, not an intentional deferral, and
+  moved here to make sure it lands this time.
+
+- [ ] **Cross-machine reconciliation of a project/concept *rename* in `kb
+  merge`/`kb import`.** DR-0025 gave ordinary field edits (`description`,
+  `status`) last-writer-wins by `updated_at`, but a rename itself still
+  isn't reconciled — `merge`/`import` dedupe `projects`/`concepts` by
+  `name`, so a rename made on one machine and not yet synced collides with,
+  rather than resolves against, the pre-rename name on the other. Named as
+  an explicit follow-on in DR-0025's own text and never built. Flagged
+  2026-09-19 as an oversight, same as the item above.
+
 ## Done
 
 - [x] **Two decision-record dialects now exist in one organisation, and `kb`
