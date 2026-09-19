@@ -520,6 +520,69 @@ func TestCmdIndex_AllHandlesNestedCorporaIndependently(t *testing.T) {
 	}
 }
 
+// A git worktree keeps a full second copy of the tree under
+// .claude/worktrees/<name>/, corpus and generated index.md included, so it
+// satisfies both of discoverIndexedCorpora's signals and is reported as a
+// corpus in its own right. That is wrong twice over: under --check it
+// reports a duplicate of a corpus already listed, and in write mode it
+// would edit a throwaway worktree instead of the real tree.
+//
+// Found 2026-09-18 running `kb index ~/WorkLab --all --check` live, which
+// reported .claude/worktrees/competent-hertz-8b7537/agents/decisions
+// alongside the real agents/decisions. Same class of bug as DR-0030's:
+// a walk that does not prune hidden directories.
+func TestCmdIndex_AllSkipsHiddenDirectories(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	realDir := filepath.Join(root, "agents", "decisions")
+	testRecord{ID: "0001", Project: ""}.write(t, realDir)
+	if err := cmdIndex(kb, nil, false, []string{realDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding the real index: %v", err)
+	}
+
+	// A worktree's copy: same shape, same generated index.md, under a
+	// dot-directory.
+	hiddenDir := filepath.Join(root, ".claude", "worktrees", "wt-1", "agents", "decisions")
+	testRecord{ID: "0001", Project: ""}.write(t, hiddenDir)
+	if err := cmdIndex(kb, nil, false, []string{hiddenDir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding the worktree copy's index: %v", err)
+	}
+
+	dirs, err := discoverIndexedCorpora(root)
+	if err != nil {
+		t.Fatalf("discoverIndexedCorpora: %v", err)
+	}
+	for _, d := range dirs {
+		if strings.Contains(d, string(filepath.Separator)+".") {
+			t.Errorf("discovered a corpus under a hidden directory: %s", d)
+		}
+	}
+	if len(dirs) != 1 || dirs[0] != realDir {
+		t.Errorf("discovered %v, want exactly [%s]", dirs, realDir)
+	}
+}
+
+// Pruning hidden directories must not prune a corpus reached through a root
+// the caller named explicitly, even when that root is itself hidden --
+// otherwise `kb index ~/WorkLab/.claude/worktrees/wt-1 --all` would silently
+// find nothing. Only directories *descended into* are pruned.
+func TestCmdIndex_AllHonoursAnExplicitlyHiddenRoot(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	hiddenRoot := filepath.Join(root, ".claude", "worktrees", "wt-1")
+	corpus := filepath.Join(hiddenRoot, "agents", "decisions")
+	testRecord{ID: "0001", Project: ""}.write(t, corpus)
+	if err := cmdIndex(kb, nil, false, []string{corpus}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("seeding: %v", err)
+	}
+
+	dirs, err := discoverIndexedCorpora(hiddenRoot)
+	if err != nil {
+		t.Fatalf("discoverIndexedCorpora: %v", err)
+	}
+	if len(dirs) != 1 || dirs[0] != corpus {
+		t.Errorf("discovered %v from an explicitly hidden root, want [%s]", dirs, corpus)
+	}
+}
+
 func TestCmdIndex_MalformedRecordIsAnError(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	dir := filepath.Join(root, "clasm", "decisions")

@@ -1,4 +1,4 @@
-%kb-index(1) user manual | version 0.0.10 6b869a4
+%kb-index(1) user manual | version 0.0.10 bdd1cf3
 % R. S. Doiel
 % 2026-09-18
 
@@ -67,6 +67,14 @@ pre-commit hook can gate on the whole workspace in one call rather than
 naming each corpus by hand. --all and --stdout cannot be combined. See
 TODO.md's index-regeneration item (index --check and the auto-refresh on
 set-status/supersede) for the single-corpus half this completes.
+
+Hidden directories are not descended into. A git worktree keeps a whole
+second copy of the tree under .claude/worktrees/<name>/, corpus and
+generated index.md included, so without this it is reported as a corpus in
+its own right -- a duplicate under --check, and in write mode an edit to a
+throwaway worktree rather than the real tree. The prune applies only to
+directories descended into, never to ROOT itself, so naming a hidden
+directory as ROOT still finds the corpora inside it.
 
 # OPTIONS
 

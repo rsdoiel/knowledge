@@ -275,6 +275,15 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 // with its own index.md is found and reported independently, exactly
 // mirroring how kb index itself treats one directory as one corpus
 // (collectRecordFilesIn does not recurse, for the same reason).
+//
+// Hidden directories are not descended into. A git worktree keeps a whole
+// second copy of the tree under .claude/worktrees/<name>/ — corpus and
+// generated index.md included — so it satisfies both signals below and was
+// reported as a corpus in its own right: a duplicate under --check, and in
+// write mode an edit to a throwaway worktree rather than the real tree.
+// Found running this live against a real workspace. The prune applies only
+// to directories descended into, never to root itself, so naming a hidden
+// directory as the root still works.
 func discoverIndexedCorpora(root string) ([]string, error) {
 	var dirs []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
@@ -283,6 +292,9 @@ func discoverIndexedCorpora(root string) ([]string, error) {
 		}
 		if !d.IsDir() {
 			return nil
+		}
+		if p != root && strings.HasPrefix(d.Name(), ".") {
+			return fs.SkipDir
 		}
 		if !looksLikeGeneratedIndex(filepath.Join(p, "index.md")) {
 			return nil

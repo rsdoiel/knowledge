@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0031  2026-09-18  accepted     correction   live-test        -     kb index --all does not descend into hidden directories
 DR-0030  2026-09-18  accepted     correction   implementation   -     A live-corpus test discovers its corpora and excludes foreign dialects by frontmatter
 DR-0029  2026-09-18  accepted     decision     request          -     kb document tag: explicit wikilink insertion from known concepts
 DR-0028  2026-09-18  accepted     decision     request          -     kb concept suggest: corpus-wide term-frequency candidate discovery

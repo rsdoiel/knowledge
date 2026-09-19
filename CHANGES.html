@@ -110,6 +110,21 @@ name-keyed fallback retained for two genuinely independent, never-synced
 entities that happen to share a name. Both were traced live, not merely
 suspected, and shipping the rename completion without them would have
 made the corruption risk worse by making the trigger routine.</li>
+<li><code>kb index ROOT --all</code> descended into hidden directories
+(DR-0031), so a git worktree — which keeps a whole second copy of the
+tree under <code>.claude/worktrees/&lt;name&gt;/</code>, corpus and
+generated <code>index.md</code> included — was reported as a corpus in
+its own right. Under <code>--check</code> that is a duplicate of a
+corpus already listed; in write mode <code>--all</code> would have
+<em>rewritten</em> the worktree’s copy, editing a throwaway tree instead
+of the real one. The two-signal rule added last release could not catch
+it: a worktree copy satisfies both signals correctly, because it is a
+byte-identical copy of something that genuinely is a corpus. The walk
+now prunes any dot-prefixed directory, but never <code>ROOT</code>
+itself, so naming a hidden directory as <code>ROOT</code> still finds
+the corpora inside it. Found running <code>--all</code> live against
+<code>~/WorkLab</code>, where it reported 8 corpora where 6 was
+right.</li>
 <li><code>TestParseRecordFile_RoundTripsEveryLiveRecord</code> (DR-0030)
 named five fixed corpus paths, three of which went stale when DR-0021’s
 <code>agents/projects/&lt;project&gt;/decisions/</code> layout was

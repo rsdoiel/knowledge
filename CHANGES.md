@@ -87,6 +87,19 @@ rather than committing anything themselves.
   happen to share a name. Both were traced live, not merely suspected,
   and shipping the rename completion without them would have made the
   corruption risk worse by making the trigger routine.
+- `kb index ROOT --all` descended into hidden directories (DR-0031), so a
+  git worktree — which keeps a whole second copy of the tree under
+  `.claude/worktrees/<name>/`, corpus and generated `index.md` included —
+  was reported as a corpus in its own right. Under `--check` that is a
+  duplicate of a corpus already listed; in write mode `--all` would have
+  *rewritten* the worktree's copy, editing a throwaway tree instead of the
+  real one. The two-signal rule added last release could not catch it:
+  a worktree copy satisfies both signals correctly, because it is a
+  byte-identical copy of something that genuinely is a corpus. The walk now
+  prunes any dot-prefixed directory, but never `ROOT` itself, so naming a
+  hidden directory as `ROOT` still finds the corpora inside it. Found
+  running `--all` live against `~/WorkLab`, where it reported 8 corpora
+  where 6 was right.
 - `TestParseRecordFile_RoundTripsEveryLiveRecord` (DR-0030) named five
   fixed corpus paths, three of which went stale when DR-0021's
   `agents/projects/<project>/decisions/` layout was rolled out. It had
