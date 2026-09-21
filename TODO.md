@@ -51,6 +51,57 @@
   `UnifiedMemory.Recall`, and building an eventual interactive/dialogic
   re-ingest mode in harvey, remain explicitly out of scope here.
 
+- [ ] **Add `cancelled` to the `status` vocabulary.** Raised 2026-09-21 from a
+  real case in `~/WorkLab`: `cold` DR-0023 recorded eleven decisions for a
+  parameterized report (cold#110), was reviewed and accepted, and the issue was
+  cancelled the same day — the report already shipped in v0.0.53 turned out to
+  answer the requester's need once he read its CSV into a spreadsheet and
+  pivoted it. No second report was needed.
+
+  None of the four current statuses tells that story:
+
+  - `rejected` misstates it. The decisions were not rejected; they were
+    accepted on their merits, and the reasoning is still sound. `rejected`
+    belongs to a record whose decisions were *never adopted*.
+  - `superseded` requires a replacement, and writing one to get the status is
+    the tail wagging the dog: it inflates the corpus with a record whose only
+    content is "this did not happen", and it labels the original as superseded
+    by a decision that replaced nothing.
+  - `accepted` leaves a reader believing the work is live. This is the one that
+    actually costs something — a reader six months out finds an accepted record
+    describing a report that does not exist and cannot tell whether it was
+    never built or was built and removed.
+  - `proposed` is simply false.
+
+  **The distinction `cancelled` carries is temporal.** `rejected` is *never
+  adopted*; `cancelled` is *adopted, then abandoned*. That difference is
+  exactly what a reader needs, because a cancelled record's content stays
+  valuable in a way a rejected one's usually does not — the design reasoning is
+  what someone revisiting the question should start from, and cold DR-0023 says
+  so explicitly.
+
+  Worth deciding alongside it:
+
+  - Should a cancelled record carry a *reason*, structurally or by convention?
+    "Cancelled because the need was met elsewhere" and "cancelled because it
+    was deprioritised" are different signals to whoever revisits it. A
+    frontmatter field is probably overkill; a body convention may be enough.
+  - Does `index.md` need to distinguish it, or is the status column sufficient?
+    The column is already rendered, so likely nothing to do.
+  - Vocabularies are documented rather than enforced — an unknown value parses
+    and carries a warning — so `kb record set-status 0023 cancelled` already
+    *works* today. That makes this mostly a documentation change
+    (`DECISION_RECORD_FORMAT.md`, `kb-record(1)`'s VOCABULARIES section) plus
+    whatever `kb record list --status` and the index renderer assume. Which is
+    an argument for doing it properly rather than relying on the warning path:
+    the value would otherwise spread through corpora as an undocumented
+    convention.
+
+  **Interim workaround used in the meantime:** a short cancellation record that
+  supersedes the original, in `~/WorkLab/agents/projects/cold/decisions/`. It
+  works and both sides are written, but it is the second bullet above and
+  should be revisited once `cancelled` exists.
+
 ## To explore
 
 - [ ] **Programmatic corpus-improvement techniques, as the corpus grows.**
