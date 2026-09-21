@@ -116,19 +116,42 @@
   far; worth weighing explicitly if either of the above turns out too weak
   in practice, not assumed as the starting point.
 
+- [ ] **Fuzzy-aware `kb concept suggest`.** Raised 2026-09-21 alongside the
+  `kb document fuzzy-tag` design (`fuzzy-concept-matching-design.md`), but
+  a distinct mechanism: fuzzy matching there compares document text against
+  *already-known* concepts; this compares `concept suggest`'s own candidate
+  terms *against each other*. Term-gathering (`cmd/kb/concept.go:226`'s
+  occurrences × idf scan) is unchanged — the fuzzy step is a refinement
+  pass over that already-gathered candidate list, clustering similar terms
+  by edit distance and picking a canonical spelling per cluster (default:
+  first mention), the rest listed as variants. Would also fix a real gap in
+  today's scoring: a term split across spelling variants (`chunking`/
+  `chunkings`/`chunked`) currently scores each separately and can fall
+  below the occurrence/idf threshold individually even though the combined
+  mentions clearly signal one real concept — clustering before scoring
+  consolidates the count, not just the label. Not yet designed; no code
+  written.
+
 ## Planned for v0.0.11
 
 Scoped 2026-09-19. Four items, none started yet.
 
-- [ ] **`kb document tag` gains fuzzy (Levenshtein or similar) concept-name
-  matching**, promoted from the corpus-improvement-techniques item above.
-  An *enhancement to tagging*, not a separate command: `MatchConceptNames`/
-  `MatchConceptNameCounts` are exact whole-word matches today, so a typo, a
-  plural, or a close paraphrase of a concept's name currently links
-  nothing. Scope stays inside `kb document tag`'s existing shape — surface
-  a near-miss as an eligible-but-fuzzy match, human still curates via
-  `--concept`/`--dry-run`, no auto-linking on a fuzzy hit without
-  confirmation.
+- [ ] **New verb `kb document fuzzy-tag`**, promoted from the
+  corpus-improvement-techniques item above and refined 2026-09-21: see
+  `fuzzy-concept-matching-design.md`. `MatchConceptNames`/
+  `MatchConceptNameCounts` are exact whole-word matches today, so a typo,
+  plural, or tense variant of a known concept's name currently links
+  nothing (paraphrase is explicitly out of scope — a semantic problem, not
+  a spelling one). Mirrors `kb document tag`'s own shape (`--project`,
+  `--concept`, `--dry-run`) with fuzzy matching substituted for exact, but
+  never bracket-wraps the near-miss text itself — doing so would let
+  `ResolveConceptName` mint a duplicate concept from the misspelled/
+  inflected form. Instead inserts a footnote marker at the near-miss and a
+  footnote definition carrying the canonical `[[Concept]]`, so prose stays
+  unedited and linking still resolves to the real, existing concept.
+  Footnote placement/numbering and idempotency (recognizing a concept
+  already footnoted in a section on re-run) are still open, tracked in the
+  design doc.
 
 - [ ] **A standalone frontmatter-generator command, for documents.**
   Explicitly *not* an alternative to `kb document tag` and not folded into
