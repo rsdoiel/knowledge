@@ -6,7 +6,7 @@ status: accepted
 kind: correction
 trigger: live-test
 project: knowledge
-phase: "0.0.10"
+phase: ""
 supersedes: []
 superseded_by: []
 relates_to: ["0030"]
@@ -119,3 +119,13 @@ The safe behaviour should not be opt-in.
   discovered, and that an explicitly hidden root still works. The second
   guards the over-fix, which is the more likely way a future change to this
   function goes wrong.
+
+**Correction (2026-09-19).** This record was originally tagged
+`phase: "0.0.10"`, and codemeta.json's `0.0.10` release notes described it
+alongside DR-0030. Both were wrong: commit `1ba3acd` (this fix) landed at
+2026-09-19T00:28:27Z, roughly 32 minutes after the `v0.0.10` tag (`bdd1cf3`,
+2026-09-18T23:56:31Z) was created and the GitHub release published
+(2026-09-18T23:58:30Z). The published `v0.0.10` release notes do not, in
+fact, mention DR-0031 — only this record's own metadata and the working
+copy of codemeta.json drifted. `phase` is cleared to `""` pending the next
+release; codemeta.json's release notes need the same correction.
