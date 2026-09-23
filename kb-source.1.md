@@ -1,4 +1,4 @@
-%kb-source(1) user manual | version 0.0.11 bb57801
+%kb-source(1) user manual | version 0.0.11 38452d9
 % R. S. Doiel
 % 2026-09-23
 

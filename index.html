@@ -47,123 +47,60 @@ explicit human review step before being trusted as searchable
 content.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.10</li>
+<li>version: 0.0.11</li>
 <li>status: concept</li>
 <li>released: 2026-09-18</li>
 </ul>
-<p>Four decision records’ worth of work: the project-rename completion
-this module had refused to do since v0.0.9, an answer to the foreign-ADR
-question that had been open since 2026-09-15, and two corpus-improvement
-verbs that surface candidates for a human to confirm rather than
-committing anything themselves.</p>
-<p><code>kb project rename OLD NEW</code> now completes for a project
-that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
-is smaller than either shape originally sketched:
-<code>records.project_id</code> never needs to change on a rename, since
-it is a stable foreign key and only <code>projects.name</code> moves, so
-the corpus rewrite is a pure file operation – every owned record’s
-<code>project:</code> frontmatter edited in place, both-or-neither,
-<code>--dry-run</code> supported – and the next ordinary
-<code>kb ingest</code> sees a changed checksum against an unchanged
-identity, the ordinary UPDATE path rather than the INSERT that collided.
-Tracing merge and import while designing this turned up two further bugs
-neither anticipated nor merely suspected: <code>kb merge</code> could
-silently keep a stale name or drop a side outright depending on merge
-order, because <code>INSERT OR IGNORE</code> cannot distinguish a uuid
-collision from a name collision, and <code>kb import</code> hard-failed
-the <em>entire</em> import rather than one row on the same collision.
-Both are fixed in the same pass – shipping the rename without them would
-have made the corruption risk worse by making the trigger routine.
-Conflict resolution for projects and concepts moves from name-keyed to
-uuid-primary, reconciling <code>name</code> by <code>updated_at</code>
-the same way <code>description</code> and <code>status</code> already
-did.</p>
-<p>A colleague’s MADR-format ADR, pulled from another repository, is
-modeled as a <strong>document</strong>, not a record (DR-0027). We do
-not own its status and can never promote or supersede it, and a document
-is exactly the shape for source material we read and summarise.
-Answering it that way dissolves the identity collision the question had
-been stuck on – both dialects number from 0001, but a document never
-enters the records identity tuple at all – so the <code>dialect</code>
-column, the <code>external</code> scope value and the
-<code>--format madr</code> adapter are moot rather than deferred. Two
-real gaps in the stopgap closed with it: <code>ParseDocumentFile</code>
-falls back to a document’s first true H1 when frontmatter supplies no
-<code>title:</code> (general, not MADR-specific, but MADR is what
-surfaced it, having no frontmatter at all), where the document used to
-be titled with its filename; and document ingest gains density-based
-concept linking, auto-linking a known concept mentioned more than once
-outside code spans and fenced blocks. The threshold and the code-span
-exclusion are not guesses – a by-hand run against four real foreign ADRs
-scored roughly 60% signal, and all five of its bad links were the same
-failure, a short common concept name matching a word used in a different
-sense inside quoted code or an error string. The accepted cost, stated
-rather than glossed: a document cannot be cited from
-<code>relates_to</code>, so a record responding to a foreign ADR links
-it in prose.</p>
-<p><code>kb concept suggest [--project NAME] [--limit N]</code>
-(DR-0028) scans every record body and document section body and prints
-candidate <em>new</em> concepts ranked by corpus-wide distinctiveness –
-a TF-IDF shape: occurring several times, confined to relatively few
-items. It closes the half of corpus improvement that density-linking
-cannot reach, since <code>MatchConceptNameCounts</code> only matches
-text against concepts that already exist and can never propose one. It
-never writes to the database. Live-tested against the real workspace
-corpus it is a roughly-50%-signal mechanical pass – <code>rename</code>,
-<code>harvey</code>, <code>divergence</code>, <code>collision</code>,
-<code>uuid</code> genuinely useful alongside generic nouns like
-<code>row</code> and <code>table</code> – the same character as
-DR-0027’s own prototype. A human still curates; this does not close the
-loop on its own.</p>
-<p><code>kb document tag --project NAME [--concept NAME,...] [--dry-run]</code>
-(DR-0029) gives that judgment somewhere to land in the corpus itself. It
-inserts an explicit <code>[[Name]]</code> wikilink at the first safe
-occurrence of each eligible concept in every already-ingested document
-for a project, so the next <code>kb document ingest</code> links it
-through the wikilink path that already exists. Eligibility reuses
-DR-0027’s density threshold verbatim with no <code>--concept</code>
-given, or is bypassed for explicitly named ones. It is a minimal
-position-based edit on the raw file bytes with no parse-and-rerender
-cycle, excluding frontmatter, fenced blocks, inline code spans, anything
-already inside <code>[[...]]</code>, and – found live, smoke-testing
-against a real document – the document’s own first H1, so a concept
-mention in the title is never wrapped. Writes across a project’s
-document set are both-or-neither, and a second run is a no-op.</p>
-<p>Two walks over a workspace tree turned out to share a bug, and only
-one of them was in a test (DR-0031). <code>kb index ROOT --all</code>
-descended into hidden directories, so a git worktree – which keeps a
-whole second copy of the tree under
-<code>.claude/worktrees/&lt;name&gt;/</code>, corpus and generated
-<code>index.md</code> included – was reported as a corpus in its own
-right. Under <code>--check</code> that is a duplicate of a corpus
-already listed; in write mode <code>--all</code> would have rewritten
-the worktree’s copy, editing a throwaway tree instead of the real one.
-The two-signal rule added last release could not catch it, and correctly
-so: a worktree copy satisfies both signals, being a byte-identical copy
-of something that genuinely is a corpus. The walk now prunes any
-dot-prefixed directory, but never <code>ROOT</code> itself, so naming a
-hidden directory as <code>ROOT</code> still finds the corpora inside it.
-Found by running <code>--all</code> live against the real
-<code>~/WorkLab</code>, where it reported 8 corpora where 6 was right –
-the same run-it-against-real-data step that caught the original
-<code>index.md</code> false positives last release, and the second time
-it has paid for itself on this one function.</p>
-<p>One test repair worth naming, because of what it was hiding
-(DR-0030). <code>TestParseRecordFile_RoundTripsEveryLiveRecord</code>
-named five fixed corpus paths, three of which went stale when DR-0021’s
-<code>agents/projects/&lt;project&gt;/decisions/</code> layout was
-rolled out. It had quietly stopped exercising four fifths of the live
-corpus – 54 records of 267 – and reported that as a count shortfall
-rather than a discovery failure. Corpora are now discovered rather than
-listed, using the same two-signal rule <code>kb index --all</code>
-settled on (a record-shaped filename <em>and</em> real frontmatter in
-the file), which also keeps a foreign MADR corpus out of a round-trip
-test it would fail by construction, and the remembered count floor is
-gone in favour of the per-file property the test was always really
-asserting. <code>user_manual.md</code>’s verb table, six verbs out of
-date and pointing at a <code>DECISIONS.md</code> removed when this
-module became the decision-record format’s first conversion pilot, is
-current again.</p>
+<p>Three new corpus-improvement features, plus a search bug fix – fuzzy
+near-miss tagging, a frontmatter provenance generator, and fuzzy
+candidate clustering, each of which surfaced and fixed a real
+self-contradiction in its own design doc before shipping, verified by
+hand rather than trusting the design’s own worked examples.</p>
+<p><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
+(DR-0032) catches what <code>tag</code>’s exact whole-word matching
+can’t: a typo, plural, or simple tense variant of a known concept’s
+name. Inserts a footnote marker at the near-miss plus a footnote
+definition carrying the canonical <code>[[Concept]]</code>, never
+bracket-wrapping the near-miss text itself, so
+<code>ResolveConceptName</code> can’t mint a duplicate concept from a
+misspelled or inflected form. A follow-up review caught and fixed a real
+corruption bug before release: two near-misses in the same section could
+splice a later footnote marker inside an earlier one’s own definition
+text.</p>
+<p><code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]</code>
+(DR-0033) proposes
+<code>title</code>/<code>author</code>/<code>dateCreated</code>/<code>dateModified</code>/<code>keywords</code>
+from a document’s own prose and git/filesystem provenance – this
+module’s first <code>exec.Command</code> dependency. <code>author</code>
+is a layered signal (a byline in the prose, then git’s earliest-commit
+author, then <code>git config user.name</code>), shown together when
+they disagree rather than collapsed to one guess. A follow-up review
+caught and fixed two bugs: an explicitly-empty frontmatter value locked
+a field from ever being filled in, and <code>--set FIELD=</code>
+silently no-op’d instead of writing an explicit empty value.</p>
+<p>Fuzzy candidate clustering for <code>kb concept suggest</code>
+(DR-0034) merges spelling variants of the same underlying term
+(<code>chunking</code>/<code>chunkings</code>/<code>chunked</code>) into
+one candidate before scoring, not after, so a signal split across
+variants no longer falls individually below the
+occurrence/distinctiveness floor. A candidate fuzzy-close to an
+already-known concept is excluded from candidacy entirely and reported
+separately. <code>--json</code>’s shape changes from a bare array to
+<code>{"candidates": [...], "near_existing": [...]}</code> – a breaking
+change for any existing consumer. Live-smoke-tested against the real
+<code>agents/knowledge.db</code>, which found a flat distance-1
+threshold with no length floor produced heavy false-positive clustering
+on short common words, fixed with a length gate.</p>
+<p><code>kb search TERM</code> threw a raw SQLite error instead of a
+normal no-results outcome for any term containing bare punctuation
+FTS5’s own query grammar treats as significant (a <code>.</code> in a
+version string, the case found). <code>Search</code> now retries once,
+quoting the term as a phrase, but only when the first attempt fails with
+an FTS5 syntax error specifically, so documented raw FTS5 query syntax
+(multi-word AND, quoted phrases, <code>prefix*</code>) keeps working
+unchanged.</p>
+<p>Also includes <code>kb index ROOT --all</code>’s hidden-directory
+pruning fix (DR-0031), shipped just after v0.0.10.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>
@@ -173,6 +110,8 @@ current again.</p>
 <li>Go &gt;= 1.26.4</li>
 <li>gopkg.in/yaml.v3 &gt;= 3.0.1</li>
 <li>github.com/rsdoiel/fountain &gt;= 1.0.2</li>
+<li>git &gt;= 2.0 (runtime, for kb document frontmatter’s provenance
+detection)</li>
 </ul>
 <h3 id="software-suggestions">Software Suggestions</h3>
 <ul>

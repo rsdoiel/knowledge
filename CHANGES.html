@@ -21,12 +21,87 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.11-2026-09-23">v0.0.11 — 2026-09-23</h2>
+<p>Three new corpus-improvement features, plus a search bug fix — fuzzy
+near-miss tagging, a frontmatter provenance generator, and fuzzy
+candidate clustering, each of which surfaced and fixed a real
+self-contradiction in its own design doc before shipping, verified by
+hand rather than trusting the design’s own worked examples.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
+(DR-0032) catches what <code>tag</code>’s exact whole-word matching
+can’t: a typo, plural, or simple tense variant of a known concept’s name
+(Levenshtein distance, not paraphrase). Inserts a footnote marker at the
+near-miss and a footnote definition carrying the canonical
+<code>[[Concept]]</code>, rather than bracket-wrapping the near-miss
+text itself, so <code>ResolveConceptName</code> never mints a duplicate
+concept from a misspelled or inflected form. <code>retrieval.go</code>
+gains the exported
+<code>LevenshteinDistance</code>/<code>StripCommonSuffix</code>
+primitives, shared with fuzzy clustering below. Live-smoke-tested
+against a real scratch document; a follow-up review caught and fixed a
+real corruption bug before release — two near-misses in the same section
+spliced a later footnote marker <em>inside</em> an earlier one’s own
+definition text, from a single running byte-offset delta that
+overcorrected.</li>
+<li><code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]</code>
+(DR-0033): propose-then- accept
+<code>title</code>/<code>author</code>/<code>dateCreated</code>/<code>dateModified</code>/<code>keywords</code>
+for one document, deriving signals from the document’s own prose and
+git/filesystem provenance — this module’s first
+<code>exec.Command</code> dependency.
+<code>title</code>/<code>author</code>/<code>dateCreated</code> are
+absent-only, never overwritten once present; <code>dateModified</code>
+is the one exception, always refreshed on an accepted run.
+<code>author</code> is a layered signal (a byline in the prose, then
+git’s earliest-commit author, then <code>git config user.name</code>),
+shown together when they disagree rather than collapsed to one guess.
+<code>keywords</code> diffs the current list against known-concept
+mentions and new candidate terms distinctive to the document itself,
+fixing an idf-degeneracy bug the design doc flagged in its own draft.
+Live-smoke-tested against a real git-tracked project; a follow-up review
+caught and fixed two bugs — an explicitly-empty frontmatter value
+(<code>title: ""</code>) locked a field from ever being filled in, and
+<code>--set FIELD=</code> (an explicit empty value, documented as
+bypassing the absent-only rule) silently no-op’d instead of
+writing.</li>
+<li>Fuzzy candidate clustering for <code>kb concept suggest</code>
+(DR-0034): spelling variants of the same underlying term
+(<code>chunking</code>/ <code>chunkings</code>/<code>chunked</code>) now
+merge into one candidate before scoring, not after, so a signal split
+across variants no longer falls individually below the
+occurrence/distinctiveness floor. A candidate fuzzy-close to an
+already-known concept is excluded from candidacy entirely and reported
+in a trailing near-existing section — that’s <code>fuzzy-tag</code>’s
+job, not this command’s. <code>--json</code>’s shape changes from a bare
+array to <code>{"candidates": [...], "near_existing": [...]}</code> — a
+breaking change for any existing consumer. Live-smoke-tested against the
+real <code>agents/knowledge.db</code>, which found a second problem
+beyond the shared design correction: a flat distance-1 threshold with no
+length floor produced heavy false-positive clustering on short common
+words (<code>table</code>+<code>stable</code>+<code>able</code>,
+<code>old</code>+<code>cold</code>+<code>told</code>+<code>hold</code>+<code>fold</code>),
+fixed with a length gate.</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><code>kb search TERM</code> threw a raw SQLite error
+(<code>fts5: syntax error</code>) instead of a normal no-results outcome
+for any term containing bare punctuation FTS5’s own query grammar treats
+as significant (a <code>.</code> in a version string, the case found).
+<code>Search</code> now retries once, quoting the term as an FTS5
+phrase, but only when the first attempt fails with an FTS5 syntax error
+specifically, so <code>kb-search(1)</code>’s documented raw query syntax
+(multi-word AND, quoted phrases, <code>prefix*</code>) keeps working
+unchanged.</li>
+</ul>
 <h2 id="v0.0.10-2026-09-18">v0.0.10 — 2026-09-18</h2>
 <p>The project-rename completion this module had refused to do since
 v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
 two corpus-improvement verbs that surface candidates for a human to
 confirm rather than committing anything themselves.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><code>kb concept suggest [--project NAME] [--limit N]</code>
 (DR-0028), a read-only verb that scans every record body and document
@@ -96,7 +171,7 @@ this module became the decision- record format’s first conversion pilot.
 <code>kb(1)</code>’s DESCRIPTION and SEE ALSO now name records and
 documents too.</li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li><code>kb merge</code> could silently keep a stale project or concept
 name, or drop a side outright, depending on merge order, because
@@ -143,7 +218,7 @@ in favour of the per-file property the test was always really asserting
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -181,7 +256,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -207,7 +282,7 @@ export/import carry <code>observation_relations</code> from this
 release, not as a follow-on, per the standing rule that a table missing
 from the merge summary is a table whose loss goes unreported.</li>
 </ul>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li><code>kb record set-status</code> and
 <code>kb record supersede</code> now refresh a corpus’s
@@ -225,7 +300,7 @@ changes, which bit WorkLab twice.</li>
 corpora (clasm, WorkLab, caltechauthors), all in
 <code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
 exit code.</p>
-<h3 id="fixed-2">Fixed</h3>
+<h3 id="fixed-3">Fixed</h3>
 <ul>
 <li><code>kb ingest</code> no longer leaves stale edges behind on
 re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
@@ -263,7 +338,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -321,7 +396,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-4">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -356,7 +431,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-5">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -396,7 +471,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-6">Added</h3>
+<h3 id="added-7">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -452,7 +527,7 @@ specification: field order, flow-styled sequences, and a double-quoted
 string type for the seven fields the format requires quoted, so every
 writer produces byte-identical output.</li>
 </ul>
-<h3 id="fixed-3">Fixed</h3>
+<h3 id="fixed-4">Fixed</h3>
 <ul>
 <li>A record path read from the database is confined to the workspace
 root before it is read or written. <code>filepath.Join</code> cleans a

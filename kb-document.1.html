@@ -30,6 +30,9 @@ abstraction levels</p>
 <p>kb document draft SECTION_ID BODY –by WHO [–confidence N]</p>
 <p>kb document review promote SECTION_ID</p>
 <p>kb document tag –project P [–concept NAME,…] [–dry-run]</p>
+<p>kb document fuzzy-tag –project P [–concept NAME,…] [–dry-run]</p>
+<p>kb document frontmatter PATH [–accept FIELD,…] [–accept-keywords
+NAME,…] [–set FIELD=VALUE] [–dry-run]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>A document is a narrative or article (Markdown, Fountain, or plain
 text) ingested into two tables: one documents row plus one
@@ -101,6 +104,57 @@ is left alone, so a second run is a no-op; YAML frontmatter and the
 document’s own first H1 heading (its title) are never written into
 either, even if a concept name genuinely occurs there. –dry-run reports
 without writing. See DR-0029 (knowledge/decisions/).
+</dd>
+<dt>fuzzy-tag</dt>
+<dd>
+mirrors tag’s shape, catching what tag’s exact matching can’t: a typo,
+plural, or simple tense variant of a known concept’s name (Levenshtein
+distance, not paraphrase). Never bracket-wraps the near-miss text itself
+– doing so would mint a duplicate concept from the misspelled or
+inflected spelling. Instead inserts a <code>[^n]</code> footnote marker
+at the match and a footnote definition carrying the canonical
+<code>[[Concept]]</code> elsewhere, so prose stays unedited and linking
+still resolves to the real concept. A concept already an exact match
+anywhere in the file is skipped entirely – fuzzy matching is additive,
+never a duplicate of what tag already covers. With no –concept, eligible
+means within a length-based distance threshold; –concept NAME,… bypasses
+that threshold for exactly the names given, each already a known
+concept, checked before any file is touched. A concept already footnoted
+(or wikilinked) anywhere in a file is left alone, so a second run is a
+no-op. –dry-run reports without writing.
+</dd>
+<dt>frontmatter</dt>
+<dd>
+propose-then-accept
+<code>title</code>/<code>author</code>/<code>dateCreated</code>/
+<code>dateModified</code>/<code>keywords</code> for one document, PATH –
+unlike tag/fuzzy-tag, not scoped by –project, since a human reviews one
+file at a time. A bare invocation (no –accept/–accept-keywords/–set)
+only reports; nothing is ever written without an explicit selection.
+<code>title</code>/<code>author</code>/<code>dateCreated</code> are
+absent-only – never overwritten once present. <code>author</code> is a
+layered signal: a byline in the document’s own prose wins, then git’s
+earliest-commit author, then <code>git config user.name</code> – when
+signals disagree, the report shows all of them, not just the winner.
+<code>dateModified</code> is the one exception to absent-only: always
+recomputed from git’s most recent commit (filesystem mtime otherwise)
+and rewritten on every accepted run, since a stale value is worse than a
+missing one. <code>keywords</code> diffs the current list against two
+candidate sets: known concepts already mentioned in the text (a plain
+write on <code>--accept-keywords</code>), and new candidate terms
+distinctive to this document specifically, scored against the rest of
+its project (or the whole corpus) with the document itself excluded from
+that comparison – accepting one creates the concept first, the same
+checked-before-any- write discipline <code>tag</code>’s
+<code>--concept</code> already holds to. <code>--set FIELD=VALUE</code>
+(repeatable) bypasses signal detection and the absent-only rule entirely
+– a human’s explicit assertion, not a proposal. Editing is surgical:
+only the frontmatter block changes, via a YAML node edit that leaves
+every other key, value, and comment in the block untouched; the document
+body is never modified. This module’s first process dependency – shells
+out to <code>git</code> for provenance, falling back to filesystem
+timestamps when <code>git</code> itself fails (not a repository, or a
+genuinely untracked file).
 </dd>
 </dl>
 <h1 id="vocabularies">VOCABULARIES</h1>
