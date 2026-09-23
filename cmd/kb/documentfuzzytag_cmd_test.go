@@ -297,3 +297,43 @@ func TestCmdDocumentFuzzyTag_NeverTouchesExactMatchInsertion(t *testing.T) {
 		t.Errorf("file content = %q, want the fuzzy near-miss \"promt\" footnoted", got)
 	}
 }
+
+// Two fuzzy near-misses in the same section (no heading between them):
+// insertFootnote's own two splices (marker at matchEnd, definition at the
+// section boundary -- end of file here, since there's only one section)
+// only shift positions *after* the first match's marker insertion point by
+// the marker's own length until the section boundary is crossed, not by
+// the marker+definition length combined. A flat, single running delta
+// applied to every later match overcorrects any later match still in the
+// same section, splicing its marker at the wrong byte offset.
+func TestCmdDocumentFuzzyTag_HandlesTwoNearMissesInTheSameSection(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	if _, err := kb.AddConcept("chunking", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.AddConcept("prompt", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	content := "## Background\n\nthe chunkibg happens here and the promt appears there.\n"
+	path := writeDocFixture(t, root+"/docs", "a.md", content)
+	if _, err := kb.AddDocument(knowledge.Document{ProjectID: pid, Title: "a", Format: "text", Path: path}); err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+
+	if _, err := runDocument(t, kb, false, "fuzzy-tag", "--project", "alpha"); err != nil {
+		t.Fatalf("document fuzzy-tag: %v", err)
+	}
+
+	raw, _ := os.ReadFile(path)
+	got := string(raw)
+	if !strings.Contains(got, "chunkibg[^1]") {
+		t.Errorf("file content = %q, want a marker immediately after \"chunkibg\"", got)
+	}
+	if !strings.Contains(got, "promt[^2]") {
+		t.Errorf("file content = %q, want a marker immediately after \"promt\", not spliced into the wrong byte offset", got)
+	}
+	if !strings.Contains(got, "[^1]: see [[chunking]]") || !strings.Contains(got, "[^2]: see [[prompt]]") {
+		t.Errorf("file content = %q, want both footnote definitions present and correctly labeled", got)
+	}
+}

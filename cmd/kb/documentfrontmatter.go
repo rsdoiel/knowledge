@@ -522,6 +522,21 @@ func mappingStringValue(node *yaml.Node, key string) (string, bool) {
 	return "", false
 }
 
+// absentOnlyCurrent returns key's existing value and true only when it is
+// present *and* non-empty. An explicit empty value (e.g. a template's
+// `title: ""`) is treated the same as absent -- found reviewing this code
+// before release: without this, mappingStringValue's ok=true for an empty
+// string permanently blocked the absent-only proposal branch from ever
+// running, with no way to fill the field in and no diagnostic explaining
+// why.
+func absentOnlyCurrent(node *yaml.Node, key string) (string, bool) {
+	v, ok := mappingStringValue(node, key)
+	if !ok || v == "" {
+		return "", false
+	}
+	return v, true
+}
+
 // mappingStringListValue returns the list value of key in node's top-level
 // mapping, or nil if absent or not a sequence.
 func mappingStringListValue(node *yaml.Node, key string) []string {
@@ -707,14 +722,14 @@ func cmdDocumentFrontmatter(kb *knowledge.KnowledgeBase, jsonOut bool, args []st
 	}
 
 	titleReport := frontmatterFieldReport{Field: "title"}
-	if v, ok := mappingStringValue(node, "title"); ok {
+	if v, ok := absentOnlyCurrent(node, "title"); ok {
 		titleReport.Current = v
 	} else {
 		titleReport.Proposed = proposeTitle(body)
 	}
 
 	authorReport := frontmatterFieldReport{Field: "author"}
-	if v, ok := mappingStringValue(node, "author"); ok {
+	if v, ok := absentOnlyCurrent(node, "author"); ok {
 		authorReport.Current = v
 	} else {
 		winner, signals := proposeAuthor(path, body)
@@ -723,7 +738,7 @@ func cmdDocumentFrontmatter(kb *knowledge.KnowledgeBase, jsonOut bool, args []st
 	}
 
 	dateCreatedReport := frontmatterFieldReport{Field: "dateCreated"}
-	if v, ok := mappingStringValue(node, "dateCreated"); ok {
+	if v, ok := absentOnlyCurrent(node, "dateCreated"); ok {
 		dateCreatedReport.Current = v
 	} else {
 		value, _ := proposeDateCreated(path)
@@ -763,24 +778,42 @@ func cmdDocumentFrontmatter(kb *knowledge.KnowledgeBase, jsonOut bool, args []st
 	keywordReport := frontmatterKeywordReport{Current: currentKeywords, Known: knownProposals, New: newCandidates}
 
 	changed := false
-	applyField := func(name, value string) {
-		if value == "" {
+	// applyProposed only fires when there's a genuine (non-empty) proposal
+	// to accept -- correct for --accept, which never invents a value out
+	// of nothing. applySet writes unconditionally, even an explicit empty
+	// string: --set is a human's direct assertion, not a proposal, so
+	// `--set title=` clearing a field must actually write, not silently
+	// no-op the way it did before this was found in review -- and it
+	// updates the report's Proposed so "accepted: %s" reflects what was
+	// actually written, not a stale/absent proposal from before --set ran.
+	applyProposed := func(name string) {
+		r := fieldReports[name]
+		if r.Proposed == "" {
 			return
 		}
+		if err := setMappingField(node, name, r.Proposed); err != nil {
+			return
+		}
+		r.Accepted = true
+		changed = true
+	}
+	applySet := func(name, value string) {
 		if err := setMappingField(node, name, value); err != nil {
 			return
 		}
-		fieldReports[name].Accepted = true
+		r := fieldReports[name]
+		r.Proposed = value
+		r.Accepted = true
 		changed = true
 	}
 	for field, value := range setValues {
-		applyField(field, value)
+		applySet(field, value)
 	}
 	for field := range acceptedFields {
 		if _, isSet := setValues[field]; isSet {
 			continue
 		}
-		applyField(field, fieldReports[field].Proposed)
+		applyProposed(field)
 	}
 
 	var acceptedKeywords []string

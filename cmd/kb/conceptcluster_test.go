@@ -91,6 +91,26 @@ func TestExcludeNearExisting_KeepsTokenBeyondThreshold(t *testing.T) {
 	}
 }
 
+// Found reviewing this code before release: bestConcept is chosen by
+// iterating `for name := range known`, a randomized-order Go map, keeping
+// only a strictly-smaller distance -- an exact-distance tie between two
+// known concepts is resolved by whichever happens to be visited first,
+// nondeterministically across runs, despite the surrounding code sorting
+// its own output "for deterministic output."
+func TestExcludeNearExisting_TiesBrokenDeterministically(t *testing.T) {
+	// "chunkx" is distance 1 from both "chunki" and "chunka" -- a genuine
+	// tie (verified by hand), not just two candidates that happen to both
+	// qualify at different distances.
+	occurrences := map[string]int{"chunkx": 3}
+	known := map[string]bool{"chunki": true, "chunka": true}
+	for i := 0; i < 20; i++ {
+		_, nearExisting := excludeNearExisting(occurrences, known)
+		if len(nearExisting) != 1 || nearExisting[0].Concept != "chunka" {
+			t.Fatalf("run %d: nearExisting = %+v, want a stable tie-break (alphabetically first concept, \"chunka\")", i, nearExisting)
+		}
+	}
+}
+
 func TestExcludeNearExisting_ReportSortedDeterministically(t *testing.T) {
 	occurrences := map[string]int{"promts": 2, "chunkings": 2}
 	known := map[string]bool{"prompt": true, "chunking": true}

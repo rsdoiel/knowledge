@@ -97,11 +97,19 @@ func excludeNearExisting(occurrences map[string]int, known map[string]bool) (sur
 		bestDistance := -1
 		bestConcept := ""
 		for name := range known {
-			if d, ok := fuzzyTermsClose(tok, name, fuzzyClusterDistance); ok && d > 0 {
-				if bestDistance == -1 || d < bestDistance {
-					bestDistance = d
-					bestConcept = name
-				}
+			d, ok := fuzzyTermsClose(tok, name, fuzzyClusterDistance)
+			if !ok || d == 0 {
+				continue
+			}
+			// A tie is broken alphabetically -- found reviewing this code
+			// before release: `known` is a map, iterated in randomized
+			// order, so an unconditional "strictly closer wins" check left
+			// an exact-distance tie decided by iteration order, silently
+			// nondeterministic across runs despite this function's own
+			// output being sorted "for deterministic output."
+			if bestDistance == -1 || d < bestDistance || (d == bestDistance && name < bestConcept) {
+				bestDistance = d
+				bestConcept = name
 			}
 		}
 		if bestDistance > 0 {

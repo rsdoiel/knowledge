@@ -167,6 +167,21 @@
   far; worth weighing explicitly if either of the above turns out too weak
   in practice, not assumed as the starting point.
 
+- [ ] **`MatchConceptNames`/`MatchConceptNameCounts` can never match a
+  concept name whose first or last character is non-word punctuation**
+  (`\b` fires only between a word character and a non-word character, so a
+  concept like `C++`, `F#`, or `.NET` mentioned as `"...using C++ for
+  this..."` never matches — the space right after the trailing `+` isn't a
+  word/non-word transition at all). Found reviewing `FuzzyMatchConceptNames`
+  (v0.0.11 item 1) before release, since it reuses `MatchConceptNames` for
+  its exact-match skip check, but the limitation is in the original
+  function (2026-09-13), not new. Affects `RecallByConceptNames`, `tag`,
+  `fuzzy-tag`'s exact-match exclusion, and density-linking, all silently —
+  no error, just a mention that never resolves. Not fixed here: it's a
+  regex-anchoring change to a widely-used, foundational function, deserving
+  its own dedicated design/test pass rather than a quick patch alongside
+  unrelated work.
+
 ## Planned for v0.0.11
 
 Scoped 2026-09-19, item 5 added 2026-09-22, item 6 (bug) added and fixed
@@ -207,6 +222,17 @@ stale duplicates once that was noticed.
   idempotent on rerun, concept actually linked after re-ingest). Decision
   record DR-0032 authored `proposed`, not yet promoted.
 
+  **Pre-release bug fix (2026-09-23):** an automated pre-release review
+  found that two fuzzy near-misses in the same section (no heading
+  between them) corrupted the file — a flat, single running `delta`
+  applied to every match after the first overcorrected any match still in
+  the same section as an earlier one, splicing a later marker at the
+  wrong byte offset (confirmed: it landed *inside* the first footnote's
+  own definition text). Fixed by tracking each insertion's two splices
+  (marker, definition) as separate positional breakpoints rather than one
+  flat delta. Regression test added (confirmed red against the unfixed
+  code first), live-verified again with a real two-near-miss file.
+
 - [x] **A standalone frontmatter-generator command, for documents.**
   Explicitly *not* an alternative to `kb document tag` and not folded into
   it — tagging links known concepts into existing prose; this is a
@@ -245,6 +271,18 @@ stale duplicates once that was noticed.
   written, re-ingested, and both concepts confirmed actually linked via
   `kb document show`. Decision record DR-0033 authored `proposed`, not
   yet promoted.
+
+  **Pre-release bug fix (2026-09-23):** an automated pre-release review
+  found that a frontmatter key present with an explicit empty value (e.g.
+  a template's `title: ""`) made the absent-only check treat it as
+  already set forever, with no way to fill it in — compounded by
+  `--set FIELD=` (an explicit empty value, documented as bypassing the
+  absent-only rule) silently no-oping instead of writing, since the
+  write-time guard couldn't distinguish "nothing proposed" from "a
+  deliberate empty assertion." Fixed: an explicit empty value is now
+  treated the same as absent for proposal purposes, and `--set` writes
+  unconditionally regardless of value. Regression tests added (confirmed
+  red first), live-verified.
 
 - [x] **Fuzzy-aware `kb concept suggest`**, folded in 2026-09-22 from the
   "To explore" list: see `fuzzy-concept-clustering-design.md`. A distinct
@@ -291,6 +329,16 @@ stale duplicates once that was noticed.
   bar. `fuzzy-concept-clustering-design.md` amended in place with both
   corrections. All FC1–FC5 tests pass, `go vet`/`go build` clean. Decision
   record DR-0034 authored `proposed`, not yet promoted.
+
+  **Pre-release bug fix (2026-09-23):** an automated pre-release review
+  found `excludeNearExisting` picked the nearest known-concept match by
+  iterating an unordered Go map, keeping only a *strictly* smaller
+  distance — an exact-distance tie between two known concepts was
+  resolved by map iteration order, nondeterministically across runs,
+  despite the surrounding code sorting its own output "for deterministic
+  output." Fixed with an explicit alphabetical tie-break. Regression test
+  added (confirmed red against the unfixed code, which failed on the
+  first run), asserting a stable result across repeated calls.
 
 - [x] **Bug: `kb search TERM` threw a raw SQLite error instead of a normal
   "no results" for any term containing bare punctuation FTS5's query

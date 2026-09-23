@@ -267,17 +267,41 @@ func cmdDocumentFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, args []strin
 		}
 
 		var entries []fuzzyTagEntry
-		delta := 0
+		// insertFootnote makes two splices per call: a marker right after
+		// matchEnd, and a definition at the section boundary (which can be
+		// well past matchEnd, e.g. end of file). A position between the two
+		// -- exactly where a second match in the same section originally
+		// sits -- only shifts by the marker's length until the boundary is
+		// crossed, not by both combined. A single flat running delta
+		// applied to every later match overcorrects that case, splicing
+		// its marker at the wrong byte offset (confirmed live: it landed
+		// inside the first footnote's own definition text). Tracking each
+		// insertion's two shifts as separate breakpoints, applied in the
+		// order recorded, gets every later match's offset right regardless
+		// of how many matches share a section.
+		type offsetShift struct{ at, amount int }
+		var shifts []offsetShift
 		for _, m := range eligible {
-			start, end := m.Start+delta, m.End+delta
+			start, end := m.Start, m.End
+			for _, s := range shifts {
+				if start >= s.at {
+					start += s.amount
+				}
+				if end >= s.at {
+					end += s.amount
+				}
+			}
 			if alreadyWikilinked(text, m.Concept) {
 				continue
 			}
 			label := nextFootnoteLabel(text)
 			section := nearestPrecedingHeading(text, start)
-			before := len(text)
+			boundary := nextSectionBoundary(text, end)
+			markerLen := len(fmt.Sprintf("[^%d]", label))
+			defLen := len(fmt.Sprintf("\n[^%d]: see [[%s]]\n", label, m.Concept))
 			text = insertFootnote(text, start, end, m.Concept, label)
-			delta += len(text) - before
+			shifts = append(shifts, offsetShift{at: end, amount: markerLen})
+			shifts = append(shifts, offsetShift{at: boundary, amount: defLen})
 			entries = append(entries, fuzzyTagEntry{
 				Section: section, Text: m.Text, Concept: m.Concept, Distance: m.Distance, Footnote: label,
 			})

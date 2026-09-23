@@ -597,6 +597,53 @@ func TestCmdDocumentFrontmatter_ReportsProposedDateModifiedEvenWhenCurrentExists
 	}
 }
 
+// Found reviewing this code before pre-release prep: a frontmatter key
+// present with an explicit empty value (e.g. a template's "title: ""')
+// made mappingStringValue report ok=true, so the absent-only proposal
+// branch never ran -- the field would never get filled in, with no
+// diagnostic explaining why.
+func TestCmdDocumentFrontmatter_TreatsExplicitEmptyValueAsAbsent(t *testing.T) {
+	kb := openTestKB(t)
+	dir := t.TempDir()
+	content := "---\ntitle: \"\"\n---\n\n# A Real Title\n\nBody.\n"
+	path := filepath.Join(dir, "a.md")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, err := runDocument(t, kb, false, "frontmatter", path, "--accept", "title"); err != nil {
+		t.Fatalf("document frontmatter --accept title: %v", err)
+	}
+	raw, _ := os.ReadFile(path)
+	if !strings.Contains(string(raw), "title: A Real Title") {
+		t.Errorf("file content = %q, want the explicitly-empty title filled in from the H1", string(raw))
+	}
+}
+
+// Found in the same review: --set FIELD= (an explicit empty value) is
+// documented as bypassing signal detection -- "a human's explicit
+// assertion, not a proposal" -- but silently did nothing at all, with no
+// write and no error, because the write-time guard treated an empty value
+// as "nothing to write" regardless of whether it came from a genuine
+// absent proposal or a deliberate --set.
+func TestCmdDocumentFrontmatter_SetEmptyValueWritesRatherThanNoOps(t *testing.T) {
+	kb := openTestKB(t)
+	dir := t.TempDir()
+	content := "---\ntitle: Existing Title\n---\n\nBody.\n"
+	path := filepath.Join(dir, "a.md")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, err := runDocument(t, kb, false, "frontmatter", path, "--set", "title="); err != nil {
+		t.Fatalf("document frontmatter --set title=: %v", err)
+	}
+	raw, _ := os.ReadFile(path)
+	if !strings.Contains(string(raw), `title: ""`) {
+		t.Errorf("file content = %q, want title cleared to an explicit empty string", string(raw))
+	}
+}
+
 func TestCmdDocumentFrontmatter_SetOverridesBypassesSignalDetection(t *testing.T) {
 	kb := openTestKB(t)
 	dir := t.TempDir()
