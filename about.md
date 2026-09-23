@@ -41,9 +41,17 @@ About this software
 
 ## knowledge 0.0.11
 
-Not yet released -- in progress since v0.0.10.
+Three new corpus-improvement features, plus a search bug fix -- fuzzy near-miss tagging, a frontmatter provenance generator, and fuzzy candidate clustering, each of which surfaced and fixed a real self-contradiction in its own design doc before shipping, verified by hand rather than trusting the design's own worked examples.
 
-`kb index ROOT --all` descended into hidden directories, so a git worktree -- which keeps a whole second copy of the tree under `.claude/worktrees/<name>/`, corpus and generated `index.md` included -- was reported as a corpus in its own right (DR-0031). Under `--check` that is a duplicate of a corpus already listed; in write mode `--all` would have rewritten the worktree's copy, editing a throwaway tree instead of the real one. The two-signal rule added in v0.0.9 could not catch it, and correctly so: a worktree copy satisfies both signals, being a byte-identical copy of something that genuinely is a corpus. The walk now prunes any dot-prefixed directory, but never `ROOT` itself, so naming a hidden directory as `ROOT` still finds the corpora inside it. Found by running `--all` live against the real `~/WorkLab`, where it reported 8 corpora where 6 was right -- the same run-it-against-real-data step that caught the original `index.md` false positives in v0.0.9, and the second time it has paid for itself on this one function.
+`kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]` (DR-0032) catches what `tag`'s exact whole-word matching can't: a typo, plural, or simple tense variant of a known concept's name. Inserts a footnote marker at the near-miss plus a footnote definition carrying the canonical `[[Concept]]`, never bracket-wrapping the near-miss text itself, so `ResolveConceptName` can't mint a duplicate concept from a misspelled or inflected form. A follow-up review caught and fixed a real corruption bug before release: two near-misses in the same section could splice a later footnote marker inside an earlier one's own definition text.
+
+`kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]` (DR-0033) proposes `title`/`author`/`dateCreated`/`dateModified`/`keywords` from a document's own prose and git/filesystem provenance -- this module's first `exec.Command` dependency. `author` is a layered signal (a byline in the prose, then git's earliest-commit author, then `git config user.name`), shown together when they disagree rather than collapsed to one guess. A follow-up review caught and fixed two bugs: an explicitly-empty frontmatter value locked a field from ever being filled in, and `--set FIELD=` silently no-op'd instead of writing an explicit empty value.
+
+Fuzzy candidate clustering for `kb concept suggest` (DR-0034) merges spelling variants of the same underlying term (`chunking`/`chunkings`/`chunked`) into one candidate before scoring, not after, so a signal split across variants no longer falls individually below the occurrence/distinctiveness floor. A candidate fuzzy-close to an already-known concept is excluded from candidacy entirely and reported separately. `--json`'s shape changes from a bare array to `{"candidates": [...], "near_existing": [...]}` -- a breaking change for any existing consumer. Live-smoke-tested against the real `agents/knowledge.db`, which found a flat distance-1 threshold with no length floor produced heavy false-positive clustering on short common words, fixed with a length gate.
+
+`kb search TERM` threw a raw SQLite error instead of a normal no-results outcome for any term containing bare punctuation FTS5's own query grammar treats as significant (a `.` in a version string, the case found). `Search` now retries once, quoting the term as a phrase, but only when the first attempt fails with an FTS5 syntax error specifically, so documented raw FTS5 query syntax (multi-word AND, quoted phrases, `prefix*`) keeps working unchanged.
+
+Also includes `kb index ROOT --all`'s hidden-directory pruning fix (DR-0031), shipped just after v0.0.10.
 
 ## Authors
 
@@ -72,6 +80,7 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 - Go >= 1.26.4
 - gopkg.in/yaml.v3 >= 3.0.1
 - github.com/rsdoiel/fountain >= 1.0.2
+- git >= 2.0 (runtime, for kb document frontmatter's provenance detection)
 
 
 ## Software Suggestions

@@ -1,6 +1,6 @@
-%kb-ingest(1) user manual | version 0.0.11 c27967d
+%kb-ingest(1) user manual | version 0.0.11 bb57801
 % R. S. Doiel
-% 2026-09-19
+% 2026-09-23
 
 # NAME
 

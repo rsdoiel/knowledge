@@ -3,6 +3,75 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.11 — 2026-09-23
+
+Three new corpus-improvement features, plus a search bug fix — fuzzy
+near-miss tagging, a frontmatter provenance generator, and fuzzy
+candidate clustering, each of which surfaced and fixed a real
+self-contradiction in its own design doc before shipping, verified by
+hand rather than trusting the design's own worked examples.
+
+### Added
+
+- `kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]`
+  (DR-0032) catches what `tag`'s exact whole-word matching can't: a
+  typo, plural, or simple tense variant of a known concept's name
+  (Levenshtein distance, not paraphrase). Inserts a footnote marker at
+  the near-miss and a footnote definition carrying the canonical
+  `[[Concept]]`, rather than bracket-wrapping the near-miss text itself,
+  so `ResolveConceptName` never mints a duplicate concept from a
+  misspelled or inflected form. `retrieval.go` gains the exported
+  `LevenshteinDistance`/`StripCommonSuffix` primitives, shared with
+  fuzzy clustering below. Live-smoke-tested against a real scratch
+  document; a follow-up review caught and fixed a real corruption bug
+  before release — two near-misses in the same section spliced a later
+  footnote marker *inside* an earlier one's own definition text, from a
+  single running byte-offset delta that overcorrected.
+- `kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords
+  NAME,...] [--set FIELD=VALUE] [--dry-run]` (DR-0033): propose-then-
+  accept `title`/`author`/`dateCreated`/`dateModified`/`keywords` for
+  one document, deriving signals from the document's own prose and
+  git/filesystem provenance — this module's first `exec.Command`
+  dependency. `title`/`author`/`dateCreated` are absent-only, never
+  overwritten once present; `dateModified` is the one exception, always
+  refreshed on an accepted run. `author` is a layered signal (a byline
+  in the prose, then git's earliest-commit author, then `git config
+  user.name`), shown together when they disagree rather than collapsed
+  to one guess. `keywords` diffs the current list against known-concept
+  mentions and new candidate terms distinctive to the document itself,
+  fixing an idf-degeneracy bug the design doc flagged in its own draft.
+  Live-smoke-tested against a real git-tracked project; a follow-up
+  review caught and fixed two bugs — an explicitly-empty frontmatter
+  value (`title: ""`) locked a field from ever being filled in, and
+  `--set FIELD=` (an explicit empty value, documented as bypassing the
+  absent-only rule) silently no-op'd instead of writing.
+- Fuzzy candidate clustering for `kb concept suggest` (DR-0034):
+  spelling variants of the same underlying term (`chunking`/
+  `chunkings`/`chunked`) now merge into one candidate before scoring,
+  not after, so a signal split across variants no longer falls
+  individually below the occurrence/distinctiveness floor. A candidate
+  fuzzy-close to an already-known concept is excluded from candidacy
+  entirely and reported in a trailing near-existing section — that's
+  `fuzzy-tag`'s job, not this command's. `--json`'s shape changes from a
+  bare array to `{"candidates": [...], "near_existing": [...]}` — a
+  breaking change for any existing consumer. Live-smoke-tested against
+  the real `agents/knowledge.db`, which found a second problem beyond
+  the shared design correction: a flat distance-1 threshold with no
+  length floor produced heavy false-positive clustering on short common
+  words (`table`+`stable`+`able`, `old`+`cold`+`told`+`hold`+`fold`),
+  fixed with a length gate.
+
+### Fixed
+
+- `kb search TERM` threw a raw SQLite error (`fts5: syntax error`)
+  instead of a normal no-results outcome for any term containing bare
+  punctuation FTS5's own query grammar treats as significant (a `.` in
+  a version string, the case found). `Search` now retries once, quoting
+  the term as an FTS5 phrase, but only when the first attempt fails with
+  an FTS5 syntax error specifically, so `kb-search(1)`'s documented raw
+  query syntax (multi-word AND, quoted phrases, `prefix*`) keeps working
+  unchanged.
+
 ## v0.0.10 — 2026-09-18
 
 The project-rename completion this module had refused to do since v0.0.9,
