@@ -109,6 +109,19 @@ or a new dependency beyond (deliberately, see decision 3) `git` itself.
      are provenance facts that shouldn't change once true, but this one is
      inherently a live field. Source: git's most recent commit touching the
      file, filesystem `mtime` as fallback.
+
+     **Correction, made during FM5 implementation (2026-09-23):** the
+     schema addition described above was **not made**.
+     `documentFrontmatter` (`documents.go`) is unexported, so `cmd/kb` —
+     where `kb document frontmatter`'s own code lives — cannot reference it
+     across the package boundary regardless of what fields it carries.
+     Current field values (for the "already set, don't overwrite" check)
+     are read directly from the parsed `yaml.Node` mapping instead, which
+     needs no cross-package struct at all. Nothing downstream in the
+     `knowledge` package consumes `dateModified` today either, so the
+     schema addition would have added dead code with no reader. Revisit
+     only if a future caller inside the `knowledge` package itself
+     genuinely needs to read `dateModified` (e.g. `extractFrontmatter`).
    - **`keywords`** — a diff against the current `keywords:` list, not a
      binary, over two candidate sets:
      - **(a) Known concepts** mentioned in the document's own text but not

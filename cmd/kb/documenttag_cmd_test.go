@@ -237,3 +237,9 @@ func TestDocumentHelpText_DocumentsFuzzyTag(t *testing.T) {
 		t.Error("DocumentHelpText does not document the fuzzy-tag subcommand's synopsis")
 	}
 }
+
+func TestDocumentHelpText_DocumentsFrontmatter(t *testing.T) {
+	if !strings.Contains(DocumentHelpText, "document frontmatter PATH") {
+		t.Error("DocumentHelpText does not document the frontmatter subcommand's synopsis")
+	}
+}

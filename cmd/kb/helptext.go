@@ -177,6 +177,8 @@ const DocumentHelpText = `%{app_name}-document(1) user manual | version {version
 
 {app_name} document fuzzy-tag --project P [--concept NAME,...] [--dry-run]
 
+{app_name} document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]
+
 # DESCRIPTION
 
 A document is a narrative or article (Markdown, Fountain, or plain text)
@@ -260,6 +262,35 @@ fuzzy-tag
   concept, checked before any file is touched. A concept already
   footnoted (or wikilinked) anywhere in a file is left alone, so a second
   run is a no-op. --dry-run reports without writing.
+
+frontmatter
+: propose-then-accept ` + "`title`" + `/` + "`author`" + `/` + "`dateCreated`" + `/
+  ` + "`dateModified`" + `/` + "`keywords`" + ` for one document, PATH -- unlike
+  tag/fuzzy-tag, not scoped by --project, since a human reviews one file at
+  a time. A bare invocation (no --accept/--accept-keywords/--set) only
+  reports; nothing is ever written without an explicit selection.
+  ` + "`title`" + `/` + "`author`" + `/` + "`dateCreated`" + ` are absent-only -- never
+  overwritten once present. ` + "`author`" + ` is a layered signal: a byline in
+  the document's own prose wins, then git's earliest-commit author, then
+  ` + "`git config user.name`" + ` -- when signals disagree, the report shows all
+  of them, not just the winner. ` + "`dateModified`" + ` is the one exception to
+  absent-only: always recomputed from git's most recent commit (filesystem
+  mtime otherwise) and rewritten on every accepted run, since a stale value
+  is worse than a missing one. ` + "`keywords`" + ` diffs the current list against
+  two candidate sets: known concepts already mentioned in the text (a plain
+  write on ` + "`--accept-keywords`" + `), and new candidate terms distinctive to
+  this document specifically, scored against the rest of its project (or
+  the whole corpus) with the document itself excluded from that comparison
+  -- accepting one creates the concept first, the same checked-before-any-
+  write discipline ` + "`tag`" + `'s ` + "`--concept`" + ` already holds to.
+  ` + "`--set FIELD=VALUE`" + ` (repeatable) bypasses signal detection and the
+  absent-only rule entirely -- a human's explicit assertion, not a
+  proposal. Editing is surgical: only the frontmatter block changes, via a
+  YAML node edit that leaves every other key, value, and comment in the
+  block untouched; the document body is never modified. This module's
+  first process dependency -- shells out to ` + "`git`" + ` for provenance,
+  falling back to filesystem timestamps when ` + "`git`" + ` itself fails (not a
+  repository, or a genuinely untracked file).
 
 # VOCABULARIES
 

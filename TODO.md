@@ -170,9 +170,9 @@
 ## Planned for v0.0.11
 
 Scoped 2026-09-19, item 5 added 2026-09-22, item 6 (bug) added and fixed
-2026-09-23, item 1 implemented 2026-09-23. Four items; item 1 done, items
-2 and 5 not started, item 6 fixed. The 2026-09-19 scoping also carried
-forward two items — `kb project rename`'s corpus-rewrite fix and
+2026-09-23, items 1 and 2 implemented 2026-09-23. Four items; items 1 and
+2 done, item 5 not started, item 6 fixed. The 2026-09-19 scoping also
+carried forward two items — `kb project rename`'s corpus-rewrite fix and
 cross-machine rename reconciliation in `merge`/`import` — that DR-0026
 (2026-09-18, see Done below) had already shipped the day before; removed
 here 2026-09-22 as stale duplicates once that was noticed.
@@ -207,23 +207,44 @@ here 2026-09-22 as stale duplicates once that was noticed.
   idempotent on rerun, concept actually linked after re-ingest). Decision
   record DR-0032 authored `proposed`, not yet promoted.
 
-- [ ] **A standalone frontmatter-generator command, for documents.**
+- [x] **A standalone frontmatter-generator command, for documents.**
   Explicitly *not* an alternative to `kb document tag` and not folded into
   it — tagging links known concepts into existing prose; this is a
   separate, more general documentation-maintenance tool for
   producing/maintaining a document's frontmatter block on its own terms.
   Filed as `frontmatter-generator-feature-request.md` (2026-09-19):
   propose-then-accept for `title`/`author`/`dateCreated`/`keywords`, plus a
-  **new `dateModified` field** added to the document frontmatter schema as
-  part of this work. Keyword proposals split into known-concept matches
-  (plain write) and new candidate concepts (must be explicitly created on
-  accept, never silently auto-minted at next ingest). **Design and plan
-  finished** — see `frontmatter-generator-design.md` and
-  `frontmatter-generator-plan.md`: verb is `kb document frontmatter PATH
-  [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE]
-  [--dry-run]`; provenance shells out to `git` (this module's first
-  `exec.Command` dependency), falling back to filesystem mtime/birth time.
-  Not yet implemented.
+  new `dateModified` field, and provenance shelling out to `git` (this
+  module's first `exec.Command` dependency), falling back to filesystem
+  mtime.
+
+  **Implemented 2026-09-23** per `frontmatter-generator-plan.md`'s FM1–FM6.
+  Verb: `kb document frontmatter PATH [--accept FIELD,...] [--accept-
+  keywords NAME,...] [--set FIELD=VALUE] [--dry-run]`. New
+  `cmd/kb/documentfrontmatter.go`: git/filesystem provenance primitives,
+  a layered author signal (byline → git first-commit author → `git config
+  user.name`, all shown when they disagree), `scoreDocumentCandidateTerms`
+  (a sibling of `scoreCandidateTerms`, `concept.go`, fixing the design's
+  own flagged idf-degeneracy bug by excluding the target document from its
+  comparison scope), and a `yaml.Node` surgical frontmatter writer that
+  never round-trips through a struct (would silently drop an unrecognized
+  frontmatter key). `documentFrontmatter` (documents.go) was **not**
+  modified as the plan specified — it's unexported, so `cmd/kb` cannot
+  reference it across the package boundary either way; current field
+  values are read directly from the parsed `yaml.Node` instead, and
+  nothing downstream needs the new field surfaced yet. `codemeta.json`
+  gained `git` as a runtime software requirement; `README.md` regenerated.
+  All of FM1–FM6's listed tests pass, plus one regression test added after
+  a bug found live-smoke-testing: the plain-text report silently hid
+  `dateModified`'s always-fresh proposal once a stale value already
+  existed (the "already set" branch matched first) — fixed to show both.
+  `go vet`/`go build` clean; live-verified end-to-end against a real
+  two-document project (git-tracked, real commits): title/author/
+  dateCreated/dateModified proposed and accepted correctly, a known-
+  concept keyword and a brand-new candidate concept both accepted and
+  written, re-ingested, and both concepts confirmed actually linked via
+  `kb document show`. Decision record DR-0033 authored `proposed`, not
+  yet promoted.
 
 - [ ] **Fuzzy-aware `kb concept suggest`**, folded in 2026-09-22 from the
   "To explore" list: see `fuzzy-concept-clustering-design.md`. A distinct

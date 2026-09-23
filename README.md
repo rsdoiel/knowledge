@@ -26,6 +26,7 @@ Not yet released -- in progress since v0.0.10.
 - Go >= 1.26.4
 - gopkg.in/yaml.v3 >= 3.0.1
 - github.com/rsdoiel/fountain >= 1.0.2
+- git >= 2.0 (runtime, for kb document frontmatter's provenance detection)
 
 ### Software Suggestions
 
