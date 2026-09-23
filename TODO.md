@@ -167,25 +167,14 @@
   far; worth weighing explicitly if either of the above turns out too weak
   in practice, not assumed as the starting point.
 
-- [ ] **Fuzzy-aware `kb concept suggest`.** Raised 2026-09-21 alongside the
-  `kb document fuzzy-tag` design (`fuzzy-concept-matching-design.md`), but
-  a distinct mechanism: fuzzy matching there compares document text against
-  *already-known* concepts; this compares `concept suggest`'s own candidate
-  terms *against each other*. Term-gathering (`cmd/kb/concept.go:226`'s
-  occurrences × idf scan) is unchanged — the fuzzy step is a refinement
-  pass over that already-gathered candidate list, clustering similar terms
-  by edit distance and picking a canonical spelling per cluster (default:
-  first mention), the rest listed as variants. Would also fix a real gap in
-  today's scoring: a term split across spelling variants (`chunking`/
-  `chunkings`/`chunked`) currently scores each separately and can fall
-  below the occurrence/idf threshold individually even though the combined
-  mentions clearly signal one real concept — clustering before scoring
-  consolidates the count, not just the label. Not yet designed; no code
-  written.
-
 ## Planned for v0.0.11
 
-Scoped 2026-09-19. Four items, none started yet.
+Scoped 2026-09-19, item 5 added 2026-09-22. Three items, none started yet.
+The 2026-09-19 scoping also carried forward two items — `kb project
+rename`'s corpus-rewrite fix and cross-machine rename reconciliation in
+`merge`/`import` — that DR-0026 (2026-09-18, see Done below) had already
+shipped the day before; removed here 2026-09-22 as stale duplicates once
+that was noticed.
 
 - [ ] **New verb `kb document fuzzy-tag`**, promoted from the
   corpus-improvement-techniques item above and refined 2026-09-21: see
@@ -214,27 +203,36 @@ Scoped 2026-09-19. Four items, none started yet.
   **new `dateModified` field** added to the document frontmatter schema as
   part of this work. Keyword proposals split into known-concept matches
   (plain write) and new candidate concepts (must be explicitly created on
-  accept, never silently auto-minted at next ingest). Verb name, per-
-  document distinctiveness scoring, and whether this takes a new `git`
-  shell-out dependency are all still open — see the feature request's
-  open questions.
+  accept, never silently auto-minted at next ingest). **Design and plan
+  finished** — see `frontmatter-generator-design.md` and
+  `frontmatter-generator-plan.md`: verb is `kb document frontmatter PATH
+  [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE]
+  [--dry-run]`; provenance shells out to `git` (this module's first
+  `exec.Command` dependency), falling back to filesystem mtime/birth time.
+  Not yet implemented.
 
-- [ ] **`kb project rename OLD NEW` refuses outright when `NEW` already
-  exists**, with no path forward, when the real fix is to let the rename
-  proceed by rewriting the colliding corpus's `project:` frontmatter.
-  Identified as a real gap and explicitly deferred in DR-0024's rejected
-  alternatives ("filed as its own future record") — never picked back up.
-  Flagged 2026-09-19 as an oversight, not an intentional deferral, and
-  moved here to make sure it lands this time.
-
-- [ ] **Cross-machine reconciliation of a project/concept *rename* in `kb
-  merge`/`kb import`.** DR-0025 gave ordinary field edits (`description`,
-  `status`) last-writer-wins by `updated_at`, but a rename itself still
-  isn't reconciled — `merge`/`import` dedupe `projects`/`concepts` by
-  `name`, so a rename made on one machine and not yet synced collides with,
-  rather than resolves against, the pre-rename name on the other. Named as
-  an explicit follow-on in DR-0025's own text and never built. Flagged
-  2026-09-19 as an oversight, same as the item above.
+- [ ] **Fuzzy-aware `kb concept suggest`**, folded in 2026-09-22 from the
+  "To explore" list: see `fuzzy-concept-clustering-design.md`. A distinct
+  mechanism from item 1's `fuzzy-tag` — that one matches document text
+  against *already-known* concepts; this one clusters `concept suggest`'s
+  own *candidate* terms *against each other*, before any of them are
+  concepts, so a term split across spelling variants (`chunking`/
+  `chunkings`/`chunked`) scores as one merged candidate instead of several
+  individually-sub-threshold ones. Ten decisions settled: shares
+  Levenshtein/suffix-strip normalization code with `fuzzy-tag` (decision
+  1); clusters the raw pre-filter occurrence map, not the already-limited
+  output (decision 2); a token fuzzy-close to an existing concept is
+  excluded from candidacy and reported separately rather than clustered
+  (decision 3); "star" clustering bounded by distance-to-seed rather than
+  chain/transitive clustering, to avoid unrelated terms drifting together
+  (decision 4); flat distance-1 threshold, tighter than `fuzzy-tag`'s
+  (decision 5); canonical spelling = the highest-occurrence seed (decision
+  6); cluster item-count(df) must union item sets across members, not sum
+  them, or idf comes out wrong (decision 7); output extends `candidateTerm`
+  with an optional `variants` field (decision 8); always on, no flag
+  (decision 9); length-difference pruning keeps the pairwise comparison
+  cheap (decision 10). **Plan finished** — see
+  `fuzzy-concept-clustering-plan.md`. No code written.
 
 ## Done
 
