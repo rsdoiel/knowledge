@@ -2,7 +2,7 @@
 id: "0033"
 title: "kb document frontmatter: propose-then-accept provenance generator"
 date: "2026-09-23"
-status: proposed
+status: accepted
 kind: decision
 trigger: implementation
 project: knowledge

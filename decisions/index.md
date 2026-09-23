@@ -3,9 +3,9 @@
 Generated file. Do not hand-edit.
 
 ```
-DR-0034  2026-09-23  proposed     decision     implementation   -     kb concept suggest: fuzzy candidate clustering via shared Levenshtein primitives
-DR-0033  2026-09-23  proposed     decision     implementation   -     kb document frontmatter: propose-then-accept provenance generator
-DR-0032  2026-09-23  proposed     decision     implementation   -     kb document fuzzy-tag: Levenshtein near-miss matching via footnote insertion
+DR-0034  2026-09-23  accepted     decision     implementation   -     kb concept suggest: fuzzy candidate clustering via shared Levenshtein primitives
+DR-0033  2026-09-23  accepted     decision     implementation   -     kb document frontmatter: propose-then-accept provenance generator
+DR-0032  2026-09-23  accepted     decision     implementation   -     kb document fuzzy-tag: Levenshtein near-miss matching via footnote insertion
 DR-0031  2026-09-18  accepted     correction   live-test        -     kb index --all does not descend into hidden directories
 DR-0030  2026-09-18  accepted     correction   implementation   -     A live-corpus test discovers its corpora and excludes foreign dialects by frontmatter
 DR-0029  2026-09-18  accepted     decision     request          -     kb document tag: explicit wikilink insertion from known concepts

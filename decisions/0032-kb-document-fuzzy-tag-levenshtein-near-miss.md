@@ -2,7 +2,7 @@
 id: "0032"
 title: "kb document fuzzy-tag: Levenshtein near-miss matching via footnote insertion"
 date: "2026-09-23"
-status: proposed
+status: accepted
 kind: decision
 trigger: implementation
 project: knowledge
