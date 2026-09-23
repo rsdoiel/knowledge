@@ -2387,3 +2387,46 @@ func TestRecordConcepts_EmptyWhenNoneLinked(t *testing.T) {
 		t.Errorf("expected no linked concepts, got %+v", concepts)
 	}
 }
+
+// A term like "v0.0.11" is not meant as FTS5 query syntax by whoever typed
+// it, but the raw term is bound straight into MATCH, whose own query
+// grammar treats a bare "." as neither a token character nor a recognized
+// operator: `sqlite3 ... MATCH 'v0.0.11'` fails outright with "fts5: syntax
+// error near \".\"" (confirmed live against kb_fts before this fix). Search
+// must degrade a term like this to an ordinary literal-phrase match, not
+// surface the raw driver error to the caller.
+func TestSearch_TermWithBarePunctuationDoesNotError(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	if _, err := kb.AddObservation(pid, "note", "shipped as v0.0.11 today"); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	results, err := kb.Search("v0.0.11")
+	if err != nil {
+		t.Fatalf("Search(%q) returned an error, want it to degrade gracefully: %v", "v0.0.11", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Search(%q) = %d results, want 1", "v0.0.11", len(results))
+	}
+}
+
+// Existing FTS5 query syntax (documented in kb-search(1): multi-word AND,
+// quoted phrases, prefix "*") must keep working once bare punctuation is
+// handled — the fix must not blanket-quote every term.
+func TestSearch_MultiWordTermStillANDs(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	if _, err := kb.AddObservation(pid, "note", "zzalphazz and zzbetazz both present"); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	if _, err := kb.AddObservation(pid, "note", "only zzalphazz present here"); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	results, err := kb.Search("zzalphazz zzbetazz")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Search(%q) = %d results, want 1 (AND of both terms)", "zzalphazz zzbetazz", len(results))
+	}
+}

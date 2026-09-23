@@ -1643,6 +1643,26 @@ func (kb *KnowledgeBase) Search(term string) ([]KBSearchResult, error) {
 	if !kb.ftsAvailable {
 		return nil, fmt.Errorf("full-text search is not available (FTS5 not compiled in)")
 	}
+	out, err := kb.runSearch(term)
+	if err != nil && isFTS5SyntaxError(err) {
+		// The raw term isn't valid FTS5 query syntax (e.g. a bare "." in a
+		// version string, which is neither a token character nor a grammar
+		// operator). Whoever typed it meant a literal string, not a query,
+		// so retry as a quoted phrase instead of surfacing the parse error.
+		out, err = kb.runSearch(`"` + strings.ReplaceAll(term, `"`, `""`) + `"`)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: search %q: %w", term, err)
+	}
+	return out, nil
+}
+
+// runSearch runs the kb_fts MATCH query with the given raw term, so Search
+// can retry it once with a different term when FTS5 rejects the first as
+// invalid query syntax. The FTS5 driver used here surfaces a MATCH parse
+// error while stepping through rows, not from Query itself, so the error
+// must be observed via rows.Err() before Search can decide whether to retry.
+func (kb *KnowledgeBase) runSearch(term string) ([]KBSearchResult, error) {
 	rows, err := kb.db.Query(`
 		SELECT kb_fts.kind,
 		       CASE WHEN kb_fts.source_type = 'observation'
@@ -1658,7 +1678,7 @@ func (kb *KnowledgeBase) Search(term string) ([]KBSearchResult, error) {
 		LIMIT  50
 	`, term)
 	if err != nil {
-		return nil, fmt.Errorf("knowledge: search %q: %w", term, err)
+		return nil, err
 	}
 	defer rows.Close()
 	var out []KBSearchResult
@@ -1670,6 +1690,13 @@ func (kb *KnowledgeBase) Search(term string) ([]KBSearchResult, error) {
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// isFTS5SyntaxError reports whether err came from FTS5 rejecting a MATCH
+// term as invalid query syntax (as opposed to some other query failure),
+// so Search only retries a query it has a real fix for.
+func isFTS5SyntaxError(err error) bool {
+	return strings.Contains(err.Error(), "fts5: syntax error")
 }
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────

@@ -169,8 +169,9 @@
 
 ## Planned for v0.0.11
 
-Scoped 2026-09-19, item 5 added 2026-09-22. Three items, none started yet.
-The 2026-09-19 scoping also carried forward two items — `kb project
+Scoped 2026-09-19, item 5 added 2026-09-22, item 6 (bug) added and fixed
+2026-09-23. Four items; three (1, 2, 5) not started, item 6 fixed. The
+2026-09-19 scoping also carried forward two items — `kb project
 rename`'s corpus-rewrite fix and cross-machine rename reconciliation in
 `merge`/`import` — that DR-0026 (2026-09-18, see Done below) had already
 shipped the day before; removed here 2026-09-22 as stale duplicates once
@@ -233,6 +234,38 @@ that was noticed.
   (decision 9); length-difference pruning keeps the pairwise comparison
   cheap (decision 10). **Plan finished** — see
   `fuzzy-concept-clustering-plan.md`. No code written.
+
+- [x] **Bug: `kb search TERM` threw a raw SQLite error instead of a normal
+  "no results" for any term containing bare punctuation FTS5's query
+  grammar treats as significant** (a `.` was the case found; likely also
+  `-`, `:`, `*`, parens). Root cause confirmed live 2026-09-23:
+  `Search` (`knowledge.go`, `WHERE kb_fts MATCH ?`) bound the user's raw
+  term directly as the MATCH string. FTS5 parses that string with its own
+  query grammar (`AND`/`OR`/`NOT`/`NEAR`/column-filters/phrases) *before*
+  tokenizing, so an unquoted `.` — not a token character for `unicode61`
+  and not a grammar operator either — had nowhere to go:
+  `sqlite3 ... MATCH 'v0.0.11'` → `Error: fts5: syntax error near "."`,
+  while `MATCH '"v0.0.11"'` (quoted phrase, grammar doesn't look inside
+  quotes) returns 9 rows.
+
+  **Fixed 2026-09-23.** `kb-search(1)`/the CLI helptext document raw FTS5
+  query syntax as a supported feature (multi-word AND, quoted phrases,
+  `prefix*`), so the fix could not blanket-quote every term — that would
+  have silently turned `kb search foo bar` from an AND of two terms into
+  an adjacency phrase. Instead `Search` now retries once, only when the
+  first attempt's error is specifically an FTS5 syntax error
+  (`isFTS5SyntaxError`, matched on `"fts5: syntax error"` in the driver's
+  error text), rewriting the term as a quoted, `"`-escaped phrase before
+  the retry. The `glebarez/go-sqlite` driver surfaces a MATCH parse error
+  while stepping rows, not from `Query` itself, so the query logic moved
+  into a `runSearch` helper whose error is observed via `rows.Err()`
+  before `Search` decides whether to retry. TDD: `knowledge_test.go`
+  gained `TestSearch_TermWithBarePunctuationDoesNotError` (confirmed red
+  against the unfixed code) and `TestSearch_MultiWordTermStillANDs` as a
+  regression guard for the documented AND syntax. `go build`/`go vet`/
+  `go test ./...` clean; live-verified with `kb search "v0.0.11"` against
+  the real `agents/knowledge.db` (exit 0, one result, no driver error).
+  Not yet committed or given a decision record.
 
 ## Done
 
