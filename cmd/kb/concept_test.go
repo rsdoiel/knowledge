@@ -13,7 +13,7 @@ import (
 
 func TestScoreCandidateTerms_RequiresMoreThanOneOccurrence(t *testing.T) {
 	items := []string{"chunking showed up once here", "nothing else relevant"}
-	got := scoreCandidateTerms(items, nil)
+	got, _ := scoreCandidateTerms(items, nil)
 	for _, c := range got {
 		if c.Term == "chunking" {
 			t.Errorf("candidates = %+v, want chunking excluded -- only one occurrence in the whole corpus", got)
@@ -26,7 +26,7 @@ func TestScoreCandidateTerms_IncludesTermMentionedTwice(t *testing.T) {
 	// every item (df < n), or its idf collapses to zero regardless of how
 	// many times it's mentioned -- see ExcludesUbiquitousTerm below.
 	items := []string{"chunking showed up here", "chunking showed up again here too", "something else entirely"}
-	got := scoreCandidateTerms(items, nil)
+	got, _ := scoreCandidateTerms(items, nil)
 	found := false
 	for _, c := range got {
 		if c.Term == "chunking" {
@@ -44,7 +44,7 @@ func TestScoreCandidateTerms_IncludesTermMentionedTwice(t *testing.T) {
 func TestScoreCandidateTerms_ExcludesKnownConcepts(t *testing.T) {
 	items := []string{"chunking showed up here", "chunking showed up again here too"}
 	known := map[string]bool{"chunking": true}
-	got := scoreCandidateTerms(items, known)
+	got, _ := scoreCandidateTerms(items, known)
 	for _, c := range got {
 		if c.Term == "chunking" {
 			t.Errorf("candidates = %+v, want chunking excluded -- it is already a known concept", got)
@@ -59,7 +59,7 @@ func TestScoreCandidateTerms_ExcludesUbiquitousTerm(t *testing.T) {
 		"widget one context here", "widget two context here",
 		"widget three context here", "widget four context here",
 	}
-	got := scoreCandidateTerms(items, nil)
+	got, _ := scoreCandidateTerms(items, nil)
 	for _, c := range got {
 		if c.Term == "widget" {
 			t.Errorf("candidates = %+v, want widget excluded -- present in every item, not distinctive", got)
@@ -81,7 +81,7 @@ func TestScoreCandidateTerms_ExcludesRecordIDShapedTokens(t *testing.T) {
 		"dr-0013 is referenced again here",
 		"something unrelated entirely",
 	}
-	got := scoreCandidateTerms(items, nil)
+	got, _ := scoreCandidateTerms(items, nil)
 	for _, c := range got {
 		if c.Term == "dr-0013" {
 			t.Errorf("candidates = %+v, want dr-0013 excluded -- it names a record, not a concept", got)
@@ -91,7 +91,7 @@ func TestScoreCandidateTerms_ExcludesRecordIDShapedTokens(t *testing.T) {
 
 func TestScoreCandidateTerms_ExcludesStopwords(t *testing.T) {
 	items := []string{"the and this that appear here", "the and this that appear again"}
-	got := scoreCandidateTerms(items, nil)
+	got, _ := scoreCandidateTerms(items, nil)
 	for _, c := range got {
 		if c.Term == "the" || c.Term == "and" || c.Term == "this" || c.Term == "that" {
 			t.Errorf("candidates = %+v, want common stopwords excluded", got)
@@ -104,7 +104,7 @@ func TestScoreCandidateTerms_ExcludesCodeSpans(t *testing.T) {
 		"saw `const format = x` once, then `unsupported format` again",
 		"nothing else relevant here",
 	}
-	got := scoreCandidateTerms(items, nil)
+	got, _ := scoreCandidateTerms(items, nil)
 	for _, c := range got {
 		if c.Term == "format" {
 			t.Errorf("candidates = %+v, want format excluded -- both mentions are inside inline code spans", got)
@@ -121,7 +121,7 @@ func TestScoreCandidateTerms_RanksMoreDistinctiveTermsFirst(t *testing.T) {
 		"sprocket appears here too",
 		"sprocket appears yet again",
 	}
-	got := scoreCandidateTerms(items, nil)
+	got, _ := scoreCandidateTerms(items, nil)
 	if len(got) < 2 {
 		t.Fatalf("candidates = %+v, want at least gadget and sprocket", got)
 	}
@@ -135,9 +135,31 @@ func TestScoreCandidateTerms_RanksMoreDistinctiveTermsFirst(t *testing.T) {
 }
 
 func TestScoreCandidateTerms_EmptyCorpusReturnsNil(t *testing.T) {
-	got := scoreCandidateTerms(nil, nil)
+	got, _ := scoreCandidateTerms(nil, nil)
 	if len(got) != 0 {
 		t.Errorf("candidates = %+v, want none for an empty corpus", got)
+	}
+}
+
+// itemCounts (FC2) tracks a set of item indices per term, not a bare count,
+// so two mentions of the same term within one item still count once toward
+// that term's df -- a third, unrelated item keeps the term from appearing
+// in literally every item (idf would otherwise collapse to zero).
+func TestScoreCandidateTerms_ItemCountsTracksDistinctItemIndices(t *testing.T) {
+	items := []string{
+		"gadgetry mentioned here, and gadgetry again in the very same item",
+		"something else entirely, unrelated to the first item",
+	}
+	got, _ := scoreCandidateTerms(items, nil)
+	for _, c := range got {
+		if c.Term == "gadgetry" {
+			if c.Occurrences != 2 {
+				t.Errorf("gadgetry.Occurrences = %d, want 2 (two mentions)", c.Occurrences)
+			}
+			if c.Items != 1 {
+				t.Errorf("gadgetry.Items = %d, want 1 (both mentions in the same item)", c.Items)
+			}
+		}
 	}
 }
 
@@ -299,18 +321,20 @@ func TestCmdConcept_SuggestScansRecordAndDocumentBodies(t *testing.T) {
 	if err := cmdConcept(kb, nil, true, []string{"suggest"}, &out); err != nil {
 		t.Fatalf("concept suggest: %v", err)
 	}
-	var got []map[string]any
+	var got struct {
+		Candidates []map[string]any `json:"candidates"`
+	}
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("output not valid JSON: %v (%q)", err, out.String())
 	}
 	found := false
-	for _, c := range got {
+	for _, c := range got.Candidates {
 		if c["term"] == "chunking" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("suggestions = %v, want chunking, mentioned across a record and a document", got)
+		t.Errorf("suggestions = %v, want chunking, mentioned across a record and a document", got.Candidates)
 	}
 }
 
@@ -382,10 +406,12 @@ func TestCmdConcept_SuggestRespectsLimit(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AddRecord: %v", err)
 	}
-	var got []candidateTerm
+	var got struct {
+		Candidates []candidateTerm `json:"candidates"`
+	}
 	runConceptJSON(t, kb, &got, "suggest", "--limit", "2")
-	if len(got) > 2 {
-		t.Errorf("got %d suggestions, want at most 2 (--limit 2)", len(got))
+	if len(got.Candidates) > 2 {
+		t.Errorf("got %d suggestions, want at most 2 (--limit 2)", len(got.Candidates))
 	}
 }
 
@@ -423,5 +449,11 @@ func runConceptJSON(t *testing.T, kb *knowledge.KnowledgeBase, v any, args ...st
 func TestConceptHelpText_DocumentsSuggest(t *testing.T) {
 	if !strings.Contains(ConceptHelpText, "suggest") {
 		t.Error("ConceptHelpText does not document suggest")
+	}
+}
+
+func TestConceptHelpText_DocumentsFuzzyClustering(t *testing.T) {
+	if !strings.Contains(ConceptHelpText, "near-existing (excluded from candidates):") {
+		t.Error("ConceptHelpText does not document the near-existing exclusion section")
 	}
 }

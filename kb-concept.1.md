@@ -1,4 +1,4 @@
-%kb-concept(1) user manual | version 0.0.11 72704ce
+%kb-concept(1) user manual | version 0.0.11 c27967d
 % R. S. Doiel
 % 2026-09-19
 
@@ -52,6 +52,21 @@ suggest
   outright rather than scored. --limit caps the number printed (default
   20). Never writes anything -- a suggestion becomes a real concept only
   when a human runs concept add. See DR-0028 (knowledge/decisions/).
+
+  Spelling variants of the same underlying term (`chunking`/
+  `chunkings`/`chunked`) are merged into one candidate before
+  scoring, not after -- individually each might fall below the occurrence
+  or distinctiveness floor even though the combined mentions clearly
+  signal one real concept. The merged candidate's name is its highest-
+  occurrence spelling; other spellings are printed inline,
+  `chunking (+chunkings, chunked)`. Always on, no flag. A candidate
+  term that's instead a fuzzy near-miss of an *already-known* concept is
+  excluded from candidacy outright -- that's `fuzzy-tag`'s job, not
+  this command's -- and reported separately in a trailing
+  `near-existing (excluded from candidates):` section, printed only
+  when non-empty. `--json` carries both:
+  `{"candidates": [...], "near_existing": [...]}`. See DR-0034
+  (knowledge/decisions/).
 
 # CAVEATS
 

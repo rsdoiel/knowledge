@@ -117,12 +117,18 @@ func cmdConceptList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 
 // candidateTerm is one term-frequency suggestion for `kb concept suggest`
 // (TODO.md's programmatic-corpus-improvement item), ranked by corpus-wide
-// distinctiveness rather than raw frequency.
+// distinctiveness rather than raw frequency. Variants is v0.0.11 item 5's
+// fuzzy clustering addition: spelling variants of Term (the cluster's
+// highest-occurrence member, its canonical spelling) merged into this one
+// candidate rather than scored separately -- omitted from JSON, and empty
+// in Go, for a singleton (the common case), so existing output/consumers
+// see no change.
 type candidateTerm struct {
-	Term        string  `json:"term"`
-	Occurrences int     `json:"occurrences"`
-	Items       int     `json:"items"`
-	Score       float64 `json:"score"`
+	Term        string   `json:"term"`
+	Occurrences int      `json:"occurrences"`
+	Items       int      `json:"items"`
+	Score       float64  `json:"score"`
+	Variants    []string `json:"variants,omitempty"`
 }
 
 // candidateTermPattern extracts single-word candidate terms: a letter
@@ -181,13 +187,56 @@ func init() {
 // Returned sorted by score descending, term ascending on a tie, for
 // deterministic output; nil for an empty corpus or when nothing survives
 // the filters.
-func scoreCandidateTerms(items []string, known map[string]bool) []candidateTerm {
+func scoreCandidateTerms(items []string, known map[string]bool) (candidates []candidateTerm, nearExisting []nearExistingMatch) {
 	if len(items) == 0 {
-		return nil
+		return nil, nil
 	}
-	occurrences := map[string]int{}
-	itemCounts := map[string]int{}
-	for _, item := range items {
+	occurrences, itemCounts := tokenizeCandidateItems(items, known)
+
+	// v0.0.11 item 5: a token fuzzy-close to an already-known concept is
+	// excluded from candidacy entirely (fuzzy-tag's job, not this
+	// command's), and clustering runs on the raw, pre-filter occurrence
+	// map -- a variant individually below the occ<2/idf<=0 floor only
+	// survives merged into a cluster, not scored on its own.
+	survivors, nearExisting := excludeNearExisting(occurrences, known)
+	clusters := clusterCandidateTerms(occurrences, itemCounts, survivors)
+
+	n := float64(len(items))
+	var out []candidateTerm
+	for _, c := range clusters {
+		if c.Occurrences < 2 {
+			continue
+		}
+		df := len(c.Items)
+		idf := math.Log(n / float64(df))
+		if idf <= 0 {
+			continue
+		}
+		out = append(out, candidateTerm{
+			Term: c.Seed, Variants: c.Variants,
+			Occurrences: c.Occurrences, Items: df, Score: float64(c.Occurrences) * idf,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		return out[i].Term < out[j].Term
+	})
+	return out, nearExisting
+}
+
+// tokenizeCandidateItems is scoreCandidateTerms's shared tokenization pass,
+// factored out so fuzzy clustering (FC4) can build its own occurrence/
+// item-index maps identically before scoreCandidateTerms's filter loop
+// runs. itemCounts is a set of item indices per term (FC2, design decision
+// 7), not a bare count -- needed so a cluster's df can be computed as the
+// size of a *union* across members, not a sum; two mentions of the same
+// term within one item still count once toward that term's df.
+func tokenizeCandidateItems(items []string, known map[string]bool) (occurrences map[string]int, itemCounts map[string]map[int]bool) {
+	occurrences = map[string]int{}
+	itemCounts = map[string]map[int]bool{}
+	for i, item := range items {
 		text := strings.ToLower(stripCodeSpans(item))
 		seenInItem := map[string]bool{}
 		for _, tok := range candidateTermPattern.FindAllString(text, -1) {
@@ -197,30 +246,14 @@ func scoreCandidateTerms(items []string, known map[string]bool) []candidateTerm 
 			occurrences[tok]++
 			if !seenInItem[tok] {
 				seenInItem[tok] = true
-				itemCounts[tok]++
+				if itemCounts[tok] == nil {
+					itemCounts[tok] = map[int]bool{}
+				}
+				itemCounts[tok][i] = true
 			}
 		}
 	}
-	n := float64(len(items))
-	var out []candidateTerm
-	for term, occ := range occurrences {
-		if occ < 2 {
-			continue
-		}
-		df := itemCounts[term]
-		idf := math.Log(n / float64(df))
-		if idf <= 0 {
-			continue
-		}
-		out = append(out, candidateTerm{Term: term, Occurrences: occ, Items: df, Score: float64(occ) * idf})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Score != out[j].Score {
-			return out[i].Score > out[j].Score
-		}
-		return out[i].Term < out[j].Term
-	})
-	return out
+	return occurrences, itemCounts
 }
 
 // cmdConceptSuggest implements `kb concept suggest [--project NAME]
@@ -290,20 +323,29 @@ func cmdConceptSuggest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, 
 	}
 
 	dl.Log("concept suggest", map[string]any{"project": *projectName, "items": len(items)})
-	candidates := scoreCandidateTerms(items, known)
+	candidates, nearExisting := scoreCandidateTerms(items, known)
 	if *limit > 0 && len(candidates) > *limit {
 		candidates = candidates[:*limit]
 	}
 
 	if jsonOut {
-		return printJSON(out, candidates)
+		return printJSON(out, map[string]any{"candidates": candidates, "near_existing": nearExisting})
 	}
 	if len(candidates) == 0 {
 		fmt.Fprintln(out, "no candidate concepts found")
-		return nil
 	}
 	for i, c := range candidates {
-		fmt.Fprintf(out, "%2d. %-24s  score=%.2f  occurrences=%d  items=%d\n", i+1, c.Term, c.Score, c.Occurrences, c.Items)
+		name := c.Term
+		if len(c.Variants) > 0 {
+			name = fmt.Sprintf("%s (+%s)", c.Term, strings.Join(c.Variants, ", "))
+		}
+		fmt.Fprintf(out, "%2d. %-24s  score=%.2f  occurrences=%d  items=%d\n", i+1, name, c.Score, c.Occurrences, c.Items)
+	}
+	if len(nearExisting) > 0 {
+		fmt.Fprintln(out, "\nnear-existing (excluded from candidates):")
+		for _, m := range nearExisting {
+			fmt.Fprintf(out, "  %s  ~  %s  (distance %d)\n", m.Token, m.Concept, m.Distance)
+		}
 	}
 	return nil
 }

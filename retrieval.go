@@ -307,10 +307,26 @@ var fuzzyTokenPattern = regexp.MustCompile(`\b[\p{L}\p{N}']+\b`)
 // multi-word concept name requires.
 var wholeGapPattern = regexp.MustCompile(`^\s*$`)
 
-// levenshteinDistance is the classic edit distance between a and b, computed
-// over runes (not bytes) since concept names and document prose aren't
-// guaranteed ASCII. Two-row iterative DP.
-func levenshteinDistance(a, b string) int {
+/** LevenshteinDistance is the classic edit distance between a and b,
+ * computed over runes (not bytes) since concept names and document prose
+ * aren't guaranteed ASCII. Two-row iterative DP. Exported so cmd/kb's
+ * fuzzy clustering (`kb concept suggest`, v0.0.11 item 5) can share this
+ * exact implementation with FuzzyMatchConceptNames (`kb document
+ * fuzzy-tag`), rather than a second copy of the same algorithm — design
+ * decision 1 of fuzzy-concept-clustering-design.md.
+ *
+ * Parameters:
+ *   a (string) — first string.
+ *   b (string) — second string.
+ *
+ * Returns:
+ *   int — the edit distance between a and b.
+ *
+ * Example:
+ *   d := knowledge.LevenshteinDistance("chunking", "chunkings")
+ *   fmt.Println(d) // 1
+ */
+func LevenshteinDistance(a, b string) int {
 	ra, rb := []rune(a), []rune(b)
 	prev := make([]int, len(rb)+1)
 	curr := make([]int, len(rb)+1)
@@ -348,11 +364,23 @@ func min3(a, b, c int) int {
 // "es", not "s", leaving "box" rather than "boxe").
 var fuzzySuffixes = []string{"ing", "es", "ed", "s"}
 
-// stripCommonSuffix lowercases s and strips exactly one trailing suffix from
-// fuzzySuffixes (longest match first) -- deliberately crude, not a real
-// stemmer: a single strip, never iterative, and returns s unchanged if none
-// of the fixed suffixes match.
-func stripCommonSuffix(s string) string {
+/** StripCommonSuffix lowercases s and strips exactly one trailing suffix
+ * from a fixed list (`ing`/`es`/`ed`/`s`, longest match first) --
+ * deliberately crude, not a real stemmer: a single strip, never iterative,
+ * and returns s unchanged if none of the fixed suffixes match. Exported
+ * for the same reason as LevenshteinDistance: shared verbatim between
+ * `kb document fuzzy-tag` and `kb concept suggest`'s fuzzy clustering.
+ *
+ * Parameters:
+ *   s (string) — the word to normalize.
+ *
+ * Returns:
+ *   string — s with its longest matching suffix stripped, or unchanged.
+ *
+ * Example:
+ *   knowledge.StripCommonSuffix("chunkings") // "chunking"
+ */
+func StripCommonSuffix(s string) string {
 	s = strings.ToLower(s)
 	for _, suf := range fuzzySuffixes {
 		if strings.HasSuffix(s, suf) {
@@ -383,11 +411,11 @@ type fuzzyToken struct {
 // "chunk" via its own trailing "ing", which no longer resembles the token
 // being compared against).
 func fuzzyDistance(concept, candidate string) (distance int, ok bool) {
-	raw := levenshteinDistance(concept, candidate)
+	raw := LevenshteinDistance(concept, candidate)
 	if raw > 0 && raw <= maxFuzzyDistance {
 		return raw, true
 	}
-	stemmed := levenshteinDistance(concept, stripCommonSuffix(candidate))
+	stemmed := LevenshteinDistance(concept, StripCommonSuffix(candidate))
 	if stemmed <= maxFuzzyDistance {
 		return stemmed, true
 	}

@@ -74,6 +74,16 @@ scoring, not after.
    `--json` gets a parallel `"near_existing"` array alongside
    `"candidates"`.
 
+   **Correction, made during FC3 implementation (2026-09-23):** "normalize
+   the token... compare via levenshteinDistance" as originally written
+   means stemming *both* sides via `stripCommonSuffix` before comparing —
+   the same mistake `fuzzy-concept-matching-design.md` decision 5 made and
+   corrected. Computed directly: stemming both `chunkings` (→ `chunking`,
+   strips only `s`) and `chunking` (→ `chunk`, strips `ing`) gives distance
+   **3**, not the claimed **1** — this design's own worked example would
+   never actually fire. See decision 4's matching correction below for the
+   fix (a shared two-tier check), which this function uses identically.
+
 4. **Clustering algorithm: "star" clustering, bounded by distance-to-seed
    — not chain (single-linkage) clustering.** Plain transitive union-find
    was considered and rejected: it lets A-B-C-D chain together when each
@@ -95,6 +105,32 @@ scoring, not after.
    - Repeat from the next unassigned token until none remain.
    - A cluster of size 1 (no variants found) is the common case and
      renders exactly as today.
+
+   **Correction, made during FC4 implementation (2026-09-23):** comparing
+   a candidate against the seed via `levenshteinDistance` on both sides'
+   `stripCommonSuffix` form, as originally written, breaks on this
+   decision's own motivating trio — computed directly: `chunking`/
+   `chunkings` (raw distance 1, no stemming needed) both-stemmed gives
+   distance 3 (stemming `chunking` itself via its own trailing `ing` turns
+   it into `chunk`, no longer resembling `chunkings`' stem `chunking`).
+   Conversely `chunking`/`chunked` — raw distance 3, exceeding threshold —
+   only comes within distance 0 when *both* sides are stemmed (both
+   reduce to `chunk`). Neither a raw-only nor a stemmed-only check
+   catches both pairs. **Corrected algorithm, as actually implemented**
+   (`fuzzyTermsClose` in `cmd/kb/concept.go`, shared by this function and
+   `excludeNearExisting`): try raw distance first (length-pruned per
+   decision 10); if that doesn't qualify, fall back to comparing both
+   sides' `stripCommonSuffix` forms (also length-pruned). This is a
+   *symmetric* fallback — unlike `fuzzy-tag`'s own corrected algorithm,
+   which only ever stems the candidate token and never the canonical
+   concept name it's matched against — because here both sides are
+   equally unverified candidate terms; there is no canonical side to
+   protect from stemming. Star clustering's own anti-drift property (only
+   ever checked against the seed) still holds: `chunkings` and `chunked`
+   are not within threshold of *each other* under this corrected check
+   either, but both independently qualify against seed `chunking`, so all
+   three still join one cluster exactly as the motivating example
+   intends.
 
 5. **Threshold: flat `distance <= 1`, normalized-length difference must
    also be `<= 1`** — no length-based 1-or-2 split like fuzzy-tag uses.
@@ -148,6 +184,31 @@ scoring, not after.
     `agents/knowledge.db` the same live-smoke-test way DR-0028/DR-0029
     were validated, and only add more structure if that shows it's
     actually slow.
+
+**Addendum, found live smoke-testing against `agents/knowledge.db` (2026-09-23):**
+a flat `distance <= 1` threshold with no length floor produced heavy
+false-positive clustering specific to short, common candidate terms --
+`table (+tables, stable, able)`, `old (+holds, holding, hold, folding,
+fold, folded, cold, folds, told)`, `makes (+make, making, man, takes, map,
+marked, bakes, marks)` -- a different failure mode than the chain-drift
+risk decision 4 already guards against, and one decision 5's own "flat
+threshold, no length-based split" wording didn't anticipate (that
+reasoning is about not *loosening* the threshold for long words, not
+about *tightening* it for short ones). **Fixed with a
+`minFuzzyTermLength` gate (6 characters, provisional)**: below this
+length, `fuzzyTermsClose` never compares two terms at all, in either
+tier. Applied uniformly to both `excludeNearExisting` and
+`clusterCandidateTerms`, since both go through the same shared function.
+Re-running the same corpus afterward: all of the above false positives
+gone, genuine merges (`rename`/`renamed`/`renaming`/`renames`,
+`import`/`imported`/`importing`/`imports`) unaffected. One residual,
+much smaller-scale case remains and is accepted rather than chased
+further: `reference`/`preference` merge (edit distance 1, both well
+above the length floor) despite being two unrelated real words that
+happen to be a coincidental one-character edit apart -- inherent to
+pure edit distance with no semantic/dictionary check, and within the
+"deliberately crude, expected to need validation" bar this design
+already set for itself.
 
 ## Deferred, explicitly
 

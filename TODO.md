@@ -170,12 +170,12 @@
 ## Planned for v0.0.11
 
 Scoped 2026-09-19, item 5 added 2026-09-22, item 6 (bug) added and fixed
-2026-09-23, items 1 and 2 implemented 2026-09-23. Four items; items 1 and
-2 done, item 5 not started, item 6 fixed. The 2026-09-19 scoping also
-carried forward two items — `kb project rename`'s corpus-rewrite fix and
-cross-machine rename reconciliation in `merge`/`import` — that DR-0026
-(2026-09-18, see Done below) had already shipped the day before; removed
-here 2026-09-22 as stale duplicates once that was noticed.
+2026-09-23, items 1, 2, and 5 implemented 2026-09-23. **All four items
+done.** The 2026-09-19 scoping also carried forward two items — `kb
+project rename`'s corpus-rewrite fix and cross-machine rename
+reconciliation in `merge`/`import` — that DR-0026 (2026-09-18, see Done
+below) had already shipped the day before; removed here 2026-09-22 as
+stale duplicates once that was noticed.
 
 - [x] **New verb `kb document fuzzy-tag`**, promoted from the
   corpus-improvement-techniques item above and refined 2026-09-21: see
@@ -246,28 +246,51 @@ here 2026-09-22 as stale duplicates once that was noticed.
   `kb document show`. Decision record DR-0033 authored `proposed`, not
   yet promoted.
 
-- [ ] **Fuzzy-aware `kb concept suggest`**, folded in 2026-09-22 from the
+- [x] **Fuzzy-aware `kb concept suggest`**, folded in 2026-09-22 from the
   "To explore" list: see `fuzzy-concept-clustering-design.md`. A distinct
   mechanism from item 1's `fuzzy-tag` — that one matches document text
   against *already-known* concepts; this one clusters `concept suggest`'s
   own *candidate* terms *against each other*, before any of them are
   concepts, so a term split across spelling variants (`chunking`/
   `chunkings`/`chunked`) scores as one merged candidate instead of several
-  individually-sub-threshold ones. Ten decisions settled: shares
-  Levenshtein/suffix-strip normalization code with `fuzzy-tag` (decision
-  1); clusters the raw pre-filter occurrence map, not the already-limited
-  output (decision 2); a token fuzzy-close to an existing concept is
-  excluded from candidacy and reported separately rather than clustered
-  (decision 3); "star" clustering bounded by distance-to-seed rather than
-  chain/transitive clustering, to avoid unrelated terms drifting together
-  (decision 4); flat distance-1 threshold, tighter than `fuzzy-tag`'s
-  (decision 5); canonical spelling = the highest-occurrence seed (decision
-  6); cluster item-count(df) must union item sets across members, not sum
-  them, or idf comes out wrong (decision 7); output extends `candidateTerm`
-  with an optional `variants` field (decision 8); always on, no flag
-  (decision 9); length-difference pruning keeps the pairwise comparison
-  cheap (decision 10). **Plan finished** — see
-  `fuzzy-concept-clustering-plan.md`. No code written.
+  individually-sub-threshold ones.
+
+  **Implemented 2026-09-23** per `fuzzy-concept-clustering-plan.md`'s
+  FC1–FC5 (FC1 was already satisfied by item 1's
+  `LevenshteinDistance`/`StripCommonSuffix` in `retrieval.go` — exported
+  from their original unexported form so `cmd/kb` could call them at all,
+  a cross-package gap the plan hadn't accounted for). Found and corrected
+  the same class of self-contradiction item 1 hit: decisions 3 and 4's
+  "stem both sides via `stripCommonSuffix`" breaks the design's own
+  chunking/chunkings example (distance 3, not 1); fixed with a shared
+  two-tier `fuzzyTermsClose` (raw distance first, both-sides-stemmed
+  fallback second — symmetric here, unlike fuzzy-tag's asymmetric
+  fallback, since both sides are equally unverified candidates). New
+  `cmd/kb/conceptcluster.go`: `excludeNearExisting` (FC3),
+  `clusterCandidateTerms` (FC4, star clustering — verified against the
+  classic cat/cot/cog/dog chain-drift case). `scoreCandidateTerms`
+  (`concept.go`) now returns `(candidates, nearExisting)`; `candidateTerm`
+  gained an optional `variants` field; `cmdConceptSuggest` renders
+  `chunking (+chunkings, chunked)` inline and a trailing near-existing
+  section, `--json` gains a parallel `near_existing` array (an
+  intentional, plan-specified breaking change to the JSON shape — was a
+  bare array, now `{"candidates": [...], "near_existing": [...]}`).
+
+  Live-smoke-tested against the real `agents/knowledge.db` and found a
+  real, second problem beyond the design contradiction: a flat
+  distance-≤1 threshold with no length floor produced heavy false-positive
+  clustering on short, common terms (`table (+tables, stable, able)`,
+  `old (+holds, holding, hold, ..., told)`, `makes (+make, ..., man, map,
+  ...)`) — a different failure mode than the chain-drift risk decision 4
+  already guards against. Fixed with a `minFuzzyTermLength` gate (6
+  characters, provisional): re-running the same corpus afterward, all of
+  the above false positives are gone and genuine merges (`rename`,
+  `import`, `reference`) are unaffected, aside from one small residual
+  case (`reference`/`preference`, a coincidental real-word collision)
+  accepted as within this feature's already-declared "deliberately crude"
+  bar. `fuzzy-concept-clustering-design.md` amended in place with both
+  corrections. All FC1–FC5 tests pass, `go vet`/`go build` clean. Decision
+  record DR-0034 authored `proposed`, not yet promoted.
 
 - [x] **Bug: `kb search TERM` threw a raw SQLite error instead of a normal
   "no results" for any term containing bare punctuation FTS5's query

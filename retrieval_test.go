@@ -455,8 +455,8 @@ func TestRecallByConceptNames_MergesAllThreeSourceTypes(t *testing.T) {
 // stemmed, and only as a fallback.
 
 func TestLevenshteinDistance_IdenticalStringsIsZero(t *testing.T) {
-	if d := levenshteinDistance("chunking", "chunking"); d != 0 {
-		t.Errorf("levenshteinDistance = %d, want 0", d)
+	if d := LevenshteinDistance("chunking", "chunking"); d != 0 {
+		t.Errorf("LevenshteinDistance = %d, want 0", d)
 	}
 }
 
@@ -467,8 +467,8 @@ func TestLevenshteinDistance_SingleCharacterEditIsOne(t *testing.T) {
 		{"chunking", "chunkibg"},  // substitution
 	}
 	for _, c := range cases {
-		if d := levenshteinDistance(c.a, c.b); d != 1 {
-			t.Errorf("levenshteinDistance(%q, %q) = %d, want 1", c.a, c.b, d)
+		if d := LevenshteinDistance(c.a, c.b); d != 1 {
+			t.Errorf("LevenshteinDistance(%q, %q) = %d, want 1", c.a, c.b, d)
 		}
 	}
 }
@@ -483,8 +483,8 @@ func TestStripCommonSuffix_StripsLongestMatchingSuffix(t *testing.T) {
 		{"nosuffixhere", "nosuffixhere"},
 	}
 	for _, c := range cases {
-		if got := stripCommonSuffix(c.in); got != c.want {
-			t.Errorf("stripCommonSuffix(%q) = %q, want %q", c.in, got, c.want)
+		if got := StripCommonSuffix(c.in); got != c.want {
+			t.Errorf("StripCommonSuffix(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
