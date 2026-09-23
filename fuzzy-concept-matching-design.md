@@ -133,6 +133,29 @@ paraphrase stays an open problem, not solved here.
 
 5. **Matching algorithm** (revised to operate on the raw file text per
    decision 3, otherwise unchanged from the first draft):
+
+   **Correction, made during F1 implementation (2026-09-23):** this
+   decision's original wording — "normalize *both* the token and the
+   concept name" before measuring distance — is self-contradicting against
+   its own three worked examples below. Computed directly: stemming both
+   sides turns `chunking` (the concept) into `chunk` via its own trailing
+   `ing`, which then measures distance **3**, not the claimed **1**, against
+   either `chunkings` (plural) or `chunkibg` (typo) — the concept's own
+   stem no longer resembles the token being compared. **Corrected
+   algorithm, as actually implemented in `retrieval.go`'s
+   `FuzzyMatchConceptNames`:** compute raw Levenshtein distance first,
+   unstemmed on both sides; raw distance alone already reproduces all three
+   worked examples below exactly (`chunking`/`chunkings` → 1,
+   `chunking`/`chunkibg` → 1, `chunk`/`chunked` → 2, within the ceiling).
+   `stripCommonSuffix` is applied only as a **fallback**, and only to the
+   candidate token (never the concept name), tried only when raw distance
+   overshoots `maxFuzzyDistance` — the case that actually needs it is a
+   short concept name against a longer suffixed token (e.g. `chunk` vs
+   `chunkings`, raw distance 4, stemmed-token distance 3). The "distance 0
+   excluded" language below no longer applies as a separate rule: raw
+   distance can never legitimately be 0 in this loop (an exact case-
+   insensitive match would already have tripped the concept-level exact-
+   match skip above), so no additional exclusion is needed.
    - Scope: for each document's file, for each known concept **not
      already an exact match anywhere in the file's text**
      (`kb.MatchConceptNames(text)` on the same whole-file text `tag`'s own

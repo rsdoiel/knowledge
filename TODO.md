@@ -170,14 +170,14 @@
 ## Planned for v0.0.11
 
 Scoped 2026-09-19, item 5 added 2026-09-22, item 6 (bug) added and fixed
-2026-09-23. Four items; three (1, 2, 5) not started, item 6 fixed. The
-2026-09-19 scoping also carried forward two items — `kb project
-rename`'s corpus-rewrite fix and cross-machine rename reconciliation in
-`merge`/`import` — that DR-0026 (2026-09-18, see Done below) had already
-shipped the day before; removed here 2026-09-22 as stale duplicates once
-that was noticed.
+2026-09-23, item 1 implemented 2026-09-23. Four items; item 1 done, items
+2 and 5 not started, item 6 fixed. The 2026-09-19 scoping also carried
+forward two items — `kb project rename`'s corpus-rewrite fix and
+cross-machine rename reconciliation in `merge`/`import` — that DR-0026
+(2026-09-18, see Done below) had already shipped the day before; removed
+here 2026-09-22 as stale duplicates once that was noticed.
 
-- [ ] **New verb `kb document fuzzy-tag`**, promoted from the
+- [x] **New verb `kb document fuzzy-tag`**, promoted from the
   corpus-improvement-techniques item above and refined 2026-09-21: see
   `fuzzy-concept-matching-design.md`. `MatchConceptNames`/
   `MatchConceptNameCounts` are exact whole-word matches today, so a typo,
@@ -190,9 +190,22 @@ that was noticed.
   inflected form. Instead inserts a footnote marker at the near-miss and a
   footnote definition carrying the canonical `[[Concept]]`, so prose stays
   unedited and linking still resolves to the real, existing concept.
-  Footnote placement/numbering and idempotency (recognizing a concept
-  already footnoted in a section on re-run) are still open, tracked in the
-  design doc.
+
+  **Implemented 2026-09-23** per `fuzzy-concept-matching-plan.md`'s F1–F4.
+  Found and corrected a real self-contradiction in the design's decision 5
+  while implementing F1: stemming *both* the concept name and the
+  candidate token (as originally written) breaks the design's own worked
+  examples — verified by hand, then fixed to raw-distance-first with a
+  stemmed-token-only fallback (see `fuzzy-concept-matching-design.md`'s
+  amended decision 5, and DR-0032 for the full writeup). `retrieval.go`
+  gained `FuzzyMatchConceptNames`/`levenshteinDistance`/
+  `stripCommonSuffix`; new `cmd/kb/documentfuzzytag.go` holds the footnote
+  mechanics and `cmdDocumentFuzzyTag`, wired into `document`'s subverb
+  switch and documented in `DocumentHelpText`/`kb-document.1.md`. All of
+  F1–F4's listed tests pass, `go vet`/`go build` clean, and live-smoke-
+  tested against a real scratch document (footnote placed correctly,
+  idempotent on rerun, concept actually linked after re-ingest). Decision
+  record DR-0032 authored `proposed`, not yet promoted.
 
 - [ ] **A standalone frontmatter-generator command, for documents.**
   Explicitly *not* an alternative to `kb document tag` and not folded into

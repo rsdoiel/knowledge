@@ -1,4 +1,4 @@
-%kb-document(1) user manual | version 0.0.11 5e33f1a
+%kb-document(1) user manual | version 0.0.11 dcee1cc
 % R. S. Doiel
 % 2026-09-19
 
@@ -21,6 +21,8 @@ kb document draft SECTION_ID BODY --by WHO [--confidence N]
 kb document review promote SECTION_ID
 
 kb document tag --project P [--concept NAME,...] [--dry-run]
+
+kb document fuzzy-tag --project P [--concept NAME,...] [--dry-run]
 
 # DESCRIPTION
 
@@ -88,6 +90,23 @@ tag
   document's own first H1 heading (its title) are never written into
   either, even if a concept name genuinely occurs there. --dry-run reports
   without writing. See DR-0029 (knowledge/decisions/).
+
+fuzzy-tag
+: mirrors tag's shape, catching what tag's exact matching can't: a typo,
+  plural, or simple tense variant of a known concept's name (Levenshtein
+  distance, not paraphrase). Never bracket-wraps the near-miss text itself
+  -- doing so would mint a duplicate concept from the misspelled or
+  inflected spelling. Instead inserts a `[^n]` footnote marker at the
+  match and a footnote definition carrying the canonical
+  `[[Concept]]` elsewhere, so prose stays unedited and linking still
+  resolves to the real concept. A concept already an exact match anywhere
+  in the file is skipped entirely -- fuzzy matching is additive, never a
+  duplicate of what tag already covers. With no --concept, eligible means
+  within a length-based distance threshold; --concept NAME,... bypasses
+  that threshold for exactly the names given, each already a known
+  concept, checked before any file is touched. A concept already
+  footnoted (or wikilinked) anywhere in a file is left alone, so a second
+  run is a no-op. --dry-run reports without writing.
 
 # VOCABULARIES
 

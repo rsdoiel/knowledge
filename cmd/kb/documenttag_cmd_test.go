@@ -231,3 +231,9 @@ func TestDocumentHelpText_DocumentsTag(t *testing.T) {
 		t.Error("DocumentHelpText does not document the tag subcommand's synopsis")
 	}
 }
+
+func TestDocumentHelpText_DocumentsFuzzyTag(t *testing.T) {
+	if !strings.Contains(DocumentHelpText, "document fuzzy-tag --project") {
+		t.Error("DocumentHelpText does not document the fuzzy-tag subcommand's synopsis")
+	}
+}

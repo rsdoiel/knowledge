@@ -440,3 +440,186 @@ func TestRecallByConceptNames_MergesAllThreeSourceTypes(t *testing.T) {
 		t.Errorf("matches = %+v, want one of each: observation, record, document_section", matches)
 	}
 }
+
+// ─── FuzzyMatchConceptNames (v0.0.11 item 1, `kb document fuzzy-tag`) ──────
+//
+// Distance is raw Levenshtein distance by default -- this alone already
+// satisfies fuzzy-concept-matching-plan.md's own worked examples (plural
+// "chunkings" and typo "chunkibg" both land on distance 1 against
+// "chunking" with no stemming at all). stripCommonSuffix only kicks in as a
+// fallback when raw distance overshoots maxFuzzyDistance, e.g. a short
+// concept name against a longer suffixed token -- confirmed by computing
+// all three of the design doc's worked pairs before writing this: stemming
+// *both* sides (as the design first described) breaks the plural and typo
+// cases outright (distance 3, not 1), so only the token side is ever
+// stemmed, and only as a fallback.
+
+func TestLevenshteinDistance_IdenticalStringsIsZero(t *testing.T) {
+	if d := levenshteinDistance("chunking", "chunking"); d != 0 {
+		t.Errorf("levenshteinDistance = %d, want 0", d)
+	}
+}
+
+func TestLevenshteinDistance_SingleCharacterEditIsOne(t *testing.T) {
+	cases := []struct{ a, b string }{
+		{"chunking", "chunkng"},   // deletion
+		{"chunking", "chunkings"}, // insertion
+		{"chunking", "chunkibg"},  // substitution
+	}
+	for _, c := range cases {
+		if d := levenshteinDistance(c.a, c.b); d != 1 {
+			t.Errorf("levenshteinDistance(%q, %q) = %d, want 1", c.a, c.b, d)
+		}
+	}
+}
+
+func TestStripCommonSuffix_StripsLongestMatchingSuffix(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"chunkings", "chunking"}, // strips only trailing "s", one strip not iterative
+		{"chunked", "chunk"},
+		{"chunks", "chunk"},
+		{"boxes", "box"},
+		{"chunking", "chunk"},
+		{"nosuffixhere", "nosuffixhere"},
+	}
+	for _, c := range cases {
+		if got := stripCommonSuffix(c.in); got != c.want {
+			t.Errorf("stripCommonSuffix(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFuzzyMatchConceptNames_FindsPluralVariant(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("chunking", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("the chunkings here")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("matches = %+v, want 1", matches)
+	}
+	if matches[0].Concept != "chunking" || matches[0].Distance != 1 {
+		t.Errorf("matches[0] = %+v, want Concept=chunking Distance=1", matches[0])
+	}
+}
+
+func TestFuzzyMatchConceptNames_FindsTenseVariant(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("chunk", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("we chunked it")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Concept != "chunk" {
+		t.Errorf("matches = %+v, want one match on chunk", matches)
+	}
+}
+
+func TestFuzzyMatchConceptNames_FindsTypo(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("chunking", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("chunkibg happens")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Distance != 1 {
+		t.Errorf("matches = %+v, want one match at distance 1", matches)
+	}
+}
+
+func TestFuzzyMatchConceptNames_SkipsConceptAlreadyExactlyMatched(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("chunking", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("chunking is here, chunkings too")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("matches = %+v, want none -- the concept is already an exact match elsewhere", matches)
+	}
+}
+
+func TestFuzzyMatchConceptNames_SkipsUnrelatedWords(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("chunking", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("something entirely unrelated appears here")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("matches = %+v, want none", matches)
+	}
+}
+
+func TestFuzzyMatchConceptNames_MatchesMultiWordConceptName(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("context window", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("the contxt windows were large")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Concept != "context window" {
+		t.Errorf("matches = %+v, want one match on \"context window\"", matches)
+	}
+}
+
+func TestFuzzyMatchConceptNames_DoesNotSpanSentenceBoundary(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("context window", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("we discussed the contxt. windows were opened later.")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("matches = %+v, want none -- \"contxt\" and \"windows\" are in different sentences", matches)
+	}
+}
+
+func TestFuzzyMatchConceptNames_NoMatchesReturnsEmpty(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("chunking", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("matches = %+v, want none for empty text", matches)
+	}
+}
+
+func TestFuzzyMatchConceptNames_ResultsSortedByPosition(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := kb.AddConcept("chunking", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	if _, err := kb.AddConcept("prompt", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	matches, err := kb.FuzzyMatchConceptNames("we saw promt first, then chunkings later")
+	if err != nil {
+		t.Fatalf("FuzzyMatchConceptNames: %v", err)
+	}
+	if len(matches) != 2 {
+		t.Fatalf("matches = %+v, want 2", matches)
+	}
+	if matches[0].Start > matches[1].Start {
+		t.Errorf("matches = %+v, want sorted by Start ascending", matches)
+	}
+}

@@ -287,3 +287,230 @@ func (kb *KnowledgeBase) MatchConceptNameCounts(text string) (map[string]int, er
 	}
 	return counts, nil
 }
+
+// maxFuzzyDistance is FuzzyMatchConceptNames's generous candidate-generation
+// ceiling (fuzzy-concept-matching-design.md decision 5) -- not the real
+// eligibility threshold, which is cmd/kb's tighter, concept-name-length-based
+// job to apply (mirroring MatchConceptNameCounts -> densityLinkCandidates's
+// own split between raw signal and applied policy).
+const maxFuzzyDistance = 3
+
+// fuzzyTokenPattern tokenizes on word-boundary runs of letters, digits, and
+// apostrophes (e.g. "don't" stays one token), used once per
+// FuzzyMatchConceptNames call rather than per concept.
+var fuzzyTokenPattern = regexp.MustCompile(`\b[\p{L}\p{N}']+\b`)
+
+// wholeGapPattern matches a run of nothing but whitespace, used to decide
+// whether two adjacent tokens are "contiguous" for multi-word concept
+// matching -- a gap containing anything else (punctuation, a sentence
+// boundary) means the tokens are not really adjacent in the sense a
+// multi-word concept name requires.
+var wholeGapPattern = regexp.MustCompile(`^\s*$`)
+
+// levenshteinDistance is the classic edit distance between a and b, computed
+// over runes (not bytes) since concept names and document prose aren't
+// guaranteed ASCII. Two-row iterative DP.
+func levenshteinDistance(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	prev := make([]int, len(rb)+1)
+	curr := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ra); i++ {
+		curr[0] = i
+		for j := 1; j <= len(rb); j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			curr[j] = min3(curr[j-1]+1, prev[j]+1, prev[j-1]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(rb)]
+}
+
+func min3(a, b, c int) int {
+	m := a
+	if b < m {
+		m = b
+	}
+	if c < m {
+		m = c
+	}
+	return m
+}
+
+// fuzzySuffixes is tried longest-first (fuzzy-concept-matching-design.md
+// decision 5): a plain plural/tense-suffixed word strips its most specific
+// matching ending, not just any one that happens to fit ("boxes" strips
+// "es", not "s", leaving "box" rather than "boxe").
+var fuzzySuffixes = []string{"ing", "es", "ed", "s"}
+
+// stripCommonSuffix lowercases s and strips exactly one trailing suffix from
+// fuzzySuffixes (longest match first) -- deliberately crude, not a real
+// stemmer: a single strip, never iterative, and returns s unchanged if none
+// of the fixed suffixes match.
+func stripCommonSuffix(s string) string {
+	s = strings.ToLower(s)
+	for _, suf := range fuzzySuffixes {
+		if strings.HasSuffix(s, suf) {
+			return s[:len(s)-len(suf)]
+		}
+	}
+	return s
+}
+
+// fuzzyToken is one tokenized word from FuzzyMatchConceptNames's input text.
+type fuzzyToken struct {
+	Text       string
+	Start, End int
+}
+
+// fuzzyDistance compares concept against candidate (both lowercased by the
+// caller) and reports the distance to record plus whether it qualifies as a
+// candidate at all under maxFuzzyDistance.
+//
+// Raw Levenshtein distance is tried first -- alone, it already reproduces
+// fuzzy-concept-matching-design.md's own worked examples exactly (a plural
+// or single-character typo lands on distance 1 with no normalization at
+// all). Stemming candidate is used only as a fallback, when raw distance
+// overshoots the ceiling -- e.g. a short concept name against a longer
+// suffixed token ("chunk" vs "chunkings"). Stemming *both* sides, as an
+// earlier draft of the design described, was tried and rejected: it breaks
+// the plural/typo cases outright (verified: it turns "chunking" itself into
+// "chunk" via its own trailing "ing", which no longer resembles the token
+// being compared against).
+func fuzzyDistance(concept, candidate string) (distance int, ok bool) {
+	raw := levenshteinDistance(concept, candidate)
+	if raw > 0 && raw <= maxFuzzyDistance {
+		return raw, true
+	}
+	stemmed := levenshteinDistance(concept, stripCommonSuffix(candidate))
+	if stemmed <= maxFuzzyDistance {
+		return stemmed, true
+	}
+	return 0, false
+}
+
+/** FuzzyConceptMatch is one spelling-level near-miss FuzzyMatchConceptNames
+ * found in a piece of text: a typo, plural, or simple tense variant of a
+ * known concept's name, not an exact match (MatchConceptNames already finds
+ * those).
+ *
+ * Fields:
+ *   Concept  (string) — canonical concept name, Concepts()'s own casing.
+ *   Text     (string) — the actual text found, original casing preserved.
+ *   Start    (int)    — byte offset into the input text where Text begins.
+ *   End      (int)    — byte offset where Text ends (half-open range).
+ *   Distance (int)    — Levenshtein distance recorded for this match (raw,
+ *                        or the stemmed fallback distance when raw
+ *                        overshot the candidate-generation ceiling).
+ *
+ * Example:
+ *   matches, _ := kb.FuzzyMatchConceptNames("the chunkings here")
+ *   fmt.Println(matches[0].Concept, matches[0].Distance) // "chunking" 1
+ */
+type FuzzyConceptMatch struct {
+	Concept  string
+	Text     string
+	Start    int
+	End      int
+	Distance int
+}
+
+/** FuzzyMatchConceptNames returns spelling-level near-misses of known
+ * concept names in text -- typos, plurals, and simple tense variants that
+ * MatchConceptNames's exact whole-word matching would find nothing for.
+ * Scoped deliberately to spelling distance, not paraphrase: a concept
+ * already found as an exact match anywhere in text is skipped entirely
+ * (fuzzy matching is additive, never a duplicate of what exact matching
+ * already covers).
+ *
+ * Parameters:
+ *   text (string) — free text to search, e.g. a document's raw content.
+ *
+ * Returns:
+ *   []FuzzyConceptMatch — near-misses sorted by Start, then Concept; nil
+ *                          when none.
+ *   error               — on database failure.
+ *
+ * Example:
+ *   matches, err := kb.FuzzyMatchConceptNames("the chunkings here")
+ *   // matches[0] == {Concept: "chunking", Text: "chunkings", Distance: 1, ...}
+ */
+func (kb *KnowledgeBase) FuzzyMatchConceptNames(text string) ([]FuzzyConceptMatch, error) {
+	concepts, err := kb.Concepts()
+	if err != nil {
+		return nil, err
+	}
+	exact, err := kb.MatchConceptNames(text)
+	if err != nil {
+		return nil, err
+	}
+	exactSet := map[string]bool{}
+	for _, name := range exact {
+		exactSet[strings.ToLower(name)] = true
+	}
+
+	var tokens []fuzzyToken
+	for _, loc := range fuzzyTokenPattern.FindAllStringIndex(text, -1) {
+		tokens = append(tokens, fuzzyToken{Text: text[loc[0]:loc[1]], Start: loc[0], End: loc[1]})
+	}
+
+	var out []FuzzyConceptMatch
+	for _, c := range concepts {
+		if exactSet[strings.ToLower(c.Name)] {
+			continue
+		}
+		lowerConcept := strings.ToLower(c.Name)
+		words := strings.Fields(c.Name)
+		if len(words) <= 1 {
+			for _, tok := range tokens {
+				d, ok := fuzzyDistance(lowerConcept, strings.ToLower(tok.Text))
+				if !ok {
+					continue
+				}
+				out = append(out, FuzzyConceptMatch{
+					Concept: c.Name, Text: tok.Text, Start: tok.Start, End: tok.End, Distance: d,
+				})
+			}
+			continue
+		}
+		w := len(words)
+		for i := 0; i+w <= len(tokens); i++ {
+			contiguous := true
+			for j := i; j < i+w-1; j++ {
+				if !wholeGapPattern.MatchString(text[tokens[j].End:tokens[j+1].Start]) {
+					contiguous = false
+					break
+				}
+			}
+			if !contiguous {
+				continue
+			}
+			window := tokens[i : i+w]
+			var parts []string
+			for _, tok := range window {
+				parts = append(parts, tok.Text)
+			}
+			candidate := strings.Join(parts, " ")
+			d, ok := fuzzyDistance(lowerConcept, strings.ToLower(candidate))
+			if !ok {
+				continue
+			}
+			out = append(out, FuzzyConceptMatch{
+				Concept: c.Name, Text: candidate, Start: window[0].Start, End: window[w-1].End, Distance: d,
+			})
+		}
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Start != out[j].Start {
+			return out[i].Start < out[j].Start
+		}
+		return out[i].Concept < out[j].Concept
+	})
+	return out, nil
+}
