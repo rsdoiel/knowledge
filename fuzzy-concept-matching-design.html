@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-document-fuzzy-tag-fuzzy-concept-name-matching-design"><code>kb document fuzzy-tag</code>
+— Fuzzy Concept-Name Matching — Design</h1>
+<p><strong>Status (2026-09-21):</strong> Decisions confirmed, revised
+same day after further discussion of CLI semantics —
+<code>fuzzy-tag</code> now mirrors <code>kb document tag</code>’s shape
+and writes (via footnotes), rather than being a report-only command as
+first drafted. Not yet implemented — see
+<code>fuzzy-concept-matching-plan.md</code> (not yet written) for the
+phased build.</p>
+<p><strong>References:</strong> - <code>TODO.md</code>, “Planned for
+v0.0.11,” item 1 — the item this design resolves. - <code>DR-0027</code>
+(density-linking threshold, <code>&gt;1</code> occurrence + code-span
+exclusion), <code>DR-0028</code> (<code>kb concept suggest</code>,
+report-only candidate discovery), <code>DR-0029</code>
+(<code>kb document tag</code>, explicit wikilink insertion) — the three
+mechanisms this design extends or reuses rather than reinventing. -
+<code>DR-0029</code>’s Rejected alternatives floated a
+frontmatter-<code>keywords:</code>-only insertion mode. Reconsidered
+here (decision 7) and set aside again, for a different, more specific
+reason than DR-0029 gave. - A companion idea, folding fuzziness into
+<code>kb concept suggest</code>’s <em>new</em>- concept discovery
+instead of into matching <em>known</em> concepts, is a distinct
+mechanism and stays a separate, unstarted TODO.md item — not part of
+this design.</p>
+<h2 id="motivation">Motivation</h2>
+<p><code>MatchConceptNames</code>/<code>MatchConceptNameCounts</code>
+(<code>retrieval.go:234,272</code>), and <code>eligibleConcepts</code>
+(<code>cmd/kb/documenttag.go:198</code>) which
+<code>kb document tag</code> builds on, are exact whole-word matches. A
+typo, a plural, or a tense variant of a known concept’s name currently
+links nothing — TODO.md’s original framing named this alongside “close
+paraphrase,” but a genuine paraphrase (different wording, same meaning)
+is a semantic-similarity problem, not a spelling-distance one, and
+pulling in embeddings or an LLM call to solve it repeats a dependency
+this module has deliberately avoided elsewhere (DR-0028’s Rejected
+alternatives makes the same call for concept discovery). <strong>This
+design scopes “fuzzy” to spelling-level variants only — typos, plurals,
+simple tense/suffix variants — not paraphrase.</strong> True paraphrase
+stays an open problem, not solved here.</p>
+<h2 id="decisions">Decisions</h2>
+<ol type="1">
+<li><p><strong><code>fuzzy-tag</code> mirrors
+<code>kb document tag</code>’s shape and writes — it is not a
+report-only command.</strong> Revised from the first draft of this
+design, which made it report-only like <code>kb concept suggest</code>.
+Settled instead on consistency with <code>tag</code>: same verb pattern
+(find eligible concepts, insert a link), same flags, differing only in
+matching algorithm (fuzzy vs. exact) and insertion mechanism (footnote
+vs. direct bracket). One mental model, two algorithms, rather than a
+second, differently- shaped command to learn.</p></li>
+<li><p><strong><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code></strong>
+— the exact synopsis <code>kb document tag</code> already has
+(<code>cmd/kb/helptext.go:176</code>), same meanings:
+<code>--concept</code> forces specific known concepts, bypassing the
+normal distance/threshold gate, exactly as it does for exact matching in
+<code>tag</code>; <code>--dry-run</code> previews without writing.
+<code>--json</code> remains available the same way it is for every verb.
+<code>fuzzy-tag</code> never touches what <code>tag</code> does or vice
+versa — a full review still runs both, since each only ever handles the
+matches the other can’t.</p></li>
+<li><p><strong>Insertion mechanism: a footnote, not a
+bracket-wrap.</strong> <code>insertWikilink</code>
+(<code>cmd/kb/documenttag.go:113</code>) wraps the <em>literal matched
+span</em> — safe for <code>tag</code>, where the match is always the
+concept’s exact name, but wrong here: bracketing a near-miss verbatim,
+e.g. <code>[[chunkings]]</code>, would make
+<code>ResolveConceptName</code> mint a new, duplicate concept rather
+than link the existing “chunking,” since resolution is exact-match
+(case-insensitive) only. A footnote sidesteps this by construction — the
+prose word is never touched, and the footnote <em>definition</em> always
+carries the canonical spelling: <code>chunkings[^3]</code> at the match,
+<code>[^3]: see [[chunking]]</code> elsewhere. It resolves correctly
+every time because the bracketed text is always the real concept name,
+never the near-miss.</p>
+<p><strong>Operates on the raw file, exactly like <code>tag</code> — not
+the database.</strong> <code>kb document tag</code> never reads
+<code>kb.DocumentSections</code>; it reads the file directly
+(<code>os.ReadFile</code>, <code>cmd/kb/documenttag.go:315</code>) and
+inserts into <em>that</em> text, because documents have no
+<code>RenderDocumentFile</code> — no lossless way to turn stored,
+already-segmented rows back into the original file.
+<code>fuzzy-tag</code> writes too now (decision 1), so it inherits the
+same constraint: matching and insertion both happen against the file’s
+current raw bytes, never DB-stored section text. This also avoids a
+staleness risk a DB-based approach would have — the file may have been
+hand-edited since the last <code>kb document ingest</code>, and working
+from its current bytes directly means that can never matter.</p>
+<p>Concrete mechanics, all computed from the one raw-text string already
+in hand (no second file read, no DB call):</p>
+<ul>
+<li><strong>Section boundaries, for reporting and placement, come from a
+fresh regex scan of the raw text</strong>, not from
+<code>document_sections</code> rows: reuse
+<code>markdownHeadingPattern</code> (<code>documents.go:341</code>,
+<code>^#{1,6}\s+(.*)$</code>) — matching how
+<code>segmentMarkdown</code> itself finds section boundaries at ingest,
+just recomputed independently here, the same “own copy, not a shared
+internal” precedent <code>firstH1HeadingPattern</code>
+(<code>cmd/kb/documenttag.go:75</code>) already sets for reusing a
+<code>documents.go</code> pattern from <code>cmd/kb</code>.</li>
+<li><strong>Marker placement</strong>: <code>[^n]</code> immediately
+after the first safe occurrence of the near-miss text, using the same
+excluded-span rules <code>tag</code> already has
+(<code>excludedSpans</code>, <code>cmd/kb/documenttag.go:39</code> —
+frontmatter, the document’s own H1, fenced/inline code, existing
+<code>[[wikilinks]]</code>), extended to also exclude any existing
+footnote definition line (<code>^\[\^\d+\]:.*$</code>) so a marker can’t
+land inside one.</li>
+<li><strong>Definition placement</strong>: appended immediately before
+the next heading after the marker (or at end of file, if the marker
+falls in the last section) — the raw-text equivalent of “end of this
+section,” found the same way <code>segmentMarkdown</code> finds section
+ends, just without going through the database.</li>
+<li><strong>Label numbering is whole-file, not per-section — trivially,
+since there’s only one text to begin with.</strong> Scan the same raw
+file text already in hand for existing <code>\[\^(\d+)\]</code> labels
+and number new footnotes starting one past the highest found.
+Markdown/CommonMark footnote labels are scoped to the whole rendered
+document regardless of source structure, so reusing one across two
+different parts of the file would collide in any renderer that collects
+them.</li>
+<li><strong>Idempotency is free, no new mechanism needed.</strong> A
+footnote definition is just raw text containing
+<code>[[Concept]]</code>, so the <em>existing</em>
+<code>alreadyWikilinked</code> check
+(<code>cmd/kb/documenttag.go:83</code>, “does <code>[[Name]]</code>
+appear anywhere in text”) already recognizes a concept that’s been
+footnoted on an earlier run — no separate “already footnoted” check to
+write. This also means, same as <code>tag</code>’s own
+<code>insertWikilink</code> (which stops at the first safe match): at
+most one footnote per concept per section, not one per near-miss
+occurrence — a second near-miss spelling of the same concept in the same
+section is already covered once the first is footnoted.</li>
+</ul></li>
+<li><p><strong>Report content (<code>--dry-run</code> output) mirrors
+<code>tag</code>’s own “would tag”/“tagged” lines</strong>, with
+“footnote” in place of “tag” as the verb and the
+near-miss/canonical/distance triple included:</p>
+<pre><code>would footnote path/to/doc.md [Background]: &quot;chunkings&quot; ~ chunking (distance 1)</code></pre>
+<p><code>--json</code> extends the existing per-file result shape
+(<code>documentTagResult</code>, <code>cmd/kb/documenttag.go:217</code>)
+with a <code>fuzzy</code> array:
+<code>{"section": "Background", "text": "chunkings", "concept": "chunking", "distance": 1, "footnote": 3}</code>.</p></li>
+<li><p><strong>Matching algorithm</strong> (revised to operate on the
+raw file text per decision 3, otherwise unchanged from the first
+draft):</p>
+<p><strong>Correction, made during F1 implementation
+(2026-09-23):</strong> this decision’s original wording — “normalize
+<em>both</em> the token and the concept name” before measuring distance
+— is self-contradicting against its own three worked examples below.
+Computed directly: stemming both sides turns <code>chunking</code> (the
+concept) into <code>chunk</code> via its own trailing <code>ing</code>,
+which then measures distance <strong>3</strong>, not the claimed
+<strong>1</strong>, against either <code>chunkings</code> (plural) or
+<code>chunkibg</code> (typo) — the concept’s own stem no longer
+resembles the token being compared. <strong>Corrected algorithm, as
+actually implemented in <code>retrieval.go</code>’s
+<code>FuzzyMatchConceptNames</code>:</strong> compute raw Levenshtein
+distance first, unstemmed on both sides; raw distance alone already
+reproduces all three worked examples below exactly
+(<code>chunking</code>/<code>chunkings</code> → 1,
+<code>chunking</code>/<code>chunkibg</code> → 1,
+<code>chunk</code>/<code>chunked</code> → 2, within the ceiling).
+<code>stripCommonSuffix</code> is applied only as a
+<strong>fallback</strong>, and only to the candidate token (never the
+concept name), tried only when raw distance overshoots
+<code>maxFuzzyDistance</code> — the case that actually needs it is a
+short concept name against a longer suffixed token
+(e.g. <code>chunk</code> vs <code>chunkings</code>, raw distance 4,
+stemmed-token distance 3). The “distance 0 excluded” language below no
+longer applies as a separate rule: raw distance can never legitimately
+be 0 in this loop (an exact case- insensitive match would already have
+tripped the concept-level exact- match skip above), so no additional
+exclusion is needed.</p>
+<ul>
+<li>Scope: for each document’s file, for each known concept <strong>not
+already an exact match anywhere in the file’s text</strong>
+(<code>kb.MatchConceptNames(text)</code> on the same whole-file text
+<code>tag</code>’s own <code>eligibleConcepts</code> already scans —
+anything it finds is skipped; fuzzy matching is additive, never a
+duplicate of what exact matching already covers). Matches whole-file
+scope for consistency with <code>tag</code>, which never scoped its own
+threshold check tighter than that either.</li>
+<li>Exclusion: reuse <code>excludedSpans</code>
+(<code>cmd/kb/documenttag.go:39</code>) as-is — frontmatter, the
+document’s own H1, fenced/inline code, and existing
+<code>[[wikilink]]</code> spans are all off-limits to fuzzy matching the
+same way they already are to <code>tag</code>’s insertion.</li>
+<li>Tokenize the remaining text on whitespace/punctuation; for a
+multi-word concept name, compare against the same-length run of
+consecutive tokens.</li>
+<li>Normalize both the token (or token-run) and the concept name:
+lowercase, then strip <strong>one</strong> trailing suffix from a fixed
+list — <code>ing</code>, <code>es</code>, <code>ed</code>,
+<code>s</code>, tried longest-first — before measuring distance. Catches
+plain plural/tense variants cheaply (<code>chunking</code> vs
+<code>chunkings</code>, <code>chunk</code> vs <code>chunked</code>)
+without a real stemmer dependency; deliberately crude, not
+linguistically complete.</li>
+<li>Compute Levenshtein distance on the normalized forms. A hit
+qualifies when <code>0 &lt; distance &lt;= threshold</code>, where
+<code>threshold = 1</code> for concept names of 8 characters or fewer
+and <code>2</code> otherwise — a provisional, easily-tuned starting
+point, not a validated constant. Distance <code>0</code> after
+normalization is excluded on purpose: that’s a plural/tense variant of
+an <em>already-linked</em> word in a different surface form, not a new
+signal.</li>
+<li>Performance: <code>O(concepts × tokens)</code> string-distance
+computations per document. Same acceptance as
+<code>MatchConceptNames</code>’s own doc comment — “call frequency here
+is once per CLI invocation,” not a hot loop.</li>
+</ul></li>
+<li><p><strong>Never rewrites the matched word.</strong> A footnote
+marker is appended immediately after it, but the word’s own spelling,
+casing, and grammar are untouched — the “document still needs to read
+well in English” constraint from the motivating conversation holds
+exactly the same way it does for <code>tag</code> (DR-0029): fuzzy-tag
+adds punctuation-like annotation, never corrects prose.</p></li>
+<li><p><strong>Frontmatter <code>keywords:</code> insertion — considered
+again, rejected again, for a sharper reason than DR-0029 gave.</strong>
+Both a footnote and a <code>keywords:</code> entry are equally safe
+against the duplicate-concept problem (decision 3) — either way the
+bracketed/listed text is the canonical spelling, never the near-miss.
+What decided it: <code>keywords:</code> only resolves at the
+<strong>gist</strong> (whole-document) level (<code>tagSection</code>’s
+frontmatter-keywords branch, <code>cmd/kb/document.go:307</code>, only
+runs for the gist row), which doesn’t match decision 1’s goal of
+mirroring <code>tag</code>’s per-passage granularity, and it requires
+<code>fuzzy-tag</code> to gain a frontmatter-editing capability that
+doesn’t exist anywhere yet (no <code>RenderDocumentFile</code>, no prior
+surgical-frontmatter-edit code — see
+<code>knowledge_dr0026_to_dr0029</code> memory) for no matching benefit,
+since the footnote mechanism already reuses existing resolution code
+with zero new capability required.</p></li>
+</ol>
+<h2 id="deferred-explicitly">Deferred, explicitly</h2>
+<ul>
+<li><strong>Paraphrase/semantic-similarity detection</strong> — out of
+scope per the Motivation section; would need embeddings or an LLM call,
+a dependency this module has avoided elsewhere (DR-0028).</li>
+<li><strong>Fuzzy-aware <code>kb concept suggest</code></strong> — a
+distinct mechanism (clustering <em>candidate</em> terms against each
+other, not matching known concepts against document text); filed
+separately in <code>TODO.md</code>, not part of this design.</li>
+<li><strong>A real stemmer</strong> — the suffix-strip list in decision
+5 is deliberately minimal; not worth a dependency unless it proves too
+weak in practice.</li>
+<li><strong>Tuning the distance threshold</strong> — decision 5’s
+<code>1</code>/<code>2</code> split by name length is a starting point,
+expected to need adjustment once run against a real corpus (the same
+“live-smoke-test before trusting it” pattern DR-0027/DR-0029 both
+needed).</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

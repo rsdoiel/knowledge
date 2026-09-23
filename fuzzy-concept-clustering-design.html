@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-concept-suggest-fuzzy-candidate-clustering-design"><code>kb concept suggest</code>
+— Fuzzy Candidate Clustering — Design</h1>
+<p><strong>Status (2026-09-22):</strong> Decisions confirmed in a full
+design conversation. Not yet implemented — plan
+(<code>fuzzy-concept-clustering-plan.md</code>) not yet written.</p>
+<p><strong>References:</strong> - <code>TODO.md</code>, “Planned for
+v0.0.11,” item 5 — the item this design resolves. Raised 2026-09-21
+alongside <code>fuzzy-concept-matching-design.md</code> (item 1) but
+explicitly kept out of it as a distinct mechanism; folded into v0.0.11
+as item 5 on 2026-09-22. - <code>fuzzy-concept-matching-design.md</code>
+(<code>kb document fuzzy-tag</code>) — the sibling fuzzy feature. That
+one matches document <em>prose</em> against <em>already-known</em>
+concepts. This one clusters <code>concept suggest</code>’s own
+<em>candidate</em> terms <em>against each other</em>, before any of them
+are concepts. Decision 1 below shares normalization/distance code with
+it; nothing else is shared, since the two operate on different data
+shapes (raw file text with sections/footnotes vs. an in-memory
+term-frequency map). - <code>DR-0028</code>
+(<code>kb concept suggest</code> itself, <code>cmd/kb/concept.go</code>)
+— the command this design extends in place, not a new verb.</p>
+<h2 id="motivation">Motivation</h2>
+<p><code>scoreCandidateTerms</code> (<code>cmd/kb/concept.go:184</code>)
+scores each single-word candidate term independently. A concept whose
+mentions are split across spelling variants — <code>chunking</code> /
+<code>chunkings</code> / <code>chunked</code> — is scored as three
+separate low-count terms, each of which can individually fall below the
+<code>occ &lt; 2</code> floor or the <code>idf &lt;= 0</code>
+distinctiveness filter even though the <em>combined</em> mentions
+clearly signal one real, frequently-discussed concept. The fix is to
+merge variant terms into one candidate before scoring, not after.</p>
+<h2 id="decisions">Decisions</h2>
+<ol type="1">
+<li><p><strong>Shared primitives with <code>fuzzy-tag</code>, not a
+duplicate implementation.</strong> Both features need a Levenshtein
+distance function and the same suffix-strip normalization
+(<code>fuzzy-concept-matching-design.md</code> decision 5: lowercase,
+then strip one trailing suffix from
+<code>ing</code>/<code>es</code>/<code>ed</code>/<code>s</code>,
+longest-first). These land in <code>retrieval.go</code> as
+<code>levenshteinDistance(a, b string) int</code> and
+<code>stripCommonSuffix(s string) string</code>, called by both
+<code>FuzzyMatchConceptNames</code> (fuzzy-tag) and
+<code>clusterCandidateTerms</code> (this feature, decision 4). One
+normalization rule everywhere; a fix or tuning change applies to both
+features at once.</p></li>
+<li><p><strong>Clustering runs on the raw occurrence map, before the
+<code>occ &lt; 2</code> / <code>idf &lt;= 0</code> filter — not on the
+already-filtered, already-limited output.</strong> This is what actually
+fixes the chunking/chunkings/chunked case: a variant that’s individually
+below threshold only survives if its count is merged into a cluster
+<em>before</em> the filter decides. Scope is the full per-corpus token
+vocabulary gathered in <code>scoreCandidateTerms</code>’s existing
+<code>occurrences</code>/<code>itemCounts</code> maps
+(<code>cmd/kb/concept.go:188-189</code>), not the top
+<code>--limit</code> results.</p></li>
+<li><p><strong>A token that’s fuzzy-close to an already-real concept is
+excluded from candidacy entirely, not clustered.</strong>
+<code>concept suggest</code>’s job is discovering <em>new</em> concepts;
+a near-miss spelling of one that already exists is
+<code>fuzzy-tag</code>’s job, not this command’s. Alongside the existing
+exact <code>known[tok]</code> check
+(<code>cmd/kb/concept.go:194</code>), add a fuzzy check: normalize the
+token, compare via <code>levenshteinDistance</code> against every
+normalized known concept name, and if
+<code>0 &lt; distance &lt;= 1</code>, drop the token from the candidate
+pool before it ever reaches clustering.</p>
+<p>This exclusion is not silent. Excluded tokens are collected into a
+separate <code>nearExisting</code> list (token, matched concept name,
+distance) and reported as a short trailing section — printed only when
+non-empty — so a human reviewing the output can confirm the tool
+suppressed it correctly rather than wondering why an expected candidate
+didn’t appear:</p>
+<pre><code>near-existing (excluded from candidates):
+  chunkings  ~  chunking  (distance 1)</code></pre>
+<p><code>--json</code> gets a parallel <code>"near_existing"</code>
+array alongside <code>"candidates"</code>.</p>
+<p><strong>Correction, made during FC3 implementation
+(2026-09-23):</strong> “normalize the token… compare via
+levenshteinDistance” as originally written means stemming <em>both</em>
+sides via <code>stripCommonSuffix</code> before comparing — the same
+mistake <code>fuzzy-concept-matching-design.md</code> decision 5 made
+and corrected. Computed directly: stemming both <code>chunkings</code>
+(→ <code>chunking</code>, strips only <code>s</code>) and
+<code>chunking</code> (→ <code>chunk</code>, strips <code>ing</code>)
+gives distance <strong>3</strong>, not the claimed <strong>1</strong> —
+this design’s own worked example would never actually fire. See decision
+4’s matching correction below for the fix (a shared two-tier check),
+which this function uses identically.</p></li>
+<li><p><strong>Clustering algorithm: “star” clustering, bounded by
+distance-to-seed — not chain (single-linkage) clustering.</strong> Plain
+transitive union-find was considered and rejected: it lets A-B-C-D chain
+together when each adjacent pair is within threshold but the endpoints
+are unrelated (the classic cat/cot/cog/dog drift), which risks silently
+collapsing two genuinely distinct new concepts into one canonical label
+before a human ever sees them separately.</p>
+<p>Mechanics, operating on the surviving (post-decision-3) raw token
+list:</p>
+<ul>
+<li>Sort tokens by occurrence count descending, term ascending on ties
+(deterministic, same tie-break style <code>scoreCandidateTerms</code>
+already uses at <code>cmd/kb/concept.go:217-221</code>).</li>
+<li>Walk the sorted list. The first unassigned token becomes a new
+cluster’s seed.</li>
+<li>Scan all still-unassigned tokens; any token within the distance
+threshold <strong>of the seed</strong> (never of another member) joins
+this cluster. This bounds every member’s distance to the seed directly —
+no drift through intermediate members.</li>
+<li>Repeat from the next unassigned token until none remain.</li>
+<li>A cluster of size 1 (no variants found) is the common case and
+renders exactly as today.</li>
+</ul>
+<p><strong>Correction, made during FC4 implementation
+(2026-09-23):</strong> comparing a candidate against the seed via
+<code>levenshteinDistance</code> on both sides’
+<code>stripCommonSuffix</code> form, as originally written, breaks on
+this decision’s own motivating trio — computed directly:
+<code>chunking</code>/ <code>chunkings</code> (raw distance 1, no
+stemming needed) both-stemmed gives distance 3 (stemming
+<code>chunking</code> itself via its own trailing <code>ing</code> turns
+it into <code>chunk</code>, no longer resembling <code>chunkings</code>’
+stem <code>chunking</code>). Conversely
+<code>chunking</code>/<code>chunked</code> — raw distance 3, exceeding
+threshold — only comes within distance 0 when <em>both</em> sides are
+stemmed (both reduce to <code>chunk</code>). Neither a raw-only nor a
+stemmed-only check catches both pairs. <strong>Corrected algorithm, as
+actually implemented</strong> (<code>fuzzyTermsClose</code> in
+<code>cmd/kb/concept.go</code>, shared by this function and
+<code>excludeNearExisting</code>): try raw distance first (length-pruned
+per decision 10); if that doesn’t qualify, fall back to comparing both
+sides’ <code>stripCommonSuffix</code> forms (also length-pruned). This
+is a <em>symmetric</em> fallback — unlike <code>fuzzy-tag</code>’s own
+corrected algorithm, which only ever stems the candidate token and never
+the canonical concept name it’s matched against — because here both
+sides are equally unverified candidate terms; there is no canonical side
+to protect from stemming. Star clustering’s own anti-drift property
+(only ever checked against the seed) still holds: <code>chunkings</code>
+and <code>chunked</code> are not within threshold of <em>each other</em>
+under this corrected check either, but both independently qualify
+against seed <code>chunking</code>, so all three still join one cluster
+exactly as the motivating example intends.</p></li>
+<li><p><strong>Threshold: flat <code>distance &lt;= 1</code>,
+normalized-length difference must also be <code>&lt;= 1</code></strong>
+— no length-based 1-or-2 split like fuzzy-tag uses. Fuzzy-tag verifies a
+match against one specific, already-real concept name; this clusters
+unverified candidates against other unverified candidates, where a
+looser threshold risks exactly the unintentional collapsing decision 4
+is designed to avoid. The length-difference check is also the
+performance pruning step (decision 7).</p></li>
+<li><p><strong>Canonical spelling = the cluster’s seed.</strong> The
+seed is already chosen by descending occurrence count (decision 4), so
+“most-mentioned form wins” and “clustering seed” and “canonical label”
+are the same value — no second pass, no separate tie-break rule to
+maintain. Considered and set aside: preferring the shortest member (more
+likely the lemma, e.g. <code>chunk</code> over <code>chunkings</code>)
+or a hybrid of the two. Deferred as a possible refinement if
+occurrence-seeding produces poor canonical labels in practice against a
+real corpus — not blocking a first implementation.</p></li>
+<li><p><strong>Cluster roll-up: occurrences sum, items(df) unions — not
+sum.</strong> <code>itemCounts</code>
+(<code>cmd/kb/concept.go:189,198-201</code>) today tracks a scalar count
+per term. For a cluster, <code>df</code> must be the number of
+<em>distinct items</em> touched by <em>any</em> member, not the sum of
+each member’s individual item count — an item containing both “chunking”
+and “chunkings” must count once toward the cluster’s <code>df</code>, or
+<code>idf</code> comes out wrong. This requires <code>itemCounts</code>
+to become a per-term set of item indices
+(<code>map[string]map[int]bool</code> or equivalent) rather than a bare
+int, so a cluster’s <code>df</code> can be computed as the size of the
+unioned set across its members. <code>occurrences</code> stays a simple
+per-member sum — double-counting total mentions across variants is
+correct, that’s the whole point of merging them.</p></li>
+<li><p><strong>Output shape extends <code>candidateTerm</code>, doesn’t
+replace it.</strong> Add an optional <code>Variants []string</code>
+field (<code>json:"variants,omitempty"</code>) — empty for singleton
+clusters, so existing single-term output and <code>--json</code>
+consumers see no change. Text rendering for a real cluster:</p>
+<pre><code>12. chunking (+chunkings, chunked)  score=8.40  occurrences=11  items=4</code></pre></li>
+<li><p><strong>No CLI flag — always on.</strong>
+<code>concept suggest</code> is already read-only and cheap; clustering
+doesn’t change that, and decision 5’s tight threshold plus decision 10’s
+pruning keep the added cost small. <code>--project</code> and
+<code>--limit</code> behave exactly as today, applied after
+clustering.</p></li>
+<li><p><strong>Performance: length-difference pruning before the
+Levenshtein DP.</strong> <code>|len(a) - len(b)|</code> is a lower bound
+on edit distance, so a normalized-length gap greater than the threshold
+(1, per decision 5) can never pass — checked with a single integer
+comparison before the O(length) distance computation runs. No further
+indexing (bucketing, BK-tree) planned for a first pass; validate against
+the real <code>agents/knowledge.db</code> the same live-smoke-test way
+DR-0028/DR-0029 were validated, and only add more structure if that
+shows it’s actually slow.</p></li>
+</ol>
+<p><strong>Addendum, found live smoke-testing against
+<code>agents/knowledge.db</code> (2026-09-23):</strong> a flat
+<code>distance &lt;= 1</code> threshold with no length floor produced
+heavy false-positive clustering specific to short, common candidate
+terms – <code>table (+tables, stable, able)</code>,
+<code>old (+holds, holding, hold, folding, fold, folded, cold, folds, told)</code>,
+<code>makes (+make, making, man, takes, map, marked, bakes, marks)</code>
+– a different failure mode than the chain-drift risk decision 4 already
+guards against, and one decision 5’s own “flat threshold, no
+length-based split” wording didn’t anticipate (that reasoning is about
+not <em>loosening</em> the threshold for long words, not about
+<em>tightening</em> it for short ones). <strong>Fixed with a
+<code>minFuzzyTermLength</code> gate (6 characters,
+provisional)</strong>: below this length, <code>fuzzyTermsClose</code>
+never compares two terms at all, in either tier. Applied uniformly to
+both <code>excludeNearExisting</code> and
+<code>clusterCandidateTerms</code>, since both go through the same
+shared function. Re-running the same corpus afterward: all of the above
+false positives gone, genuine merges
+(<code>rename</code>/<code>renamed</code>/<code>renaming</code>/<code>renames</code>,
+<code>import</code>/<code>imported</code>/<code>importing</code>/<code>imports</code>)
+unaffected. One residual, much smaller-scale case remains and is
+accepted rather than chased further:
+<code>reference</code>/<code>preference</code> merge (edit distance 1,
+both well above the length floor) despite being two unrelated real words
+that happen to be a coincidental one-character edit apart – inherent to
+pure edit distance with no semantic/dictionary check, and within the
+“deliberately crude, expected to need validation” bar this design
+already set for itself.</p>
+<h2 id="deferred-explicitly">Deferred, explicitly</h2>
+<ul>
+<li><strong>Paraphrase/semantic-similarity detection</strong> — out of
+scope, same reasoning as <code>fuzzy-concept-matching-design.md</code>’s
+Motivation: a different problem needing embeddings or an LLM call, a
+dependency this module has avoided elsewhere (DR-0028).</li>
+<li><strong>A real stemmer</strong> — inherits fuzzy-tag’s own deferral;
+the suffix-strip list is deliberately minimal.</li>
+<li><strong>Shortest-variant or hybrid canonical selection</strong>
+(decision 6) — a possible refinement over seed-as-canonical, not adopted
+now.</li>
+<li><strong>Tuning the distance threshold</strong> — decision 5’s flat
+<code>1</code> is a conservative starting point, expected to need
+validation against a real corpus, same as fuzzy-tag’s own
+threshold.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

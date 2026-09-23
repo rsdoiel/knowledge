@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-document-frontmatter-frontmatter-generator-design"><code>kb document frontmatter</code>
+— Frontmatter Generator — Design</h1>
+<p><strong>Status (2026-09-21):</strong> Decisions confirmed, from a
+design conversation. Not yet implemented — see
+<code>frontmatter-generator-plan.md</code> (not yet written) for the
+phased build.</p>
+<p><strong>References:</strong> -
+<code>frontmatter-generator-feature-request.md</code> — the filed idea
+this design resolves; its five open questions are answered by decisions
+2–4 and 7 below. - <code>TODO.md</code>, “Planned for v0.0.11,” item 2.
+- DR-0027 — the existing first-H1 title fallback
+(<code>firstH1Heading</code>, <code>documents.go:353</code>) this design
+reuses rather than reimplementing, and the
+frontmatter-<code>keywords:</code> mechanism it originally considered
+and set aside for <code>kb document tag</code> specifically (not for a
+standalone tool, which is what this is). - DR-0028
+(<code>kb concept suggest</code>) — the <code>occurrences × idf</code>
+candidate-concept scoring this design adapts for a single-document scope
+(decision 4). - DR-0029 (<code>kb document tag</code>) — the
+<code>--concept</code>-must-already-exist, checked-before-any-file-opens
+precedent decision 4’s keyword-signal-(b) handling follows.</p>
+<h2 id="motivation">Motivation</h2>
+<p>Document frontmatter is optional by this module’s own design
+(<code>extractFrontmatter</code>’s “no frontmatter is normal, not an
+error,” <code>documents.go:481-489</code>), so a real document can be
+missing a title, an author, a creation date, or any keywords at all,
+with nothing today surfacing that gap or filling it. Several of those
+fields are mechanically derivable — from the document’s own content
+(<code>title</code>, and, per this design’s refinement,
+<code>author</code> via a byline) or from git/filesystem provenance
+(<code>author</code>, <code>dateCreated</code>,
+<code>dateModified</code>) — without a model call or a new dependency
+beyond (deliberately, see decision 3) <code>git</code> itself.</p>
+<h2 id="decisions">Decisions</h2>
+<ol type="1">
+<li><p><strong>Scope: documents only, not decision records.</strong>
+Records already have most metadata tool-filled by
+<code>kb record new</code>/ingest and have no <code>author</code> field
+at all — adding one would be its own schema decision, out of scope here.
+Unchanged from the feature request.</p></li>
+<li><p><strong>A new, single-file verb:
+<code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]</code>.</strong>
+<code>--set</code> is repeatable (one <code>FIELD=VALUE</code> pair per
+occurrence), a manual override that writes exactly the given value for
+that field, bypassing signal detection entirely — still through the same
+write path as an accepted proposal (decision 5). No
+<code>--project</code>: unlike <code>tag</code>/<code>fuzzy-tag</code>,
+this isn’t a batch operation over a project’s documents — a human
+reviews title/author/keyword proposals one file at a time, so a single
+<code>PATH</code> argument matches how it’s actually used.
+<code>--dry-run</code> still earns its place here, unlike
+<code>fuzzy-tag</code> (which dropped it): bare invocation with no
+<code>--accept</code>/<code>--accept-keywords</code>/<code>--set</code>
+is already read-only by construction (nothing accepted, nothing
+written), but <code>--dry-run</code> combined <em>with</em> an
+accept/set selection previews the exact value that selection would write
+— useful in particular before accepting a signal-(b) keyword, which has
+the side effect of creating a new concept.</p></li>
+<li><p><strong>Provenance source: shell out to
+<code>git</code>.</strong> <code>exec.Command("git", "log", ...)</code>
+for real per-file commit history — <code>knowledge</code>’s first
+external-process dependency (checked: no file anywhere in the module
+calls <code>exec.Command</code> today). Falls back to filesystem
+<code>mtime</code>/birth time when <code>git</code> itself fails (an
+untracked file, or the binary running outside any git checkout) —
+detected by the command’s own failure, not by checking for a
+<code>.git</code> directory first, since the file’s repository root may
+not be the process’s working directory.</p></li>
+<li><p><strong>Field-by-field behavior:</strong></p>
+<ul>
+<li><p><strong><code>title</code></strong> — absent only; proposed from
+<code>firstH1Heading</code> (<code>documents.go:353</code>), the exact
+function DR-0027 already uses at ingest time, called here for a command
+a human runs deliberately instead.</p></li>
+<li><p><strong><code>author</code></strong> — absent only; a layered
+signal, not a single source, because git’s own commit-author string is
+often <em>not</em> the form a human wants cited (a raw email/handle, or
+simply whatever <code>user.name</code> was configured at commit time,
+which may predate a preferred citation form):</p>
+<ol type="1">
+<li><strong>A byline in the document’s own prose</strong> wins when
+present — scan the text immediately following the first H1 (before the
+next paragraph break or heading) for one of a small, deliberate set of
+lead-ins: <code>By</code>, <code>Author:</code>,
+<code>Written by</code>. Highest confidence, since it’s the author’s own
+chosen wording, and mirrors the same “trust the document’s own
+structure” philosophy <code>firstH1Heading</code> already uses for
+<code>title</code>.</li>
+<li><strong>git’s earliest-commit author</strong>
+(<code>git log --follow --format=%an --diff-filter=A</code> or
+equivalent, exact form to confirm during implementation) as fallback —
+original authorship, not “whoever touched it last.”</li>
+<li><strong><code>git config user.name</code></strong> as a last resort,
+for an untracked file with no commit history at all.</li>
+</ol>
+<p>When more than one signal is available and they disagree, the report
+shows all of them, not just the winner —
+e.g. <code>author: missing. byline found: "R. S. Doiel". git author: "rsdoiel" (lower confidence). proposing byline value.</code>
+— so a human can judge the mismatch rather than have it hidden behind a
+single guess. <code>author</code> stays a bare string
+(<code>documentFrontmatter.Author</code>’s existing type, no schema
+change); a file with more than one git committer just takes the
+earliest, no multi-value list.</p></li>
+<li><p><strong><code>dateCreated</code></strong> — absent only; git’s
+first commit touching the file, filesystem birth time (or
+<code>ctime</code> where birth time isn’t available) as
+fallback.</p></li>
+<li><p><strong><code>dateModified</code></strong> — <strong>new
+field</strong>, added to <code>documentFrontmatter</code> (decision 5) —
+does not exist in the schema today even though the antennaApp vocabulary
+this struct mirrors treats it as distinct from
+<code>datePublished</code>/<code>pubDate</code>. <strong>Does not follow
+the “absent only” rule the other three fields do</strong> — refreshed to
+the proposed value on every accepted run regardless of whatever value
+(if any) was already there. A stale <code>dateModified</code> is worse
+than a missing one; the other three are provenance facts that shouldn’t
+change once true, but this one is inherently a live field. Source: git’s
+most recent commit touching the file, filesystem <code>mtime</code> as
+fallback.</p>
+<p><strong>Correction, made during FM5 implementation
+(2026-09-23):</strong> the schema addition described above was
+<strong>not made</strong>. <code>documentFrontmatter</code>
+(<code>documents.go</code>) is unexported, so <code>cmd/kb</code> —
+where <code>kb document frontmatter</code>’s own code lives — cannot
+reference it across the package boundary regardless of what fields it
+carries. Current field values (for the “already set, don’t overwrite”
+check) are read directly from the parsed <code>yaml.Node</code> mapping
+instead, which needs no cross-package struct at all. Nothing downstream
+in the <code>knowledge</code> package consumes <code>dateModified</code>
+today either, so the schema addition would have added dead code with no
+reader. Revisit only if a future caller inside the
+<code>knowledge</code> package itself genuinely needs to read
+<code>dateModified</code>
+(e.g. <code>extractFrontmatter</code>).</p></li>
+<li><p><strong><code>keywords</code></strong> — a diff against the
+current <code>keywords:</code> list, not a binary, over two candidate
+sets:</p>
+<ul>
+<li><strong>(a) Known concepts</strong> mentioned in the document’s own
+text but not yet listed — reuses
+<code>eligibleConcepts</code>/<code>densityLinkCandidates</code>
+(<code>cmd/kb/documenttag.go:198</code>,
+<code>cmd/kb/document.go:393</code>) as-is, the same
+<code>&gt;1</code>-occurrence, code-span-excluded threshold
+<code>tag</code> and <code>fuzzy-tag</code> both already apply.
+Accepting one is a plain write.</li>
+<li><strong>(b) New candidate concepts</strong> distinctive to this
+document specifically, not yet known to the corpus at all — a
+single-document-scoped variant of <code>cmdConceptSuggest</code>’s
+(<code>cmd/kb/concept.go:225</code>) <code>occurrences × idf</code>
+scoring. The feature request flagged a real degeneracy here: naively
+scoping the whole calculation to just the target document makes
+<code>df == N</code> trivially, collapsing every term’s <code>idf</code>
+to <code>0</code>. <strong>Resolved</strong>: count
+<code>occurrences</code> from the target document only, but compute
+<code>idf</code> from the comparison scope with the target document
+<em>excluded</em> — the project’s other documents/records if the file
+belongs to one, otherwise the whole corpus minus the target. Excluding
+the target from its own comparison set is what restores genuine
+corpus-wide rarity as the signal. Accepting a signal-(b) keyword
+<strong>explicitly creates the concept first</strong> (the same effect
+as <code>kb concept add NAME</code>), mirroring
+<code>kb document tag --concept</code>’s “must already exist, checked
+before any file opens” rule (<code>cmd/kb/documenttag.go:256</code>) —
+never left as a bare string for <code>ResolveConceptName</code> to
+silently resolve-or-create at the next
+<code>kb document ingest</code>.</li>
+</ul></li>
+</ul></li>
+<li><p><strong>Write mechanism: a surgical edit of just the frontmatter
+block, via <code>yaml.Node</code> — not <code>documentFrontmatter</code>
+(the struct) and not a full-file rewrite.</strong> Two separate reasons
+rule out the obvious-looking
+unmarshal-into-<code>documentFrontmatter</code>-then-remarshal
+approach:</p>
+<ul>
+<li><code>documentFrontmatter</code>’s own doc comment states its decode
+is “tolerant… unrecognized keys ignored”
+(<code>documents.go:467-479</code>) — correct for read-only extraction
+at ingest, but round-tripping through it on a <em>write</em> would
+silently <strong>drop any frontmatter key the struct doesn’t know
+about</strong> — a real data-loss risk for a document carrying a custom
+field this module never asked it to.</li>
+<li>Documents have no <code>RenderDocumentFile</code> — no lossless way
+to turn parsed/segmented state back into a file (the same gap
+<code>fuzzy-concept-matching-design.md</code>’s decision 7 already found
+and avoided by operating on raw file text instead). A full-document
+parse-mutate-render cycle isn’t available here either.</li>
+</ul>
+<p><code>yaml.Node</code> (already available via
+<code>gopkg.in/yaml.v3</code>, already a dependency) reads and edits
+only the mapping between the <code>---</code> delimiters
+<code>splitFrontmatter</code> (<code>recordfile.go:401</code>) locates,
+in place: find-or-append the specific keys being written, leave every
+other key, value, and comment in the block untouched, then splice the
+re-encoded block back between the original delimiters. Everything
+outside the frontmatter block — the whole document body — is never read
+into memory as anything other than the raw bytes on either side of it.
+<strong>For a document with no frontmatter block at all</strong>
+(<code>splitFrontmatter</code> errors, the ordinary case per
+<code>extractFrontmatter</code>’s own design decision 3): a fresh block
+is constructed containing only the fields being written this run, and
+prepended to the file’s existing raw content.</p>
+<p>A bounded cost accepted here, revisit only if it proves to matter: a
+<code>yaml.Node</code> edit still can’t guarantee
+<code>keywords</code>’s existing <code>flow</code>-style formatting
+(<code>yaml:"keywords,flow"</code>) survives if that list is one of the
+fields being touched — a block-style re-render there is a cosmetic
+difference, not a correctness one.</p></li>
+<li><p><strong>Never overwrites an existing value</strong> for
+<code>title</code>/<code>author</code>/ <code>dateCreated</code> —
+enhancement only, consistent with document frontmatter being optional by
+this module’s design. <code>dateModified</code> is the one exception
+(decision 4).</p></li>
+<li><p><strong>Body text is never modified</strong>, matching the same
+rule <code>tag</code>/ <code>fuzzy-tag</code> already hold to. A
+detected byline only feeds the <code>author</code> proposal — the byline
+sentence itself is left exactly as written, even after its content is
+copied into frontmatter. This does mean the same information can
+legitimately appear in both places at once; that’s accepted, not a bug
+to fix.</p></li>
+<li><p><strong>No statistical or model-based authorship
+detection.</strong> Considered and declined in the design conversation:
+the layered byline → git -&gt; <code>git config</code> signal (decision
+4) is fully deterministic, needs no new dependency beyond
+<code>git</code> itself, and <code>--set</code> (decision 2) already
+covers the case where none of the three signals produces the citation
+form a human actually wants. Worth reopening only if the deterministic
+layers prove insufficient in practice, not assumed as a gap to fill
+now.</p></li>
+<li><p><strong>Single-file scope makes “both-or-neither”
+trivial</strong> — unlike <code>tag</code>/ <code>fuzzy-tag</code>’s
+multi-file runs, there’s exactly one file to write, so the existing
+staged-write-then-rollback-on-any-failure pattern collapses to an
+ordinary atomic single-file replace (write to a temp file in the same
+directory, then rename over the original) rather than needing the
+multi-file bookkeeping <code>cmdDocumentTag</code> has.</p></li>
+</ol>
+<h2 id="deferred-explicitly">Deferred, explicitly</h2>
+<ul>
+<li><strong>The exact <code>git log</code> invocation and flags</strong>
+for earliest/latest-commit author and date (decision 3/4) — a real
+command to pin down during implementation, not a design-level
+concern.</li>
+<li><strong><code>yaml.Node</code> implementation detail</strong>
+(decision 5) — the plan’s job, not this document’s.</li>
+<li><strong>Record frontmatter</strong> (decision 1) — explicitly out of
+scope, unchanged from the feature request.</li>
+<li><strong>Statistical/ML authorship detection</strong> (decision 8) —
+declined for now, not ruled out forever.</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

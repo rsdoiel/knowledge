@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-document-frontmatter-implementation-plan"><code>kb document frontmatter</code>
+— Implementation Plan</h1>
+<p>See <a
+href="frontmatter-generator-design.html">frontmatter-generator-design.md</a>
+for the full rationale and confirmed decisions. Work items ordered FM1 →
+FM6. TDD-first: each phase’s tests are written and confirmed red before
+its implementation, per this workspace’s standing convention. New file:
+<code>cmd/kb/documentfrontmatter.go</code>, unless noted otherwise.</p>
+<hr />
+<h2 id="fm1-gitfilesystem-provenance-primitives-pure-no-db">FM1 —
+Git/filesystem provenance primitives (pure, no DB)</h2>
+<ul>
+<li><code>gitFirstCommit(path string) (author, date string, ok bool)</code>
+—
+<code>git log --follow --format=%an%x1f%aI --diff-filter=A -- PATH</code>,
+oldest entry (<code>--diff-filter=A</code> isolates the add; if that
+yields nothing, e.g. a moved/renamed file, fall back to the oldest
+<code>--follow</code> line with no filter). <code>ok=false</code> on any
+<code>exec.Command</code> failure (non-repo, untracked file) — detected
+from the command’s own exit error, not a <code>.git</code> pre-check
+(design decision 3).</li>
+<li><code>gitLastCommit(path string) (date string, ok bool)</code> —
+<code>git log -1 --format=%aI -- PATH</code>.</li>
+<li><code>gitConfigUserName() (string, ok bool)</code> —
+<code>git config user.name</code>, run with cwd at the target file’s
+directory.</li>
+<li><code>fsBirthOrModTime(path string) (time.Time, error)</code> —
+birth time where the OS exposes it, <code>mtime</code> otherwise
+(build-tag or runtime fallback, confirm platform support during
+implementation).</li>
+<li><code>detectByline(body string) (author string, ok bool)</code> —
+after <code>firstH1Heading</code>’s match line, scan forward to the next
+blank line or heading; match a leading <code>By</code>,
+<code>Author:</code>, or <code>Written by</code> (confirm during
+implementation whether this should be case-insensitive).</li>
+</ul>
+<h3 id="tests-cmdkbdocumentfrontmatter_test.go">Tests
+(<code>cmd/kb/documentfrontmatter_test.go</code>)</h3>
+<ul>
+<li><code>TestGitFirstCommit_ReturnsOldestAuthorAndDate</code> — real
+<code>git init</code>/ <code>git commit</code> in
+<code>t.TempDir()</code> (module’s first <code>exec.Command</code>
+dependency, so this is necessarily a real-git integration test, not a
+mock).</li>
+<li><code>TestGitFirstCommit_FalseWhenNotARepo</code></li>
+<li><code>TestGitLastCommit_ReturnsMostRecentCommitDate</code></li>
+<li><code>TestGitConfigUserName_ReturnsConfiguredName</code></li>
+<li><code>TestFsBirthOrModTime_ReturnsATimeForAnyFile</code></li>
+<li><code>TestDetectByline_FindsEachLeadInForm</code> — table test over
+<code>By</code>, <code>Author:</code>, <code>Written by</code>.</li>
+<li><code>TestDetectByline_FalseWhenNoLeadInPresent</code></li>
+</ul>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green. Confirm CI/dev machines
+have <code>git</code> on <code>PATH</code> (the Toolchain dependencies
+table doesn’t list it today — flag as a new build/test dependency in
+FM6).</li>
+</ul>
+<hr />
+<h2 id="fm2-field-proposals-title-author-datecreated-datemodified">FM2 —
+Field proposals: title / author / dateCreated / dateModified</h2>
+<ul>
+<li><code>proposeTitle(body string) string</code> — thin wrapper on
+<code>firstH1Heading</code> (<code>documents.go:353</code>).</li>
+<li><code>signal struct { Source, Value string }</code> — one candidate
+value with its provenance label, for author’s multi-signal report
+(decision 4’s “show all signals when they disagree”).</li>
+<li><code>proposeAuthor(path, body string) (winner string, signals []signal)</code>
+— byline (FM1) → <code>gitFirstCommit</code> author →
+<code>gitConfigUserName</code>, first present wins as
+<code>winner</code>; <code>signals</code> always carries every signal
+that fired, in that priority order.</li>
+<li><code>proposeDateCreated(path string) (value, source string)</code>
+— <code>gitFirstCommit</code> date → <code>fsBirthOrModTime</code>
+fallback.</li>
+<li><code>proposeDateModified(path string) (value, source string)</code>
+— <code>gitLastCommit</code> date → <code>fsBirthOrModTime</code>.
+Always computed (decision 4’s “not absent-only” exception); the caller
+(FM5) decides whether to write it.</li>
+</ul>
+<h3 id="tests">Tests</h3>
+<ul>
+<li><code>TestProposeAuthor_PrefersBylineOverGit</code></li>
+<li><code>TestProposeAuthor_FallsBackToGitFirstCommitAuthor</code></li>
+<li><code>TestProposeAuthor_FallsBackToGitConfigWhenUntracked</code></li>
+<li><code>TestProposeAuthor_SignalsListsEveryFiredSignal</code> — byline
++ git disagree, assert both appear.</li>
+<li><code>TestProposeDateCreated_PrefersGitOverFilesystem</code></li>
+<li><code>TestProposeDateModified_AlwaysComputesRegardlessOfExistingValue</code></li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2 id="fm3-keyword-proposals-db-read-only">FM3 — Keyword proposals (DB
+read-only)</h2>
+<ul>
+<li><strong>(a) Known-concept matches:</strong>
+<code>knownKeywordProposals(kb, text string, currentKeywords []string) ([]string, error)</code>
+— calls <code>eligibleConcepts</code>
+(<code>cmd/kb/documenttag.go:198</code>) against every known concept
+name, then subtracts <code>currentKeywords</code> (case-insensitive) so
+only genuinely new matches are proposed.</li>
+<li><strong>(b) New candidate concepts:</strong> requires splitting
+<code>scoreCandidateTerms</code>’s single-corpus assumption into a
+target-vs-comparison-scope shape.
+<ul>
+<li>New
+<code>scoreDocumentCandidateTerms(targetText string, comparisonItems []string, known map[string]bool) []candidateTerm</code>
+in <code>cmd/kb/concept.go</code> (sibling to
+<code>scoreCandidateTerms</code>, not a modification of it — that
+function’s existing single-corpus contract and tests stay untouched):
+tokenize <code>targetText</code> alone for
+<code>occurrences</code>/per-term presence, then compute
+<code>idf</code> from <code>comparisonItems</code> (<code>df</code> =
+how many comparison-scope items also contain the term; smoothing form,
+e.g. <code>log((len(comparisonItems)+1) / (df+1))</code>, to confirm
+during implementation so a term absent from every comparison item still
+scores rather than dividing by zero). <code>comparisonItems</code>
+explicitly excludes the target document — that’s the fix for decision
+4b’s idf-degeneracy bug.</li>
+<li><code>comparisonScope(kb, doc *knowledge.Document) ([]string, error)</code>
+— if <code>doc.ProjectID != 0</code>, the project’s other records +
+document sections (mirroring <code>cmdConceptSuggest</code>’s existing
+gather loop, <code>cmd/kb/concept.go:267-290</code>, minus the target);
+otherwise whole corpus minus target.</li>
+</ul></li>
+</ul>
+<h3 id="tests-1">Tests</h3>
+<ul>
+<li><code>TestKnownKeywordProposals_ExcludesAlreadyListedKeywords</code></li>
+<li><code>TestScoreDocumentCandidateTerms_ExcludingTargetFixesIdfDegeneracy</code>
+— the exact regression case the design calls out: naive same-scope idf
+collapses to 0, this function must not.</li>
+<li><code>TestScoreDocumentCandidateTerms_TermAbsentFromComparisonScopeStillScores</code></li>
+<li><code>TestComparisonScope_ScopesToProjectWhenDocumentBelongsToOne</code></li>
+<li><code>TestComparisonScope_FallsBackToWholeCorpusWhenNoProject</code></li>
+</ul>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2 id="fm4-yaml.node-surgical-frontmatter-writer">FM4 —
+<code>yaml.Node</code> surgical frontmatter writer</h2>
+<ul>
+<li><code>frontmatterNode(raw []byte) (node *yaml.Node, bodyOffset int, hadBlock bool, err error)</code>
+— locates the <code>---</code>/<code>---</code> block via
+<code>splitFrontmatter</code> (<code>recordfile.go:401</code>)
+positionally (reuse, don’t reimplement); <code>yaml.Unmarshal</code> the
+frontmatter text into a <code>yaml.Node</code> (not
+<code>documentFrontmatter</code>, decision 5).
+<code>hadBlock=false</code> when none exists — caller starts from an
+empty mapping node.</li>
+<li><code>setMappingField(node *yaml.Node, key string, value any) error</code>
+— find-or-append a scalar/sequence key in the top-level mapping, in
+place; must not disturb sibling keys, comments, or ordering it doesn’t
+touch.</li>
+<li><code>renderFrontmatter(node *yaml.Node) (string, error)</code> —
+re-encode via <code>yaml.Node</code>’s own marshal back to a
+<code>---</code>-delimited block.</li>
+<li><code>writeDocumentFile(path string, raw []byte, hadBlock bool, bodyOffset int, newBlock string) error</code>
+— splice <code>newBlock</code> in place of the original block (or
+prepend, when <code>!hadBlock</code>) against <code>raw</code>, write to
+a temp file in the same directory, <code>os.Rename</code> over the
+original (decision 9’s single-file atomic write).</li>
+</ul>
+<h3 id="tests-2">Tests</h3>
+<ul>
+<li><code>TestFrontmatterNode_ParsesExistingBlock</code></li>
+<li><code>TestFrontmatterNode_NoBlockReturnsEmptyMappingHadBlockFalse</code></li>
+<li><code>TestSetMappingField_AppendsNewKey</code></li>
+<li><code>TestSetMappingField_OverwritesExistingKeyInPlace</code></li>
+<li><code>TestSetMappingField_LeavesUnknownKeysAndCommentsUntouched</code>
+— the data-loss regression this whole decision exists to prevent.</li>
+<li><code>TestWriteDocumentFile_PrependsBlockWhenNoneExisted</code></li>
+<li><code>TestWriteDocumentFile_BodyBytesUnchangedOutsideFrontmatterBlock</code></li>
+<li><code>TestWriteDocumentFile_AtomicReplaceViaTempFileAndRename</code></li>
+</ul>
+<h3 id="acceptance-criteria-3">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2 id="fm5-cmddocumentfrontmatter-wiring">FM5 —
+<code>cmdDocumentFrontmatter</code> wiring</h2>
+<ul>
+<li>Add a <code>DateModified</code> field to
+<code>documentFrontmatter</code> (<code>documents.go:471- 479</code>) —
+the one schema change (decision 4). Check whether
+<code>extractFrontmatter</code> (<code>documents.go:490</code>) needs a
+matching field for read-side consistency; confirm during implementation
+whether anything downstream consumes it yet.</li>
+<li><code>cmdDocumentFrontmatter(kb, jsonOut bool, args []string, out io.Writer) error</code>
+— parse <code>PATH</code>, <code>--accept FIELD,...</code>,
+<code>--accept-keywords NAME,...</code>, repeatable
+<code>--set FIELD=VALUE</code>, <code>--dry-run</code> (design decision
+2). Resolve <code>kb.DocumentByPath(path)</code>
+(<code>documents.go:274</code>) if already ingested (for FM3’s project
+scoping); proceed even when not ingested (whole-corpus comparison
+scope).</li>
+<li>Build a per-field report: current value (if any), proposed value,
+source/signals (FM2’s <code>signal</code> list for author). Bare
+invocation with no
+<code>--accept</code>/<code>--accept-keywords</code>/<code>--set</code>
+is read-only by construction — just prints the report.</li>
+<li>Apply: for each accepted field or <code>--set</code> override, call
+<code>setMappingField</code>; for accepted signal-(b) keywords,
+<code>kb.AddConcept(name, "")</code> (<code>knowledge.go:1087</code>)
+<em>before</em> writing the keyword (decision 4b, mirrors
+<code>documenttag.go</code>’s <code>--concept</code> must-exist-first
+rule) — fail the whole call if concept creation fails, nothing
+written.</li>
+<li><code>--dry-run</code> combined with an accept/set selection: build
+the report and the would-be write, print it, skip the actual
+<code>writeDocumentFile</code> call.</li>
+</ul>
+<h3 id="tests-cmdkbdocumentfrontmatter_cmd_test.go">Tests
+(<code>cmd/kb/documentfrontmatter_cmd_test.go</code>)</h3>
+<ul>
+<li><code>TestCmdDocumentFrontmatter_BareInvocationIsReadOnly</code></li>
+<li><code>TestCmdDocumentFrontmatter_AcceptsTitleField</code></li>
+<li><code>TestCmdDocumentFrontmatter_NeverOverwritesExistingTitleAuthorOrDateCreated</code></li>
+<li><code>TestCmdDocumentFrontmatter_DateModifiedAlwaysRefreshedOnAcceptedRun</code></li>
+<li><code>TestCmdDocumentFrontmatter_SetOverridesBypassesSignalDetection</code></li>
+<li><code>TestCmdDocumentFrontmatter_AcceptKeywordsPlainWriteForKnownConceptMatch</code></li>
+<li><code>TestCmdDocumentFrontmatter_AcceptKeywordsCreatesConceptForNewCandidateBeforeWriting</code></li>
+<li><code>TestCmdDocumentFrontmatter_DryRunWithAcceptPreviewsWithoutWriting</code></li>
+<li><code>TestCmdDocumentFrontmatter_BodyNeverModified</code></li>
+<li><code>TestCmdDocumentFrontmatter_JSONOutputShape</code></li>
+</ul>
+<h3 id="acceptance-criteria-4">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+<li>Manual smoke test (per
+<code>feedback_smoke_test_data_transforms</code>): a scratch document
+missing frontmatter entirely, run without flags to see the report, then
+with <code>--accept title,author --accept-keywords X</code>, inspect the
+file by eye, then <code>kb document ingest</code> it and confirm via
+<code>kb document show</code>.</li>
+</ul>
+<hr />
+<h2 id="fm6-documentation">FM6 — Documentation</h2>
+<ul>
+<li><code>cmd/kb/helptext.go</code>’s <code>DocumentHelpText</code>
+(<code>:154</code>): add the <code>frontmatter</code> synopsis line and
+a description paragraph.</li>
+<li>Note in <code>codemeta.json</code>/<code>README.md</code>’s
+toolchain section (or wherever <code>git</code> is first mentioned as a
+runtime dependency) that <code>kb document frontmatter</code> shells out
+to <code>git</code> — this module’s first process dependency; regenerate
+via <code>cmt</code> per repo convention, don’t hand-edit.</li>
+<li><code>make kb-topics-help</code> to regenerate
+<code>kb-document.1.md</code>.</li>
+</ul>
+<h3 id="acceptance-criteria-5">Acceptance criteria</h3>
+<ul>
+<li><code>git diff kb-document.1.md</code> shows only the expected
+addition, regenerated from the edited <code>helptext.go</code> constant
+— no hand-edits to the <code>.1.md</code> file itself.</li>
+</ul>
+<hr />
+<h2 id="after-fm6-a-decision-record">After FM6: a decision record</h2>
+<p>Once implemented and smoke-tested, author a decision record via
+<code>kb record new --project knowledge</code>, following DR-0029’s own
+precedent (<code>kb document tag</code>’s original implementation) as
+the most directly related prior work. Authored <code>proposed</code>,
+promoted by the user — not self-promoted, per this workspace’s standing
+rule that a model may write a record but not accept one.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

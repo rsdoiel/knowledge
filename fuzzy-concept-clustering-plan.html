@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-concept-suggest-fuzzy-candidate-clustering-implementation-plan"><code>kb concept suggest</code>
+— Fuzzy Candidate Clustering — Implementation Plan</h1>
+<p>See <a
+href="fuzzy-concept-clustering-design.html">fuzzy-concept-clustering-design.md</a>
+for the full rationale and confirmed decisions. Work items ordered FC1 →
+FC5. TDD-first: each phase’s tests are written and confirmed red before
+its implementation, per this workspace’s standing convention.</p>
+<hr />
+<h2 id="fc1-shared-fuzzy-primitives-retrieval.go">FC1 — Shared fuzzy
+primitives (<code>retrieval.go</code>)</h2>
+<p><strong>Only needed if <a
+href="fuzzy-concept-matching-plan.html">fuzzy-concept-matching-plan.md</a>’s
+F1 hasn’t landed yet</strong> — that phase already specifies
+<code>levenshteinDistance(a, b string) int</code> and
+<code>stripCommonSuffix(s string) string</code> in
+<code>retrieval.go</code>, which this feature reuses verbatim (design
+decision 1). If F1 ships first, this phase is just an import; if this
+plan ships first, build them here exactly as F1 specifies, so whichever
+lands second only adds a caller.</p>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go test .</code> green (package root).</li>
+</ul>
+<hr />
+<h2 id="fc2-scorecandidateterms-restructured-for-item-index-sets">FC2 —
+<code>scoreCandidateTerms</code> restructured for item-index sets</h2>
+<p><code>itemCounts</code> changes from <code>map[string]int</code> to
+<code>map[string]map[int]bool</code> (a set of item indices, decision 7)
+— needed so a cluster’s <code>df</code> can be computed as the size of a
+<em>union</em> across members, not a sum. This is an internal-shape
+change to the existing function
+(<code>cmd/kb/concept.go:184- 224</code>), not a new one; its external
+behavior (same candidates, same scores, same <code>df</code> values)
+must be provably unchanged for the non-clustering case —
+<code>df := len(itemCounts[term])</code> replaces the old direct int
+read, same numeric result.</p>
+<h3 id="tests-existing-concept_test.go-suite">Tests (existing
+<code>concept_test.go</code> suite)</h3>
+<ul>
+<li>Re-run/confirm all current <code>TestScoreCandidateTerms_*</code>
+tests pass unmodified in assertion, only internals differ.</li>
+<li><code>TestScoreCandidateTerms_ItemCountsTracksDistinctItemIndices</code>
+— new, asserting the set shape directly (two mentions in the same item
+count once).</li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green, no change to
+<code>TestCmdConceptSuggest_*</code> golden output for existing
+fixtures.</li>
+</ul>
+<hr />
+<h2 id="fc3-near-existing-exclusion-decision-3">FC3 — Near-existing
+exclusion (decision 3)</h2>
+<ul>
+<li><code>nearExistingMatch struct { Token, Concept string; Distance int }</code>.</li>
+<li><code>excludeNearExisting(occurrences map[string]int, known map[string]bool) (survivors map[string]bool, nearExisting []nearExistingMatch)</code>
+— for each raw token (keys of <code>occurrences</code>, pre-clustering
+per decision 2), normalize via <code>stripCommonSuffix</code>, compare
+against every normalized known concept name via
+<code>levenshteinDistance</code>; if
+<code>0 &lt; distance &lt;= 1</code>, exclude from
+<code>survivors</code> and record in <code>nearExisting</code> (sorted
+by token for determinism). Runs <em>before</em> clustering (FC4) — an
+excluded token never becomes a cluster seed or member.</li>
+</ul>
+<h3 id="tests">Tests</h3>
+<ul>
+<li><code>TestExcludeNearExisting_DropsTokenWithinDistanceOneOfKnownConcept</code></li>
+<li><code>TestExcludeNearExisting_KeepsExactMatchToken</code> — exact
+matches are already filtered earlier by <code>known[tok]</code>, not
+this function; confirm no double-handling.</li>
+<li><code>TestExcludeNearExisting_KeepsTokenBeyondThreshold</code></li>
+<li><code>TestExcludeNearExisting_ReportSortedDeterministically</code></li>
+</ul>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2 id="fc4-star-clustering-decisions-2-4-5-6-7-10">FC4 — Star
+clustering (decisions 2, 4, 5, 6, 7, 10)</h2>
+<ul>
+<li><code>termCluster struct { Seed string; Variants []string; Occurrences int; Items map[int]bool }</code>.</li>
+<li><code>clusterCandidateTerms(occurrences map[string]int, itemCounts map[string]map[int]bool, survivors map[string]bool) []termCluster</code>:
+<ol type="1">
+<li>Build the survivor list (decision 3’s exclusions applied), sort by
+<code>occurrences</code> descending, term ascending on ties (mirrors
+<code>cmd/kb/concept.go:217-221</code>’s tie-break).</li>
+<li>Walk the sorted list; first unassigned token seeds a new
+cluster.</li>
+<li>Scan remaining unassigned tokens; a token joins the current cluster
+only if
+<code>|len(stripCommonSuffix(seed)) - len(stripCommonSuffix(tok))| &lt;= 1</code>
+(decision 10’s pruning) <strong>and</strong>
+<code>levenshteinDistance(stripCommonSuffix(seed), stripCommonSuffix(tok)) &lt;= 1</code>
+(decision 5) — both checked against the seed specifically, never a
+non-seed member (decision 4’s anti-drift rule).</li>
+<li>Roll up: <code>Occurrences</code> = sum across members;
+<code>Items</code> = union of each member’s
+<code>itemCounts[term]</code> set (decision 7).</li>
+<li>Repeat until no unassigned tokens remain. Singleton clusters (no
+variants) are the common case.</li>
+</ol></li>
+</ul>
+<h3 id="tests-1">Tests</h3>
+<ul>
+<li><code>TestClusterCandidateTerms_MergesPluralAndTenseVariants</code>
+— the chunking/chunkings/chunked case from the design’s motivation.</li>
+<li><code>TestClusterCandidateTerms_SeedIsHighestOccurrenceMember</code></li>
+<li><code>TestClusterCandidateTerms_DoesNotChainThroughIntermediateMembers</code>
+— A-B-C-D chain case, confirms star (not transitive) shape: D not within
+threshold of A directly must not join A’s cluster even if D is within
+threshold of C.</li>
+<li><code>TestClusterCandidateTerms_LengthPruningExcludesBeforeLevenshteinRuns</code>
+— a spy/counter on distance calls, or a length-differing pair that must
+never reach the DP.</li>
+<li><code>TestClusterCandidateTerms_OccurrencesSumAcrossMembers</code></li>
+<li><code>TestClusterCandidateTerms_ItemSetUnionsNotSums</code> — an
+item containing both variants counts once toward <code>df</code>.</li>
+<li><code>TestClusterCandidateTerms_SingletonClusterUnchangedFromToday</code></li>
+</ul>
+<h3 id="acceptance-criteria-3">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2
+id="fc5-wire-into-scorecandidateterms-output-cmdconceptsuggest-rendering-decision-8">FC5
+— Wire into <code>scoreCandidateTerms</code> output +
+<code>cmdConceptSuggest</code> rendering (decision 8)</h2>
+<ul>
+<li><code>candidateTerm</code> gains <code>Variants []string</code>
+(<code>json:"variants,omitempty"</code>)
+(<code>cmd/kb/concept.go:121-126</code>).</li>
+<li><code>scoreCandidateTerms</code> signature changes:
+<code>func scoreCandidateTerms(items []string, known map[string]bool) (candidates []candidateTerm, nearExisting []nearExistingMatch)</code>
+— internally: build <code>occurrences</code>/<code>itemCounts</code>
+(FC2’s shape) → <code>excludeNearExisting</code> (FC3) →
+<code>clusterCandidateTerms</code> (FC4) on survivors → existing
+<code>occ &lt; 2</code> / <code>idf &lt;= 0</code> filter loop now
+iterates clusters, <code>df := len(cluster.Items)</code>, building
+<code>candidateTerm{Term: cluster.Seed, Variants: cluster.Variants, Occurrences: cluster.Occurrences, Items: df, Score: ...}</code>.</li>
+<li>Update the one existing caller, <code>cmdConceptSuggest</code>
+(<code>cmd/kb/concept.go:293</code>), for the new two-value return.</li>
+<li>Text rendering: append <code>(+variant1, variant2)</code> after a
+clustered term’s name (decision 8’s exact example format); trailing
+<code>near-existing (excluded from candidates):</code> section, printed
+only when non-empty.</li>
+<li><code>--json</code>:
+<code>{"candidates": [...], "near_existing": [...]}</code>.</li>
+</ul>
+<h3 id="tests-2">Tests</h3>
+<ul>
+<li><code>TestScoreCandidateTerms_ReturnsNearExistingAlongsideCandidates</code></li>
+<li><code>TestCmdConceptSuggest_RendersVariantsInline</code></li>
+<li><code>TestCmdConceptSuggest_RendersNearExistingSectionOnlyWhenNonEmpty</code></li>
+<li><code>TestCmdConceptSuggest_JSONIncludesNearExistingArray</code></li>
+<li><code>TestCmdConceptSuggest_ExistingFixturesUnchangedWhenNoVariantsOrNearExisting</code>
+— regression guard for decision 9’s “always on, no flag” not breaking
+today’s plain output.</li>
+</ul>
+<h3 id="acceptance-criteria-4">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+<li>Manual smoke test against <code>agents/knowledge.db</code> (per
+<code>feedback_smoke_test_data_transforms</code>, matching
+DR-0028/DR-0029’s own precedent): run <code>kb concept suggest</code>
+for real, eyeball whether any real variant cluster or near-existing
+exclusion appears and looks right — decision 10 explicitly defers
+further indexing until this shows it’s needed.</li>
+</ul>
+<p><code>ConceptHelpText</code> (<code>cmd/kb/helptext.go:401+</code>)
+likely needs no synopsis change (no new flag, decision 9) — confirm
+during implementation whether the DESCRIPTION prose should mention
+clustering/near-existing behavior.</p>
+<hr />
+<h2 id="after-fc5-a-decision-record">After FC5: a decision record</h2>
+<p>Once implemented and smoke-tested, author a decision record via
+<code>kb record new --project knowledge</code>, authored
+<code>proposed</code>, promoted by the user — not self-promoted, per
+this workspace’s standing rule.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="frontmatter-enhancement-for-documents-feature-request">Frontmatter
+enhancement for documents — Feature Request</h1>
+<blockquote>
+<p><strong>2026-09-19: Filed.</strong> Captured from a conversation with
+RSDOIEL about scoping v0.0.11. No design/decide/plan cycle has been run
+yet. This document preserves the idea and the decisions already made
+about its shape — a starting point for that cycle, not a committed
+design.</p>
+<p>Decided in the filing conversation: - Targets <strong>documents
+only</strong>, not decision records. Records already have most of their
+metadata tool-filled by <code>kb record new</code>/ingest, and have no
+<code>author</code> field at all — adding one would be its own schema
+decision, out of scope here. - A <strong>new, standalone
+subcommand</strong>, explicitly not a mode of
+<code>kb document tag</code> and not merged into it: tagging links known
+concepts into a document’s prose; this instead maintains the frontmatter
+block itself, for general documentation writing/maintenance, not only
+for documents ingested as narrative content. - <strong>Propose, then
+accept</strong> — mirroring <code>kb concept suggest</code>’s read-only
+report and <code>kb document tag</code>’s
+<code>--dry-run</code>/<code>--concept</code> selective-apply shape.
+Default invocation is read-only. A field already set is never
+overwritten — this command only fills gaps, consistent with document
+frontmatter being optional by design. - Fields in scope:
+<code>title</code>, <code>author</code>, <code>dateCreated</code>,
+<code>keywords</code>, and a <strong>new <code>dateModified</code>
+field</strong>, added to the schema as part of this work — it does not
+exist in <code>documentFrontmatter</code> today. - <code>keywords</code>
+proposals split into two kinds with different accept behavior: known
+concepts found in the document’s own text but not yet listed (a plain
+write, the concept already exists), and new candidate concepts
+distinctive to the document but not yet known to the corpus at all
+(accepting one <strong>explicitly creates the concept</strong>, the same
+effect as <code>kb concept add</code>, never a bare string left for
+<code>ResolveConceptName</code> to silently resolve-or-create at the
+next <code>kb document ingest</code>).</p>
+</blockquote>
+<h2 id="motivation">Motivation</h2>
+<p><code>TODO.md</code>’s “To explore” section has carried a standing
+question since 2026-09-18 — what other mechanical, no-dependency
+techniques could improve corpus linkage as it scales past what a human
+curating by hand keeps up with — and DR-0029 explicitly considered and
+set aside a frontmatter-<code>keywords:</code>-only mechanism as
+<em>tagging’s</em> primary approach, noting it was “[n]ot ruled out as a
+<em>future</em>, smaller, no-prose-edit option for a corpus that
+specifically wants to avoid inline edits — just not built here.” This
+feature request is that option, built — but scoped wider than just
+keywords, and explicitly as its own tool rather than an alternative
+inside <code>kb document tag</code>.</p>
+<p>Document frontmatter is optional by this module’s own design
+(<code>extractFrontmatter</code>’s “no frontmatter is normal, not an
+error” decision; see below) — which means a real document in this corpus
+can be missing a title, an author, a creation date, or any keywords at
+all, with nothing today surfacing that gap or filling it. Several of
+those fields are mechanically derivable — from the document’s own
+content (<code>title</code>) or from git/filesystem provenance
+(<code>author</code>, <code>dateCreated</code>,
+<code>dateModified</code>) — without needing a model call or new
+external dependency beyond (possibly) <code>git</code> itself.</p>
+<h2 id="what-knowledge-assumes-today">What <code>knowledge</code>
+assumes today</h2>
+<ul>
+<li><code>documentFrontmatter</code> (<code>documents.go:471-479</code>)
+carries exactly <code>title</code>, <code>description</code>,
+<code>pubDate</code>, <code>datePublished</code>,
+<code>dateCreated</code>, <code>author</code>, <code>keywords</code> —
+<strong>no <code>dateModified</code> field at all</strong>, even though
+the vocabulary this mirrors (antennaApp’s own post frontmatter — see
+antennaApp’s <code>helptext.go</code> documented fields and
+<code>schema.go</code>’s handling of
+<code>doc.FrontMatter["dateModified"]</code>) treats
+<code>dateModified</code> as distinct from
+<code>datePublished</code>/<code>pubDate</code>. This is a real gap in
+the schema, not just a missing feature, and closing it is explicitly in
+scope here.</li>
+<li><code>extractFrontmatter</code> (<code>documents.go:486-521</code>)
+treats a document with no frontmatter block at all as the ordinary case,
+not an error (“design decision 3” in the code’s own comment) — a
+Fountain screenplay or a plain story usually has none. This command has
+to be able to <em>add</em> a frontmatter block where none exists, not
+only edit one that’s already there.</li>
+<li><code>keywords:</code> resolves through <code>tagSection</code>
+(<code>cmd/kb/document.go:317-348</code>) →
+<code>kb.ResolveConceptName</code> per entry, at every
+<code>kb document ingest</code> — case-insensitive,
+<strong>find-or-create</strong>. Any string that lands in
+<code>keywords:</code> becomes a real concept on the next ingest,
+whether or not a human meant for it to be created.</li>
+<li><code>kb document tag</code>’s <code>--concept NAME,...</code>
+(<code>cmd/kb/documenttag.go:256+</code>) resolves each named concept
+against <code>kb.Concepts()</code> and refuses the <em>whole call</em>
+on an unknown name, checked before any file is opened — it deliberately
+never relies on <code>ResolveConceptName</code>’s auto-create for a
+human-named candidate. This is the precedent this feature request’s “new
+candidate keywords must be explicitly created on accept” decision
+follows.</li>
+<li><code>eligibleConcepts</code>/<code>densityLinkCandidates</code>
+(<code>cmd/kb/documenttag.go:198-212</code>,
+<code>cmd/kb/document.go:393+</code>) already implement “a known concept
+mentioned more than once in this text, outside code spans” — directly
+reusable for the first keyword signal (known concepts, unlisted).</li>
+<li><code>cmdConceptSuggest</code>
+(<code>cmd/kb/concept.go:225-259</code>) scores candidate terms as
+<code>occurrences × idf</code>, <code>idf = log(N/df)</code>, over a set
+of “items” (each record body or document section is one item), keeping
+only <code>idf &gt; 0</code>. This is the shape for the second keyword
+signal (new candidate concepts) — but it is <strong>not a straight
+reuse</strong> for a single document: if the item set being scored
+shrinks to just that one document’s own sections, every term trivially
+satisfies <code>df == N</code>, <code>idf</code> collapses to
+<code>0</code>, and nothing survives the filter. A per-document
+distinctiveness signal needs occurrences counted within the target
+document but <code>idf</code> computed against a wider comparison scope
+— see open questions.</li>
+<li><strong>No file in this module shells out to <code>git</code> or
+reads filesystem timestamps for provenance today</strong> (checked: no
+<code>exec.Command</code> calls anywhere in the codebase). Deriving
+<code>author</code>/<code>dateCreated</code>/<code>dateModified</code>
+from git or the filesystem would be a new capability, not a reuse of an
+existing helper.</li>
+</ul>
+<h2 id="what-is-already-fine">What is already fine</h2>
+<ul>
+<li><code>frontmatterBlockPattern</code>/<code>splitFrontmatter</code>
+(<code>recordfile.go</code>, reused by <code>documenttag.go</code> and
+<code>documents.go</code>) already locate and parse a leading
+<code>---</code>-delimited block — the read side needs no new
+parser.</li>
+<li>The propose-then-write, both-or-neither-across-a-run pattern is
+already fully worked out by <code>kb document tag</code>
+(<code>cmdDocumentTag</code>, <code>cmd/kb/documenttag.go:256+</code>):
+stage every write in memory, touch disk only once every file in the run
+is ready, restore from original bytes on any failure. This command’s
+accept step is the same shape applied to frontmatter fields instead of
+inline wikilinks.</li>
+<li><code>kb.Concepts()</code> / <code>kb.ResolveConceptName()</code> /
+the explicit create-a-concept path <code>kb concept add</code> already
+uses — no new database schema needed on the concept side of
+keywords.</li>
+<li>The narrative-documents review workflow’s <code>unsummarized</code>
+→ <code>drafted</code> → <code>reviewed</code> states already establish,
+elsewhere in this corpus, that a mechanical draft and a human-trusted
+value are different things with different states. The propose/accept
+split here is the same idea applied to metadata fields instead of prose
+summaries.</li>
+</ul>
+<h2 id="proposal">Proposal</h2>
+<ol type="1">
+<li>A new subcommand, working name
+<code>kb document frontmatter PATH</code> (final verb name and CLI shape
+open — see below), dispatched from <code>cmdDocument</code> alongside
+<code>ingest</code>/<code>tag</code>/<code>draft</code>/<code>review</code>/<code>list</code>/<code>show</code>.</li>
+<li>Default invocation is read-only: report, per field, what’s missing
+and what would be proposed, with a source/reason for each proposal (e.g.
+“title: missing, proposed from first H1: ‘…’”). A field that already has
+a value is never overwritten.</li>
+<li>Field-by-field checks:
+<ul>
+<li><strong><code>title</code></strong> — absent only; propose from the
+document’s first true H1, the same fallback
+<code>ParseDocumentFile</code> already applies at ingest time for a
+missing frontmatter <code>title:</code> (DR-0027), reused here for a
+command a human runs deliberately.</li>
+<li><strong><code>author</code></strong> — absent only; propose from the
+file’s git history (e.g. earliest committing author) or
+<code>git config user.name</code>/<code>user.email</code> as a fallback
+for an untracked file.</li>
+<li><strong><code>dateCreated</code></strong> — absent only; propose
+from git (first commit touching the file) or filesystem birth/ctime as a
+fallback when git history is unavailable.</li>
+<li><strong><code>dateModified</code></strong> — new field, added to
+<code>documentFrontmatter</code> as part of this work. Propose from git
+(most recent commit touching the file) or filesystem mtime as a
+fallback. Whether “never overwrite” applies to this field the same way
+it does to the other three is an open question below — a modified-time
+field is expected to change on a re-run, unlike the others.</li>
+<li><strong><code>keywords</code></strong> — a diff, not a binary:
+current <code>keywords:</code> list versus two candidate sets — (a)
+known concepts matched in the document’s own text but not yet listed
+(<code>eligibleConcepts</code>/<code>densityLinkCandidates</code>’s
+existing threshold), and (b) new candidate concepts distinctive to this
+document specifically but not yet known to the corpus at all (a
+document-scoped variant of <code>cmdConceptSuggest</code>’s scoring —
+see open question).</li>
+</ul></li>
+<li>Accept is selective at two granularities: which <em>fields</em> to
+take, and — for <code>keywords</code> specifically — which individual
+<em>entries</em>. Accepting a signal-(a) keyword is a plain frontmatter
+write. Accepting a signal-(b) keyword <strong>explicitly creates the
+concept first</strong> (the same effect as
+<code>kb concept add NAME</code>), then writes it to
+<code>keywords:</code> — mirroring
+<code>kb document tag --concept</code>’s “must already exist, checked up
+front” rule rather than opening a second, looser path to the same
+database mutation.</li>
+<li>Writing to a document with no frontmatter block at all inserts one,
+rather than refusing, consistent with <code>extractFrontmatter</code>
+already treating “no frontmatter” as the ordinary case for this module’s
+documents.</li>
+</ol>
+<h2 id="open-questions-for-the-design-cycle">Open questions for the
+design cycle</h2>
+<ul>
+<li><strong>Command name and CLI shape.</strong> A single verb,
+propose-by-default, with flags for selective accept
+(e.g. <code>--accept title,author</code>,
+<code>--accept-keywords NAME,NAME2</code>, <code>--all</code>) —
+matching <code>kb index --check</code>’s single-verb-plus-flag
+convention — or a <code>suggest</code>/<code>apply</code> pair, matching
+<code>kb concept suggest</code> + <code>kb concept add</code>’s two-verb
+convention? Both conventions already exist in this codebase; not yet
+chosen.</li>
+<li><strong>Per-document distinctiveness scoring for new-candidate
+keywords.</strong> <code>cmdConceptSuggest</code>’s
+<code>occurrences × idf</code> shape degenerates to zero if naively
+scoped to a single document’s own sections (see above). Needs occurrence
+count from the target document and <code>idf</code> from a wider
+comparison scope (project? whole corpus?) — a real design question, not
+a straight reuse of the existing function signature.</li>
+<li><strong>Does this module take a new dependency on shelling out to
+<code>git</code>?</strong> No file today calls <code>exec.Command</code>
+for anything; <code>git log</code>/<code>git blame</code> for
+<code>author</code>/<code>dateCreated</code>/<code>dateModified</code>
+would be the first external-process dependency in
+<code>knowledge</code>. Needs a decision on whether that’s acceptable,
+and what the fallback is when <code>git</code> can’t answer — an
+untracked file, or <code>knowledge</code> running (as an installed
+binary) against a document outside any git checkout at all.</li>
+<li><strong>Does <code>dateModified</code> get the same “never
+overwrite” treatment as the other three fields, or is it the one field
+this command is allowed to keep current on every run?</strong> A stale
+<code>dateModified</code> is arguably worse than a missing one, which
+cuts against the “enhancement only, never overwrite” rule stated for
+<code>title</code>/<code>author</code>/<code>dateCreated</code>. Not
+decided.</li>
+<li><strong>Author format.</strong> A bare name string (matching the
+existing <code>author</code> field’s <code>string</code> type), or
+<code>Name &lt;email&gt;</code>? And if a file’s git history shows more
+than one author, which wins — first committer, most recent, or is a
+single-string field simply the wrong shape for that case?</li>
+<li><strong>Where the <code>title</code> H1-fallback logic should
+live.</strong> Does this command call <code>ParseDocumentFile</code>
+directly, or does a propose-without-writing read path need its own,
+lighter entry point that doesn’t require running the full ingest
+pipeline?</li>
+</ul>
+<h2 id="related">Related</h2>
+<ul>
+<li><code>wikilink-tagging-feature-request.md</code> /
+<code>concept-tag-retrieval-feature-request.md</code> /
+<code>narrative-documents-feature-request.md</code> — the
+concept-linking and document-ingestion mechanisms this reuses.</li>
+<li>DR-0027 (<code>knowledge/decisions/</code>) — the existing first-H1
+title fallback and density-linking threshold this proposal generalizes
+into a standalone command.</li>
+<li>DR-0028 (<code>kb concept suggest</code>) — the TF-IDF-shaped
+candidate scoring the new-candidate-keyword signal reuses, with the
+per-document scoping question above still open.</li>
+<li>DR-0029 (<code>kb document tag</code>) — the propose/accept-shaped,
+both-or-neither write pattern this proposal follows, and the rejected
+frontmatter-<code>keywords:</code>-only alternative this proposal is, in
+effect, now building as its own tool rather than as a second tagging
+mechanism.</li>
+<li><code>TODO.md</code>, “Planned for v0.0.11” — where this item is
+tracked at the release-scope level; this document is the feature-request
+write-up that entry pointed at.</li>
+<li>Filing conversation, 2026-09-19 (Laboratory root).</li>
+</ul>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

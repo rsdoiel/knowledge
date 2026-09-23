@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="kb-document-fuzzy-tag-implementation-plan"><code>kb document fuzzy-tag</code>
+— Implementation Plan</h1>
+<p>See <a
+href="fuzzy-concept-matching-design.html">fuzzy-concept-matching-design.md</a>
+for the full rationale and confirmed decisions. Work items ordered F1 →
+F4. TDD-first: each phase’s tests are written and confirmed red before
+its implementation, per this workspace’s standing convention.</p>
+<hr />
+<h2
+id="f1-library-primitive-fuzzymatchconceptnames-knowledge-package">F1 —
+Library primitive: <code>FuzzyMatchConceptNames</code>
+(<code>knowledge</code> package)</h2>
+<p>Pure, DB-read-only (<code>kb.Concepts()</code>), no file I/O. Mirrors
+<code>MatchConceptNames</code> (<code>retrieval.go:234</code>) and
+<code>MatchConceptNameCounts</code> (<code>retrieval.go:272</code>) in
+shape and location, following the same “library gives the raw signal,
+the caller applies eligibility policy” split DR-0027/DR-0028 already
+established for density-linking and concept suggestion.</p>
+<h3 id="files-to-modify">Files to modify</h3>
+<p><code>retrieval.go</code>:</p>
+<ul>
+<li><p>New unexported <code>levenshteinDistance(a, b string) int</code>
+— classic two-row iterative DP over <code>[]rune</code>, not
+<code>[]byte</code> (concept names and document prose aren’t guaranteed
+ASCII).</p></li>
+<li><p>New unexported <code>stripCommonSuffix(s string) string</code> —
+lowercases, then strips exactly one trailing suffix from
+<code>"ing"</code>, <code>"es"</code>, <code>"ed"</code>,
+<code>"s"</code> tried longest-first (design decision 5); returns the
+input unchanged if none match. Applied to both sides of every distance
+comparison, never to <code>MatchConceptNames</code>’s own exact
+matching.</p></li>
+<li><p>New exported type:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> FuzzyConceptMatch <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    Concept  <span class="dt">string</span> <span class="co">// canonical concept name (Concepts()&#39;s own casing)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    Text     <span class="dt">string</span> <span class="co">// the actual text found, original casing preserved</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    Start    <span class="dt">int</span>    <span class="co">// byte offset into the input text</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    End      <span class="dt">int</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    Distance <span class="dt">int</span>    <span class="co">// Levenshtein distance after stripCommonSuffix normalization</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p>New exported method:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> FuzzyMatchConceptNames<span class="op">(</span>text <span class="dt">string</span><span class="op">)</span> <span class="op">([]</span>FuzzyConceptMatch<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<ul>
+<li>Fetch <code>kb.Concepts()</code>. For each concept, first check
+whether it’s already an <em>exact</em> whole-word match in
+<code>text</code> (same per-concept regex <code>MatchConceptNames</code>
+already builds) — if so, skip it entirely (design decision 5’s scope
+rule: fuzzy is additive, never a duplicate of exact).</li>
+<li>Tokenize <code>text</code> once, up front, into
+<code>[]struct{ Text string; Start, End int }</code> on a simple
+word-boundary split (<code>\b[\p{L}\p{N}']+\b</code>), not per-concept —
+one tokenize pass shared across every remaining concept.</li>
+<li>For a single-word concept name, compare each token. For a
+<code>W</code>-word concept name, slide a window of <code>W</code>
+consecutive tokens (only where the tokens are contiguous in the original
+text — no window spanning a gap wider than ordinary whitespace, so
+“chunking, strategy” one sentence apart never becomes a false multi-word
+candidate), joining with a single space for comparison.</li>
+<li>Normalize both sides with <code>stripCommonSuffix</code>, compute
+<code>levenshteinDistance</code>. Record a
+<code>FuzzyConceptMatch</code> when
+<code>0 &lt; distance &lt;= maxFuzzyDistance</code> (a package constant,
+<code>3</code> — a generous <em>candidate-generation</em> ceiling, not
+the real eligibility threshold; decision 5’s tighter
+<code>1</code>/<code>2</code>-by-length threshold is cmd/kb’s job to
+apply, same split as <code>MatchConceptNameCounts</code> →
+<code>densityLinkCandidates</code>).</li>
+<li>Sort results by <code>Start</code>, then <code>Concept</code>, for
+deterministic output.</li>
+</ul></li>
+</ul>
+<h3
+id="tests-to-add-retrieval_test.go-alongside-testmatchconceptnamecounts_">Tests
+to add (<code>retrieval_test.go</code>, alongside
+<code>TestMatchConceptNameCounts_*</code>)</h3>
+<ul>
+<li><code>TestLevenshteinDistance_IdenticalStringsIsZero</code></li>
+<li><code>TestLevenshteinDistance_SingleCharacterEditIsOne</code> —
+“chunking” vs “chunkng” (deletion), “chunking” vs “chunkings”
+(insertion), “chunking” vs “chunkibg” (substitution).</li>
+<li><code>TestStripCommonSuffix_StripsLongestMatchingSuffix</code> —
+“chunkings” → “chunk” via “ings”? No — decision 5’s list is
+<code>ing</code>/<code>es</code>/<code>ed</code>/<code>s</code>
+individually, longest-first, so “chunkings” strips only trailing
+<code>s</code> → “chunking” (one strip, not iterative) — confirm this
+exact behavior against the design, not an assumed stemmer-like
+multi-pass.</li>
+<li><code>TestFuzzyMatchConceptNames_FindsPluralVariant</code> — concept
+“chunking”, text “the chunkings here”, expect one match, distance
+1.</li>
+<li><code>TestFuzzyMatchConceptNames_FindsTenseVariant</code> — concept
+“chunk”, text “we chunked it”, expect one match.</li>
+<li><code>TestFuzzyMatchConceptNames_FindsTypo</code> — concept
+“chunking”, text “chunkibg happens”, expect one match, distance 1.</li>
+<li><code>TestFuzzyMatchConceptNames_SkipsConceptAlreadyExactlyMatched</code>
+— text contains both “chunking” (exact) and “chunkings” (near-miss);
+expect zero matches, per decision 5’s scope rule.</li>
+<li><code>TestFuzzyMatchConceptNames_SkipsUnrelatedWords</code> — a
+distance-4+ word pair produces nothing (confirms
+<code>maxFuzzyDistance</code> actually bounds output, not just documents
+it).</li>
+<li><code>TestFuzzyMatchConceptNames_MatchesMultiWordConceptName</code>
+— concept “context window”, text “the contxt windows were”, expect one
+match spanning both tokens.</li>
+<li><code>TestFuzzyMatchConceptNames_DoesNotSpanSentenceBoundary</code>
+— tokens from two different, unrelated multi-word mentions never combine
+into a false window match.</li>
+<li><code>TestFuzzyMatchConceptNames_NoMatchesReturnsEmpty</code></li>
+<li><code>TestFuzzyMatchConceptNames_ResultsSortedByPosition</code></li>
+</ul>
+<h3 id="acceptance-criteria">Acceptance criteria</h3>
+<ul>
+<li><code>go test .</code> (package root) green.</li>
+<li><code>go vet ./...</code> clean.</li>
+</ul>
+<hr />
+<h2 id="f2-raw-text-mechanics-cmdkb-pure-functions">F2 — Raw-text
+mechanics (<code>cmd/kb</code>, pure functions)</h2>
+<p>No DB, no file I/O — string-in, string-out functions operating on a
+single document’s raw file text, mirroring
+<code>documenttag_test.go</code>’s existing split between pure-function
+tests and CLI integration tests.</p>
+<h3 id="files-to-modify-1">Files to modify</h3>
+<p>New <code>cmd/kb/documentfuzzytag.go</code>:</p>
+<ul>
+<li><code>sectionHeadingPattern = regexp.MustCompile(</code>(?m)^#{1,6}[
++(.*)$<code>)</code> — own copy of <code>markdownHeadingPattern</code>
+(<code>documents.go:341</code>), same “own copy, not a shared internal”
+precedent <code>firstH1HeadingPattern</code> already sets
+(<code>cmd/kb/documenttag.go:75</code>).</li>
+<li><code>footnoteLabelPattern = regexp.MustCompile(</code>[^()]<code>)</code>
+— matches both a marker (<code>[^3]</code>) and the start of a
+definition (<code>[^3]:</code>).</li>
+<li><code>footnoteDefinitionLinePattern = regexp.MustCompile(</code>(?m)^[^]:.*$<code>)</code></li>
+<li><code>nearestPrecedingHeading(text string, pos int) string</code> —
+scans all <code>sectionHeadingPattern</code> matches, returns the last
+one whose match starts before <code>pos</code>, or <code>""</code> if
+none (gist/lead text before any heading).</li>
+<li><code>nextSectionBoundary(text string, pos int) int</code> — the
+start offset of the next <code>sectionHeadingPattern</code> match after
+<code>pos</code>, or <code>len(text)</code> if none. This is where a
+footnote definition for a marker at <code>pos</code> gets inserted.</li>
+<li><code>nextFootnoteLabel(text string) int</code> — every
+<code>footnoteLabelPattern</code> match’s captured number,
+<code>1 + max(...)</code>, or <code>1</code> if none found.</li>
+<li><code>fuzzyExcludedSpans(text string) []textSpan</code> —
+<code>excludedSpans(text)</code> (<code>cmd/kb/documenttag.go:39</code>,
+untouched) plus every <code>footnoteDefinitionLinePattern</code> match,
+so a marker can never land inside an existing footnote definition. A new
+function, not an edit to <code>excludedSpans</code> itself —
+<code>kb document tag</code> must stay exactly as it is (design decision
+2).</li>
+<li><code>insertFootnote(text string, matchStart, matchEnd int, concept string, label int) string</code>
+— splices in definition-then-marker order (definition’s insertion point
+is always <code>&gt;= matchEnd</code>, so inserting it first keeps
+<code>matchEnd</code> valid for the marker insertion that follows):
+appends <code>"\n[^" + label + "]: see [[" + concept + "]]\n"</code>
+immediately before <code>nextSectionBoundary(text, matchEnd)</code>,
+then inserts <code>"[^" + label + "]"</code> immediately after
+<code>matchEnd</code> in the (now longer) text.</li>
+</ul>
+<h3 id="tests-to-add-cmdkbdocumentfuzzytag_test.go">Tests to add
+(<code>cmd/kb/documentfuzzytag_test.go</code>)</h3>
+<ul>
+<li><code>TestNearestPrecedingHeading_ReturnsLastHeadingBeforePosition</code></li>
+<li><code>TestNearestPrecedingHeading_EmptyWhenPositionBeforeAnyHeading</code></li>
+<li><code>TestNextSectionBoundary_ReturnsNextHeadingStart</code></li>
+<li><code>TestNextSectionBoundary_ReturnsTextLengthWhenNoFollowingHeading</code></li>
+<li><code>TestNextFootnoteLabel_StartsAtOneWhenNoneExist</code></li>
+<li><code>TestNextFootnoteLabel_ContinuesPastHighestExistingLabel</code>
+— text containing <code>[^1]</code> and <code>[^2]</code> (in either
+marker or definition form) yields <code>3</code>.</li>
+<li><code>TestFuzzyExcludedSpans_ExcludesFootnoteDefinitionLine</code></li>
+<li><code>TestFuzzyExcludedSpans_StillExcludesEverythingExcludedSpansDoes</code>
+— a spot-check that fenced code / frontmatter / existing wikilinks are
+still excluded (regression against decision 5’s “reuse as-is”
+claim).</li>
+<li><code>TestInsertFootnote_MarkerImmediatelyFollowsMatch</code></li>
+<li><code>TestInsertFootnote_DefinitionPrecedesNextHeading</code></li>
+<li><code>TestInsertFootnote_DefinitionAtEndOfFileWhenNoFollowingHeading</code></li>
+<li><code>TestInsertFootnote_MultipleFootnotesInOneSectionDoNotCollideLabels</code></li>
+</ul>
+<h3 id="acceptance-criteria-1">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+</ul>
+<hr />
+<h2 id="f3-cmddocumentfuzzytag-wiring">F3 —
+<code>cmdDocumentFuzzyTag</code> wiring</h2>
+<h3 id="files-to-modify-2">Files to modify</h3>
+<p><code>cmd/kb/documentfuzzytag.go</code> (continued):</p>
+<ul>
+<li><code>fuzzyEligible(matches []knowledge.FuzzyConceptMatch, explicit []string) []knowledge.FuzzyConceptMatch</code>
+— applies design decision 5’s real threshold (not <code>F1</code>’s
+generous <code>maxFuzzyDistance</code> candidate ceiling): keep a match
+if its <code>Concept</code> is in <code>explicit</code> (any distance up
+to <code>maxFuzzyDistance</code> qualifies — the <code>--concept</code>
+bypass, decision 2), or if no <code>explicit</code> list was given and
+<code>Distance &lt;= 1</code> for concept names of 8 characters or
+fewer, <code>&lt;= 2</code> otherwise. Then drops any match whose
+<code>[Start, End)</code> overlaps a span from
+<code>fuzzyExcludedSpans(text)</code> (F2).</li>
+<li><code>documentFuzzyTagResult</code> — mirrors
+<code>documentTagResult</code> (<code>cmd/kb/documenttag.go:217</code>):
+<code>Path string</code>, <code>Footnoted []fuzzyTagEntry</code>, where
+<code>fuzzyTagEntry{Section, Text, Concept string; Distance, Footnote int}</code>.</li>
+<li><code>cmdDocumentFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error</code>
+— same shape as <code>cmdDocumentTag</code>
+(<code>cmd/kb/documenttag.go:256</code>): parse
+<code>--project</code>/<code>--concept</code>/<code>--dry-run</code>,
+resolve the project, validate <code>--concept</code> names against known
+concepts up front (fail before any file opens, matching
+<code>tag</code>’s own rule), iterate <code>kb.Documents(p.ID)</code>,
+per file: <code>os.ReadFile</code> →
+<code>kb.FuzzyMatchConceptNames(text)</code> →
+<code>fuzzyEligible</code> → for each surviving match, in
+<code>Start</code> order, skip if
+<code>alreadyWikilinked(text, match.Concept)</code> is already true
+(decision 3’s free idempotency), else assign the next label via
+<code>nextFootnoteLabel</code> and apply <code>insertFootnote</code>,
+recording a <code>fuzzyTagEntry</code> with
+<code>Section: nearestPrecedingHeading(text, match.Start)</code>. Same
+both-or- neither staged-write-with-rollback pattern
+<code>cmdDocumentTag</code> already uses
+(<code>cmd/kb/documenttag.go:307-357</code>) when not
+<code>--dry-run</code>.</li>
+<li><code>reportDocumentFuzzyTag(jsonOut, dryRun bool, results []documentFuzzyTagResult, out io.Writer) error</code>
+— mirrors <code>reportDocumentTag</code>
+(<code>cmd/kb/documenttag.go:361</code>): “would footnote”/“footnoted”
+verb, one line per entry per design decision 4.</li>
+</ul>
+<p><code>cmd/kb/document.go</code>:</p>
+<ul>
+<li>Add
+<code>case "fuzzy-tag": return cmdDocumentFuzzyTag(kb, jsonOut, rest, out)</code>
+to the <code>document</code> subverb switch, alongside the existing
+<code>"tag"</code> case.</li>
+</ul>
+<h3
+id="tests-to-add-cmdkbdocumentfuzzytag_cmd_test.go-mirroring-documenttag_cmd_test.go">Tests
+to add (<code>cmd/kb/documentfuzzytag_cmd_test.go</code>, mirroring
+<code>documenttag_cmd_test.go</code>)</h3>
+<ul>
+<li><code>TestCmdDocumentFuzzyTag_DryRunWritesNothing</code></li>
+<li><code>TestCmdDocumentFuzzyTag_InsertsFootnoteForPluralNearMiss</code></li>
+<li><code>TestCmdDocumentFuzzyTag_PreservesOriginalWordSpelling</code> —
+the matched word itself is byte-identical before/after, only a
+<code>[^n]</code> marker and a trailing definition line are new
+(decision 6).</li>
+<li><code>TestCmdDocumentFuzzyTag_SkipsWhenAlreadyExactlyLinkedElsewhere</code></li>
+<li><code>TestCmdDocumentFuzzyTag_SecondRunIsIdempotent</code> — run
+twice, assert the second run’s <code>Footnoted</code> is empty and the
+file is byte-identical to after the first run.</li>
+<li><code>TestCmdDocumentFuzzyTag_ConceptFlagBypassesDistanceThreshold</code>
+—a distance-3 near-miss is skipped by default but footnoted when named
+via <code>--concept</code>.</li>
+<li><code>TestCmdDocumentFuzzyTag_UnknownConceptFlagErrorsBeforeAnyFileOpens</code></li>
+<li><code>TestCmdDocumentFuzzyTag_RequiresProject</code></li>
+<li><code>TestCmdDocumentFuzzyTag_JSONOutputShape</code></li>
+<li><code>TestCmdDocumentFuzzyTag_RollsBackAllFilesIfOneWriteFails</code></li>
+<li><code>TestCmdDocumentFuzzyTag_NeverTouchesExactMatchInsertion</code>
+— a file with both an exact-match candidate and a fuzzy candidate for
+<em>different</em> concepts: run <code>fuzzy-tag</code> alone, assert
+the exact-match concept is untouched (only <code>tag</code> ever inserts
+a bracket).</li>
+</ul>
+<h3 id="acceptance-criteria-2">Acceptance criteria</h3>
+<ul>
+<li><code>go test ./cmd/kb/...</code> green.</li>
+<li>Manual smoke test against a scratch document (per
+<code>feedback_smoke_test_data_transforms</code> — this is exactly the
+kind of prose-rewriting transform DR-0029 itself found a real bug in
+only by running against a real file, not just unit tests): write a
+throwaway document under a scratch project containing a deliberate
+typo/plural of a known concept, run
+<code>kb document fuzzy-tag --project SCRATCH</code> for real, inspect
+the resulting file by eye for a correctly placed marker and definition,
+then run <code>kb document ingest</code> on it and confirm via
+<code>kb document show</code> (or a direct query) that the concept
+actually linked.</li>
+</ul>
+<hr />
+<h2 id="f4-documentation">F4 — Documentation</h2>
+<h3 id="files-to-modify-3">Files to modify</h3>
+<p><code>cmd/kb/helptext.go</code>:</p>
+<ul>
+<li><code>DocumentHelpText</code> (<code>cmd/kb/helptext.go:154</code>):
+add
+<code>{app_name} document fuzzy-tag --project P [--concept NAME,...] [--dry-run]</code>
+to <code>SYNOPSIS</code>, alongside the existing <code>tag</code> line
+(<code>cmd/kb/helptext.go:176</code>), and a <code>DESCRIPTION</code>
+paragraph covering the footnote mechanism and why it differs from
+<code>tag</code>’s direct bracket-wrap (design decision 3, short
+form).</li>
+</ul>
+<h3
+id="regeneration-do-not-hand-edit-kb-document.1.md-it-is-generated">Regeneration
+(do not hand-edit <code>kb-document.1.md</code> — it is generated)</h3>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> kb-topics-help   <span class="co"># regenerates kb-document.1.md</span></span></code></pre></div>
+<h3 id="acceptance-criteria-3">Acceptance criteria</h3>
+<ul>
+<li><code>git diff kb-document.1.md</code> shows only the expected
+addition, regenerated from the edited <code>helptext.go</code> constant
+— no hand-edits to the <code>.1.md</code> file itself.</li>
+</ul>
+<hr />
+<h2 id="after-f4-a-decision-record">After F4: a decision record</h2>
+<p>Once implemented and smoke-tested, author a decision record via
+<code>kb record new --project knowledge</code>, following DR-0029’s own
+precedent as the most directly related prior work
+(<code>kb document tag</code>’s own original implementation). Authored
+<code>proposed</code>, promoted by the user — not self-promoted, per
+this workspace’s standing rule that a model may write a record but not
+accept one.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
