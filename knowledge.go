@@ -1624,7 +1624,10 @@ type KBSearchResult struct {
  * Returns an error wrapping ErrFTSUnavailable when the FTS index is not present.
  *
  * The term uses standard FTS5 query syntax: multiple words are ANDed, phrases
- * can be quoted ("WAL mode"), and prefix search is supported (docker*).
+ * can be quoted ("WAL mode"), and prefix search is supported (docker*). A term
+ * that is not valid query syntax (a hyphenated name like map-reduce, a version
+ * like v0.0.11, an unbalanced quote) is searched as a literal phrase instead of
+ * failing.
  *
  * Parameters:
  *   term (string) — FTS5 query term.
@@ -1644,17 +1647,40 @@ func (kb *KnowledgeBase) Search(term string) ([]KBSearchResult, error) {
 		return nil, fmt.Errorf("full-text search is not available (FTS5 not compiled in)")
 	}
 	out, err := kb.runSearch(term)
-	if err != nil && isFTS5SyntaxError(err) {
-		// The raw term isn't valid FTS5 query syntax (e.g. a bare "." in a
-		// version string, which is neither a token character nor a grammar
-		// operator). Whoever typed it meant a literal string, not a query,
-		// so retry as a quoted phrase instead of surfacing the parse error.
-		out, err = kb.runSearch(`"` + strings.ReplaceAll(term, `"`, `""`) + `"`)
+	if err != nil {
+		// The raw term isn't a valid FTS5 query. FTS5 has a family of such
+		// errors, and characters that are common in real terms trigger
+		// different members of it: a bare "." in a version string gives "fts5:
+		// syntax error", a hyphen (`map-reduce`, read as `map` minus column
+		// `reduce`) or a colon gives "no such column", an unbalanced quote
+		// gives "unterminated string". v0.0.11 retried on the first only, so
+		// dots worked and hyphens, which concept names are full of, did not
+		// (found 2026-09-24). Whoever typed such a term meant a literal
+		// string, so retry once as a quoted phrase, on any failure of the raw
+		// term rather than a list of messages that would miss the next one. A
+		// term that parses is never touched, so the documented syntax (AND,
+		// NOT, "phrases", prefix*) keeps its meaning. If the phrase fails too,
+		// that error is what the caller gets.
+		out, err = kb.runSearch(quotedPhrase(term))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: search %q: %w", term, err)
 	}
 	return out, nil
+}
+
+// quotedPhrase turns term into a single FTS5 phrase, escaping embedded quotes.
+// A trailing "*" stays outside the quotes so it still means prefix on the last
+// token: `map-red*` becomes `"map-red"*`, not the literal phrase `"map-red*"`,
+// which would only match the exact token "red".
+func quotedPhrase(term string) string {
+	prefix := strings.HasSuffix(term, "*")
+	body := strings.TrimSuffix(term, "*")
+	q := `"` + strings.ReplaceAll(body, `"`, `""`) + `"`
+	if prefix {
+		q += "*"
+	}
+	return q
 }
 
 // runSearch runs the kb_fts MATCH query with the given raw term, so Search
@@ -1690,13 +1716,6 @@ func (kb *KnowledgeBase) runSearch(term string) ([]KBSearchResult, error) {
 		out = append(out, r)
 	}
 	return out, rows.Err()
-}
-
-// isFTS5SyntaxError reports whether err came from FTS5 rejecting a MATCH
-// term as invalid query syntax (as opposed to some other query failure),
-// so Search only retries a query it has a real fix for.
-func isFTS5SyntaxError(err error) bool {
-	return strings.Contains(err.Error(), "fts5: syntax error")
 }
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────

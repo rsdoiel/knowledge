@@ -2430,3 +2430,105 @@ func TestSearch_MultiWordTermStillANDs(t *testing.T) {
 		t.Fatalf("Search(%q) = %d results, want 1 (AND of both terms)", "zzalphazz zzbetazz", len(results))
 	}
 }
+
+// ─── hyphens and other grammar characters (found 2026-09-24) ────────────────
+//
+// v0.0.11 retried a failed search as a quoted phrase, but only when the error
+// contained "fts5: syntax error". FTS5 reports a different error for other
+// characters: a hyphen (`map-reduce`, read as `map` minus column `reduce`) and a
+// colon (`x:y`, a column filter) give "no such column", and an unbalanced quote
+// gives "unterminated string". So dots worked and hyphens, common in concept
+// names, did not. Search now retries once, as a literal phrase, on ANY failure
+// of the raw term; a raw term that parses keeps its documented meaning.
+
+func searchKB(t *testing.T, texts ...string) *KnowledgeBase {
+	t.Helper()
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	for _, text := range texts {
+		if _, err := kb.AddObservation(pid, "note", text); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+	return kb
+}
+
+func TestSearch_HyphenatedTermsMatchAsAPhrase(t *testing.T) {
+	kb := searchKB(t,
+		"the map-reduce pass runs over chunks",
+		"records-portability shipped in v0.0.5",
+		"JSON-L export is authoritative",
+		"a spot-check of the cross-machine merge",
+		"an unrelated note about reduce and map, in that order")
+	for _, term := range []string{"map-reduce", "records-portability", "JSON-L", "spot-check", "cross-machine"} {
+		results, err := kb.Search(term)
+		if err != nil {
+			t.Errorf("Search(%q) = error %v, want a phrase match", term, err)
+			continue
+		}
+		if len(results) != 1 {
+			t.Errorf("Search(%q) = %d results, want exactly the one note containing it", term, len(results))
+		}
+	}
+}
+
+func TestSearch_AHyphenatedPhraseDoesNotMatchTheWordsInTheWrongOrder(t *testing.T) {
+	kb := searchKB(t, "an unrelated note about reduce and map, in that order")
+	results, err := kb.Search("map-reduce")
+	if err != nil || len(results) != 0 {
+		t.Errorf("Search(map-reduce) = %d results, %v; want none: it is a phrase, not two loose words", len(results), err)
+	}
+}
+
+func TestSearch_ATrailingStarStillMeansPrefixOnAHyphenatedTerm(t *testing.T) {
+	kb := searchKB(t, "the map-reduce pass runs over chunks")
+	results, err := kb.Search("map-red*")
+	if err != nil {
+		t.Fatalf("Search(map-red*): %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("Search(map-red*) = %d results, want the prefix to match map-reduce", len(results))
+	}
+}
+
+func TestSearch_OtherGrammarCharactersDoNotErrorEither(t *testing.T) {
+	kb := searchKB(t, "written in C++ with a/b testing, it's fine, x:y pairs, and a quoted \"word\" too")
+	for _, term := range []string{"C++", "a/b", "it's", "x:y", `"unbalanced`, "foo -bar", "a,b", "x AND", "a--b"} {
+		if _, err := kb.Search(term); err != nil {
+			t.Errorf("Search(%q) = error %v, want no error from any typed term", term, err)
+		}
+	}
+}
+
+func TestSearch_ATermThatMatchesNothingIsAnEmptyResultNotAnError(t *testing.T) {
+	kb := searchKB(t, "some text")
+	results, err := kb.Search("no-such-thing")
+	if err != nil || len(results) != 0 {
+		t.Errorf("Search(no-such-thing) = %d results, %v; want an empty result and no error", len(results), err)
+	}
+}
+
+// The documented raw syntax must keep its meaning: the retry is only for a term
+// that fails.
+func TestSearch_DocumentedSyntaxIsUnchanged(t *testing.T) {
+	kb := searchKB(t,
+		"zzalphazz and zzbetazz both present",
+		"only zzalphazz present here",
+		"zzgammazz zzdeltazz adjacent")
+	for _, tc := range []struct {
+		term string
+		want int
+	}{
+		{"zzalphazz zzbetazz", 1},     // implicit AND
+		{`"zzgammazz zzdeltazz"`, 1},  // quoted phrase
+		{`"zzdeltazz zzgammazz"`, 0},  // phrase order matters
+		{"zzalph*", 2},                // prefix
+		{"zzalphazz NOT zzbetazz", 1}, // NOT
+		{"zzalphazz OR zzgammazz", 3}, // OR
+	} {
+		results, err := kb.Search(tc.term)
+		if err != nil || len(results) != tc.want {
+			t.Errorf("Search(%q) = %d results, %v; want %d", tc.term, len(results), err, tc.want)
+		}
+	}
+}
