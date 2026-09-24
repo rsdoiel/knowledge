@@ -1,4 +1,4 @@
-%kb-topics(1) user manual | version 0.0.12 66500c0
+%kb-topics(1) user manual | version 0.0.12 036bd79
 % R. S. Doiel
 % 2026-09-23
 
