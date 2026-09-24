@@ -2,7 +2,7 @@
 id: "0035"
 title: "Move cmd/kb workflow logic into the knowledge library as exported functions"
 date: "2026-09-23"
-status: proposed
+status: accepted
 kind: decision
 trigger: design
 project: knowledge

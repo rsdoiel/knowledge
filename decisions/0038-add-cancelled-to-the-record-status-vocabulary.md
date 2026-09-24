@@ -2,7 +2,7 @@
 id: "0038"
 title: "Add cancelled to the record status vocabulary"
 date: "2026-09-23"
-status: proposed
+status: accepted
 kind: decision
 trigger: request
 project: knowledge

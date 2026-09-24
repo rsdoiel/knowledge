@@ -3,11 +3,11 @@
 Generated file. Do not hand-edit.
 
 ```
-DR-0039  2026-09-23  proposed     decision     request          -     kb concept delete: refuse when linked, local to one database
-DR-0038  2026-09-23  proposed     decision     request          -     Add cancelled to the record status vocabulary
+DR-0039  2026-09-23  accepted     decision     request          -     kb concept delete: refuse when linked, local to one database
+DR-0038  2026-09-23  accepted     decision     request          -     Add cancelled to the record status vocabulary
 DR-0037  2026-09-23  accepted     correction   live-test        -     Deterministic output, punctuation-edged concept names, and wikilinks in code
-DR-0036  2026-09-23  proposed     correction   live-test        -     Fuzzy-match false-positive gates and keyword acceptance validation
-DR-0035  2026-09-23  proposed     decision     design           -     Move cmd/kb workflow logic into the knowledge library as exported functions
+DR-0036  2026-09-23  accepted     correction   live-test        -     Fuzzy-match false-positive gates and keyword acceptance validation
+DR-0035  2026-09-23  accepted     decision     design           -     Move cmd/kb workflow logic into the knowledge library as exported functions
 DR-0034  2026-09-23  accepted     decision     implementation   -     kb concept suggest: fuzzy candidate clustering via shared Levenshtein primitives
 DR-0033  2026-09-23  accepted     decision     implementation   -     kb document frontmatter: propose-then-accept provenance generator
 DR-0032  2026-09-23  accepted     decision     implementation   -     kb document fuzzy-tag: Levenshtein near-miss matching via footnote insertion

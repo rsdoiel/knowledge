@@ -2,7 +2,7 @@
 id: "0036"
 title: "Fuzzy-match false-positive gates and keyword acceptance validation"
 date: "2026-09-23"
-status: proposed
+status: accepted
 kind: correction
 trigger: live-test
 project: knowledge

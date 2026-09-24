@@ -2,7 +2,7 @@
 id: "0039"
 title: "kb concept delete: refuse when linked, local to one database"
 date: "2026-09-23"
-status: proposed
+status: accepted
 kind: decision
 trigger: request
 project: knowledge
