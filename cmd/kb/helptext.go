@@ -466,6 +466,8 @@ const ConceptHelpText = `%{app_name}-concept(1) user manual | version {version} 
 
 {app_name} concept rename OLD NEW
 
+{app_name} concept delete NAME [--force] [--dry-run]
+
 {app_name} concept suggest [--project NAME] [--limit N]
 
 # DESCRIPTION
@@ -491,6 +493,26 @@ rename
   (record_concepts, observation_concepts, project_concepts,
   document_section_concepts) is a foreign key, never a name matched from a
   file. See DR-0024 (knowledge/decisions/).
+
+delete
+: remove a concept, its links, and its search entry. NAME must match exactly,
+  including case. A concept still linked to a project, observation, record or
+  document section is refused, with the counts, and nothing changes; --force
+  unlinks it from all of them and deletes it (the projects, observations,
+  records and documents themselves are untouched, only the links go).
+  --dry-run reports what would happen and changes nothing. A NAME that looks
+  like a flag (---, -x) is passed after --, as everywhere else. The concepts
+  most worth deleting are junk ones minted from a documentation example, so
+  this exists to remove them. See DR-0038 (knowledge/decisions/).
+
+  Two things delete does not do, and prints a note about each. It does not
+  touch files: a record or document that still contains [[Name]], or lists the
+  name in tags or keywords, recreates the concept when that file is next ingested
+  after it changes (an unchanged file is skipped) or when the database is rebuilt
+  from the files,
+  so remove the mention too. And it does not propagate: a database that still
+  holds the concept brings it back on the next {app_name}-merge(1) or
+  {app_name}-import(1) into this one, so delete it there as well.
 
 suggest
 : read-only: scans every record body and document section body (scoped to
@@ -527,6 +549,13 @@ A description or name edited on two machines now reconciles: both
 updated_at is later (DR-0025, generalized to name by DR-0026), so a concept
 renamed on one machine and left untouched on another arrives as one renamed
 concept, not two, regardless of merge/import order.
+
+A deleted concept is not remembered. Deletion is local to one database: there is
+no tombstone, so {app_name}-merge(1) and {app_name}-import(1) treat a concept
+the other side still has as new and add it back. Under the authoritative
+agents/knowledge.jsonl flow (each machine rebuilds its database from the
+committed export) a deletion travels with the next export, provided every
+machine rebuilds before it exports.
 
 # SEE ALSO
 
@@ -966,7 +995,15 @@ unknown value parses and carries a warning, because a typo in a file several
 harnesses write should be a fixable row, not a failed run.
 
 status
-: proposed, accepted, superseded, rejected
+: proposed, accepted, superseded, rejected, cancelled
+
+  rejected means the decisions were never adopted. superseded means a later
+  record replaced them. cancelled means they were adopted and then the work was
+  abandoned: its reasoning still stands and is where anyone revisiting the
+  question should start, but it is not live. Say why in the record's body, since
+  "the need was met another way" and "deprioritised" tell a later reader
+  different things; there is no field for it. Use kb record set-status ID
+  cancelled, without writing a replacement record.
 
 kind
 : decision, correction, refinement

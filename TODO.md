@@ -51,7 +51,7 @@
   `UnifiedMemory.Recall`, and building an eventual interactive/dialogic
   re-ingest mode in harvey, remain explicitly out of scope here.
 
-- [ ] **Add `cancelled` to the `status` vocabulary.** Raised 2026-09-21 from a
+- [x] **DONE 2026-09-23 (DR-0038): `cancelled` is in the status vocabulary, documented in `kb help record`, with the reason-in-the-body convention.** *Original request:* **Add `cancelled` to the `status` vocabulary.** Raised 2026-09-21 from a
   real case in `~/WorkLab`: `cold` DR-0023 recorded eleven decisions for a
   parameterized report (cold#110), was reviewed and accepted, and the issue was
   cancelled the same day — the report already shipped in v0.0.53 turned out to
@@ -103,6 +103,10 @@
   should be revisited once `cancelled` exists.
 
 ## To explore
+
+- [x] **FIXED 2026-09-23 (DR-0037).** **`document frontmatter` prints `known-concept proposals` in a different order every run.** Found 2026-09-23 by comparing two builds: the same binary, same file, six runs gave six different orderings (same items each time). Cause: `EligibleTagConcepts` (`documenttag.go`, moved from `cmd/kb` in L2) builds its result by ranging over a map, so the order is unspecified, and `knownKeywordProposals` passes it straight to the report. Same class as the `excludeNearExisting` tie-break bug fixed before v0.0.11. Likely fix: `sort.Strings` the result, with a test written red first. Not fixed inside L3 because L1-L3 are pure moves.
+
+- [x] **FIXED 2026-09-23 (DR-0037).** **`document frontmatter --accept` writes new frontmatter keys in a different order every run.** Found 2026-09-23 during L4: the same command (`--accept title,author,dateCreated,dateModified` on a file with no frontmatter) run 8 times gave two different key orders, 4 runs each. Cause: `frontmatterRun` (moved from `cmd/kb` in L4) applies accepted fields by ranging over a map, and `setMappingField` appends each new key as it goes, so key order in the file follows map iteration order. Same for several `--set` flags. Likely fix: apply in the canonical order title, author, dateCreated, dateModified (and sort `--set` keys the same way), with a test written red first. Moved verbatim in L4, not fixed there, so the old-vs-new comparison stayed exact (it compared one field at a time and normalized key order for the multi-field case). Related to the entry above and to the `excludeNearExisting` tie-break bug fixed before v0.0.11.
 
 - [ ] **Programmatic corpus-improvement techniques, as the corpus grows.**
   Raised 2026-09-18 while discussing the MADR item below: decision records
@@ -167,7 +171,7 @@
   far; worth weighing explicitly if either of the above turns out too weak
   in practice, not assumed as the starting point.
 
-- [ ] **`MatchConceptNames`/`MatchConceptNameCounts` can never match a
+- [x] **FIXED 2026-09-23 (DR-0037).** **`MatchConceptNames`/`MatchConceptNameCounts` can never match a
   concept name whose first or last character is non-word punctuation**
   (`\b` fires only between a word character and a non-word character, so a
   concept like `C++`, `F#`, or `.NET` mentioned as `"...using C++ for
@@ -181,6 +185,10 @@
   regex-anchoring change to a widely-used, foundational function, deserving
   its own dedicated design/test pass rather than a quick patch alongside
   unrelated work.
+
+- [x] **FIXED 2026-09-23 (DR-0037): two more bugs found while fixing those.** (1) A `[[...]]` inside a code span or fenced block minted a concept in both document and record ingest, which is where junk concepts like `...`, `recall: ...` and `tool: ...` came from; ingest now scans the code-stripped text. (2) The determinism audit found two more map-order sites, `RemovedHeadings` after a re-ingest and the notes `project rename` prints; both are ordered now. A repeat-run check (60 read-only invocations x 5, and the file-taking verbs x 12 runs, against a pre-fix binary that gave 12 different outputs in 12 runs) now finds none. **Follow-up (DR-0039): `kb concept delete` now exists.** The real `agents/knowledge.db` still holds the junk concept `...` (id 162, linked to two records, not one as first written). It is inert; removing it is `kb concept delete ... --force`, awaiting a go-ahead because it is real data.
+
+- [x] **DONE 2026-09-23 (DR-0039): `kb concept delete`.** `ConceptUsage`/`DeleteConcept`/`ConceptInUseError` in the library; the verb refuses a linked concept unless `--force`, previews with `--dry-run`, accepts a flag-shaped name after `--`, matches the name exactly, and says in its output and man page that a merge/import from a database that still has the concept brings it back (no tombstone, chosen 2026-09-23) and that a file still naming it recreates it when next ingested after a change.
 
 ## Planned for v0.0.11
 

@@ -1,6 +1,11 @@
 package knowledge
 
-import "testing"
+import (
+	"math/rand"
+	"regexp"
+	"strings"
+	"testing"
+)
 
 // ─── W1: RecallByConceptNames ────────────────────────────────────────────────
 
@@ -621,5 +626,170 @@ func TestFuzzyMatchConceptNames_ResultsSortedByPosition(t *testing.T) {
 	}
 	if matches[0].Start > matches[1].Start {
 		t.Errorf("matches = %+v, want sorted by Start ascending", matches)
+	}
+}
+
+// ─── concept names that begin or end in punctuation (TODO.md, found 2026-09-23) ─
+//
+// The matcher was `(?i)\b` + name + `\b`. \b only fires between a word
+// character and a non-word one, so a name like C++ (ends in '+') could never
+// match "using C++ for this": the space after the '+' is not a word boundary.
+// The rule is now "not glued to a word character on either side", which is
+// exactly what \b meant for names that start and end with a letter.
+
+func matchKB(t *testing.T, names ...string) *KnowledgeBase {
+	t.Helper()
+	kb := openTestKB(t)
+	for _, n := range names {
+		if _, err := kb.AddConcept(n, ""); err != nil {
+			t.Fatalf("AddConcept(%q): %v", n, err)
+		}
+	}
+	return kb
+}
+
+func TestMatchConceptNames_FindsNamesThatBeginOrEndInPunctuation(t *testing.T) {
+	cases := []struct{ name, text string }{
+		{"C++", "we are using C++ for this"},
+		{"C++", "C++ at the very start"},
+		{"C++", "and at the very end, C++"},
+		{"C++", "in parentheses (C++) and punctuation C++."},
+		{"C++", "a list: C++, Go"},
+		{"F#", "written in F# today"},
+		{"C#", "the C# compiler"},
+		{".NET", "a .NET application"},
+		{".NET", "targets .NET, not Mono"},
+		{"c++", "Upper-case C++ still matches a lower-case name"},
+	}
+	for _, c := range cases {
+		kb := matchKB(t, c.name)
+		got, err := kb.MatchConceptNames(c.text)
+		if err != nil || len(got) != 1 || got[0] != c.name {
+			t.Errorf("MatchConceptNames(%q) with concept %q = %v, %v; want [%s]", c.text, c.name, got, err, c.name)
+		}
+	}
+}
+
+func TestMatchConceptNames_PunctuationNamesAreNotMatchedInsideALongerWord(t *testing.T) {
+	cases := []struct{ name, text string }{
+		{"C++", "ABC++ is not the same word"},
+		{"C++", "C++x is not either"},
+		{"F#", "MyF# is not F sharp"},
+		{".NET", "ASP.NET is a different thing"},
+		{".NET", "the .NETwork"},
+	}
+	for _, c := range cases {
+		kb := matchKB(t, c.name)
+		if got, _ := kb.MatchConceptNames(c.text); len(got) != 0 {
+			t.Errorf("MatchConceptNames(%q) with concept %q = %v, want no match: glued to a word character", c.text, c.name, got)
+		}
+	}
+}
+
+func TestMatchConceptNames_LetterNamesBehaveExactlyAsBefore(t *testing.T) {
+	kb := matchKB(t, "foo")
+	yes := []string{"foo", "a foo b", "(foo)", "foo.", "foo-bar", "FOO", "x, foo!", "foo\nbar"}
+	no := []string{"xfoo", "foox", "foo_bar", "foo9", "9foo", "a_foo"}
+	for _, s := range yes {
+		if got, _ := kb.MatchConceptNames(s); len(got) != 1 {
+			t.Errorf("MatchConceptNames(%q) = %v, want a match", s, got)
+		}
+	}
+	for _, s := range no {
+		if got, _ := kb.MatchConceptNames(s); len(got) != 0 {
+			t.Errorf("MatchConceptNames(%q) = %v, want no match", s, got)
+		}
+	}
+}
+
+func TestMatchConceptNames_MultiWordAndInteriorPunctuationStillWork(t *testing.T) {
+	kb := matchKB(t, "chunking strategy", "Node.js", "llama.cpp")
+	got, _ := kb.MatchConceptNames("a chunking strategy for Node.js and llama.cpp")
+	if len(got) != 3 {
+		t.Errorf("got %v, want all three", got)
+	}
+}
+
+func TestMatchConceptNameCounts_CountsEveryPunctuationNameMention(t *testing.T) {
+	kb := matchKB(t, "C++", "F#")
+	got, err := kb.MatchConceptNameCounts("C++ and C++, then C++. Also F# and ABC++ and F#.")
+	if err != nil {
+		t.Fatalf("MatchConceptNameCounts: %v", err)
+	}
+	if got["C++"] != 3 || got["F#"] != 2 {
+		t.Errorf("counts = %v, want C++:3 (ABC++ excluded) and F#:2", got)
+	}
+}
+
+func TestMatchConceptNameCounts_AdjacentMentionsAreEachCounted(t *testing.T) {
+	// A boundary check that consumed the separator would count "C++ C++" once.
+	kb := matchKB(t, "C++")
+	got, _ := kb.MatchConceptNameCounts("C++ C++ C++")
+	if got["C++"] != 3 {
+		t.Errorf("counts = %v, want 3", got)
+	}
+}
+
+func TestMatchConceptNameCounts_AMatchRejectedForItsNeighbourDoesNotHideALaterOne(t *testing.T) {
+	// "a.a" first matches inside "xa.a.a" glued to the x and is rejected; the
+	// overlapping "a.a" starting one character later is a valid mention.
+	kb := matchKB(t, "a.a")
+	got, _ := kb.MatchConceptNameCounts("xa.a.a")
+	if got["a.a"] != 1 {
+		t.Errorf("counts = %v, want the mention at the later offset found", got)
+	}
+}
+
+// A differential test against the matcher this replaced: for any name that
+// starts and ends with an ASCII word character, conceptNameMatches must find
+// exactly what `(?i)\b` + name + `\b` found, over arbitrary text (including
+// underscores, digits, hyphens, punctuation, newlines and non-ASCII letters).
+func TestConceptNameMatches_AgreesWithTheOldBoundaryRegexForLetterEdgedNames(t *testing.T) {
+	rng := rand.New(rand.NewSource(20260923))
+	alphabet := []rune("abAB_ 19-.+#(),\né世")
+	names := []string{"a", "ab", "a b", "b-a", "a.b", "AB", "a_b", "1a", "b9", "a b a"}
+	for i := 0; i < 4000; i++ {
+		n := rng.Intn(14)
+		var sb strings.Builder
+		for j := 0; j < n; j++ {
+			sb.WriteRune(alphabet[rng.Intn(len(alphabet))])
+		}
+		text := sb.String()
+		for _, name := range names {
+			want := regexp.MustCompile(`(?i)\b`+regexp.QuoteMeta(name)+`\b`).FindAllStringIndex(text, -1)
+			got := conceptNameMatches(text, name)
+			if len(want) != len(got) {
+				t.Fatalf("name %q, text %q: old regex found %v, conceptNameMatches found %v", name, text, want, got)
+			}
+			for k := range want {
+				if want[k][0] != got[k][0] || want[k][1] != got[k][1] {
+					t.Fatalf("name %q, text %q: old regex found %v, conceptNameMatches found %v", name, text, want, got)
+				}
+			}
+		}
+	}
+}
+
+// A concept whose name has no letter or digit (a junk concept such as "...",
+// minted from a documentation example like [[...]]) must never match. Before
+// punctuation-edged names were supported this held by accident, since \b could
+// not fire on it; now it has to hold on purpose, or "..." would match every
+// ellipsis in every document.
+func TestMatchConceptNames_ANameWithNoLetterOrDigitNeverMatches(t *testing.T) {
+	for _, name := range []string{"...", "+", "#", "---", "()", "!?"} {
+		kb := matchKB(t, name)
+		text := "wait... what? a + b # c --- (d) really!?"
+		if got, _ := kb.MatchConceptNames(text); len(got) != 0 {
+			t.Errorf("concept %q matched %v, want no match: it has no letter or digit", name, got)
+		}
+		if got, _ := kb.MatchConceptNameCounts(text); len(got) != 0 {
+			t.Errorf("concept %q counted %v, want no count", name, got)
+		}
+	}
+}
+
+func TestInsertWikilink_NeverWrapsANameWithNoLetterOrDigit(t *testing.T) {
+	if got, ok := insertWikilink("wait ... what", "..."); ok || got != "wait ... what" {
+		t.Errorf("got %q, %v; want the text untouched", got, ok)
 	}
 }

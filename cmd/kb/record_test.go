@@ -700,3 +700,66 @@ func TestRecordConcepts_UnknownRecordIDErrors(t *testing.T) {
 		t.Fatal("expected an error for an unknown record id, got none")
 	}
 }
+
+// ─── cancelled: adopted, then abandoned (TODO.md, 2026-09-21) ────────────────
+
+func TestCmdRecord_SetStatusCancelledWritesFileAndDatabaseWithoutAWarning(t *testing.T) {
+	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Status: "accepted"})
+
+	out := runRecord(t, kb, "set-status", "0001", "cancelled")
+
+	if got := frontmatterLine(t, readFixture(t, root, "clasm", "0001"), "status"); got != "status: cancelled" {
+		t.Errorf("file line = %q, want %q", got, "status: cancelled")
+	}
+	p, _ := kb.ProjectByName("clasm")
+	rec, err := kb.RecordByIdentity(kb.Workspace(), p.ID, "project", "0001")
+	if err != nil || rec.Status != "cancelled" {
+		t.Fatalf("database record = %+v, %v; want status cancelled", rec, err)
+	}
+	if strings.Contains(out, "vocabulary") {
+		t.Errorf("output = %q, want no out-of-vocabulary warning", out)
+	}
+	rf, err := knowledge.ParseRecordFile(filepath.Join(root, "clasm", "decisions", "0001-fixture.md"))
+	if err != nil || len(rf.Warnings) != 0 {
+		t.Errorf("re-parsing the file: %v, warnings %v; want none", err, rf.Warnings)
+	}
+}
+
+func TestCmdRecord_ListFiltersByCancelledStatus(t *testing.T) {
+	kb, _ := fixtureWorkspace(t, "clasm",
+		testRecord{ID: "0001", Status: "accepted"},
+		testRecord{ID: "0002", Status: "cancelled"},
+		testRecord{ID: "0003", Status: "rejected"})
+
+	out := runRecord(t, kb, "list", "--status", "cancelled")
+
+	if !strings.Contains(out, "0002") || strings.Contains(out, "0001") || strings.Contains(out, "0003") {
+		t.Errorf("list --status cancelled = %q, want only DR-0002", out)
+	}
+}
+
+func TestCmdRecord_IndexShowsACancelledStatus(t *testing.T) {
+	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Status: "cancelled"})
+	dir := filepath.Join(root, "clasm", "decisions")
+	if err := cmdIndex(kb, nil, false, []string{dir}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("cmdIndex: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "index.md"))
+	if !strings.Contains(string(got), "cancelled") {
+		t.Errorf("index.md = %q, want the cancelled status shown", got)
+	}
+}
+
+// The distinction is temporal, and a reader picking a status needs it spelled
+// out: rejected is never adopted, cancelled is adopted and then abandoned. The
+// reason a record was cancelled goes in its body, by convention.
+func TestHelpText_RecordDocumentsWhatCancelledMeans(t *testing.T) {
+	var out bytes.Buffer
+	printHelp(&out, "record")
+	page := out.String()
+	for _, want := range []string{"cancelled", "abandoned", "rejected", "reason"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("kb help record does not mention %q", want)
+		}
+	}
+}

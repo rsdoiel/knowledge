@@ -16,7 +16,10 @@ import (
 // Rejecting one would turn a typo in a file several harnesses write into a
 // failed run rather than a fixable row.
 var (
-	RecordStatuses = []string{"proposed", "accepted", "superseded", "rejected"}
+	// cancelled is adopted, then abandoned: distinct from rejected (never
+	// adopted) and superseded (replaced by a later decision). The reason goes in
+	// the record's body, by convention. See TODO.md, raised 2026-09-21.
+	RecordStatuses = []string{"proposed", "accepted", "superseded", "rejected", "cancelled"}
 	RecordKinds    = []string{"decision", "correction", "refinement"}
 	RecordTriggers = []string{
 		"design", "plan-review", "implementation", "live-test",

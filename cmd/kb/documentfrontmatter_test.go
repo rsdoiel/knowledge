@@ -7,13 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	knowledge "github.com/rsdoiel/knowledge"
 )
 
-// ─── kb document frontmatter (v0.0.11 item 2), FM1: git/filesystem
-// provenance primitives ─────────────────────────────────────────────────────
+// The unit tests for the proposers, provenance primitives, scoring and YAML
+// helpers moved to the library with them (library-lift-plan.md L4); these are
+// the CLI-level tests that remain.
 
 // runGitProbe runs git with args in dir, failing the test on error -- for
 // test setup only, not the primitives under test.
@@ -49,441 +47,6 @@ func gitCommitFile(t *testing.T, dir, relPath, content, authorName, authorEmail,
 		"GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git commit: %v\n%s", err, out)
-	}
-}
-
-func TestGitFirstCommit_ReturnsOldestAuthorAndDate(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	gitCommitFile(t, dir, "a.md", "v1\n", "Original Author", "orig@example.com", "2026-01-01T10:00:00-07:00")
-	gitCommitFile(t, dir, "a.md", "v2\n", "Later Editor", "later@example.com", "2026-02-01T10:00:00-07:00")
-
-	author, date, ok := gitFirstCommit(filepath.Join(dir, "a.md"))
-	if !ok {
-		t.Fatal("expected ok=true")
-	}
-	if author != "Original Author" {
-		t.Errorf("author = %q, want %q (the oldest commit's author)", author, "Original Author")
-	}
-	if !strings.HasPrefix(date, "2026-01-01") {
-		t.Errorf("date = %q, want it to start with 2026-01-01", date)
-	}
-}
-
-func TestGitFirstCommit_FalseWhenNotARepo(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.md")
-	if err := os.WriteFile(path, []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	if _, _, ok := gitFirstCommit(path); ok {
-		t.Error("expected ok=false outside any git repository")
-	}
-}
-
-func TestGitLastCommit_ReturnsMostRecentCommitDate(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	gitCommitFile(t, dir, "a.md", "v1\n", "Original Author", "orig@example.com", "2026-01-01T10:00:00-07:00")
-	gitCommitFile(t, dir, "a.md", "v2\n", "Later Editor", "later@example.com", "2026-03-15T10:00:00-07:00")
-
-	date, ok := gitLastCommit(filepath.Join(dir, "a.md"))
-	if !ok {
-		t.Fatal("expected ok=true")
-	}
-	if !strings.HasPrefix(date, "2026-03-15") {
-		t.Errorf("date = %q, want it to start with 2026-03-15 (the most recent commit)", date)
-	}
-}
-
-func TestGitConfigUserName_ReturnsConfiguredName(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	runGitProbe(t, dir, "config", "user.name", "Configured Name")
-
-	name, ok := gitConfigUserName(dir)
-	if !ok || name != "Configured Name" {
-		t.Errorf("gitConfigUserName = %q, %v, want \"Configured Name\", true", name, ok)
-	}
-}
-
-func TestFsBirthOrModTime_ReturnsATimeForAnyFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.md")
-	if err := os.WriteFile(path, []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	got, err := fsBirthOrModTime(path)
-	if err != nil {
-		t.Fatalf("fsBirthOrModTime: %v", err)
-	}
-	if got.IsZero() || got.After(time.Now().Add(time.Minute)) {
-		t.Errorf("fsBirthOrModTime = %v, want a sane recent time", got)
-	}
-}
-
-func TestDetectByline_FindsEachLeadInForm(t *testing.T) {
-	cases := []struct {
-		name, body, wantAuthor string
-	}{
-		{"By", "# Title\n\nBy Jane Doe\n\nBody text follows.\n", "Jane Doe"},
-		{"Author colon", "# Title\n\nAuthor: Jane Doe\n\nBody text follows.\n", "Jane Doe"},
-		{"Written by", "# Title\n\nWritten by Jane Doe\n\nBody text follows.\n", "Jane Doe"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			author, ok := detectByline(c.body)
-			if !ok || author != c.wantAuthor {
-				t.Errorf("detectByline = %q, %v, want %q, true", author, ok, c.wantAuthor)
-			}
-		})
-	}
-}
-
-func TestDetectByline_FalseWhenNoLeadInPresent(t *testing.T) {
-	body := "# Title\n\nThis document has no byline at all, just prose.\n"
-	if _, ok := detectByline(body); ok {
-		t.Error("expected ok=false when no byline lead-in is present")
-	}
-}
-
-// ─── FM2: field proposals (title / author / dateCreated / dateModified) ───
-
-func TestProposeAuthor_PrefersBylineOverGit(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	body := "# Title\n\nBy Byline Author\n\nBody text.\n"
-	gitCommitFile(t, dir, "a.md", body, "Git Author", "git@example.com", "2026-01-01T10:00:00-07:00")
-
-	winner, signals := proposeAuthor(filepath.Join(dir, "a.md"), body)
-	if winner != "Byline Author" {
-		t.Errorf("winner = %q, want %q", winner, "Byline Author")
-	}
-	if len(signals) < 2 {
-		t.Fatalf("signals = %+v, want at least byline and git", signals)
-	}
-}
-
-func TestProposeAuthor_FallsBackToGitFirstCommitAuthor(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	body := "# Title\n\nNo byline here, just prose.\n"
-	gitCommitFile(t, dir, "a.md", body, "Git Author", "git@example.com", "2026-01-01T10:00:00-07:00")
-
-	winner, _ := proposeAuthor(filepath.Join(dir, "a.md"), body)
-	if winner != "Git Author" {
-		t.Errorf("winner = %q, want %q", winner, "Git Author")
-	}
-}
-
-func TestProposeAuthor_FallsBackToGitConfigWhenUntracked(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	runGitProbe(t, dir, "config", "user.name", "Configured Name")
-	body := "# Title\n\nNo byline here, just prose.\n"
-	path := filepath.Join(dir, "a.md")
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	winner, _ := proposeAuthor(path, body)
-	if winner != "Configured Name" {
-		t.Errorf("winner = %q, want %q", winner, "Configured Name")
-	}
-}
-
-func TestProposeAuthor_SignalsListsEveryFiredSignal(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	body := "# Title\n\nBy Byline Author\n\nBody text.\n"
-	gitCommitFile(t, dir, "a.md", body, "Git Author", "git@example.com", "2026-01-01T10:00:00-07:00")
-
-	_, signals := proposeAuthor(filepath.Join(dir, "a.md"), body)
-	var haveByline, haveGit bool
-	for _, s := range signals {
-		if s.Value == "Byline Author" {
-			haveByline = true
-		}
-		if s.Value == "Git Author" {
-			haveGit = true
-		}
-	}
-	if !haveByline || !haveGit {
-		t.Errorf("signals = %+v, want both the byline and git signals listed", signals)
-	}
-}
-
-func TestProposeDateCreated_PrefersGitOverFilesystem(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	gitCommitFile(t, dir, "a.md", "content\n", "Author", "a@example.com", "2026-01-01T10:00:00-07:00")
-
-	value, source := proposeDateCreated(filepath.Join(dir, "a.md"))
-	if !strings.HasPrefix(value, "2026-01-01") {
-		t.Errorf("value = %q, want it to start with 2026-01-01", value)
-	}
-	if source != "git" {
-		t.Errorf("source = %q, want %q", source, "git")
-	}
-}
-
-func TestProposeDateModified_AlwaysComputesRegardlessOfExistingValue(t *testing.T) {
-	dir := t.TempDir()
-	initGitRepo(t, dir)
-	gitCommitFile(t, dir, "a.md", "content\n", "Author", "a@example.com", "2026-03-15T10:00:00-07:00")
-
-	value, source := proposeDateModified(filepath.Join(dir, "a.md"))
-	if !strings.HasPrefix(value, "2026-03-15") {
-		t.Errorf("value = %q, want it to start with 2026-03-15", value)
-	}
-	if source != "git" {
-		t.Errorf("source = %q, want %q", source, "git")
-	}
-}
-
-// ─── FM3: keyword proposals (DB read-only) ─────────────────────────────────
-
-func TestKnownKeywordProposals_ExcludesAlreadyListedKeywords(t *testing.T) {
-	kb := openTestKB(t)
-	if _, err := kb.AddConcept("chunking", ""); err != nil {
-		t.Fatalf("AddConcept: %v", err)
-	}
-	if _, err := kb.AddConcept("workspace", ""); err != nil {
-		t.Fatalf("AddConcept: %v", err)
-	}
-	text := "chunking is mentioned twice: chunking again. workspace is mentioned twice: workspace again."
-
-	proposals, err := knownKeywordProposals(kb, text, []string{"chunking"})
-	if err != nil {
-		t.Fatalf("knownKeywordProposals: %v", err)
-	}
-	if len(proposals) != 1 || !strings.EqualFold(proposals[0], "workspace") {
-		t.Errorf("proposals = %+v, want just [workspace] (chunking already listed)", proposals)
-	}
-}
-
-func TestScoreDocumentCandidateTerms_ExcludingTargetFixesIdfDegeneracy(t *testing.T) {
-	target := "gronkulator gronkulator gronkulator appears many times in this document"
-	comparison := []string{
-		"unrelated text about something else entirely",
-		"another unrelated document with different words",
-	}
-	got := scoreDocumentCandidateTerms(target, comparison, map[string]bool{})
-	found := false
-	for _, c := range got {
-		if c.Term == "gronkulator" {
-			found = true
-			if c.Score <= 0 {
-				t.Errorf("gronkulator score = %v, want positive (idf must not collapse to 0)", c.Score)
-			}
-		}
-	}
-	if !found {
-		t.Errorf("got = %+v, want gronkulator scored as a candidate", got)
-	}
-}
-
-func TestScoreDocumentCandidateTerms_TermAbsentFromComparisonScopeStillScores(t *testing.T) {
-	target := "distinctiveword distinctiveword shows up twice here"
-	comparison := []string{"nothing in common with the target at all"}
-	got := scoreDocumentCandidateTerms(target, comparison, map[string]bool{})
-	if len(got) == 0 {
-		t.Fatal("got no candidates, want distinctiveword scored even though absent from comparison scope")
-	}
-}
-
-func TestComparisonScope_ScopesToProjectWhenDocumentBelongsToOne(t *testing.T) {
-	kb := openTestKB(t)
-	pidA, _ := kb.AddProject("alpha", "")
-	pidB, _ := kb.AddProject("beta", "")
-	if _, err := kb.AddRecord(knowledge.Record{
-		RecordID: "0001", ProjectID: pidA, Scope: "project", Path: "alpha/decisions/0001-x.md",
-		Title: "x", Date: "2026-01-01", Status: "accepted", Kind: "decision", Body: "alpha record body",
-	}); err != nil {
-		t.Fatalf("AddRecord alpha: %v", err)
-	}
-	if _, err := kb.AddRecord(knowledge.Record{
-		RecordID: "0001", ProjectID: pidB, Scope: "project", Path: "beta/decisions/0001-x.md",
-		Title: "x", Date: "2026-01-01", Status: "accepted", Kind: "decision", Body: "beta record body",
-	}); err != nil {
-		t.Fatalf("AddRecord beta: %v", err)
-	}
-	target, err := kb.AddDocument(knowledge.Document{ProjectID: pidA, Title: "t", Format: "text", Path: "a.md"})
-	if err != nil {
-		t.Fatalf("AddDocument: %v", err)
-	}
-	doc, err := kb.DocumentByPath("a.md")
-	if err != nil {
-		t.Fatalf("DocumentByPath: %v", err)
-	}
-	_ = target
-
-	items, err := comparisonScope(kb, doc)
-	if err != nil {
-		t.Fatalf("comparisonScope: %v", err)
-	}
-	for _, item := range items {
-		if strings.Contains(item, "beta record body") {
-			t.Errorf("items = %+v, want beta's record excluded (different project)", items)
-		}
-	}
-}
-
-func TestComparisonScope_FallsBackToWholeCorpusWhenNoProject(t *testing.T) {
-	kb := openTestKB(t)
-	if _, err := kb.AddRecord(knowledge.Record{
-		RecordID: "0001", ProjectID: 0, Scope: "workspace", Path: "decisions/0001-x.md",
-		Title: "x", Date: "2026-01-01", Status: "accepted", Kind: "decision", Body: "workspace record body",
-	}); err != nil {
-		t.Fatalf("AddRecord: %v", err)
-	}
-
-	items, err := comparisonScope(kb, nil)
-	if err != nil {
-		t.Fatalf("comparisonScope: %v", err)
-	}
-	found := false
-	for _, item := range items {
-		if strings.Contains(item, "workspace record body") {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("items = %+v, want the workspace record included when there's no target project", items)
-	}
-}
-
-// ─── FM4: yaml.Node surgical frontmatter writer ────────────────────────────
-
-func TestFrontmatterNode_ParsesExistingBlock(t *testing.T) {
-	raw := []byte("---\ntitle: Foo\nauthor: Bar\n---\n\nBody text.\n")
-	node, bodyOffset, hadBlock, err := frontmatterNode(raw)
-	if err != nil {
-		t.Fatalf("frontmatterNode: %v", err)
-	}
-	if !hadBlock {
-		t.Fatal("hadBlock = false, want true")
-	}
-	if string(raw[bodyOffset:]) != "\n\nBody text.\n" {
-		t.Errorf("raw[bodyOffset:] = %q, want %q", string(raw[bodyOffset:]), "\n\nBody text.\n")
-	}
-	found := false
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == "title" && node.Content[i+1].Value == "Foo" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("node.Content = %+v, want title: Foo present", node.Content)
-	}
-}
-
-func TestFrontmatterNode_NoBlockReturnsEmptyMappingHadBlockFalse(t *testing.T) {
-	raw := []byte("Just a plain document, no frontmatter.\n")
-	node, _, hadBlock, err := frontmatterNode(raw)
-	if err != nil {
-		t.Fatalf("frontmatterNode: %v", err)
-	}
-	if hadBlock {
-		t.Error("hadBlock = true, want false")
-	}
-	if len(node.Content) != 0 {
-		t.Errorf("node.Content = %+v, want empty", node.Content)
-	}
-}
-
-func TestSetMappingField_AppendsNewKey(t *testing.T) {
-	node, _, _, _ := frontmatterNode([]byte("---\ntitle: Foo\n---\n"))
-	if err := setMappingField(node, "author", "Jane Doe"); err != nil {
-		t.Fatalf("setMappingField: %v", err)
-	}
-	rendered, err := renderFrontmatter(node)
-	if err != nil {
-		t.Fatalf("renderFrontmatter: %v", err)
-	}
-	if !strings.Contains(rendered, "author: Jane Doe") {
-		t.Errorf("rendered = %q, want it to contain \"author: Jane Doe\"", rendered)
-	}
-	if !strings.Contains(rendered, "title: Foo") {
-		t.Errorf("rendered = %q, want the existing title untouched", rendered)
-	}
-}
-
-func TestSetMappingField_OverwritesExistingKeyInPlace(t *testing.T) {
-	node, _, _, _ := frontmatterNode([]byte("---\ntitle: Old Title\nauthor: Jane\n---\n"))
-	if err := setMappingField(node, "title", "New Title"); err != nil {
-		t.Fatalf("setMappingField: %v", err)
-	}
-	rendered, err := renderFrontmatter(node)
-	if err != nil {
-		t.Fatalf("renderFrontmatter: %v", err)
-	}
-	if strings.Contains(rendered, "Old Title") {
-		t.Errorf("rendered = %q, want the old title gone", rendered)
-	}
-	if !strings.Contains(rendered, "title: New Title") {
-		t.Errorf("rendered = %q, want the new title", rendered)
-	}
-	if !strings.Contains(rendered, "author: Jane") {
-		t.Errorf("rendered = %q, want author untouched", rendered)
-	}
-}
-
-func TestSetMappingField_LeavesUnknownKeysAndCommentsUntouched(t *testing.T) {
-	raw := []byte("---\ntitle: Foo\ncustomField: keep-me\n---\n")
-	node, _, _, err := frontmatterNode(raw)
-	if err != nil {
-		t.Fatalf("frontmatterNode: %v", err)
-	}
-	if err := setMappingField(node, "author", "Jane Doe"); err != nil {
-		t.Fatalf("setMappingField: %v", err)
-	}
-	rendered, err := renderFrontmatter(node)
-	if err != nil {
-		t.Fatalf("renderFrontmatter: %v", err)
-	}
-	if !strings.Contains(rendered, "customField: keep-me") {
-		t.Errorf("rendered = %q, want the unknown field preserved -- this is the data-loss regression FM4 exists to prevent", rendered)
-	}
-}
-
-func TestWriteDocumentFile_PrependsBlockWhenNoneExisted(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.md")
-	raw := []byte("# Title\n\nBody text.\n")
-	if err := os.WriteFile(path, raw, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	if err := writeDocumentFile(path, raw, false, 0, "title: Foo"); err != nil {
-		t.Fatalf("writeDocumentFile: %v", err)
-	}
-	got, _ := os.ReadFile(path)
-	want := "---\ntitle: Foo\n---\n\n# Title\n\nBody text.\n"
-	if string(got) != want {
-		t.Errorf("got %q, want %q", string(got), want)
-	}
-}
-
-func TestWriteDocumentFile_BodyBytesUnchangedOutsideFrontmatterBlock(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.md")
-	raw := []byte("---\ntitle: Old\n---\n\nBody with `code` and [[Wikilink]] untouched.\n")
-	if err := os.WriteFile(path, raw, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	_, bodyOffset, hadBlock, err := frontmatterNode(raw)
-	if err != nil || !hadBlock {
-		t.Fatalf("frontmatterNode: hadBlock=%v err=%v", hadBlock, err)
-	}
-	if err := writeDocumentFile(path, raw, true, bodyOffset, "title: New"); err != nil {
-		t.Fatalf("writeDocumentFile: %v", err)
-	}
-	got, _ := os.ReadFile(path)
-	if !strings.Contains(string(got), "Body with `code` and [[Wikilink]] untouched.\n") {
-		t.Errorf("got %q, want the body bytes unchanged", string(got))
-	}
-	if strings.Contains(string(got), "Old") {
-		t.Errorf("got %q, want the old title gone", string(got))
 	}
 }
 
@@ -690,9 +253,17 @@ func TestCmdDocumentFrontmatter_AcceptKeywordsPlainWriteForKnownConceptMatch(t *
 
 func TestCmdDocumentFrontmatter_AcceptKeywordsCreatesConceptForNewCandidateBeforeWriting(t *testing.T) {
 	kb := openTestKB(t)
+	// A term is only *proposed* when it occurs at least twice and is
+	// distinctive against the rest of the corpus, so the corpus needs one
+	// unrelated document (DR-0036: this test used to pass an unproposed term).
+	kb.AddProject("alpha", "")
+	other := writeDocFixture(t, t.TempDir(), "other.md", "## S\n\nunrelated words about the weather.\n")
+	if _, err := runDocument(t, kb, false, "ingest", other, "--project", "alpha"); err != nil {
+		t.Fatalf("seeding comparison document: %v", err)
+	}
 	before, _ := kb.Concepts()
 	dir := t.TempDir()
-	content := "# Title\n\ngronkulator appears here as a brand new term.\n"
+	content := "# Title\n\ngronkulator appears here, and gronkulator appears again.\n"
 	path := filepath.Join(dir, "a.md")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -801,8 +372,8 @@ func TestWriteDocumentFile_AtomicReplaceViaTempFileAndRename(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if err := writeDocumentFile(path, raw, true, len("---\ntitle: Old\n---"), "title: New"); err != nil {
-		t.Fatalf("writeDocumentFile: %v", err)
+	if err := writeFileAtomic(path, []byte("---\ntitle: New\n---\n\nBody.\n")); err != nil {
+		t.Fatalf("writeFileAtomic: %v", err)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -810,5 +381,82 @@ func TestWriteDocumentFile_AtomicReplaceViaTempFileAndRename(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Name() != "a.md" {
 		t.Errorf("dir entries = %+v, want only a.md left behind, no leftover temp file", entries)
+	}
+}
+
+// ─── --accept-keywords only accepts what was proposed (found live 2026-09-23) ─
+//
+// DR-0033: a keyword is a known concept (plain write) or a *proposed* new
+// candidate (concept created first). It never mints a concept for an
+// arbitrary string: a probe with a nonsense term wrote it into the file and
+// created a real concept in the database.
+
+func TestCmdDocumentFrontmatter_AcceptKeywordsRejectsATermThatWasNeverProposed(t *testing.T) {
+	kb := openTestKB(t)
+	before, _ := kb.Concepts()
+	path := filepath.Join(t.TempDir(), "a.md")
+	content := "# Title\n\nSome ordinary body text.\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err := runDocument(t, kb, false, "frontmatter", path, "--accept-keywords", "zzznotaterm")
+	if err == nil {
+		t.Fatal("document frontmatter --accept-keywords zzznotaterm = nil error, want a rejection")
+	}
+	if !strings.Contains(err.Error(), "zzznotaterm") {
+		t.Errorf("error = %q, want it to name the rejected term", err)
+	}
+	raw, _ := os.ReadFile(path)
+	if string(raw) != content {
+		t.Errorf("file changed to %q, want it untouched", raw)
+	}
+	after, _ := kb.Concepts()
+	if len(after) != len(before) {
+		t.Errorf("concepts changed from %d to %d, want no concept minted", len(before), len(after))
+	}
+}
+
+func TestCmdDocumentFrontmatter_RejectedKeywordAbortsEveryOtherAcceptedField(t *testing.T) {
+	kb := openTestKB(t)
+	path := filepath.Join(t.TempDir(), "a.md")
+	content := "# A Real Title\n\nSome body text.\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_, err := runDocument(t, kb, false, "frontmatter", path, "--accept", "title", "--accept-keywords", "zzznotaterm")
+	if err == nil {
+		t.Fatal("want a rejection")
+	}
+	if raw, _ := os.ReadFile(path); string(raw) != content {
+		t.Errorf("file changed to %q: a rejected keyword must abort the whole write, as tag --concept does", raw)
+	}
+}
+
+func TestCmdDocumentFrontmatter_DryRunWithNewCandidateKeywordCreatesNoConcept(t *testing.T) {
+	kb := openTestKB(t)
+	// A term is only *proposed* when it occurs at least twice and is
+	// distinctive against the rest of the corpus, so the corpus needs one
+	// unrelated document (DR-0036: this test used to pass an unproposed term).
+	kb.AddProject("alpha", "")
+	other := writeDocFixture(t, t.TempDir(), "other.md", "## S\n\nunrelated words about the weather.\n")
+	if _, err := runDocument(t, kb, false, "ingest", other, "--project", "alpha"); err != nil {
+		t.Fatalf("seeding comparison document: %v", err)
+	}
+	before, _ := kb.Concepts()
+	path := filepath.Join(t.TempDir(), "a.md")
+	content := "# Title\n\ngronkulator appears here, and gronkulator appears again.\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, err := runDocument(t, kb, false, "frontmatter", path, "--accept-keywords", "gronkulator", "--dry-run"); err != nil {
+		t.Fatalf("document frontmatter --dry-run: %v", err)
+	}
+	if raw, _ := os.ReadFile(path); string(raw) != content {
+		t.Errorf("file changed to %q on a dry run", raw)
+	}
+	after, _ := kb.Concepts()
+	if len(after) != len(before) {
+		t.Errorf("concepts changed from %d to %d on a dry run, want the database untouched", len(before), len(after))
 	}
 }

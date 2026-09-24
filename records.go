@@ -124,7 +124,7 @@ func applyRecordsMigration(db *sql.DB, workspace string) error {
  *   Path        (string)    — file path relative to the workspace root.
  *   Title       (string)    — the record's title.
  *   Date        (string)    — YYYY-MM-DD, as written in the file.
- *   Status      (string)    — proposed | accepted | superseded | rejected.
+ *   Status      (string)    — proposed | accepted | superseded | rejected | cancelled.
  *   Kind        (string)    — decision | correction | note, documented not enforced.
  *   Trigger     (string)    — what prompted the episode; may be empty.
  *   Phase       (string)    — release or phase label, e.g. "0.0.46".

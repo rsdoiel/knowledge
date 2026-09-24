@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -450,5 +452,45 @@ func TestCmdProject_UnknownSubcommand(t *testing.T) {
 	var out bytes.Buffer
 	if err := cmdProject(kb, nil, false, []string{"bogus"}, &out); err == nil {
 		t.Error("expected an error for an unknown project subcommand")
+	}
+}
+
+// ─── determinism (found 2026-09-23 auditing map iteration, DR-0037) ─────────
+//
+// project rename collected the directories to refresh in a map, so when two
+// index refreshes failed their notes came out in a different order per run.
+
+func TestCmdProject_RenameIndexRefreshNotesAreInSortedDirectoryOrder(t *testing.T) {
+	for i := 0; i < 15; i++ {
+		kb, root := openWorkspaceKB(t)
+		dirs := []string{
+			filepath.Join(root, "multi", "decisions"),
+			filepath.Join(root, "zz-other", "decisions"),
+			filepath.Join(root, "aa-other", "decisions"),
+		}
+		for n, dir := range dirs {
+			testRecord{ID: "000" + string(rune('1'+n)), Project: "multi"}.write(t, dir)
+			runIngest(t, kb, dir)
+			// An index.md that exists but cannot be rewritten: it is a directory.
+			if err := os.MkdirAll(filepath.Join(dir, "index.md"), 0o755); err != nil {
+				t.Fatalf("MkdirAll: %v", err)
+			}
+		}
+		var out bytes.Buffer
+		if err := cmdProject(kb, nil, false, []string{"rename", "multi", "renamed"}, &out); err != nil {
+			t.Fatalf("project rename: %v", err)
+		}
+		var notes []string
+		for _, line := range strings.Split(out.String(), "\n") {
+			if strings.Contains(line, "could not be refreshed in") {
+				notes = append(notes, line)
+			}
+		}
+		if len(notes) != 3 {
+			t.Fatalf("run %d: %d refresh notes, want 3:\n%s", i, len(notes), out.String())
+		}
+		if !sort.StringsAreSorted(notes) {
+			t.Fatalf("run %d: notes not in sorted directory order:\n%s", i, strings.Join(notes, "\n"))
+		}
 	}
 }

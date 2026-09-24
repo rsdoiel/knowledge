@@ -9,160 +9,6 @@ import (
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
-// ─── scoreCandidateTerms (kb concept suggest, TODO.md's term-frequency item) ─
-
-func TestScoreCandidateTerms_RequiresMoreThanOneOccurrence(t *testing.T) {
-	items := []string{"chunking showed up once here", "nothing else relevant"}
-	got, _ := scoreCandidateTerms(items, nil)
-	for _, c := range got {
-		if c.Term == "chunking" {
-			t.Errorf("candidates = %+v, want chunking excluded -- only one occurrence in the whole corpus", got)
-		}
-	}
-}
-
-func TestScoreCandidateTerms_IncludesTermMentionedTwice(t *testing.T) {
-	// A third, unrelated item keeps chunking from appearing in literally
-	// every item (df < n), or its idf collapses to zero regardless of how
-	// many times it's mentioned -- see ExcludesUbiquitousTerm below.
-	items := []string{"chunking showed up here", "chunking showed up again here too", "something else entirely"}
-	got, _ := scoreCandidateTerms(items, nil)
-	found := false
-	for _, c := range got {
-		if c.Term == "chunking" {
-			found = true
-			if c.Occurrences != 2 || c.Items != 2 {
-				t.Errorf("chunking candidate = %+v, want Occurrences=2 Items=2", c)
-			}
-		}
-	}
-	if !found {
-		t.Errorf("candidates = %+v, want chunking present", got)
-	}
-}
-
-func TestScoreCandidateTerms_ExcludesKnownConcepts(t *testing.T) {
-	items := []string{"chunking showed up here", "chunking showed up again here too"}
-	known := map[string]bool{"chunking": true}
-	got, _ := scoreCandidateTerms(items, known)
-	for _, c := range got {
-		if c.Term == "chunking" {
-			t.Errorf("candidates = %+v, want chunking excluded -- it is already a known concept", got)
-		}
-	}
-}
-
-func TestScoreCandidateTerms_ExcludesUbiquitousTerm(t *testing.T) {
-	// "widget" appears in every item, so it carries no distinctiveness
-	// (idf collapses to zero) even though its raw occurrence count is high.
-	items := []string{
-		"widget one context here", "widget two context here",
-		"widget three context here", "widget four context here",
-	}
-	got, _ := scoreCandidateTerms(items, nil)
-	for _, c := range got {
-		if c.Term == "widget" {
-			t.Errorf("candidates = %+v, want widget excluded -- present in every item, not distinctive", got)
-		}
-	}
-	// "context" is equally ubiquitous, both are filtered, but "one"/"two"
-	// etc. are below the length-3 token floor via digits-as-words -- this
-	// just confirms the corpus isn't accidentally producing zero candidates
-	// for an unrelated reason (regression guard against an overly strict filter).
-}
-
-// A record-id-shaped token (dr-0013, adr-0004, ...) is a legitimate
-// statistical signal -- distinctive, repeated -- but never a usable
-// concept name, so it is filtered outright rather than left for a human
-// to skip on every single run.
-func TestScoreCandidateTerms_ExcludesRecordIDShapedTokens(t *testing.T) {
-	items := []string{
-		"see dr-0013 for the full repro",
-		"dr-0013 is referenced again here",
-		"something unrelated entirely",
-	}
-	got, _ := scoreCandidateTerms(items, nil)
-	for _, c := range got {
-		if c.Term == "dr-0013" {
-			t.Errorf("candidates = %+v, want dr-0013 excluded -- it names a record, not a concept", got)
-		}
-	}
-}
-
-func TestScoreCandidateTerms_ExcludesStopwords(t *testing.T) {
-	items := []string{"the and this that appear here", "the and this that appear again"}
-	got, _ := scoreCandidateTerms(items, nil)
-	for _, c := range got {
-		if c.Term == "the" || c.Term == "and" || c.Term == "this" || c.Term == "that" {
-			t.Errorf("candidates = %+v, want common stopwords excluded", got)
-		}
-	}
-}
-
-func TestScoreCandidateTerms_ExcludesCodeSpans(t *testing.T) {
-	items := []string{
-		"saw `const format = x` once, then `unsupported format` again",
-		"nothing else relevant here",
-	}
-	got, _ := scoreCandidateTerms(items, nil)
-	for _, c := range got {
-		if c.Term == "format" {
-			t.Errorf("candidates = %+v, want format excluded -- both mentions are inside inline code spans", got)
-		}
-	}
-}
-
-func TestScoreCandidateTerms_RanksMoreDistinctiveTermsFirst(t *testing.T) {
-	// "gadget" is confined to one item (rarer, more distinctive) but
-	// mentioned there several times; "sprocket" appears in more items.
-	items := []string{
-		"gadget gadget gadget gadget context here",
-		"sprocket appears here",
-		"sprocket appears here too",
-		"sprocket appears yet again",
-	}
-	got, _ := scoreCandidateTerms(items, nil)
-	if len(got) < 2 {
-		t.Fatalf("candidates = %+v, want at least gadget and sprocket", got)
-	}
-	rank := map[string]int{}
-	for i, c := range got {
-		rank[c.Term] = i
-	}
-	if rank["gadget"] >= rank["sprocket"] {
-		t.Errorf("ranks = %+v, want gadget (confined to one item, mentioned repeatedly) ranked above sprocket (spread across many items)", rank)
-	}
-}
-
-func TestScoreCandidateTerms_EmptyCorpusReturnsNil(t *testing.T) {
-	got, _ := scoreCandidateTerms(nil, nil)
-	if len(got) != 0 {
-		t.Errorf("candidates = %+v, want none for an empty corpus", got)
-	}
-}
-
-// itemCounts (FC2) tracks a set of item indices per term, not a bare count,
-// so two mentions of the same term within one item still count once toward
-// that term's df -- a third, unrelated item keeps the term from appearing
-// in literally every item (idf would otherwise collapse to zero).
-func TestScoreCandidateTerms_ItemCountsTracksDistinctItemIndices(t *testing.T) {
-	items := []string{
-		"gadgetry mentioned here, and gadgetry again in the very same item",
-		"something else entirely, unrelated to the first item",
-	}
-	got, _ := scoreCandidateTerms(items, nil)
-	for _, c := range got {
-		if c.Term == "gadgetry" {
-			if c.Occurrences != 2 {
-				t.Errorf("gadgetry.Occurrences = %d, want 2 (two mentions)", c.Occurrences)
-			}
-			if c.Items != 1 {
-				t.Errorf("gadgetry.Items = %d, want 1 (both mentions in the same item)", c.Items)
-			}
-		}
-	}
-}
-
 func TestCmdConcept_AddThenList(t *testing.T) {
 	kb := openTestKB(t)
 	var out bytes.Buffer
@@ -407,7 +253,7 @@ func TestCmdConcept_SuggestRespectsLimit(t *testing.T) {
 		t.Fatalf("AddRecord: %v", err)
 	}
 	var got struct {
-		Candidates []candidateTerm `json:"candidates"`
+		Candidates []knowledge.ConceptCandidate `json:"candidates"`
 	}
 	runConceptJSON(t, kb, &got, "suggest", "--limit", "2")
 	if len(got.Candidates) > 2 {
@@ -455,5 +301,233 @@ func TestConceptHelpText_DocumentsSuggest(t *testing.T) {
 func TestConceptHelpText_DocumentsFuzzyClustering(t *testing.T) {
 	if !strings.Contains(ConceptHelpText, "near-existing (excluded from candidates):") {
 		t.Error("ConceptHelpText does not document the near-existing exclusion section")
+	}
+}
+
+// ─── concept delete (requested 2026-09-23, DR-0038) ─────────────────────────
+
+func runConcept(t *testing.T, kb *knowledge.KnowledgeBase, jsonOut bool, args ...string) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	err := cmdConcept(kb, nil, jsonOut, args, &out)
+	return out.String(), err
+}
+
+func conceptExists(t *testing.T, kb *knowledge.KnowledgeBase, name string) bool {
+	t.Helper()
+	cs, err := kb.Concepts()
+	if err != nil {
+		t.Fatalf("Concepts: %v", err)
+	}
+	for _, c := range cs {
+		if c.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// linkedConcept makes concept name linked to a project and, when withRecord, a
+// decision record too (a record link is what re-ingesting would recreate).
+func linkedConcept(t *testing.T, kb *knowledge.KnowledgeBase, name string, withRecord bool) {
+	t.Helper()
+	cid, err := kb.AddConcept(name, "")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	pid, _ := kb.AddProject("alpha", "")
+	if err := kb.LinkProjectConcept(pid, cid); err != nil {
+		t.Fatalf("LinkProjectConcept: %v", err)
+	}
+	if withRecord {
+		rid, err := kb.AddRecord(knowledge.Record{
+			RecordID: "0001", ProjectID: pid, Scope: "project", Path: "decisions/0001-x.md",
+			Title: "t", Date: "2026-09-23", Status: "accepted", Kind: "decision", Body: "b", Checksum: "c1",
+		})
+		if err != nil {
+			t.Fatalf("AddRecord: %v", err)
+		}
+		if err := kb.LinkRecordConcept(rid, cid); err != nil {
+			t.Fatalf("LinkRecordConcept: %v", err)
+		}
+	}
+}
+
+func TestCmdConcept_DeleteRemovesAnUnlinkedConceptAndSaysTheSyncCaveat(t *testing.T) {
+	kb := openTestKB(t)
+	kb.AddConcept("junk", "")
+	out, err := runConcept(t, kb, false, "delete", "junk")
+	if err != nil {
+		t.Fatalf("concept delete: %v", err)
+	}
+	if conceptExists(t, kb, "junk") {
+		t.Error("concept still exists")
+	}
+	if !strings.Contains(out, `concept "junk" deleted`) {
+		t.Errorf("output = %q, want the deletion confirmed", out)
+	}
+	if !strings.Contains(out, "merge") || !strings.Contains(out, "import") {
+		t.Errorf("output = %q, want the note that merge/import from another database brings it back", out)
+	}
+}
+
+func TestCmdConcept_DeleteRefusesALinkedConceptWithoutForce(t *testing.T) {
+	kb := openTestKB(t)
+	linkedConcept(t, kb, "junk", true)
+	_, err := runConcept(t, kb, false, "delete", "junk")
+	if err == nil {
+		t.Fatal("concept delete of a linked concept = nil error, want a refusal")
+	}
+	for _, want := range []string{"1 project(s)", "1 record(s)", "--force", "nothing was deleted"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
+	}
+	if !conceptExists(t, kb, "junk") {
+		t.Error("the concept was deleted despite the refusal")
+	}
+}
+
+func TestCmdConcept_DeleteForceUnlinksAndWarnsThatReingestRecreatesIt(t *testing.T) {
+	kb := openTestKB(t)
+	linkedConcept(t, kb, "junk", true)
+	out, err := runConcept(t, kb, false, "delete", "junk", "--force")
+	if err != nil {
+		t.Fatalf("concept delete --force: %v", err)
+	}
+	if conceptExists(t, kb, "junk") {
+		t.Error("concept still exists")
+	}
+	for _, want := range []string{"deleted", "1 project(s)", "1 record(s)", "ingest"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output = %q, want it to contain %q", out, want)
+		}
+	}
+}
+
+func TestCmdConcept_DeleteForceOnAProjectOnlyConceptDoesNotWarnAboutReingest(t *testing.T) {
+	kb := openTestKB(t)
+	linkedConcept(t, kb, "junk", false)
+	out, err := runConcept(t, kb, false, "delete", "--force", "junk")
+	if err != nil {
+		t.Fatalf("concept delete --force: %v", err)
+	}
+	if strings.Contains(out, "recreates") {
+		t.Errorf("output = %q, want no re-ingest warning: only a project links it, and nothing re-links that", out)
+	}
+}
+
+func TestCmdConcept_DeleteDryRunChangesNothingEvenForALinkedConcept(t *testing.T) {
+	kb := openTestKB(t)
+	linkedConcept(t, kb, "junk", true)
+	out, err := runConcept(t, kb, false, "delete", "junk", "--dry-run")
+	if err != nil {
+		t.Fatalf("concept delete --dry-run: %v", err)
+	}
+	if !conceptExists(t, kb, "junk") {
+		t.Error("a dry run deleted the concept")
+	}
+	if !strings.Contains(out, "would delete") || !strings.Contains(out, "1 record(s)") {
+		t.Errorf("output = %q, want a preview naming the links", out)
+	}
+	if strings.Contains(out, `deleted`) && !strings.Contains(out, "would delete") {
+		t.Errorf("output = %q, must not claim a deletion", out)
+	}
+}
+
+func TestCmdConcept_DeleteJSONShape(t *testing.T) {
+	kb := openTestKB(t)
+	linkedConcept(t, kb, "junk", true)
+	out, err := runConcept(t, kb, true, "delete", "junk", "--force")
+	if err != nil {
+		t.Fatalf("concept delete --force --json: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		t.Fatalf("output not valid JSON: %v (%q)", err, out)
+	}
+	links, _ := raw["links"].(map[string]any)
+	if raw["concept"] != "junk" || raw["deleted"] != true || raw["dry_run"] != false {
+		t.Errorf("json = %v, want concept junk, deleted true, dry_run false", raw)
+	}
+	if links["projects"] != float64(1) || links["records"] != float64(1) || links["observations"] != float64(0) || links["document_sections"] != float64(0) {
+		t.Errorf("links = %v, want projects 1, records 1, observations 0, document_sections 0", links)
+	}
+	if notes, _ := raw["notes"].([]any); len(notes) == 0 {
+		t.Errorf("json = %v, want the caveats carried as notes", raw)
+	}
+}
+
+func TestCmdConcept_DeleteJSONDryRunSaysNothingWasDeleted(t *testing.T) {
+	kb := openTestKB(t)
+	kb.AddConcept("junk", "")
+	out, _ := runConcept(t, kb, true, "delete", "junk", "--dry-run")
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		t.Fatalf("output not valid JSON: %v (%q)", err, out)
+	}
+	if raw["deleted"] != false || raw["dry_run"] != true {
+		t.Errorf("json = %v, want deleted false and dry_run true", raw)
+	}
+	if !conceptExists(t, kb, "junk") {
+		t.Error("a dry run deleted the concept")
+	}
+}
+
+func TestCmdConcept_DeleteUsageAndUnknownConceptErrors(t *testing.T) {
+	kb := openTestKB(t)
+	kb.AddConcept("keeper", "")
+	if _, err := runConcept(t, kb, false, "delete"); err == nil || !strings.Contains(err.Error(), "usage") {
+		t.Errorf("no NAME: err = %v, want a usage error", err)
+	}
+	if _, err := runConcept(t, kb, false, "delete", "a", "b"); err == nil || !strings.Contains(err.Error(), "usage") {
+		t.Errorf("two names: err = %v, want a usage error", err)
+	}
+	if _, err := runConcept(t, kb, false, "delete", "--nonesuchflag", "x"); err == nil {
+		t.Error("unknown flag: nil error, want one")
+	}
+	if _, err := runConcept(t, kb, false, "delete", "nonesuch"); err == nil || !strings.Contains(err.Error(), "nonesuch") {
+		t.Errorf("unknown concept: err = %v, want it to name the concept", err)
+	}
+	if !conceptExists(t, kb, "keeper") {
+		t.Error("an unrelated concept was deleted")
+	}
+}
+
+func TestCmdConcept_DeleteAcceptsANameThatLooksLikeAFlagAfterDoubleDash(t *testing.T) {
+	// The concepts most worth deleting are junk ones, and junk names look like
+	// flags: "---", "-x". `--` ends flag parsing, as everywhere else.
+	kb := openTestKB(t)
+	kb.AddConcept("---", "")
+	kb.AddConcept("--odd", "")
+	if _, err := runConcept(t, kb, false, "delete", "--", "---"); err != nil {
+		t.Fatalf("delete -- ---: %v", err)
+	}
+	if _, err := runConcept(t, kb, false, "delete", "--dry-run", "--", "--odd"); err != nil {
+		t.Fatalf("delete --dry-run -- --odd: %v", err)
+	}
+	if conceptExists(t, kb, "---") {
+		t.Error("--- still exists")
+	}
+	if !conceptExists(t, kb, "--odd") {
+		t.Error("--odd was deleted by a dry run")
+	}
+}
+
+func TestConceptHelpText_DocumentsDelete(t *testing.T) {
+	var out bytes.Buffer
+	printHelp(&out, "concept")
+	page := out.String()
+	for _, want := range []string{"concept delete NAME", "--force", "--dry-run", "merge", "import", "ingest"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("kb help concept does not mention %q", want)
+		}
+	}
+}
+
+func TestCmdConcept_UsageListsDelete(t *testing.T) {
+	kb := openTestKB(t)
+	if _, err := runConcept(t, kb, false); err == nil || !strings.Contains(err.Error(), "delete") {
+		t.Errorf("err = %v, want the usage line to list delete", err)
 	}
 }

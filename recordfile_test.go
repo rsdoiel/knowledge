@@ -652,3 +652,37 @@ func bodyOf(s string) string {
 	}
 	return parts[2]
 }
+
+// TODO.md, raised 2026-09-21 from a real case: a record accepted on its merits
+// whose work was then abandoned is neither rejected (never adopted), superseded
+// (nothing replaced it) nor accepted (it is not live). Without a documented
+// status the value spread through corpora as an undocumented convention that
+// parsed with a warning.
+func TestParseRecord_CancelledIsADocumentedStatus(t *testing.T) {
+	rf, err := ParseRecord([]byte(withField(t, "status", `status: cancelled`)), "decisions/0008-x.md")
+	if err != nil {
+		t.Fatalf("status: cancelled failed the parse: %v", err)
+	}
+	if len(rf.Warnings) != 0 {
+		t.Errorf("status: cancelled produced warnings %v, want none", rf.Warnings)
+	}
+	found := false
+	for _, s := range RecordStatuses {
+		if s == "cancelled" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("RecordStatuses = %v, want it to include cancelled", RecordStatuses)
+	}
+}
+
+func TestParseRecord_AnUnknownStatusStillWarnsNextToCancelled(t *testing.T) {
+	rf, err := ParseRecord([]byte(withField(t, "status", `status: canceled`)), "decisions/0008-x.md")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !warnsAbout(rf.Warnings, "canceled") {
+		t.Errorf("warnings = %v, want the single-l spelling reported, not silently accepted", rf.Warnings)
+	}
+}

@@ -5,157 +5,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
-// sectionHeadingPattern is fuzzy-tag's own copy of markdownHeadingPattern
-// (documents.go:341) -- the same "own copy, not a shared internal"
-// precedent firstH1HeadingPattern (documenttag.go) already sets for reusing
-// a documents.go pattern from cmd/kb.
-var sectionHeadingPattern = regexp.MustCompile(`(?m)^#{1,6}[ \t]+(.*)$`)
-
-// footnoteLabelPattern matches both a marker ([^3]) and the start of a
-// definition ([^3]:).
-var footnoteLabelPattern = regexp.MustCompile(`\[\^(\d+)\]`)
-
-// footnoteDefinitionLinePattern matches a whole footnote-definition line, so
-// fuzzyExcludedSpans can keep a marker from ever landing inside one.
-var footnoteDefinitionLinePattern = regexp.MustCompile(`(?m)^\[\^\d+\]:.*$`)
-
-// nearestPrecedingHeading returns the text of the last sectionHeadingPattern
-// match starting before pos, or "" if pos falls before any heading (gist/
-// lead text).
-func nearestPrecedingHeading(text string, pos int) string {
-	var heading string
-	for _, m := range sectionHeadingPattern.FindAllStringSubmatchIndex(text, -1) {
-		if m[0] >= pos {
-			break
-		}
-		heading = text[m[2]:m[3]]
-	}
-	return heading
-}
-
-// nextSectionBoundary returns the start offset of the next
-// sectionHeadingPattern match after pos, or len(text) if none -- where a
-// footnote definition for a marker at pos gets inserted.
-func nextSectionBoundary(text string, pos int) int {
-	for _, loc := range sectionHeadingPattern.FindAllStringIndex(text, -1) {
-		if loc[0] > pos {
-			return loc[0]
-		}
-	}
-	return len(text)
-}
-
-// nextFootnoteLabel scans every footnoteLabelPattern match's captured number
-// and returns one past the highest found, or 1 if none exist. Label
-// numbering is whole-file, not per-section: CommonMark footnote labels are
-// scoped to the whole rendered document regardless of source structure.
-func nextFootnoteLabel(text string) int {
-	max := 0
-	for _, m := range footnoteLabelPattern.FindAllStringSubmatch(text, -1) {
-		if n, err := strconv.Atoi(m[1]); err == nil && n > max {
-			max = n
-		}
-	}
-	return max + 1
-}
-
-// fuzzyExcludedSpans is excludedSpans (documenttag.go), untouched, plus
-// every footnoteDefinitionLinePattern match, so a marker can never land
-// inside an existing footnote definition. A new function, not an edit to
-// excludedSpans itself -- kb document tag must stay exactly as it is.
-func fuzzyExcludedSpans(text string) []textSpan {
-	spans := excludedSpans(text)
-	for _, loc := range footnoteDefinitionLinePattern.FindAllStringIndex(text, -1) {
-		spans = append(spans, textSpan{loc[0], loc[1]})
-	}
-	return spans
-}
-
-// insertFootnote splices a footnote marker and definition into text for a
-// near-miss match at [matchStart, matchEnd). The definition is inserted
-// first, immediately before nextSectionBoundary(text, matchEnd) (or at end
-// of file) -- its insertion point is always >= matchEnd, so doing this
-// first keeps matchEnd valid for the marker insertion that follows. The
-// marker ([^label]) is then inserted immediately after matchEnd. matchStart
-// is unused by the splice itself; it's part of the signature for callers
-// that already have both offsets from a FuzzyConceptMatch.
-func insertFootnote(text string, matchStart, matchEnd int, concept string, label int) string {
-	boundary := nextSectionBoundary(text, matchEnd)
-	def := fmt.Sprintf("\n[^%d]: see [[%s]]\n", label, concept)
-	text = text[:boundary] + def + text[boundary:]
-	marker := fmt.Sprintf("[^%d]", label)
-	text = text[:matchEnd] + marker + text[matchEnd:]
-	return text
-}
-
-// fuzzyThreshold is design decision 5's real, length-based eligibility
-// threshold -- distinct from FuzzyMatchConceptNames's own generous
-// maxFuzzyDistance candidate-generation ceiling.
-func fuzzyThreshold(concept string) int {
-	if len(concept) <= 8 {
-		return 1
-	}
-	return 2
-}
-
-// fuzzyEligible applies design decision 5's real threshold to matches
-// already produced by FuzzyMatchConceptNames: with no explicit concepts
-// given, keep a match only if its Distance is within fuzzyThreshold for its
-// Concept's length; with explicit concepts given, keep only matches whose
-// Concept is named there (any distance up to FuzzyMatchConceptNames's own
-// ceiling qualifies -- the --concept bypass, decision 2), dropping every
-// other concept's matches entirely. Either way, drop any match whose
-// [Start, End) overlaps a span from fuzzyExcludedSpans(text).
-//
-// Takes text (not just matches) to compute exclusion spans -- the plan's
-// original signature omitted it, an oversight caught while implementing:
-// fuzzyExcludedSpans needs the raw text to scan for frontmatter/code/
-// existing wikilinks/footnote-definition lines.
-func fuzzyEligible(matches []knowledge.FuzzyConceptMatch, explicit []string, text string) []knowledge.FuzzyConceptMatch {
-	explicitSet := map[string]bool{}
-	for _, name := range explicit {
-		explicitSet[strings.ToLower(name)] = true
-	}
-	excluded := fuzzyExcludedSpans(text)
-
-	var out []knowledge.FuzzyConceptMatch
-	for _, m := range matches {
-		if len(explicit) > 0 {
-			if !explicitSet[strings.ToLower(m.Concept)] {
-				continue
-			}
-		} else if m.Distance > fuzzyThreshold(m.Concept) {
-			continue
-		}
-		safe := true
-		for _, span := range excluded {
-			if span.overlaps([]int{m.Start, m.End}) {
-				safe = false
-				break
-			}
-		}
-		if safe {
-			out = append(out, m)
-		}
-	}
-	return out
-}
-
 // fuzzyTagEntry is one footnote insertion in documentFuzzyTagResult's report.
-type fuzzyTagEntry struct {
-	Section  string `json:"section"`
-	Text     string `json:"text"`
-	Concept  string `json:"concept"`
-	Distance int    `json:"distance"`
-	Footnote int    `json:"footnote"`
-}
+// It is the library's FuzzyTagInsertion (library-lift-plan.md L2), aliased so
+// the JSON contract has exactly one definition.
+type fuzzyTagEntry = knowledge.FuzzyTagInsertion
 
 // documentFuzzyTagResult is one file's outcome in `kb document fuzzy-tag`'s
 // report.
@@ -261,56 +119,17 @@ func cmdDocumentFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, args []strin
 		if err != nil {
 			return err
 		}
-		eligible := fuzzyEligible(matches, explicit, text)
+		eligible := knowledge.FuzzyEligible(matches, explicit, text)
 		if len(eligible) == 0 {
 			continue
 		}
 
-		var entries []fuzzyTagEntry
-		// insertFootnote makes two splices per call: a marker right after
-		// matchEnd, and a definition at the section boundary (which can be
-		// well past matchEnd, e.g. end of file). A position between the two
-		// -- exactly where a second match in the same section originally
-		// sits -- only shifts by the marker's length until the boundary is
-		// crossed, not by both combined. A single flat running delta
-		// applied to every later match overcorrects that case, splicing
-		// its marker at the wrong byte offset (confirmed live: it landed
-		// inside the first footnote's own definition text). Tracking each
-		// insertion's two shifts as separate breakpoints, applied in the
-		// order recorded, gets every later match's offset right regardless
-		// of how many matches share a section.
-		type offsetShift struct{ at, amount int }
-		var shifts []offsetShift
-		for _, m := range eligible {
-			start, end := m.Start, m.End
-			for _, s := range shifts {
-				if start >= s.at {
-					start += s.amount
-				}
-				if end >= s.at {
-					end += s.amount
-				}
-			}
-			if alreadyWikilinked(text, m.Concept) {
-				continue
-			}
-			label := nextFootnoteLabel(text)
-			section := nearestPrecedingHeading(text, start)
-			boundary := nextSectionBoundary(text, end)
-			markerLen := len(fmt.Sprintf("[^%d]", label))
-			defLen := len(fmt.Sprintf("\n[^%d]: see [[%s]]\n", label, m.Concept))
-			text = insertFootnote(text, start, end, m.Concept, label)
-			shifts = append(shifts, offsetShift{at: end, amount: markerLen})
-			shifts = append(shifts, offsetShift{at: boundary, amount: defLen})
-			entries = append(entries, fuzzyTagEntry{
-				Section: section, Text: m.Text, Concept: m.Concept, Distance: m.Distance, Footnote: label,
-			})
-		}
+		next, entries := knowledge.FuzzyTagDocumentText(text, eligible)
 		if len(entries) == 0 {
 			continue
 		}
 		results = append(results, documentFuzzyTagResult{Path: d.Path, Footnoted: entries})
-		writes = append(writes, stagedWrite{path: d.Path, raw: raw, next: []byte(text)})
+		writes = append(writes, stagedWrite{path: d.Path, raw: raw, next: []byte(next)})
 	}
 
 	if *dryRun {

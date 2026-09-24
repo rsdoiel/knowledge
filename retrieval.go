@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 /** ConceptMatch is one entity (an observation, a record, or a document
@@ -214,7 +216,8 @@ func (kb *KnowledgeBase) RecallByConceptNames(names []string, limit int) ([]Conc
 }
 
 /** MatchConceptNames returns every known concept name that appears in text as
- * a whole word, case-insensitively. Whole-word matching (not substring) is
+ * a whole word, case-insensitively, including a name that begins or ends in
+ * punctuation such as C++ or .NET (see conceptNameMatches). Whole-word matching (not substring) is
  * deliberate: a short concept name like "RAG" must not match inside an
  * unrelated word like "storage". Concept names are otherwise free-form, so
  * this compiles one small regex per concept per call rather than assuming
@@ -238,16 +241,84 @@ func (kb *KnowledgeBase) MatchConceptNames(text string) ([]string, error) {
 	}
 	var matched []string
 	for _, c := range concepts {
-		pattern := `(?i)\b` + regexp.QuoteMeta(c.Name) + `\b`
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			continue
-		}
-		if re.MatchString(text) {
+		if len(conceptNameMatches(text, c.Name)) > 0 {
 			matched = append(matched, c.Name)
 		}
 	}
 	return matched, nil
+}
+
+// hasLetterOrDigit reports whether s contains at least one letter or digit. A
+// concept name without one ("...", "+") is not a word or a phrase and can never
+// be a meaningful mention; conceptNameMatches refuses it, since with
+// punctuation-edged names supported it would otherwise match every ellipsis.
+func hasLetterOrDigit(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// isASCIIWordByte reports whether b is an ASCII word character, [0-9A-Za-z_]:
+// the class Go's \b and \w use, kept so that a name made of letters behaves
+// exactly as it did under `\b` + name + `\b`.
+func isASCIIWordByte(b byte) bool {
+	return b == '_' || (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
+/** conceptNameMatches returns the [start, end) byte offsets of every
+ * case-insensitive, whole-word mention of name in text, left to right and
+ * non-overlapping. A mention counts when it is not glued to a word character
+ * on either side. For a name that starts and ends with a letter or digit that
+ * is exactly what `\b` + name + `\b` meant, so those names behave as before.
+ * It also holds for a name that starts or ends with punctuation (C++, F#,
+ * .NET), which `\b` could not handle: \b only fires between a word character
+ * and a non-word one, so the space after C++ was never a boundary, and .NET
+ * matched inside ASP.NET. Go's regexp has no lookbehind, so the neighbours
+ * are checked by hand. A candidate rejected for its neighbour does not hide
+ * an overlapping one that starts a character later.
+ *
+ * Parameters:
+ *   text (string) — the text to search.
+ *   name (string) — a concept name, taken literally.
+ *
+ * Returns:
+ *   [][]int — {start, end} pairs; nil for a name with no letter or digit, or no mention.
+ *
+ * Example:
+ *   conceptNameMatches("using C++ today", "C++") // [[6 9]]
+ */
+func conceptNameMatches(text, name string) [][]int {
+	if !hasLetterOrDigit(name) {
+		return nil
+	}
+	re, err := regexp.Compile(`(?i)` + regexp.QuoteMeta(name))
+	if err != nil {
+		return nil
+	}
+	var out [][]int
+	pos := 0
+	for pos <= len(text) {
+		loc := re.FindStringIndex(text[pos:])
+		if loc == nil {
+			break
+		}
+		start, end := pos+loc[0], pos+loc[1]
+		glued := (start > 0 && isASCIIWordByte(text[start-1])) || (end < len(text) && isASCIIWordByte(text[end]))
+		if glued {
+			_, size := utf8.DecodeRuneInString(text[start:])
+			pos = start + size
+			continue
+		}
+		out = append(out, []int{start, end})
+		pos = end
+		if end == start {
+			pos++
+		}
+	}
+	return out
 }
 
 /** MatchConceptNameCounts is MatchConceptNames with an occurrence count
@@ -276,12 +347,7 @@ func (kb *KnowledgeBase) MatchConceptNameCounts(text string) (map[string]int, er
 	}
 	counts := map[string]int{}
 	for _, c := range concepts {
-		pattern := `(?i)\b` + regexp.QuoteMeta(c.Name) + `\b`
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			continue
-		}
-		if n := len(re.FindAllStringIndex(text, -1)); n > 0 {
+		if n := len(conceptNameMatches(text, c.Name)); n > 0 {
 			counts[c.Name] = n
 		}
 	}

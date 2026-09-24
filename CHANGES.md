@@ -3,6 +3,115 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.12 — 2026-09-23
+
+The corpus-improvement toolchain moves out of `cmd/kb` and into the
+importable `knowledge` package, so a second program can drive it in-process
+instead of shelling out to `kb`, plus a concept delete verb, a `cancelled`
+record status, and a sweep of bugs that only showed up by running a build from
+before each change against the new one on real data. Every fix below was
+written red first, and each move was checked by diffing the old binary's output
+against the new one, byte for byte.
+
+### Added
+
+- **The workflow logic is now library API** (DR-0035). `cmd/kb` is `package
+  main`, so everything implemented there was reachable from exactly one caller,
+  the `kb` binary. It moved into the root package as exported functions that
+  take text or bytes and return results, never touching `flag`, `io.Writer`,
+  `os.Exit` or a file, so a consumer's own permission layer stays in charge of
+  its writes. Each of the verbs below is now flag parsing, one library call and
+  rendering, and its output and `--json` shape are unchanged. Record ingest
+  (`kb ingest`) was not part of this move and stays in `cmd/kb`.
+  - `IngestDocument` with `DocumentIngestOptions`/`DocumentIngestResult`:
+    create or reconcile a document, tagging and density-scoring each section.
+    The path is stored exactly as given and `DocumentByPath` is an exact match,
+    so a caller must pass one form consistently.
+  - `TagDocumentText`, `EligibleTagConcepts`, `FuzzyEligible`,
+    `FuzzyTagDocumentText` and `FuzzyTagInsertion`: text in, text out, for
+    `document tag` and `document fuzzy-tag`. `StripCodeSpans` is exported too.
+  - `SuggestConcepts` with `ConceptSuggestions`, `ConceptCandidate` and
+    `NearExistingMatch`, and `CandidateTerms`, the one definition of a
+    candidate word that concept suggestion and the frontmatter keyword scorer
+    share.
+  - `ProposeFrontmatter` and `ApplyFrontmatter`, which take the file's bytes
+    and return the new bytes. Git access sits behind a `Provenance` interface,
+    with `GitProvenance` as the default and this module's only `os/exec`, so a
+    caller can supply its own authorship and dates, and tests need no real
+    repository. `ApplyFrontmatter` creates a new-candidate keyword's concept
+    before returning (never on a dry run).
+- `kb concept delete NAME [--force] [--dry-run]` (DR-0039), backed by
+  `ConceptUsage`, `DeleteConcept` and `ConceptInUseError`. There was no way to
+  remove a concept, so a junk one had to be deleted with raw SQL, which skips
+  the search index. NAME matches exactly, including case. A concept still
+  linked to a project, observation, record or document section is refused with
+  the counts unless `--force`, which removes only the links. `--` lets a name
+  that looks like a flag (`---`) be deleted. Deletion is local to one database,
+  with no tombstone: the command's output and `kb-concept(1)` say that a
+  `merge` or `import` from a database that still has the concept brings it
+  back, and that a file still naming it recreates it when that file is next
+  ingested after it changes (an unchanged file is skipped) or on a rebuild.
+- `cancelled` joins the record `status` vocabulary (DR-0038): adopted, then
+  abandoned. It differs from `rejected` (never adopted) and `superseded`
+  (replaced), and needs no replacement record. The reason goes in the record's
+  body, by convention. `kb help record` documents it.
+
+### Changed
+
+- **Concept names that begin or end in punctuation now match** (DR-0037).
+  `C++`, `F#` and `.NET` could never match a mention, because the matcher was
+  `\b` + name + `\b` and `\b` only fires between a word character and a
+  non-word one; and `.NET` matched inside `ASP.NET`. A mention now counts when
+  it is not glued to an ASCII word character on either side, which is exactly
+  what `\b` meant for a name that starts and ends with a letter: a differential
+  test against the old regex agrees on 4,000 random strings. A name with no
+  letter or digit never matches, or a junk concept such as `...` would match
+  every ellipsis. This reaches `MatchConceptNames`, `MatchConceptNameCounts`,
+  `RecallByConceptNames`, tag density, density-linking and `document tag`.
+- **A wikilink inside a code span or fenced block no longer mints or links a
+  concept**, in both document and record ingest (DR-0037). Documentation about
+  wikilink syntax was minting junk concepts (`...`, `recall: ...`); over 159
+  real documents ingest went from 213 concepts to 147 with none newly minted,
+  and all 66 that stopped were examples inside code. A database ingested with
+  v0.0.11 may still hold some; `kb concept delete` removes them.
+- **`document fuzzy-tag` proposes far fewer false matches** (DR-0036). A dry
+  run over 159 real documents against the real vocabulary returned 614
+  proposals, most of them noise: `fts` for `its` (96 times), `drift` for
+  `draft` (47), `madr` for `made`, and distance-2 substitutions like
+  `retirement` for `requirement`. A concept shorter than 6 letters is no
+  longer fuzzy-matched without `--concept`, and a distance-2 match needs a
+  6-letter shared prefix. That took 614 to 224 proposals, all 14 measured false
+  positives to zero and kept all 10 measured true positives. The constants
+  are provisional. A short concept's plural (`merge` for `merges`) now needs
+  `--concept`.
+- **`concept suggest` requires terms to share a first letter** to be treated as
+  spelling variants or near-existing (DR-0036), which removes
+  `nested ~ testing`, `nesting ~ testing` and `around ~ grounding`, and stops
+  `preference` clustering into `reference` and `treats`/`treating`/`treated`
+  into `created`.
+- `document frontmatter --accept-keywords` accepts a name only if it is a known
+  concept or one of the report's proposed new candidates, checked before
+  anything is created or written (DR-0036). It used to write any string into
+  the file and mint a real concept for it, and it did so under `--dry-run`.
+- The `--debug` trace for the lifted verbs is coarser: one event at the call
+  boundary rather than one per internal KB call, and `concept suggest` logs the
+  candidate count rather than the item count.
+
+### Fixed
+
+- **Output that changed between identical runs** (DR-0037), found by repeating
+  every verb and by an audit of each `range` over a map. Five sites: known-
+  concept proposals in `document frontmatter` (now sorted); `--accept` and
+  `--set` writing new frontmatter keys in map order, which changed the key
+  order written into users' files (two orders in eight runs; now the fixed
+  order title, author, dateCreated, dateModified); the unknown `--set` field
+  named in an error; `RemovedHeadings` after a re-ingest, in text and `--json`
+  (now the old document's own order); and the notes `project rename` prints
+  when index refreshes fail (now sorted by directory). A pre-fix build gave 12
+  different outputs in 12 runs of the same script; this one gives one.
+- `document frontmatter --dry-run` with a new-candidate keyword created the
+  concept in the database while leaving the file alone (DR-0036).
+
 ## v0.0.11 — 2026-09-23
 
 Three new corpus-improvement features, plus a search bug fix — fuzzy

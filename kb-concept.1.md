@@ -1,4 +1,4 @@
-%kb-concept(1) user manual | version 0.0.11 df8eff2
+%kb-concept(1) user manual | version 0.0.12 66500c0
 % R. S. Doiel
 % 2026-09-23
 
@@ -13,6 +13,8 @@ kb concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]
 kb concept list
 
 kb concept rename OLD NEW
+
+kb concept delete NAME [--force] [--dry-run]
 
 kb concept suggest [--project NAME] [--limit N]
 
@@ -39,6 +41,26 @@ rename
   (record_concepts, observation_concepts, project_concepts,
   document_section_concepts) is a foreign key, never a name matched from a
   file. See DR-0024 (knowledge/decisions/).
+
+delete
+: remove a concept, its links, and its search entry. NAME must match exactly,
+  including case. A concept still linked to a project, observation, record or
+  document section is refused, with the counts, and nothing changes; --force
+  unlinks it from all of them and deletes it (the projects, observations,
+  records and documents themselves are untouched, only the links go).
+  --dry-run reports what would happen and changes nothing. A NAME that looks
+  like a flag (---, -x) is passed after --, as everywhere else. The concepts
+  most worth deleting are junk ones minted from a documentation example, so
+  this exists to remove them. See DR-0038 (knowledge/decisions/).
+
+  Two things delete does not do, and prints a note about each. It does not
+  touch files: a record or document that still contains [[Name]], or lists the
+  name in tags or keywords, recreates the concept when that file is next ingested
+  after it changes (an unchanged file is skipped) or when the database is rebuilt
+  from the files,
+  so remove the mention too. And it does not propagate: a database that still
+  holds the concept brings it back on the next kb-merge(1) or
+  kb-import(1) into this one, so delete it there as well.
 
 suggest
 : read-only: scans every record body and document section body (scoped to
@@ -75,6 +97,13 @@ kb-merge(1) and kb-import(1) adopt whichever side's
 updated_at is later (DR-0025, generalized to name by DR-0026), so a concept
 renamed on one machine and left untouched on another arrives as one renamed
 concept, not two, regardless of merge/import order.
+
+A deleted concept is not remembered. Deletion is local to one database: there is
+no tombstone, so kb-merge(1) and kb-import(1) treat a concept
+the other side still has as new and add it back. Under the authoritative
+agents/knowledge.jsonl flow (each machine rebuilds its database from the
+committed export) a deletion travels with the next export, provided every
+machine rebuilds before it exports.
 
 # SEE ALSO
 

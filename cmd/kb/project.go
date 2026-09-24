@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	knowledge "github.com/rsdoiel/knowledge"
@@ -258,7 +259,13 @@ func cmdProjectRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 	}
 
 	var notes []string
+	// Sorted, so the notes come out in the same order on every run (DR-0037).
+	sortedDirs := make([]string, 0, len(dirs))
 	for dir := range dirs {
+		sortedDirs = append(sortedDirs, dir)
+	}
+	sort.Strings(sortedDirs)
+	for _, dir := range sortedDirs {
 		if regenErr := regenerateIndexIfPresent(dir); regenErr != nil {
 			notes = append(notes, fmt.Sprintf("index.md could not be refreshed in %s: %v", dir, regenErr))
 		}

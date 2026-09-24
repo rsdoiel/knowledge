@@ -1,4 +1,4 @@
-%kb(1) user manual | version 0.0.11 df8eff2
+%kb(1) user manual | version 0.0.12 66500c0
 % R. S. Doiel
 % 2026-09-23
 

@@ -945,3 +945,44 @@ func TestCmdIngest_LiveCrossTierOrderIndependence(t *testing.T) {
 		t.Errorf("Unresolved = %v, want none once clasm has been ingested", second.Unresolved)
 	}
 }
+
+// ─── a wikilink inside code is not a tag (found 2026-09-23, DR-0037) ─────────
+//
+// A record that documents wikilink syntax writes [[Name]] inside a code span or
+// a fenced block. Ingest treated it as a real tag and minted a concept for it
+// (that is where junk concepts like "..." and "recall: ..." came from), though
+// `kb document tag`, density-linking and fuzzy-tag all already exclude code.
+
+func TestCmdIngest_WikilinkInsideCodeDoesNotMintOrLinkAConcept(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	body := "\nThe syntax is `[[InlineExample]]` in prose.\n\n```\n[[FencedExample]]\n```\n\nA real tag: [[RealOne]].\n"
+	testRecord{ID: "0001", Project: "clasm", Body: body}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "RealOne" {
+		t.Errorf("RecordConcepts = %+v, want only RealOne linked", concepts)
+	}
+	all, _ := kb.Concepts()
+	for _, c := range all {
+		if c.Name == "InlineExample" || c.Name == "FencedExample" {
+			t.Errorf("concept %q was minted from a wikilink inside code", c.Name)
+		}
+	}
+}
+
+func TestCmdIngest_WikilinkBothInAndOutOfCodeStillLinks(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nUse `[[Both]]` like [[Both]] here.\n"}.write(t, dir)
+	runIngest(t, kb, dir)
+	concepts, _ := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if len(concepts) != 1 || concepts[0].Name != "Both" {
+		t.Errorf("RecordConcepts = %+v, want Both linked by its real mention", concepts)
+	}
+}

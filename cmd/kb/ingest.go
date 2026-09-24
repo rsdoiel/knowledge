@@ -393,7 +393,9 @@ func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64
 	}
 	seen := map[string]bool{}
 	var names []string
-	for _, m := range wikilinkPattern.FindAllStringSubmatch(rf.Record.Body, -1) {
+	// A wikilink inside code is an example of the syntax, not a tag (DR-0037);
+	// the same rule document ingest applies.
+	for _, m := range wikilinkPattern.FindAllStringSubmatch(knowledge.StripCodeSpans(rf.Record.Body), -1) {
 		name := strings.TrimSpace(m[1])
 		if name != "" && !seen[strings.ToLower(name)] {
 			seen[strings.ToLower(name)] = true
