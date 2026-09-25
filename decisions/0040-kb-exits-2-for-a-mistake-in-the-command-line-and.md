@@ -2,13 +2,13 @@
 id: "0040"
 title: "kb exits 2 for a mistake in the command line and 1 for everything else"
 date: "2026-09-24"
-status: accepted
+status: superseded
 kind: correction
 trigger: live-test
 project: knowledge
 phase: ""
 supersedes: []
-superseded_by: []
+superseded_by: ["0047"]
 relates_to: ["0010", "0041"]
 initiative: ""
 session: ""

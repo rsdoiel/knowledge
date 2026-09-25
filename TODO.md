@@ -350,7 +350,19 @@ trip was also checked and is clean: 14 tables' row counts identical.
   with a test that no file is created. Not fixed with the ignored-input work;
   it is a missing-file check, not an argument-shape one.
 
-- [ ] **Revisit exit codes greater than 1.** Filed 2026-09-24 at RSDOIEL's
+- [ ] **DECIDED and ACCEPTED 2026-09-25, in progress: split the exit codes** (workspace
+  DR-0003 for the convention, knowledge DR-0047 for `kb`, both `accepted`, DR-0040
+  superseded, root `CLAUDE.md` updated; plan in
+  `exit-codes-plan.md`, X0-X6). RSDOIEL chose to split now and follow POSIX where
+  sensible: 0, 1 (a normal negative answer: nothing found, stale, state forbids), 2
+  (usage, unchanged), then sysexits numbers (65 data, 66 no_input, 69 unavailable,
+  70 internal, 73 cant_create, 74 io, 75 temp_fail, 77 no_permission). Bulk commands
+  exit with the failure's class after processing everything (`kb ingest` used to exit
+  0 with failures). The root `CLAUDE.md` must be updated once DR-0003 is accepted,
+  since RSDOIEL wants this convention across projects. The original item follows,
+  kept as the record of the questions it raised.
+
+- [x] **(superseded by the item above) Revisit exit codes greater than 1.** Filed 2026-09-24 at RSDOIEL's
   request, as something useful to explore later, not a bug. `kb` exits 0, 1 or
   2 and nothing else. DR-0040 (accepted) settled the split, 2 for a mistake in
   the command line and 1 for everything else, and left these open, so this
@@ -384,18 +396,46 @@ trip was also checked and is clean: 14 tables' row counts identical.
   because DR-0040 is accepted it wants a new record that supersedes or amends it,
   not an edit.
 
-- [ ] **Low priority, possibly by design: no validation on free-text-looking
-  fields.** `source add T --published notadate` and `--url 'not a url'` and an
-  empty `source add ''` title all succeed; `record new --trigger bogus`
-  succeeds silently. Records' vocabularies are documented rather than
-  enforced (see the `cancelled` item), so the trigger case may be intended;
-  the source fields want a decision on whether a date must parse.
+- [x] **FIXED 2026-09-25 (DR-0045, `proposed`; unreleased).** **No validation on
+  free-text-looking fields.** `source add T --published notadate` and `--url
+  'not a url'` and an empty `source add ''` title all succeeded; `record new
+  --trigger bogus` succeeded silently. Worked through with RSDOIEL, every
+  recommendation taken. `AddSource` (library) now trims, refuses a blank title,
+  requires `--published` to be YYYY, YYYY-MM or YYYY-MM-DD and a real date,
+  requires a `url` identifier to be absolute with a scheme and host, and a `doi`
+  to be the bare `10.NNNN/suffix` form (a pasted `https://doi.org/...` is refused,
+  not rewritten). The DOI check was added beyond the filed item: a mistyped DOI
+  goes to Retraction Watch and a miss reads as "not retracted". `record new`
+  refuses a `--trigger` or `--kind` outside the vocabulary unless a record
+  already carries it, the rule `record list` uses (one shared function). Import
+  is not held to the checks. Verified by running old and new binaries on a copy
+  of the real database: only the refusals differ, the seven real sources are
+  untouched. Left open on purpose, listed in DR-0045: an ignored `--url` beside
+  `--doi` is unchecked, a document's frontmatter `published_date` and
+  `observation add --source-doi` are still free text, `record new --project P`
+  does not require P to exist. Breaking for scripts: needs an upgrade note.
 
 - [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** **`kb search` fails on any term containing a hyphen** (`map-reduce`, `records-portability`, `cross-machine`, `JSON-L`, `spot-check`), with `SQL logic error: no such column: reduce (1)`. Found 2026-09-24 in v0.0.12 (and v0.0.11) while live-testing harvey's learning mode; confirmed against the real database with the installed `kb`. Cause (unverified in code, consistent with every failure): FTS5 reads `a-b` as `a` minus column `b`. v0.0.11's punctuation fix (`c702c9d`) only retries with the term quoted when the first attempt fails with an *FTS5 syntax error*; a hyphen raises a different error, `no such column`, so it is never retried. Dots (`v0.0.11`) work and hyphens do not, which is why the v0.0.11 fix looked complete. Hyphenated names are common here (concepts such as `map-reduce`, `harness-engineering`, `scholarly-provenance`), and harvey's `/kb search` goes through the same `Search`. Likely fix: also retry on `no such column` (or quote the term up front whenever it contains anything but letters, digits and the documented operators), with a test written red first for each hyphenated case above. **Fix as landed:** `Search` now retries once as a quoted phrase when the raw term fails for *any* reason (hyphen and colon give `no such column`, an unbalanced quote gives `unterminated string`, the rest `fts5: syntax error`), not only on a syntax error; a trailing `*` stays outside the quotes so prefix search still works. Six tests in `knowledge_test.go` (`TestSearch_*`), five red first; the last pins the documented syntax (AND, phrase, order, prefix, NOT, OR) unchanged. Checked with a built `kb` against a copy of the real database: 23 terms, 11 identical to v0.0.12 (all documented syntax, dots, `C++`, apostrophes), 12 that errored now return results (`map-reduce` 4, `records-portability` 9, `JSON-L` 17, `cross-machine` 30, ...) or a clean "no results", none that worked changed. Not yet in a release; the v0.0.13 CHANGES entry is RSDOIEL's step.
 
 - [x] **FIXED 2026-09-23 (DR-0037).** **`document frontmatter` prints `known-concept proposals` in a different order every run.** Found 2026-09-23 by comparing two builds: the same binary, same file, six runs gave six different orderings (same items each time). Cause: `EligibleTagConcepts` (`documenttag.go`, moved from `cmd/kb` in L2) builds its result by ranging over a map, so the order is unspecified, and `knownKeywordProposals` passes it straight to the report. Same class as the `excludeNearExisting` tie-break bug fixed before v0.0.11. Likely fix: `sort.Strings` the result, with a test written red first. Not fixed inside L3 because L1-L3 are pure moves.
 
 - [x] **FIXED 2026-09-23 (DR-0037).** **`document frontmatter --accept` writes new frontmatter keys in a different order every run.** Found 2026-09-23 during L4: the same command (`--accept title,author,dateCreated,dateModified` on a file with no frontmatter) run 8 times gave two different key orders, 4 runs each. Cause: `frontmatterRun` (moved from `cmd/kb` in L4) applies accepted fields by ranging over a map, and `setMappingField` appends each new key as it goes, so key order in the file follows map iteration order. Same for several `--set` flags. Likely fix: apply in the canonical order title, author, dateCreated, dateModified (and sort `--set` keys the same way), with a test written red first. Moved verbatim in L4, not fixed there, so the old-vs-new comparison stayed exact (it compared one field at a time and normalized key order for the multi-field case). Related to the entry above and to the `excludeNearExisting` tie-break bug fixed before v0.0.11.
+
+- [x] **FIXED 2026-09-25 (DR-0046, `proposed`; unreleased). DR-0041, DR-0042 and
+  DR-0044's open questions**, each probed before choosing, every recommendation
+  taken. (1) `--` now ends flag recognition in `splitFlags`, so `record`,
+  `document`, `ingest` and `source add` accept a dash-leading title or path.
+  (2) `CleanName` makes a name one line: interior whitespace runs (newline, tab)
+  collapse to a space and any other control character is refused; ingest cleans
+  wikilinks and tags first, so a hard-wrapped `[[a<newline>b]]` is the ordinary
+  concept `a b` (the previous binary minted two newline concepts from 212 real
+  documents). (3) `merge` refuses every zero-byte input: the WAL allowance was
+  tested and protects nothing (SQLite discards the WAL of a zero-byte main file),
+  and it made merge exit 0 on an empty input and delete the input's `-wal`. Old
+  and new binaries agree on real data: 45 records, 75 concepts, 157 links.
+  Left open, listed in DR-0046: `kb search -- -x` does not consume `--`; a
+  `source add` title still may hold a newline; `document tag` does not recognise a
+  wrapped existing link. Breaking for scripts: needs an upgrade note.
 
 - [ ] **Programmatic corpus-improvement techniques, as the corpus grows.**
   Raised 2026-09-18 while discussing the MADR item below: decision records
