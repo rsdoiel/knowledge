@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0048  2026-09-25  accepted     decision     request          -     record set-status refuses an unknown status; X2's amendments to DR-0047
 DR-0047  2026-09-25  accepted     decision     request          -     kb adopts the workspace exit-code convention and supersedes DR-0040
 DR-0046  2026-09-25  proposed     decision     live-test        -     Close DR-0041, DR-0042 and DR-0044's open questions: -- everywhere, one-line names, no WAL allowance
 DR-0045  2026-09-25  proposed     decision     request          -     Refuse a malformed source and an unknown record trigger or kind at authoring time

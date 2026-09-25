@@ -350,6 +350,21 @@ trip was also checked and is clean: 14 tables' row counts identical.
   with a test that no file is created. Not fixed with the ignored-input work;
   it is a missing-file check, not an argument-shape one.
 
+- [ ] **Exit-codes X3 to X6 remain** (see `exit-codes-plan.md`). X0 to X2 are done. Known
+  gaps at the X2 commit, so nobody assumes otherwise: `kb ingest` still exits 0 when
+  records fail (X3); `source check-retractions` does not yet use 69 for an unreachable
+  service (X3; add the 69 row to the EXIT STATUS help when it does); no test yet runs
+  every verb with a bogus flag (X4); the per-verb man pages, the upgrade note and the
+  three skill scripts that read `kb`'s exit status still describe the old codes (X6).
+  Only the main EXIT STATUS section was updated at X2. **No release before X6.**
+
+- [ ] **Two traps that are not exit-code questions** (noted in DR-0048). `kb project add
+  NAME description --status paused` stores "description --status paused" as the
+  description, because DR-0041 treats words after the fixed arguments as free text;
+  the flag has to come before the name. And `kb project add` on an existing name says
+  "added" though nothing was added. Both want a decision on whether a flag-looking
+  trailing word should be refused, and on the wording.
+
 - [ ] **DECIDED and ACCEPTED 2026-09-25, in progress: split the exit codes** (workspace
   DR-0003 for the convention, knowledge DR-0047 for `kb`, both `accepted`, DR-0040
   superseded, root `CLAUDE.md` updated; plan in

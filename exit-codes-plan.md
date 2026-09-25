@@ -109,6 +109,41 @@ bogus` and a blank name move from 1 to 2.
 
 **Done when:** the table passes and no provoked failure yields 70.
 
+**DONE 2026-09-25** (uncommitted). `cmd/kb/exitcodes_verbs_test.go` provokes one failure per
+class per verb (about 70 cases) and asserts the exit code, the JSON `class`, and that nothing
+is 70; `unclassifiedFallback` is now `classInternal`. Sites classified: not found (project,
+concept, observation, source, record, document, link targets), `search` and `index --check`
+negative results, refusals the state forces (`concept delete` and `source remove` while
+linked, rename onto an existing name), bad command-line values (usage), missing inputs (66),
+outputs that cannot be created (`asCreate`: 73, but permission stays 77 and a write that fails
+part way stays 74), content errors (`asContent`: a library `ErrInvalid` from a file, plus JSON
+decode errors, 65), and `mainRun`'s own failures (`failWith`: no workspace 66, open errors by
+cause; they now honour `--json`). Deviations from DR-0047's wording, all small: a third library
+sentinel `ErrInUse` (a source still linked) because the library needs to mark a refusal the way
+`ConceptInUseError` does; `record new`'s vocabulary check is wrapped as usage while `record
+list`'s stays a lookup; a zero-byte merge input is 65 (content that is not a knowledge base)
+and a directory 66.
+
+**Bugs found by the classification pass, fixed with tests:** `source retract 99` and `source
+remove 99` on a missing id exited 0 (zero rows updated or deleted); `source link 99 99`
+exited 74 with a raw foreign-key error and `link observation 99 C` likewise; `document
+review promote 99` exited 70 (a plain "no document section" error); `concept suggest
+--limit -1` was accepted. The library's `Link*` functions now check the ids and return
+`ErrNotFound`; five plain "no X with id" errors became `notFoundf`.
+
+**Decided by the user 2026-09-25 (DR-0048, `proposed`):** `record set-status ID bogus` is refused
+with exit 2 by the shared vocabulary rule (was: written, exit 0); done, with tests
+(`recordsetstatus_test.go`). DR-0048 also records X2's other choices (`ErrInUse`, zero-byte merge
+input 65, `--json` for pre-verb failures) as amendments to DR-0047. The main EXIT STATUS help
+section and `kb.1.md` were rewritten at X2. **Left for X3:** `kb ingest` still exits 0 when records
+fail; `source check-retractions` network failures.
+
+Matrix (35 commands, `scratchpad/probes.sh`), v0.0.13-equivalent binary against this one:
+14 change, every one a row of DR-0047's table, none 70: no workspace 66; bad kind, bad status,
+blank name 2; missing ingest, document ingest, import, merge and index inputs 66; `--db` on a
+text file 65; `--db` in a directory the user cannot create 77; `init` and `export` cannot create
+73; `index --check` over a malformed record 65.
+
 ---
 
 ## X3 — Bulk commands
