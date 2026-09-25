@@ -11,6 +11,8 @@ import (
 	"io"
 	"io/fs"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -162,6 +164,40 @@ func TestClassify_StandardLibraryErrorsClassifyThemselves(t *testing.T) {
 				t.Errorf("classify(%v) = %v, %v; want %v, true", tc.err, got, classified, tc.want)
 			}
 		})
+	}
+}
+
+// A real refused connection wraps an *os.SyscallError, which the file-error
+// rule would call a failed write (74). The hand-built net errors above cannot
+// show that, so this one dials a port nothing listens on. The reverse also has
+// to hold: a plain file error carries a syscall.Errno, which satisfies
+// net.Error, and must stay io.
+func TestClassify_RealNetworkErrorsAreUnavailableAndFileErrorsStayIO(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	addr := srv.URL
+	srv.Close()
+	_, refused := http.Get(addr)
+	if refused == nil {
+		t.Fatal("test setup: a closed server answered")
+	}
+	_, isDir := os.ReadFile(t.TempDir()) // read <dir>: is a directory
+	if isDir == nil {
+		t.Fatal("test setup: reading a directory succeeded")
+	}
+	for _, tc := range []struct {
+		name string
+		err  error
+		want exitClass
+	}{
+		{"connection refused (real)", refused, classUnavailable},
+		{"connection refused, wrapped", fmt.Errorf("checking retractions: %w", refused), classUnavailable},
+		{"dns error", &net.DNSError{Err: "no such host", Name: "x"}, classUnavailable},
+		{"a file error keeps io", isDir, classIO},
+		{"a file error keeps io, wrapped", fmt.Errorf("reading: %w", isDir), classIO},
+	} {
+		if got, ok := classify(tc.err); got != tc.want || !ok {
+			t.Errorf("%s: classify = %v (classified %v), want %v", tc.name, got, ok, tc.want)
+		}
 	}
 }
 

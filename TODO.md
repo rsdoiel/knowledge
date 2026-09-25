@@ -188,6 +188,19 @@
     checks must cover them). Each new verb also needs the every-command test to reach it, which the
     SYNOPSIS-derived registry does automatically.
 
+- [x] **`kb`'s classifier called a refused connection `io` (74), not `unavailable` (69).** Found and
+  **fixed 2026-09-25** while writing `harvey`'s exit-code classifier from `kb`'s. `classify` tested the
+  file errors (`*os.SyscallError`, which a refused connection wraps) before the network rule, so a
+  real connection refusal exited 74; testing the `net.Error` interface first is no fix, because a bare
+  `syscall.Errno` (what an `is a directory` error wraps) satisfies it too and would turn 74 into 69.
+  Now `*net.OpError`, `*url.Error` and `*net.DNSError` are checked first, then the file errors, then
+  `net.Error`. Test: `TestClassify_RealNetworkErrorsAreUnavailableAndFileErrorsStayIO` dials a closed
+  port (the older tests built their net errors by hand, which could not show it); both directions
+  mutation-checked. It was latent: `source check-retractions` classes its failure explicitly
+  (`RetractionCheckError`), and no other verb makes a network call. No release-note entry: the
+  classifier is new in v0.0.14. `scripts/compare-exit-codes.py` was not rerun (no probed command
+  produces a raw network error). Knowledge-base observation 510.
+
 ## To explore
 
 ### Bugs collected for v0.0.13

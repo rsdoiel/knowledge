@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"net"
+	"net/url"
 	"os"
 
 	sqlite "github.com/glebarez/go-sqlite"
@@ -217,7 +218,8 @@ func ioErrorf(format string, a ...any) error { return classErrorf(classIO, forma
  * An explicit class (the outermost *classedError in the chain) wins. Otherwise
  * standard-library errors classify themselves: fs.ErrNotExist is no_input,
  * fs.ErrPermission no_permission, fs.ErrExist cant_create, any other file
- * error io, a network error unavailable, and a SQLite error by its result code
+ * error io (a network error is checked first, by type: a refused connection wraps
+ * a syscall error), a network error unavailable, and a SQLite error by its result code
  * (see sqliteClass). The library's ErrNotFound and a *ConceptInUseError are
  * negative, and its ErrInvalid is usage. An error nothing classified is
  * reported as classInternal with classified false, so a caller can tell.
@@ -270,12 +272,23 @@ func classify(err error) (exitClass, bool) {
 	case errors.Is(err, fs.ErrExist):
 		return classCantCreate, true
 	}
+	// Network errors, by concrete type first. A refused connection wraps an
+	// *os.SyscallError, so the file errors below would call it a failed write;
+	// but the net.Error interface cannot be tested first either, because a bare
+	// syscall.Errno (what a *fs.PathError wraps) satisfies it too.
+	var oe *net.OpError
+	var ue *url.Error
+	var de *net.DNSError
+	if errors.As(err, &oe) || errors.As(err, &ue) || errors.As(err, &de) {
+		return classUnavailable, true
+	}
 	var pe *fs.PathError
 	var le *os.LinkError
 	var se *os.SyscallError
 	if errors.As(err, &pe) || errors.As(err, &le) || errors.As(err, &se) {
 		return classIO, true
 	}
+	// Any other network error type (a custom net.Error, a timeout).
 	var ne net.Error
 	if errors.As(err, &ne) {
 		return classUnavailable, true
