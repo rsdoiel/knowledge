@@ -18,7 +18,7 @@ func init() {
 
 func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("usage: project <add|list|show|concepts|set-status|set-description|rename> ...")
+		return usageErrorf("usage: project <add|list|show|concepts|set-status|set-description|rename|delete> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -36,6 +36,8 @@ func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 		return cmdProjectSetDescription(kb, dl, jsonOut, rest, out)
 	case "rename":
 		return cmdProjectRename(kb, dl, jsonOut, rest, out)
+	case "delete":
+		return cmdProjectDelete(kb, dl, jsonOut, rest, out)
 	default:
 		return usageErrorf("unknown project subcommand %q", sub)
 	}

@@ -37,6 +37,8 @@ func printHelp(out io.Writer, topic string) bool {
 		f(ConceptHelpText)
 	case "link":
 		f(LinkHelpText)
+	case "unlink":
+		f(UnlinkHelpText)
 	case "source":
 		f(SourceHelpText)
 	case "search", "summary", "format":

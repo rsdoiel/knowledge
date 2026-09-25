@@ -79,7 +79,7 @@ type recordFlags struct {
  */
 func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("record requires a subverb: list, show, new, set-status, supersede, fmt or concepts")
+		return usageErrorf("record requires a subverb: list, show, new, set-status, supersede, fmt, concepts or delete")
 	}
 	flags, err := parseRecordFlags(args[1:])
 	if err != nil {
@@ -102,8 +102,10 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return recordNew(kb, jsonOut, flags, out)
 	case "concepts":
 		return recordConcepts(kb, jsonOut, flags, out)
+	case "delete":
+		return recordDelete(kb, jsonOut, flags, out)
 	default:
-		return usageErrorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt or concepts", args[0])
+		return usageErrorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt, concepts or delete", args[0])
 	}
 }
 

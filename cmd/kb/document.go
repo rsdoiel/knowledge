@@ -31,7 +31,7 @@ func init() {
  */
 func cmdDocument(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("document requires a subverb: ingest, draft, review, list, show, tag, fuzzy-tag, or frontmatter")
+		return usageErrorf("document requires a subverb: ingest, draft, review, list, show, tag, fuzzy-tag, frontmatter, or delete")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -51,8 +51,10 @@ func cmdDocument(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args [
 		return cmdDocumentFuzzyTag(kb, jsonOut, rest, out)
 	case "frontmatter":
 		return cmdDocumentFrontmatter(kb, jsonOut, rest, out)
+	case "delete":
+		return cmdDocumentDelete(kb, nil, jsonOut, rest, out)
 	default:
-		return usageErrorf("unknown document subverb %q; want ingest, draft, review, list, show, tag, fuzzy-tag, or frontmatter", sub)
+		return usageErrorf("unknown document subverb %q; want ingest, draft, review, list, show, tag, fuzzy-tag, frontmatter, or delete", sub)
 	}
 }
 

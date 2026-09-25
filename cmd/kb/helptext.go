@@ -89,8 +89,9 @@ observation
 concept
 : manage concepts — see {app_name}-concept(1)
 
-link
-: link projects/observations to concepts — see {app_name}-link(1)
+link, unlink
+: link projects/observations to concepts, and remove those links — see
+  {app_name}-link(1) and {app_name}-unlink(1)
 
 source
 : manage cited sources and retraction checking — see {app_name}-source(1)
@@ -253,6 +254,8 @@ const DocumentHelpText = `%{app_name}-document(1) user manual | version {version
 
 {app_name} document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]
 
+{app_name} document delete ID [--force] [--dry-run]
+
 # DESCRIPTION
 
 A document is a narrative or article (Markdown, Fountain, or plain text)
@@ -366,6 +369,18 @@ frontmatter
   falling back to filesystem timestamps when ` + "`git`" + ` itself fails (not a
   repository, or a genuinely untracked file).
 
+delete
+: delete a document, its sections, their concept links and the search entries of
+  any promoted summaries. A document with a section whose summary is reviewed is
+  refused (exit 1): a reviewed summary is human-gated data and deleting it loses
+  it. --force deletes anyway. Ingesting the file again recreates the document,
+  without the reviewed summaries. --dry-run reports and changes nothing.
+
+Deletion is local to one database, with no tombstone: {app_name}-merge(1) and
+{app_name}-import(1) from a database that still has the row bring it back, so
+delete it there as well. ` + "`agents/knowledge.jsonl`" + ` is re-exported from the database,
+so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
+
 # VOCABULARIES
 
 summary_status
@@ -403,6 +418,8 @@ const ProjectHelpText = `%{app_name}-project(1) user manual | version {version} 
 {app_name} project set-description NAME DESCRIPTION
 
 {app_name} project rename [--root PATH] [--dry-run] OLD NEW
+
+{app_name} project delete NAME [--force] [--dry-run]
 
 # DESCRIPTION
 
@@ -449,6 +466,20 @@ rename
   relative to (default: inferred from the database path). See DR-0026
   (knowledge/decisions/), which supersedes DR-0024's outright refusal.
 
+delete
+: delete a project. Meant for a stray empty one (a failed ingest can leave one).
+  A project that owns any observation, record or document is refused, with
+  --force or without: one command must never destroy work, so delete or move
+  the content first (exit 1). A project attached only to concepts is refused
+  unless --force, which removes those links and the project; the concepts stay.
+  --dry-run reports what would happen and changes nothing. A NAME that looks
+  like a flag is given after --.
+
+Deletion is local to one database, with no tombstone: {app_name}-merge(1) and
+{app_name}-import(1) from a database that still has the row bring it back, so
+delete it there as well. ` + "`agents/knowledge.jsonl`" + ` is re-exported from the database,
+so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
+
 # CAVEATS
 
 A description, status, or name edited on two machines now reconciles: both
@@ -487,6 +518,8 @@ const ObservationHelpText = `%{app_name}-observation(1) user manual | version {v
 
 {app_name} observation sources ID
 
+{app_name} observation delete ID [--force] [--dry-run]
+
 # DESCRIPTION
 
 An observation is a timestamped note attached to a project. KIND is one of
@@ -515,6 +548,19 @@ update
 
 sources
 : list the sources cited by an observation (see {app_name}-source(1))
+
+delete
+: delete an observation and its search entry. One with concept links, source
+  links, or supersession relations (in either direction) is refused with the
+  counts (exit 1); --force removes those links and relations and the
+  observation, and the concepts, sources and other observations stay. To remove
+  a single link instead, see {app_name}-unlink(1). --dry-run reports and changes
+  nothing.
+
+Deletion is local to one database, with no tombstone: {app_name}-merge(1) and
+{app_name}-import(1) from a database that still has the row bring it back, so
+delete it there as well. ` + "`agents/knowledge.jsonl`" + ` is re-exported from the database,
+so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
 
 # SEE ALSO
 
@@ -638,6 +684,42 @@ machine rebuilds before it exports.
 
 `
 
+// UnlinkHelpText is shown by `kb unlink -h` and `kb help unlink`.
+const UnlinkHelpText = `%{app_name}-unlink(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-unlink — remove a link between a project or observation and a concept, or an observation and a source
+
+# SYNOPSIS
+
+{app_name} unlink project PROJECT_NAME CONCEPT_NAME
+
+{app_name} unlink observation OBS_ID CONCEPT_NAME
+
+{app_name} unlink source OBS_ID SOURCE_ID
+
+# DESCRIPTION
+
+The inverse of {app_name}-link(1) and of {app_name} source link: it removes one link and
+nothing else, so the project, observation, concept or source itself is untouched.
+Concept and project names match exactly, including case, as for {app_name} concept
+delete: a destructive command must not guess. Removing a link that does not exist is
+an error (exit 1), not a silent success, and so is naming a project, concept,
+observation or source that does not exist.
+
+To remove a concept from everything at once, see {app_name}-concept(1)'s delete.
+Like every delete, an unlink is local to one database: {app_name}-merge(1) and
+{app_name}-import(1) from a database that still has the link bring it back.
+
+# SEE ALSO
+
+{app_name}-link(1), {app_name}-source(1), {app_name}-concept(1), {app_name}-observation(1)
+
+`
+
 // LinkHelpText is shown by `kb link -h` and `kb help link`.
 // Generates kb-link.1.md.
 const LinkHelpText = `%{app_name}-link(1) user manual | version {version} {release_hash}
@@ -661,7 +743,7 @@ silent no-op.
 
 # SEE ALSO
 
-{app_name}-project(1), {app_name}-observation(1), {app_name}-concept(1)
+{app_name}-project(1), {app_name}-observation(1), {app_name}-concept(1), {app_name}-unlink(1)
 
 `
 
@@ -1047,6 +1129,8 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record concepts RECORD_ID [--project P] [--workspace]
 
+{app_name} record delete RECORD_ID [--project P] [--workspace] [--root DIR] [--dry-run]
+
 # DESCRIPTION
 
 A decision record is one file, indexed by ingest. new writes a project-scoped
@@ -1114,6 +1198,15 @@ fmt
 concepts
 : list the concepts ingest linked to a record, from [[Name]] wikilinks in its
   body and its frontmatter tags list
+
+delete
+: drop the database row of a record whose file is already gone: its relations, its
+  concept links and its search entry go with it. A record's file is the truth and
+  ingest is additive, so a row whose file vanished otherwise stays (ingest only
+  reports it). While the file exists this is refused (exit 1), because the next
+  ingest of the changed file would only undo it, and {app_name} never deletes a
+  decision record from disk: delete the file yourself first, or retire the record
+  with set-status cancelled. --dry-run reports and changes nothing.
 
 new, set-status, supersede and fmt are the only commands that write a record
 file; ingest never does. A record is written proposed and stays proposed: a
@@ -1392,6 +1485,9 @@ concept
 
 link
 : link projects and observations to concepts
+
+unlink
+: remove a link between a project or observation and a concept, or an observation and a source
 
 source
 : manage cited sources and retraction checking

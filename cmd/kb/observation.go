@@ -16,7 +16,7 @@ func init() {
 
 func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("usage: observation <add|list|show|update|sources> ...")
+		return usageErrorf("usage: observation <add|list|show|update|sources|delete> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -30,6 +30,8 @@ func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 		return cmdObservationUpdate(kb, dl, jsonOut, rest, out)
 	case "sources":
 		return cmdObservationSources(kb, dl, jsonOut, rest, out)
+	case "delete":
+		return cmdObservationDelete(kb, dl, jsonOut, rest, out)
 	default:
 		return usageErrorf("unknown observation subcommand %q", sub)
 	}

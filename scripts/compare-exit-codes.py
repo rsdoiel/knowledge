@@ -45,7 +45,7 @@ import tempfile
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 TIMESTAMP = re.compile(r"\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(Z|\.\d+Z?)?")
-VERBS = "project observation concept link source search merge export import ingest record document index init".split()
+VERBS = "project observation concept link unlink source search merge export import ingest record document index init".split()
 FREE_TEXT = ("BODY", "DESCRIPTION", "NOTE", "TERM")
 
 
