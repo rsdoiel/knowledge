@@ -16,8 +16,13 @@ func init() {
 }
 
 func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return usageErrorf("usage: search TERM")
+	// The first word is checked for flag shape, so a mistyped option (`kb search
+	// --json foo`) is a usage error, not a search for the text "--json foo" that
+	// finds nothing. `--` gives a dash-leading term on purpose; later words are
+	// free text, dashes included (DR-0041).
+	args, argErr := plainArgs(args, 1, -1, 1, "usage: search TERM")
+	if argErr != nil {
+		return argErr
 	}
 	term := strings.Join(args, " ")
 	// A blank term matches nothing by construction: the command line is wrong,

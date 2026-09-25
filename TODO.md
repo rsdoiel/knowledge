@@ -378,9 +378,8 @@ trip was also checked and is clean: 14 tables' row counts identical.
   with a test that no file is created. Not fixed with the ignored-input work;
   it is a missing-file check, not an argument-shape one.
 
-- [ ] **Exit-codes X4 to X6 remain** (see `exit-codes-plan.md`). X0 to X3 are done. Known
-  gaps, so nobody assumes otherwise: no test yet runs every verb with a bogus flag and a
-  surplus argument (X4); no old-versus-new comparison on the real database yet (X5, the
+- [ ] **Exit-codes X5 and X6 remain** (see `exit-codes-plan.md`). X0 to X4 are done. Known
+  gaps, so nobody assumes otherwise: no old-versus-new comparison on the real database yet (X5, the
   DR-0040 method); the per-verb man pages, the upgrade note and the three skill scripts
   that read `kb`'s exit status still describe the old codes (X6). The main EXIT STATUS
   section, `ingest` and `source check-retractions` pages are current. **No release before

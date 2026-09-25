@@ -194,6 +194,21 @@ survey.
 
 ---
 
+**DONE 2026-09-25** (uncommitted): `cmd/kb/verbcoverage_test.go`. The registry of command paths is
+derived from every verb's SYNOPSIS (52 paths, subverbs included; 44 get the trailing checks), so a newly documented
+command is covered with no edit to the test, and it is cross-checked against the `verbs` map (a
+registered verb with no documented path fails). Every path is run with a bogus flag straight after
+the path, with a bogus flag after a complete valid invocation, with two surplus words after one,
+and in minimal form (never 70). Paths that end in free text (observation body, project
+description, retraction note, search term) are exempt from the two trailing checks, per DR-0041
+item 2, and still get the flag-first check. Parser unit-tested on ten synopsis shapes. Mutation
+checks: dropping surplus handling in `plainArgs` names 15 verbs; dropping flag detection names
+`init`, `project set-description` and `search` (plus the others that reach it). **Found and fixed
+by the test:** `kb init --bogus` created a workspace in a directory named `--bogus` and exited 0;
+`kb search --json foo` searched for the text "--json foo" and exited 1 "no results", the answer a
+script reads as "nothing found". Both now refuse a flag-shaped first argument and accept `--`
+(`initsearchargs_test.go`); the `search` page says so.
+
 ## X5 — Old versus new on real data
 
 **Run:** the DR-0040 method. Build the pre-change binary from `HEAD`, run the same

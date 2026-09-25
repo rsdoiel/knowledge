@@ -42,13 +42,15 @@ func init() {
  *   err := cmdInit(nil, nil, false, []string{"."}, os.Stdout)
  */
 func cmdInit(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	// The PATH is checked for flag shape: `kb init --bogus` used to create a
+	// workspace in a directory named "--bogus". `--` gives a dash-leading path.
+	args, argErr := plainArgs(args, 0, 1, 1, "usage: init [PATH]")
+	if argErr != nil {
+		return argErr
+	}
 	root := "."
-	switch len(args) {
-	case 0:
-	case 1:
+	if len(args) == 1 {
 		root = args[0]
-	default:
-		return usageErrorf("init takes a single optional PATH, got %d arguments", len(args))
 	}
 
 	absRoot, err := filepath.Abs(root)

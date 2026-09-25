@@ -747,7 +747,10 @@ const SearchHelpText = `%{app_name}-search(1) user manual | version {version} {r
 search
 : full-text search across observations, projects, and concepts using the
   FTS5 index. TERM uses standard FTS5 query syntax: multiple words are
-  ANDed, "quoted phrases" match exactly, prefix* matches by prefix.
+  ANDed, "quoted phrases" match exactly, prefix* matches by prefix. A first
+  word that starts with a dash is read as a mistyped option and refused
+  (exit 2); give a dash-leading term after --, as in {app_name} search -- -x.
+  Later words are text as typed, dashes included. Finding nothing is exit 1
 
 summary
 : a formatted overview of every project and its most recent observations
