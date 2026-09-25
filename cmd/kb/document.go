@@ -31,7 +31,7 @@ func init() {
  */
 func cmdDocument(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("document requires a subverb: ingest, draft, review, list, show, tag, fuzzy-tag, or frontmatter")
+		return usageErrorf("document requires a subverb: ingest, draft, review, list, show, tag, fuzzy-tag, or frontmatter")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -52,14 +52,14 @@ func cmdDocument(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args [
 	case "frontmatter":
 		return cmdDocumentFrontmatter(kb, jsonOut, rest, out)
 	default:
-		return fmt.Errorf("unknown document subverb %q; want ingest, draft, review, list, show, tag, fuzzy-tag, or frontmatter", sub)
+		return usageErrorf("unknown document subverb %q; want ingest, draft, review, list, show, tag, fuzzy-tag, or frontmatter", sub)
 	}
 }
 
 // cmdDocumentReview implements `kb document review list|promote`.
 func cmdDocumentReview(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: document review <list|promote> ...")
+		return usageErrorf("usage: document review <list|promote> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -68,7 +68,7 @@ func cmdDocumentReview(kb *knowledge.KnowledgeBase, jsonOut bool, args []string,
 	case "promote":
 		return cmdDocumentReviewPromote(kb, jsonOut, rest, out)
 	default:
-		return fmt.Errorf("unknown document review subverb %q; want list or promote", sub)
+		return usageErrorf("unknown document review subverb %q; want list or promote", sub)
 	}
 }
 
@@ -83,11 +83,11 @@ func cmdDocumentDraft(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, 
 		return err
 	}
 	if len(positional) != 2 || by == "" {
-		return fmt.Errorf("usage: document draft SECTION_ID BODY --by WHO [--confidence N]")
+		return usageErrorf("usage: document draft SECTION_ID BODY --by WHO [--confidence N]")
 	}
 	sectionID, err := strconv.ParseInt(positional[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid section id %q", positional[0])
+		return usageErrorf("invalid section id %q", positional[0])
 	}
 	body := positional[1]
 
@@ -95,10 +95,10 @@ func cmdDocumentDraft(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, 
 	if confidenceStr != "" {
 		c, err := strconv.ParseFloat(confidenceStr, 64)
 		if err != nil {
-			return fmt.Errorf("invalid --confidence %q", confidenceStr)
+			return usageErrorf("invalid --confidence %q", confidenceStr)
 		}
 		if c < 0 || c > 1 {
-			return fmt.Errorf("--confidence must be between 0 and 1, got %v", c)
+			return usageErrorf("--confidence must be between 0 and 1, got %v", c)
 		}
 		confidence = &c
 	}
@@ -121,11 +121,11 @@ func cmdDocumentReviewPromote(kb *knowledge.KnowledgeBase, jsonOut bool, args []
 		return err
 	}
 	if len(positional) != 1 {
-		return fmt.Errorf("usage: document review promote SECTION_ID")
+		return usageErrorf("usage: document review promote SECTION_ID")
 	}
 	sectionID, err := strconv.ParseInt(positional[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid section id %q", positional[0])
+		return usageErrorf("invalid section id %q", positional[0])
 	}
 	if err := kb.PromoteDocumentSummary(sectionID); err != nil {
 		return err
@@ -146,7 +146,7 @@ func cmdDocumentReviewList(kb *knowledge.KnowledgeBase, jsonOut bool, args []str
 		return err
 	}
 	if len(positional) != 0 {
-		return fmt.Errorf("usage: document review list [--project P] [--status S]")
+		return usageErrorf("usage: document review list [--project P] [--status S]")
 	}
 	var projectID int64
 	if projectName != "" {
@@ -205,7 +205,7 @@ func cmdDocumentIngest(kb *knowledge.KnowledgeBase, jsonOut bool, args []string,
 		return err
 	}
 	if project == "" || len(positional) != 1 {
-		return fmt.Errorf("usage: document ingest PATH --project P [--title T] [--format F] [--dry-run]")
+		return usageErrorf("usage: document ingest PATH --project P [--title T] [--format F] [--dry-run]")
 	}
 	path := positional[0]
 
@@ -243,7 +243,7 @@ func cmdDocumentList(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, o
 		return err
 	}
 	if len(positional) != 0 {
-		return fmt.Errorf("usage: document list [--project P]")
+		return usageErrorf("usage: document list [--project P]")
 	}
 	var projectID int64
 	if projectName != "" {
@@ -280,11 +280,11 @@ func cmdDocumentShow(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, o
 		return err
 	}
 	if len(positional) != 1 {
-		return fmt.Errorf("usage: document show ID")
+		return usageErrorf("usage: document show ID")
 	}
 	docID, err := strconv.ParseInt(positional[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid document id %q", positional[0])
+		return usageErrorf("invalid document id %q", positional[0])
 	}
 	doc, err := kb.DocumentByID(docID)
 	if err != nil {

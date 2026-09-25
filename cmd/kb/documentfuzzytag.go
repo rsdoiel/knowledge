@@ -58,11 +58,11 @@ func cmdDocumentFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, args []strin
 	projectName := fs.String("project", "", "scope to one project (required)")
 	conceptList := fs.String("concept", "", "comma-separated concept names to force, bypassing the distance threshold")
 	dryRun := fs.Bool("dry-run", false, "report what would be footnoted without writing anything")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	if len(fs.Args()) != 0 || *projectName == "" {
-		return fmt.Errorf("usage: document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]")
+		return usageErrorf("usage: document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]")
 	}
 
 	p, err := kb.ProjectByName(*projectName)

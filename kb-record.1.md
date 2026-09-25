@@ -1,6 +1,6 @@
-%kb-record(1) user manual | version 0.0.12 036bd79
+%kb-record(1) user manual | version 0.0.13 fd588ef
 % R. S. Doiel
-% 2026-09-23
+% 2026-09-24
 
 # NAME
 
@@ -36,7 +36,14 @@ DR-0001. Where a bare id is ambiguous, the command reports the candidates and
 asks for --project or --workspace rather than choosing one.
 
 list
-: print matching records, one per line
+: print matching records, one per line. --status, --kind, --trigger and
+  --initiative filter on those fields and --since DATE (YYYY, YYYY-MM or
+  YYYY-MM-DD) keeps records dated on or after it; filters combine.
+  "no matching records" means a real filter matched nothing. A value that
+  no record carries and the vocabularies below do not list is a typo, and
+  is an error that names what is known. A value outside the vocabularies
+  that some record does carry still filters. --workspace and --project
+  cannot be combined, since workspace-tier records have no project
 
 show
 : print one record with its body and its relations resolved in both

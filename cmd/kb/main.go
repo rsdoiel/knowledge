@@ -96,7 +96,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// before any database is opened, for the same reason merge is
 	// special-cased below -- printing help shouldn't have the side effect
 	// of creating an ambient ./agents/knowledge.db.
-	if len(rest) > 1 && (rest[1] == "-h" || rest[1] == "-help" || rest[1] == "--help") {
+	if wantsVerbHelp(rest) {
 		if !printHelp(out, rest[0]) {
 			fmt.Fprintf(errOut, "kb: unknown verb %q\n", rest[0])
 			return 2
@@ -120,6 +120,13 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// hypothetical: kb index left a 127KB database in whatever directory it
 	// ran in.
 	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" {
+		// They do not use --db, so an explicit one is a mistake. It used to be
+		// dropped silently: `kb --db rt.db init` created ./agents/knowledge.db
+		// and never rt.db. Refuse it and say where the target really goes.
+		if dbPath != "" {
+			printError(errOut, jsonOut, dbOptionRefusal(rest[0]))
+			return 2
+		}
 		return dispatch(verbs, nil, dl, jsonOut, rest, out, errOut)
 	}
 
@@ -154,6 +161,85 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	defer kb.Close()
 
 	return dispatch(verbs, kb, dl, jsonOut, rest, out, errOut)
+}
+
+/** dbOptionRefusal is the usage error for a --db given to a verb that never
+ * opens the ambient database: init, index or merge.
+ *
+ * Parameters:
+ *   verb (string) — "init", "index" or "merge".
+ *
+ * Returns:
+ *   error — a usage error saying why --db does not apply and where the
+ *           verb's target is given instead.
+ *
+ * Example:
+ *   err := dbOptionRefusal("init") // "--db does not apply to init: ..."
+ */
+func dbOptionRefusal(verb string) error {
+	switch verb {
+	case "init":
+		return usageErrorf("--db does not apply to init: it creates PATH/agents/knowledge.db, so name the target as an argument, kb init PATH")
+	case "index":
+		return usageErrorf("--db does not apply to index: it reads record files, not a database; see kb help index")
+	}
+	return usageErrorf("--db does not apply to %s: it takes its databases as -a, -b and -out; see kb help %s", verb, verb)
+}
+
+// verbsWithSubverbs are the verbs whose first argument names a subverb. Their
+// manual page documents every subverb, so a help flag one level down prints
+// the same page.
+var verbsWithSubverbs = map[string]bool{
+	"project": true, "observation": true, "concept": true, "source": true,
+	"link": true, "record": true, "document": true,
+}
+
+/** isHelpFlag reports whether arg is one of the three spellings of a help
+ * request: -h, -help or --help.
+ *
+ * Parameters:
+ *   arg (string) — a single command-line argument.
+ *
+ * Returns:
+ *   bool — true for "-h", "-help" and "--help".
+ *
+ * Example:
+ *   isHelpFlag("--help") // true
+ */
+func isHelpFlag(arg string) bool {
+	return arg == "-h" || arg == "-help" || arg == "--help"
+}
+
+/** wantsVerbHelp reports whether rest (the verb and its arguments) asks for the
+ * verb's manual page. That is a help flag directly after the verb, or, for a
+ * verb that has subverbs, directly after the subverb (`kb project add -help`),
+ * or after `document review`'s own subverb. Only those positions count: past
+ * them the words are a verb's free text (an observation body, a description, a
+ * search term), and a "-h" there is text. A help flag that comes after other
+ * flags is left to the subverb's own flag parser, whose flag.ErrHelp dispatch
+ * turns into the same page.
+ *
+ * Parameters:
+ *   rest ([]string) — the verb followed by its arguments; must be non-empty.
+ *
+ * Returns:
+ *   bool — true when the verb's page should be printed.
+ *
+ * Example:
+ *   wantsVerbHelp([]string{"project", "add", "-help"}) // true
+ *   wantsVerbHelp([]string{"observation", "add", "--project", "p", "note", "-h"}) // false
+ */
+func wantsVerbHelp(rest []string) bool {
+	if len(rest) > 1 && isHelpFlag(rest[1]) {
+		return true
+	}
+	if !verbsWithSubverbs[rest[0]] {
+		return false
+	}
+	if len(rest) > 2 && isHelpFlag(rest[2]) {
+		return true
+	}
+	return rest[0] == "document" && len(rest) > 3 && rest[1] == "review" && isHelpFlag(rest[3])
 }
 
 // openDebugLogIfRequested opens a new DebugLog and announces its path to

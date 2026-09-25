@@ -21,13 +21,364 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.13-2026-09-24">v0.0.13 — 2026-09-24</h2>
+<p>A sweep for commands that answer a mistake with success. Every verb
+was run with empty, malformed, unknown and surplus input against a copy
+of the real database, and each one that exited 0 for input it had not
+understood, or lost part of it, is fixed, along with the
+<code>kb search</code> hyphen bug found while testing Harvey’s
+<code>/kb search</code>. Several changes are visible to scripts: usage
+errors now exit 2, unknown flags and surplus arguments are refused
+instead of dropped, and three verbs that ignored <code>--db</code> now
+refuse it. Read <strong>Upgrade notes</strong> before updating a script.
+The decisions behind the changes are DR-0040 to DR-0044. Every fix below
+was written red first, and the command-line changes were checked by
+running a build from before the change alongside the new one, on a copy
+of the real database.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><code>CleanName(kind, name)</code>, exported (DR-0042): trims
+surrounding whitespace from a project or concept name and refuses one
+that is empty afterwards. It is the one definition of a usable name,
+shared by the library and the CLI.</li>
+<li><code>DistinctRecordValues(field)</code> (DR-0043): the values a
+record’s <code>status</code>, <code>kind</code>, <code>trigger</code> or
+<code>initiative</code> actually takes in this database, sorted and
+without the empty string. The field name is spliced into SQL, so only
+those four are accepted. It exists so <code>record list</code> can tell
+a typo from a real filter that matches nothing.</li>
+<li>An ARGUMENTS section in <code>kb(1)</code> (DR-0041): global options
+go before the verb, a name that begins with a dash follows
+<code>--</code>, and free text after a verb’s fixed arguments is taken
+as typed. EXIT STATUS now says exactly what 1 and 2 mean.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><strong>Usage errors exit 2</strong> (they exited 1; DR-0040).
+<code>kb -help</code> had always documented 2 for “usage error”, but
+only an unknown verb produced it, so a script could not tell “fix the
+command” from “handle the result”. Exit 2 now means the command line
+itself is wrong and nothing was attempted: an unknown verb, subverb or
+flag, a missing or surplus argument, a flag without its value or with
+one that does not parse, a malformed id, a missing required flag. Exit 1
+stays for a command line that was fine and a result that was not: not
+found, no results, a value the knowledge base rejects (an unknown kind
+or status), a database error. Over 67 commands run through the old and
+new binaries, 35 changed from 1 to 2, all of them real mistakes, and the
+other 32 kept their codes. About 75 error sites were converted; a
+mechanical edit of mine dropped a word from one message and was caught
+by auditing the diff.</li>
+<li><strong>Unknown flags and surplus arguments are refused</strong>
+(they were dropped; DR-0041). Of 25 verbs probed, 15 accepted a bogus
+flag and 19 ignored an extra argument; all 25 now refuse both. The
+damage was real: <code>source add T more words</code> stored the title
+<code>T</code> and lost the rest,
+<code>record new --title A decision</code> kept only <code>A</code>,
+<code>source link 1 1 --relationship</code> with no value linked anyway,
+and <code>project list --json</code> printed plain text and exited 0,
+ignoring the option. A global option after the verb is now refused with
+a message saying it goes before it
+(<code>kb --json project list</code>). Verbs with plain positionals
+check their fixed arguments for flag shape and their count; FlagSet
+verbs check their leftovers; the <code>record</code> verbs check for
+exactly the arguments they take. <strong>A name that begins with a dash
+now needs <code>--</code></strong> on the verbs that take one
+(<code>kb project show -- -name</code>), as <code>concept delete</code>
+already did. Free-text tails are unchanged:
+<code>project set-description P a -x b</code>, a retraction note and an
+observation body may contain dashes. Over 65 commands the old and new
+binaries left an identical database and identical exit codes, apart from
+the two intended cases.</li>
+<li><strong><code>init</code>, <code>index</code> and <code>merge</code>
+refuse <code>--db</code></strong> (DR-0041). None of them opens the
+ambient database, and <code>--db</code> was dropped silently:
+<code>kb --db rt.db init</code> reported success and created
+<code>./agents/knowledge.db</code>, and <code>rt.db</code> never
+existed. Refused rather than honoured because <code>--db</code> names a
+database file while <code>init</code> creates a workspace, and any verb
+that does use the database already open-or-creates an explicit path.
+<code>kb --db x init -help</code> still prints the page.</li>
+<li><strong><code>record list</code> validates its filters</strong>
+(DR-0043). Every mistake used to read as
+<code>no matching records</code>. A <code>--status</code>,
+<code>--kind</code>, <code>--trigger</code> or <code>--initiative</code>
+that no record carries and the vocabulary does not list is now an error
+naming what is known; <code>--project</code> naming no project is an
+error listing the known ones; <code>--since</code> must be a real
+<code>YYYY</code>, <code>YYYY-MM</code> or <code>YYYY-MM-DD</code>; and
+<code>--workspace</code> with <code>--project</code> is refused, since
+workspace-tier records have no project. The vocabularies are documented
+rather than enforced, so a value outside them that some record does
+carry still filters, and a value inside them that matches nothing is
+still a valid empty answer. On a copy of the real 44-record database, 16
+valid filters were byte-identical and 9 mistakes became errors.</li>
+<li><strong>Project and concept names are trimmed, and a blank name or
+observation body is refused</strong> (DR-0042).
+<code>kb project add '  '</code> created a project named two spaces,
+<code>kb concept add ''</code> an empty concept, and
+<code>kb observation add ... ''</code> an empty body; all three then
+showed up in every list, and <code>' harvey '</code> was a second
+project beside <code>harvey</code>. This is in the library, so ingest,
+Harvey and a script get it too. An observation body is only refused when
+blank and is otherwise stored exactly as given. <code>import</code> and
+<code>merge</code> use raw SQL and are unchanged, so an existing
+database with such rows still loads.</li>
+<li><code>kb search ''</code> and <code>kb search ' '</code> are usage
+errors (exit 2, DR-0040, DR-0041), not <code>no results</code>.</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><strong><code>kb project rename demo ''</code> corrupted a project
+that owns records</strong> (DR-0042). The command rewrites every owned
+record’s <code>project:</code> frontmatter before the library sees the
+new name, so a blank name wrote <code>project: ""</code> into each file,
+renamed the row to an empty string, and the next ingest hit
+<code>UNIQUE constraint failed: records.uuid</code>, the deadlock
+DR-0026 exists to prevent. The name is now cleaned before any file is
+staged, so the files and the row cannot disagree about it, and
+<code>--dry-run</code> refuses too. Found while verifying the name fix
+on a real scratch corpus.</li>
+<li><strong><code>kb merge</code> succeeded on inputs that do not
+exist</strong> (DR-0044). <code>kb merge -a x -b y -out z</code> with
+neither present exited 0, created zero-byte <code>x</code> and
+<code>y</code>, and wrote a schema-only <code>z</code>, so a mistyped
+<code>-a</code> merged an empty database and reported success. Cause:
+each input was opened with <code>sql.Open</code> and a pragma, and
+SQLite creates a missing file. Now a missing input (exit 1, naming the
+flag and path), a directory or other non-file, and a zero-byte file are
+refused before anything is opened, as is <code>-a</code> and
+<code>-b</code> naming the same file by any spelling or symlink (exit
+2). A directory used to fail with SQLite’s
+<code>unable to open database file: out of memory (14)</code>. A refused
+merge changes nothing on disk, and a test compares the directory before
+and after. A zero-byte main file with a non-empty <code>-wal</code> is
+not refused; that state could not be produced with this driver, so it is
+a defensive allowance, not an observed case. A real merge of the actual
+database with an older backup gives an identical 14-table summary and
+identical merged content (518 rows compared).</li>
+<li><strong><code>kb VERB SUBVERB -help</code> did something different
+for every verb</strong> (DR-0041). <code>project add -help</code>
+printed <code>kb: flag: help requested</code> and exited 1,
+<code>project show -help</code> looked up a project named
+<code>-help</code>, <code>document frontmatter -help</code> tried to
+open a file called <code>-help</code>, and
+<code>record list -help</code> said <code>unknown flag</code>. It now
+prints the verb’s page and exits 0, before any database is opened, so it
+works outside a workspace and creates nothing. A help flag after other
+flags (<code>project add --status active -help</code>) is answered too.
+It is not a scan of every argument:
+<code>kb observation add --project p note pass -h to it</code> still
+records its body. Checked over 33 subverbs in three spellings.</li>
+<li><strong><code>kb search</code> failed on any term containing a
+hyphen</strong> (<code>map-reduce</code>, <code>JSON-L</code>,
+<code>cross-machine</code>) with
+<code>SQL logic error: no such column: reduce</code>, because FTS5 reads
+<code>a-b</code> as <code>a</code> minus column <code>b</code>.
+v0.0.11’s punctuation fix retried only on a syntax error, so a hyphen
+slipped past it. <code>Search</code> now retries once as a quoted phrase
+on any failure of the raw term; a trailing <code>*</code> stays outside
+the quotes so prefix search still works, and the documented syntax (AND,
+phrases, NOT, OR, prefix) is unchanged. Of 23 terms run against a copy
+of the real database, 11 gave identical results and 12 that errored now
+return results (<code>map-reduce</code> 4, <code>JSON-L</code> 17,
+<code>cross-machine</code> 30). Harvey’s <code>/kb search</code> calls
+the same function and is fixed with it.</li>
+<li><code>TestImportJSONL_SameNameDifferentUUIDMergesUnderLocalProject</code>
+failed about one run in 40 (test only; no product change). It asserted
+that the local project’s description wins a tie, but
+<code>updated_at</code> has one-second resolution and DR-0025’s
+last-writer-wins correctly lets the incoming row win when the clock
+ticks between the two creations. Both timestamps are now pinned, and the
+two cases that used to happen only by accident, newer incoming wins and
+an exact tie keeps the local row, are tests of their own. The old test
+failed 3 of 3 with a forced tick; the new ones pass with it, and 600
+runs are clean.</li>
+</ul>
+<h3 id="upgrade-notes">Upgrade notes</h3>
+<p>For scripts:</p>
+<ul>
+<li>Exit 2 now means a usage error. A script that treated any non-zero
+as failure is unaffected. One that tested for exactly 1 to mean “not
+found” still gets 1 for a lookup that found nothing, and now gets 2 for
+a mistyped command line.</li>
+<li><code>--json</code>, <code>--db</code> and <code>--debug</code> go
+before the verb. After it they are refused, where they used to be
+ignored (<code>--json</code> after the verb printed plain text).</li>
+<li>A name that begins with a dash needs <code>--</code>:
+<code>kb project show -- -name</code>.</li>
+<li><code>kb --db PATH init</code>, <code>index</code> and
+<code>merge</code> are refused. Use <code>kb init PATH</code>, and
+<code>merge</code>’s <code>-a</code>, <code>-b</code> and
+<code>-out</code>.</li>
+<li><code>record list</code> exits 1 for a typo’d <code>--status</code>,
+<code>--kind</code>, <code>--trigger</code>, <code>--initiative</code>
+or <code>--project</code>, and 2 for a malformed <code>--since</code>. A
+script that relied on those returning an empty list should check for the
+value first.</li>
+<li><code>kb merge</code> fails on a missing or empty input instead of
+merging an empty database. A zero-byte <code>.db</code> left by an
+earlier failed merge can be deleted.</li>
+</ul>
+<p>For library callers:</p>
+<ul>
+<li><code>AddProject</code>, <code>AddProjectWithStatus</code>,
+<code>AddConcept</code>, <code>AddConceptWithIdentifier</code>,
+<code>ResolveConceptName</code>, <code>RenameProject</code>,
+<code>RenameProjectRow</code> and <code>RenameConcept</code> trim the
+name and return an error for a blank one. <code>AddObservation</code>
+and <code>AddObservationWithSource</code> return an error for a blank
+body. A caller that passed untrimmed names now gets the trimmed name’s
+row, not a new one.</li>
+<li>New exports: <code>CleanName</code> and
+<code>DistinctRecordValues</code>.</li>
+</ul>
+<h2 id="v0.0.12-2026-09-23">v0.0.12 — 2026-09-23</h2>
+<p>The corpus-improvement toolchain moves out of <code>cmd/kb</code> and
+into the importable <code>knowledge</code> package, so a second program
+can drive it in-process instead of shelling out to <code>kb</code>, plus
+a concept delete verb, a <code>cancelled</code> record status, and a
+sweep of bugs that only showed up by running a build from before each
+change against the new one on real data. Every fix below was written red
+first, and each move was checked by diffing the old binary’s output
+against the new one, byte for byte.</p>
+<h3 id="added-1">Added</h3>
+<ul>
+<li><strong>The workflow logic is now library API</strong> (DR-0035).
+<code>cmd/kb</code> is <code>package main</code>, so everything
+implemented there was reachable from exactly one caller, the
+<code>kb</code> binary. It moved into the root package as exported
+functions that take text or bytes and return results, never touching
+<code>flag</code>, <code>io.Writer</code>, <code>os.Exit</code> or a
+file, so a consumer’s own permission layer stays in charge of its
+writes. Each of the verbs below is now flag parsing, one library call
+and rendering, and its output and <code>--json</code> shape are
+unchanged. Record ingest (<code>kb ingest</code>) was not part of this
+move and stays in <code>cmd/kb</code>.
+<ul>
+<li><code>IngestDocument</code> with
+<code>DocumentIngestOptions</code>/<code>DocumentIngestResult</code>:
+create or reconcile a document, tagging and density-scoring each
+section. The path is stored exactly as given and
+<code>DocumentByPath</code> is an exact match, so a caller must pass one
+form consistently.</li>
+<li><code>TagDocumentText</code>, <code>EligibleTagConcepts</code>,
+<code>FuzzyEligible</code>, <code>FuzzyTagDocumentText</code> and
+<code>FuzzyTagInsertion</code>: text in, text out, for
+<code>document tag</code> and <code>document fuzzy-tag</code>.
+<code>StripCodeSpans</code> is exported too.</li>
+<li><code>SuggestConcepts</code> with <code>ConceptSuggestions</code>,
+<code>ConceptCandidate</code> and <code>NearExistingMatch</code>, and
+<code>CandidateTerms</code>, the one definition of a candidate word that
+concept suggestion and the frontmatter keyword scorer share.</li>
+<li><code>ProposeFrontmatter</code> and <code>ApplyFrontmatter</code>,
+which take the file’s bytes and return the new bytes. Git access sits
+behind a <code>Provenance</code> interface, with
+<code>GitProvenance</code> as the default and this module’s only
+<code>os/exec</code>, so a caller can supply its own authorship and
+dates, and tests need no real repository. <code>ApplyFrontmatter</code>
+creates a new-candidate keyword’s concept before returning (never on a
+dry run).</li>
+</ul></li>
+<li><code>kb concept delete NAME [--force] [--dry-run]</code> (DR-0039),
+backed by <code>ConceptUsage</code>, <code>DeleteConcept</code> and
+<code>ConceptInUseError</code>. There was no way to remove a concept, so
+a junk one had to be deleted with raw SQL, which skips the search index.
+NAME matches exactly, including case. A concept still linked to a
+project, observation, record or document section is refused with the
+counts unless <code>--force</code>, which removes only the links.
+<code>--</code> lets a name that looks like a flag (<code>---</code>) be
+deleted. Deletion is local to one database, with no tombstone: the
+command’s output and <code>kb-concept(1)</code> say that a
+<code>merge</code> or <code>import</code> from a database that still has
+the concept brings it back, and that a file still naming it recreates it
+when that file is next ingested after it changes (an unchanged file is
+skipped) or on a rebuild.</li>
+<li><code>cancelled</code> joins the record <code>status</code>
+vocabulary (DR-0038): adopted, then abandoned. It differs from
+<code>rejected</code> (never adopted) and <code>superseded</code>
+(replaced), and needs no replacement record. The reason goes in the
+record’s body, by convention. <code>kb help record</code> documents
+it.</li>
+</ul>
+<h3 id="changed-1">Changed</h3>
+<ul>
+<li><strong>Concept names that begin or end in punctuation now
+match</strong> (DR-0037). <code>C++</code>, <code>F#</code> and
+<code>.NET</code> could never match a mention, because the matcher was
+<code>\b</code> + name + <code>\b</code> and <code>\b</code> only fires
+between a word character and a non-word one; and <code>.NET</code>
+matched inside <code>ASP.NET</code>. A mention now counts when it is not
+glued to an ASCII word character on either side, which is exactly what
+<code>\b</code> meant for a name that starts and ends with a letter: a
+differential test against the old regex agrees on 4,000 random strings.
+A name with no letter or digit never matches, or a junk concept such as
+<code>...</code> would match every ellipsis. This reaches
+<code>MatchConceptNames</code>, <code>MatchConceptNameCounts</code>,
+<code>RecallByConceptNames</code>, tag density, density-linking and
+<code>document tag</code>.</li>
+<li><strong>A wikilink inside a code span or fenced block no longer
+mints or links a concept</strong>, in both document and record ingest
+(DR-0037). Documentation about wikilink syntax was minting junk concepts
+(<code>...</code>, <code>recall: ...</code>); over 159 real documents
+ingest went from 213 concepts to 147 with none newly minted, and all 66
+that stopped were examples inside code. A database ingested with v0.0.11
+may still hold some; <code>kb concept delete</code> removes them.</li>
+<li><strong><code>document fuzzy-tag</code> proposes far fewer false
+matches</strong> (DR-0036). A dry run over 159 real documents against
+the real vocabulary returned 614 proposals, most of them noise:
+<code>fts</code> for <code>its</code> (96 times), <code>drift</code> for
+<code>draft</code> (47), <code>madr</code> for <code>made</code>, and
+distance-2 substitutions like <code>retirement</code> for
+<code>requirement</code>. A concept shorter than 6 letters is no longer
+fuzzy-matched without <code>--concept</code>, and a distance-2 match
+needs a 6-letter shared prefix. That took 614 to 224 proposals, all 14
+measured false positives to zero and kept all 10 measured true
+positives. The constants are provisional. A short concept’s plural
+(<code>merge</code> for <code>merges</code>) now needs
+<code>--concept</code>.</li>
+<li><strong><code>concept suggest</code> requires terms to share a first
+letter</strong> to be treated as spelling variants or near-existing
+(DR-0036), which removes <code>nested ~ testing</code>,
+<code>nesting ~ testing</code> and <code>around ~ grounding</code>, and
+stops <code>preference</code> clustering into <code>reference</code> and
+<code>treats</code>/<code>treating</code>/<code>treated</code> into
+<code>created</code>.</li>
+<li><code>document frontmatter --accept-keywords</code> accepts a name
+only if it is a known concept or one of the report’s proposed new
+candidates, checked before anything is created or written (DR-0036). It
+used to write any string into the file and mint a real concept for it,
+and it did so under <code>--dry-run</code>.</li>
+<li>The <code>--debug</code> trace for the lifted verbs is coarser: one
+event at the call boundary rather than one per internal KB call, and
+<code>concept suggest</code> logs the candidate count rather than the
+item count.</li>
+</ul>
+<h3 id="fixed-1">Fixed</h3>
+<ul>
+<li><strong>Output that changed between identical runs</strong>
+(DR-0037), found by repeating every verb and by an audit of each
+<code>range</code> over a map. Five sites: known- concept proposals in
+<code>document frontmatter</code> (now sorted); <code>--accept</code>
+and <code>--set</code> writing new frontmatter keys in map order, which
+changed the key order written into users’ files (two orders in eight
+runs; now the fixed order title, author, dateCreated, dateModified); the
+unknown <code>--set</code> field named in an error;
+<code>RemovedHeadings</code> after a re-ingest, in text and
+<code>--json</code> (now the old document’s own order); and the notes
+<code>project rename</code> prints when index refreshes fail (now sorted
+by directory). A pre-fix build gave 12 different outputs in 12 runs of
+the same script; this one gives one.</li>
+<li><code>document frontmatter --dry-run</code> with a new-candidate
+keyword created the concept in the database while leaving the file alone
+(DR-0036).</li>
+</ul>
 <h2 id="v0.0.11-2026-09-23">v0.0.11 — 2026-09-23</h2>
 <p>Three new corpus-improvement features, plus a search bug fix — fuzzy
 near-miss tagging, a frontmatter provenance generator, and fuzzy
 candidate clustering, each of which surfaced and fixed a real
 self-contradiction in its own design doc before shipping, verified by
 hand rather than trusting the design’s own worked examples.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
 (DR-0032) catches what <code>tag</code>’s exact whole-word matching
@@ -84,7 +435,7 @@ words (<code>table</code>+<code>stable</code>+<code>able</code>,
 <code>old</code>+<code>cold</code>+<code>told</code>+<code>hold</code>+<code>fold</code>),
 fixed with a length gate.</li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li><code>kb search TERM</code> threw a raw SQLite error
 (<code>fts5: syntax error</code>) instead of a normal no-results outcome
@@ -101,7 +452,7 @@ unchanged.</li>
 v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
 two corpus-improvement verbs that surface candidates for a human to
 confirm rather than committing anything themselves.</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><code>kb concept suggest [--project NAME] [--limit N]</code>
 (DR-0028), a read-only verb that scans every record body and document
@@ -135,7 +486,7 @@ and fenced blocks, is auto-linked. <code>tag_density</code> is
 deliberately left counting the unfiltered text — it is the raw signal
 the threshold is applied to, not the threshold’s output.</li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> now completes for a project
 that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
@@ -171,7 +522,7 @@ this module became the decision- record format’s first conversion pilot.
 <code>kb(1)</code>’s DESCRIPTION and SEE ALSO now name records and
 documents too.</li>
 </ul>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-3">Fixed</h3>
 <ul>
 <li><code>kb merge</code> could silently keep a stale project or concept
 name, or drop a side outright, depending on merge order, because
@@ -218,7 +569,7 @@ in favour of the per-file property the test was always really asserting
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -256,7 +607,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -282,7 +633,7 @@ export/import carry <code>observation_relations</code> from this
 release, not as a follow-on, per the standing rule that a table missing
 from the merge summary is a table whose loss goes unreported.</li>
 </ul>
-<h3 id="fixed-2">Fixed</h3>
+<h3 id="fixed-4">Fixed</h3>
 <ul>
 <li><code>kb record set-status</code> and
 <code>kb record supersede</code> now refresh a corpus’s
@@ -300,7 +651,7 @@ changes, which bit WorkLab twice.</li>
 corpora (clasm, WorkLab, caltechauthors), all in
 <code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
 exit code.</p>
-<h3 id="fixed-3">Fixed</h3>
+<h3 id="fixed-5">Fixed</h3>
 <ul>
 <li><code>kb ingest</code> no longer leaves stale edges behind on
 re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
@@ -338,7 +689,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-4">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -381,7 +732,7 @@ every portability path, per the project’s standing rule that a table
 missing from the merge summary is a table whose loss goes
 unreported.</li>
 </ul>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-3">Changed</h3>
 <ul>
 <li>The independent hand-rolled CLI flag/positional parsers in
 <code>ingest</code>, <code>record</code>, <code>source</code>, and the
@@ -396,7 +747,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-5">Added</h3>
+<h3 id="added-7">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -431,7 +782,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-6">Added</h3>
+<h3 id="added-8">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -440,7 +791,7 @@ start a workspace (DR-0021, DR-0022).</p>
 location for a new record, relative to <code>--root</code> like every
 other stored record path.</li>
 </ul>
-<h3 id="changed-2">Changed</h3>
+<h3 id="changed-4">Changed</h3>
 <ul>
 <li><code>kb record new --project P</code> (no <code>--dir</code>) now
 writes to <code>agents/projects/P/decisions/</code> instead of
@@ -471,7 +822,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-7">Added</h3>
+<h3 id="added-9">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -513,7 +864,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed-3">Changed</h3>
+<h3 id="changed-5">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather
@@ -527,7 +878,7 @@ specification: field order, flow-styled sequences, and a double-quoted
 string type for the seven fields the format requires quoted, so every
 writer produces byte-identical output.</li>
 </ul>
-<h3 id="fixed-4">Fixed</h3>
+<h3 id="fixed-6">Fixed</h3>
 <ul>
 <li>A record path read from the database is confined to the workspace
 root before it is read or written. <code>filepath.Join</code> cleans a

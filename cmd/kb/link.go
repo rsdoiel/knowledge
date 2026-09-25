@@ -14,7 +14,7 @@ func init() {
 
 func cmdLink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: link <project|observation> ...")
+		return usageErrorf("usage: link <project|observation> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -23,7 +23,7 @@ func cmdLink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []str
 	case "observation":
 		return cmdLinkObservation(kb, dl, jsonOut, rest, out)
 	default:
-		return fmt.Errorf("unknown link subcommand %q", sub)
+		return usageErrorf("unknown link subcommand %q", sub)
 	}
 }
 
@@ -43,8 +43,9 @@ func conceptByName(kb *knowledge.KnowledgeBase, dl *DebugLog, name string) (*kno
 }
 
 func cmdLinkProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: link project PROJECT_NAME CONCEPT_NAME")
+	args, argErr := plainArgs(args, 2, 2, 2, "usage: link project PROJECT_NAME CONCEPT_NAME")
+	if argErr != nil {
+		return argErr
 	}
 	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": args[0]}, func() (*knowledge.Project, error) {
 		return kb.ProjectByName(args[0])
@@ -78,12 +79,13 @@ func cmdLinkProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 }
 
 func cmdLinkObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: link observation OBS_ID CONCEPT_NAME")
+	args, argErr := plainArgs(args, 2, 2, 2, "usage: link observation OBS_ID CONCEPT_NAME")
+	if argErr != nil {
+		return argErr
 	}
 	obsID, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid observation id %q", args[0])
+		return usageErrorf("invalid observation id %q", args[0])
 	}
 	c, err := conceptByName(kb, dl, args[1])
 	if err != nil {

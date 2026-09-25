@@ -477,7 +477,10 @@ func migrateExperimentsToProjects(kb *KnowledgeBase) error {
 			default:
 				desc = e.language + " — " + e.repo
 			}
-			projectID, err = kb.AddProject(e.name, desc)
+			// addProject, not AddProject: migrating a legacy database must
+			// carry its rows across as they are, not fail Open on a name the
+			// public API would now refuse.
+			projectID, err = kb.addProject(e.name, desc, "active")
 			if err != nil {
 				return fmt.Errorf("migrate experiment %q: %w", e.name, err)
 			}
@@ -528,13 +531,43 @@ func (kb *KnowledgeBase) Close() error {
  *
  * Returns:
  *   int64 — ID of the inserted or existing project.
- *   error — on database failure.
+ *   error — if name is blank, or on database failure.
  *
  * Example:
  *   id, err := kb.AddProject("harvey", "Terminal coding agent backed by Ollama")
  */
 func (kb *KnowledgeBase) AddProject(name, description string) (int64, error) {
+	name, err := CleanName("project", name)
+	if err != nil {
+		return 0, err
+	}
 	return kb.addProject(name, description, "active")
+}
+
+/** CleanName trims surrounding whitespace from a project or concept name and
+ * refuses one that is empty afterwards. A blank name is never meaningful: it
+ * sorts first in every list, cannot be typed back to select it, and used to be
+ * storable by `kb project add ''`. Trimming matches what ingest already does to
+ * wikilink and tag text, so a padded name resolves to the row it plainly means
+ * instead of forking a duplicate.
+ *
+ * Parameters:
+ *   kind (string) — "project" or "concept"; only used in the error message.
+ *   name (string) — the name as supplied.
+ *
+ * Returns:
+ *   string — the trimmed name.
+ *   error  — if the trimmed name is empty.
+ *
+ * Example:
+ *   name, err := CleanName("project", "  harvey ") // "harvey", nil
+ */
+func CleanName(kind, name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("knowledge: %s name must not be empty", kind)
+	}
+	return name, nil
 }
 
 // validProjectStatuses are the allowed values for projects.status (see
@@ -560,7 +593,7 @@ var validProjectStatuses = map[string]bool{
  *   int64 — ID of the inserted or existing project. If the project already
  *           existed, its status is left unchanged (same no-op convention
  *           as AddProject).
- *   error — on database failure, or if status is not one of the allowed values.
+ *   error — on database failure, if status is not one of the allowed values, or if name is blank.
  *
  * Example:
  *   id, err := kb.AddProjectWithStatus("harvey", "Terminal coding agent", "concept")
@@ -568,6 +601,10 @@ var validProjectStatuses = map[string]bool{
 func (kb *KnowledgeBase) AddProjectWithStatus(name, description, status string) (int64, error) {
 	if !validProjectStatuses[status] {
 		return 0, fmt.Errorf("knowledge: invalid project status %q (want concept, active, paused, or concluded)", status)
+	}
+	name, err := CleanName("project", name)
+	if err != nil {
+		return 0, err
 	}
 	return kb.addProject(name, description, status)
 }
@@ -704,13 +741,17 @@ func (kb *KnowledgeBase) SetProjectDescription(name, description string) error {
  *   new (string) — the replacement name.
  *
  * Returns:
- *   error — if old does not exist, new already names another project, the
+ *   error — if old does not exist, new is blank or already names another project, the
  *           project owns any records, or on database failure.
  *
  * Example:
  *   err := kb.RenameProject("caltechcampuspubs_static", "ep3StaticSite")
  */
 func (kb *KnowledgeBase) RenameProject(old, new string) error {
+	new, err := CleanName("project", new)
+	if err != nil {
+		return err
+	}
 	id, description, err := kb.resolveProjectRename(old, new)
 	if err != nil {
 		return err
@@ -741,13 +782,17 @@ func (kb *KnowledgeBase) RenameProject(old, new string) error {
  *   new (string) — the replacement name.
  *
  * Returns:
- *   error — if old does not exist, new already names another project, or on
+ *   error — if old does not exist, new is blank or already names another project, or on
  *           database failure.
  *
  * Example:
  *   err := kb.RenameProjectRow("caltechcampuspubs_static", "ep3StaticSite")
  */
 func (kb *KnowledgeBase) RenameProjectRow(old, new string) error {
+	new, err := CleanName("project", new)
+	if err != nil {
+		return err
+	}
 	id, description, err := kb.resolveProjectRename(old, new)
 	if err != nil {
 		return err
@@ -834,7 +879,7 @@ var ValidObservationKinds = []string{"note", "finding", "decision", "question", 
  *
  * Returns:
  *   int64 — ID of the new observation.
- *   error — if kind is invalid or the insert fails.
+ *   error — if kind is invalid, body is blank, or the insert fails.
  *
  * Example:
  *   id, err := kb.AddObservation(1, "finding", "WAL mode doubles write throughput")
@@ -855,7 +900,7 @@ func (kb *KnowledgeBase) AddObservation(projectID int64, kind, body string) (int
  *
  * Returns:
  *   int64 — ID of the new observation.
- *   error — if kind is invalid or the insert fails.
+ *   error — if kind is invalid, body is blank, or the insert fails.
  *
  * Example:
  *   id, err := kb.AddObservationWithSource(1, "finding",
@@ -865,6 +910,10 @@ func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, s
 	if !IsValidKind(kind) {
 		return 0, fmt.Errorf("knowledge: invalid kind %q; must be one of: %s",
 			kind, strings.Join(ValidObservationKinds, ", "))
+	}
+	// Only a blank body is refused; a real one is stored exactly as given.
+	if strings.TrimSpace(body) == "" {
+		return 0, fmt.Errorf("knowledge: observation body must not be empty")
 	}
 	u, err := uuid.NewV7()
 	if err != nil {
@@ -1079,7 +1128,7 @@ func (kb *KnowledgeBase) ObservationRelationsFor(id int64) ([]RelatedObservation
  *
  * Returns:
  *   int64 — ID of the inserted or existing concept.
- *   error — on database failure.
+ *   error — if name is blank, or on database failure.
  *
  * Example:
  *   id, err := kb.AddConcept("WAL mode", "SQLite write-ahead logging for concurrency")
@@ -1108,13 +1157,17 @@ func (kb *KnowledgeBase) AddConcept(name, description string) (int64, error) {
  *
  * Returns:
  *   int64 — ID of the inserted or existing concept.
- *   error — on database failure.
+ *   error — if name is blank, or on database failure.
  *
  * Example:
  *   id, err := kb.AddConceptWithIdentifier("Jane Doe", "paper author",
  *       string(IdentifierORCID), "0000-0003-0900-6903")
  */
 func (kb *KnowledgeBase) AddConceptWithIdentifier(name, description, identifierType, identifierValue string) (int64, error) {
+	name, err := CleanName("concept", name)
+	if err != nil {
+		return 0, err
+	}
 	u, err := uuid.NewV7()
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
@@ -1176,16 +1229,20 @@ func (kb *KnowledgeBase) refreshConceptFTS(id int64, name, description string) {
  *   new (string) — the replacement name.
  *
  * Returns:
- *   error — if old does not exist, new already names another concept, or on
+ *   error — if old does not exist, new is blank or already names another concept, or on
  *           database failure.
  *
  * Example:
  *   err := kb.RenameConcept("wal-mdoe", "wal-mode")
  */
 func (kb *KnowledgeBase) RenameConcept(old, new string) error {
+	new, err := CleanName("concept", new)
+	if err != nil {
+		return err
+	}
 	var id int64
 	var description string
-	err := kb.db.QueryRow(`SELECT id, description FROM concepts WHERE name = ?`, old).Scan(&id, &description)
+	err = kb.db.QueryRow(`SELECT id, description FROM concepts WHERE name = ?`, old).Scan(&id, &description)
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("knowledge: concept %q not found", old)
 	}
@@ -1339,14 +1396,18 @@ func (kb *KnowledgeBase) ClearRecordConcepts(recordID int64) error {
  *
  * Returns:
  *   int64 — ID of the matching or newly created concept.
- *   error — on database failure.
+ *   error — if name is blank, or on database failure.
  *
  * Example:
  *   id, err := kb.ResolveConceptName("computer")
  */
 func (kb *KnowledgeBase) ResolveConceptName(name string) (int64, error) {
+	name, err := CleanName("concept", name)
+	if err != nil {
+		return 0, err
+	}
 	var id int64
-	err := kb.db.QueryRow(
+	err = kb.db.QueryRow(
 		`SELECT id FROM concepts WHERE name = ?1 COLLATE NOCASE LIMIT 1`, name,
 	).Scan(&id)
 	if err == nil {

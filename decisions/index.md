@@ -3,6 +3,11 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0044  2026-09-24  accepted     correction   live-test        -     kb merge refuses inputs that are missing, empty, not a file, or the same file twice
+DR-0043  2026-09-24  accepted     decision     live-test        -     kb record list: a filter value is an error only when nothing carries it
+DR-0042  2026-09-24  accepted     correction   live-test        -     Project and concept names are trimmed and blank ones refused in the library; import and merge stay raw
+DR-0041  2026-09-24  accepted     correction   live-test        -     Refuse what a verb does not understand: unknown flags, surplus arguments, misplaced global options and --db
+DR-0040  2026-09-24  accepted     correction   live-test        -     kb exits 2 for a mistake in the command line and 1 for everything else
 DR-0039  2026-09-23  accepted     decision     request          -     kb concept delete: refuse when linked, local to one database
 DR-0038  2026-09-23  accepted     decision     request          -     Add cancelled to the record status vocabulary
 DR-0037  2026-09-23  accepted     correction   live-test        -     Deterministic output, punctuation-edged concept names, and wikilinks in code

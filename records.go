@@ -824,3 +824,47 @@ func NewUUID() (string, error) {
 func Today() string {
 	return time.Now().Format("2006-01-02")
 }
+
+// distinctRecordColumns maps the record fields a caller may ask about to their
+// column. The field name is spliced into SQL, so only these four ever are.
+var distinctRecordColumns = map[string]string{
+	"status": "status", "kind": "kind", "trigger": `"trigger"`, "initiative": "initiative",
+}
+
+/** DistinctRecordValues returns the values a record field actually takes in
+ * this database, sorted, without duplicates and without the empty string.
+ * It exists so a caller can tell a filter value nothing carries (a typo) from
+ * a real one that happens to match no record, which matters because the
+ * status, kind and trigger vocabularies are documented rather than enforced:
+ * a record may carry a value outside them.
+ *
+ * Parameters:
+ *   field (string) — one of "status", "kind", "trigger" or "initiative".
+ *
+ * Returns:
+ *   []string — the distinct non-empty values; nil when no record has one.
+ *   error    — for any other field name, or on database failure.
+ *
+ * Example:
+ *   statuses, err := kb.DistinctRecordValues("status") // [accepted proposed]
+ */
+func (kb *KnowledgeBase) DistinctRecordValues(field string) ([]string, error) {
+	col, ok := distinctRecordColumns[field]
+	if !ok {
+		return nil, fmt.Errorf("knowledge: no distinct values for record field %q; want status, kind, trigger or initiative", field)
+	}
+	rows, err := kb.db.Query(`SELECT DISTINCT ` + col + ` FROM records WHERE ` + col + ` != '' ORDER BY ` + col)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: distinct record %s: %w", field, err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

@@ -56,11 +56,11 @@ func cmdDocumentTag(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, ou
 	projectName := fs.String("project", "", "scope to one project (required)")
 	conceptList := fs.String("concept", "", "comma-separated concept names to force, bypassing the occurrence threshold")
 	dryRun := fs.Bool("dry-run", false, "report what would be tagged without writing anything")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	if len(fs.Args()) != 0 || *projectName == "" {
-		return fmt.Errorf("usage: document tag --project NAME [--concept NAME,...] [--dry-run]")
+		return usageErrorf("usage: document tag --project NAME [--concept NAME,...] [--dry-run]")
 	}
 
 	p, err := kb.ProjectByName(*projectName)

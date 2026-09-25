@@ -19,57 +19,73 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.11">knowledge 0.0.11</h2>
-<p>Three new corpus-improvement features, plus a search bug fix – fuzzy
-near-miss tagging, a frontmatter provenance generator, and fuzzy
-candidate clustering, each of which surfaced and fixed a real
-self-contradiction in its own design doc before shipping, verified by
-hand rather than trusting the design’s own worked examples.</p>
-<p><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
-(DR-0032) catches what <code>tag</code>’s exact whole-word matching
-can’t: a typo, plural, or simple tense variant of a known concept’s
-name. Inserts a footnote marker at the near-miss plus a footnote
-definition carrying the canonical <code>[[Concept]]</code>, never
-bracket-wrapping the near-miss text itself, so
-<code>ResolveConceptName</code> can’t mint a duplicate concept from a
-misspelled or inflected form. A follow-up review caught and fixed a real
-corruption bug before release: two near-misses in the same section could
-splice a later footnote marker inside an earlier one’s own definition
-text.</p>
-<p><code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]</code>
-(DR-0033) proposes
-<code>title</code>/<code>author</code>/<code>dateCreated</code>/<code>dateModified</code>/<code>keywords</code>
-from a document’s own prose and git/filesystem provenance – this
-module’s first <code>exec.Command</code> dependency. <code>author</code>
-is a layered signal (a byline in the prose, then git’s earliest-commit
-author, then <code>git config user.name</code>), shown together when
-they disagree rather than collapsed to one guess. A follow-up review
-caught and fixed two bugs: an explicitly-empty frontmatter value locked
-a field from ever being filled in, and <code>--set FIELD=</code>
-silently no-op’d instead of writing an explicit empty value.</p>
-<p>Fuzzy candidate clustering for <code>kb concept suggest</code>
-(DR-0034) merges spelling variants of the same underlying term
-(<code>chunking</code>/<code>chunkings</code>/<code>chunked</code>) into
-one candidate before scoring, not after, so a signal split across
-variants no longer falls individually below the
-occurrence/distinctiveness floor. A candidate fuzzy-close to an
-already-known concept is excluded from candidacy entirely and reported
-separately. <code>--json</code>’s shape changes from a bare array to
-<code>{"candidates": [...], "near_existing": [...]}</code> – a breaking
-change for any existing consumer. Live-smoke-tested against the real
-<code>agents/knowledge.db</code>, which found a flat distance-1
-threshold with no length floor produced heavy false-positive clustering
-on short common words, fixed with a length gate.</p>
-<p><code>kb search TERM</code> threw a raw SQLite error instead of a
-normal no-results outcome for any term containing bare punctuation
-FTS5’s own query grammar treats as significant (a <code>.</code> in a
-version string, the case found). <code>Search</code> now retries once,
-quoting the term as a phrase, but only when the first attempt fails with
-an FTS5 syntax error specifically, so documented raw FTS5 query syntax
-(multi-word AND, quoted phrases, <code>prefix*</code>) keeps working
-unchanged.</p>
-<p>Also includes <code>kb index ROOT --all</code>’s hidden-directory
-pruning fix (DR-0031), shipped just after v0.0.10.</p>
+<h2 id="knowledge-0.0.13">knowledge 0.0.13</h2>
+<p>A sweep for commands that answer a mistake with success. Every verb
+was run with empty, malformed, unknown and surplus input against a copy
+of the real database, and each one that exited 0 for input it did not
+understand, or lost part of it, is fixed, plus a <code>kb search</code>
+bug on hyphenated terms. Several changes are visible to scripts, so read
+the upgrading notes below. The decisions behind them are DR-0040 to
+DR-0044.</p>
+<p>Usage errors now exit 2 (they exited 1; DR-0040), as
+<code>kb -help</code> always documented: an unknown verb, subverb or
+flag, a missing or surplus argument, a malformed id or flag value. Exit
+1 stays for a command line that was fine and a result that was not: not
+found, no results, a value the knowledge base rejects, a database error.
+Unknown flags and surplus arguments are refused instead of dropped
+(DR-0041): of 25 verbs probed, 15 accepted a bogus flag and 19 ignored
+an extra argument, so <code>source add T more words</code> stored the
+title <code>T</code>, <code>record new --title A decision</code> kept
+only <code>A</code>, and <code>project list --json</code> printed plain
+text. A name that begins with a dash now follows <code>--</code>
+(<code>kb project show -- -name</code>).</p>
+<p><code>init</code>, <code>index</code> and <code>merge</code> never
+open the ambient database, and a <code>--db</code> given to them was
+dropped silently (<code>kb --db rt.db init</code> created
+<code>./agents/knowledge.db</code>); it is now refused (DR-0041).
+<code>record list</code> validates its filters (DR-0043), where every
+mistake used to read as <code>no matching records</code>: a
+<code>--status</code>, <code>--kind</code>, <code>--trigger</code>,
+<code>--initiative</code> or <code>--project</code> that nothing carries
+is an error naming what is known, <code>--since</code> must be a real
+date, and <code>--workspace</code> with <code>--project</code> is
+refused. The vocabularies are documented, not enforced, so a value
+outside them that a record really carries still filters.</p>
+<p>Project and concept names are trimmed, and a blank name or
+observation body is refused, in the library as well as the CLI
+(DR-0042): <code>kb project add '  '</code> used to create a project
+named two spaces. That also closes a corruption:
+<code>kb project rename demo ''</code> on a project that owns records
+wrote <code>project: ""</code> into every record, renamed the row to an
+empty string, and left the next ingest failing on
+<code>UNIQUE constraint failed: records.uuid</code>.
+<code>kb merge</code> now checks its inputs before opening them
+(DR-0044). A mistyped <code>-a</code> used to merge an empty database,
+exit 0 and leave a zero-byte file at the typo; a missing, empty or
+directory input, or <code>-a</code> and <code>-b</code> naming the same
+file, is now refused, and a refused merge changes nothing on disk.</p>
+<p><code>kb VERB SUBVERB -help</code> prints the verb’s page and exits 0
+(DR-0041; it printed <code>flag: help requested</code>, or looked up a
+project named <code>-help</code>). <code>kb search</code> no longer
+fails on <code>map-reduce</code>, <code>JSON-L</code> or other
+hyphenated terms, which FTS5 read as a column filter. A flaky import
+test, failing about one run in 40 on a one-second clock race in the test
+rather than in the product, is fixed.</p>
+<p>Upgrading: a script that tested for exit 1 to mean a mistyped command
+should expect 2; one that tested for 1 to mean not found still gets 1.
+<code>--json</code>, <code>--db</code> and <code>--debug</code> go
+before the verb and are refused after it. <code>kb --db PATH init</code>
+becomes <code>kb init PATH</code>. A typo’d <code>record list</code>
+filter now fails where it printed an empty list. Library callers:
+<code>AddProject</code>, <code>AddProjectWithStatus</code>,
+<code>AddConcept</code>, <code>AddConceptWithIdentifier</code>,
+<code>ResolveConceptName</code>, <code>RenameProject</code>,
+<code>RenameProjectRow</code> and <code>RenameConcept</code> trim the
+name and return an error for a blank one, <code>AddObservation</code>
+and <code>AddObservationWithSource</code> return an error for a blank
+body, and <code>CleanName</code> and <code>DistinctRecordValues</code>
+are new. A zero-byte <code>.db</code> left by an earlier failed merge
+can be deleted.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

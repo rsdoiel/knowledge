@@ -102,28 +102,28 @@ func cmdDocumentFrontmatter(kb *knowledge.KnowledgeBase, jsonOut bool, args []st
 	fs.Var(&setFlags, "set", "FIELD=VALUE, repeatable, bypasses signal detection and the absent-only rule")
 	dryRun := fs.Bool("dry-run", false, "preview the write without applying it")
 	if len(args) == 0 {
-		return fmt.Errorf("usage: document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]")
+		return usageErrorf("usage: document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]")
 	}
 	// PATH comes first, flags after -- Go's flag package stops parsing at
 	// the first non-flag token, so PATH must be peeled off before Parse
 	// ever sees it, not left for fs.Args() to return afterward.
 	path := args[0]
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := parseFlags(fs, args[1:]); err != nil {
 		return err
 	}
 	if len(fs.Args()) != 0 {
-		return fmt.Errorf("usage: document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]")
+		return usageErrorf("usage: document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]")
 	}
 
 	setValues := map[string]string{}
 	for _, kv := range setFlags {
 		i := strings.Index(kv, "=")
 		if i <= 0 {
-			return fmt.Errorf("invalid --set value %q, want FIELD=VALUE", kv)
+			return usageErrorf("invalid --set value %q, want FIELD=VALUE", kv)
 		}
 		field, value := kv[:i], kv[i+1:]
 		if !knowledge.IsFrontmatterScalarField(field) {
-			return fmt.Errorf("unknown --set field %q", field)
+			return usageErrorf("unknown --set field %q", field)
 		}
 		setValues[field] = value
 	}
@@ -136,7 +136,7 @@ func cmdDocumentFrontmatter(kb *knowledge.KnowledgeBase, jsonOut bool, args []st
 				continue
 			}
 			if !knowledge.IsFrontmatterScalarField(f) {
-				return fmt.Errorf("unknown --accept field %q", f)
+				return usageErrorf("unknown --accept field %q", f)
 			}
 			acceptFields = append(acceptFields, f)
 		}

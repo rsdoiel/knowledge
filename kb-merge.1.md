@@ -1,6 +1,6 @@
-%kb-merge(1) user manual | version 0.0.12 036bd79
+%kb-merge(1) user manual | version 0.0.13 fd588ef
 % R. S. Doiel
-% 2026-09-23
+% 2026-09-24
 
 # NAME
 
@@ -24,8 +24,13 @@ before ATTACHing, so a database predating decision records (or any other
 table) still merges instead of failing outright.
 
 Unlike every other verb, merge operates entirely on the explicit -a/-b/-out
-paths — it ignores --db and never opens (or creates) the ambient
+paths — a --db is refused, and it never opens (or creates) the ambient
 ./agents/knowledge.db.
+
+Both inputs must exist, be non-empty database files, and be two different
+files; anything else is refused before any file is touched. A mistyped -a
+therefore fails, instead of merging an empty database in its place and
+leaving a zero-byte file at the typo.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a

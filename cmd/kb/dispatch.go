@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 
@@ -29,7 +31,17 @@ func dispatch(verbs map[string]verbFunc, kb *knowledge.KnowledgeBase, dl *DebugL
 		return 2
 	}
 	if err := fn(kb, dl, jsonOut, args[1:], out); err != nil {
+		// A help flag that follows other flags (`project add --status active
+		// -help`) is not caught before the verb runs; the subverb's FlagSet
+		// reports it as ErrHelp. Answer with the verb's page, as for any
+		// other help request, not with the package's "flag: help requested".
+		if errors.Is(err, flag.ErrHelp) && printHelp(out, verb) {
+			return 0
+		}
 		printError(errOut, jsonOut, err)
+		if isUsageError(err) {
+			return 2
+		}
 		return 1
 	}
 	return 0

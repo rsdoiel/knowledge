@@ -16,7 +16,7 @@ func init() {
 
 func cmdSource(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: source <add|list|show|remove|retract|link|check-retractions> ...")
+		return usageErrorf("usage: source <add|list|show|remove|retract|link|check-retractions> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -35,7 +35,7 @@ func cmdSource(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	case "check-retractions":
 		return cmdSourceCheckRetractions(kb, dl, jsonOut, rest, out)
 	default:
-		return fmt.Errorf("unknown source subcommand %q", sub)
+		return usageErrorf("unknown source subcommand %q", sub)
 	}
 }
 
@@ -71,7 +71,10 @@ func parseSourceFlags(args []string) (knowledge.Source, error) {
 		s.IdentifierType, s.IdentifierValue = "url", url
 	}
 	if len(positional) == 0 {
-		return s, fmt.Errorf("source add requires a TITLE")
+		return s, usageErrorf("source add requires a TITLE")
+	}
+	if len(positional) > 1 {
+		return s, usageErrorf("source add takes one TITLE, got %d arguments (quote a multi-word title)", len(positional))
 	}
 	s.Title = positional[0]
 	return s, nil
@@ -80,7 +83,7 @@ func parseSourceFlags(args []string) (knowledge.Source, error) {
 func cmdSourceAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	s, err := parseSourceFlags(args)
 	if err != nil {
-		return fmt.Errorf("usage: source add TITLE [--doi D] [--url U] [--authors A] [--published DATE] [--publisher P] [--rights R] [--version V]: %w", err)
+		return usageErrorf("usage: source add TITLE [--doi D] [--url U] [--authors A] [--published DATE] [--publisher P] [--rights R] [--version V]: %w", err)
 	}
 	id, err := logKBCall(dl, "AddSource", map[string]any{"title": s.Title}, func() (int64, error) {
 		return kb.AddSource(s)
@@ -99,6 +102,10 @@ func cmdSourceAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args 
 }
 
 func cmdSourceList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	args, argErr := plainArgs(args, 0, 0, 0, "usage: source list")
+	if argErr != nil {
+		return argErr
+	}
 	sources, err := logKBCall(dl, "ListSources", nil, kb.ListSources)
 	if err != nil {
 		return err
@@ -165,12 +172,13 @@ func cmdSourceRemove(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, ar
 }
 
 func cmdSourceRetract(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: source retract ID NOTE")
+	args, argErr := plainArgs(args, 2, -1, 1, "usage: source retract ID NOTE")
+	if argErr != nil {
+		return argErr
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid source id %q", args[0])
+		return usageErrorf("invalid source id %q", args[0])
 	}
 	note := strings.Join(args[1:], " ")
 	if err := logKBCallErr(dl, "RetractSource", map[string]any{"id": id, "note": note}, func() error {
@@ -190,24 +198,21 @@ func cmdSourceRetract(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 }
 
 func cmdSourceLink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: source link OBS_ID SOURCE_ID [--relationship R]")
+	relationship := "cited"
+	args, err := splitFlags(args, map[string]*string{"--relationship": &relationship}, nil)
+	if err != nil {
+		return err
+	}
+	if len(args) != 2 {
+		return usageErrorf("usage: source link OBS_ID SOURCE_ID [--relationship R]")
 	}
 	obsID, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid observation id %q", args[0])
+		return usageErrorf("invalid observation id %q", args[0])
 	}
 	sourceID, err := strconv.ParseInt(args[1], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid source id %q", args[1])
-	}
-	relationship := "cited"
-	rest := args[2:]
-	for i := 0; i < len(rest); i++ {
-		if rest[i] == "--relationship" && i+1 < len(rest) {
-			relationship = rest[i+1]
-			i++
-		}
+		return usageErrorf("invalid source id %q", args[1])
 	}
 	if err := logKBCallErr(dl, "LinkObservationSource", map[string]any{"observation_id": obsID, "source_id": sourceID, "relationship": relationship}, func() error {
 		return kb.LinkObservationSource(obsID, sourceID, relationship)
@@ -226,6 +231,10 @@ func cmdSourceLink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 }
 
 func cmdSourceCheckRetractions(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	args, argErr := plainArgs(args, 0, 0, 0, "usage: source check-retractions")
+	if argErr != nil {
+		return argErr
+	}
 	// CheckRetractions writes a human-readable line per DOI checked
 	// directly to its out parameter; suppress that in JSON mode so stdout
 	// stays cleanly parseable, same reasoning as cmdMerge's progressOut.
@@ -267,12 +276,13 @@ func cmdSourceCheckRetractions(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOu
 }
 
 func parseSourceID(args []string, usage string) (int64, error) {
-	if len(args) == 0 {
-		return 0, fmt.Errorf("usage: %s", usage)
+	args, err := plainArgs(args, 1, 1, 1, "usage: "+usage)
+	if err != nil {
+		return 0, err
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("invalid source id %q", args[0])
+		return 0, usageErrorf("invalid source id %q", args[0])
 	}
 	return id, nil
 }

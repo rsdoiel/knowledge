@@ -126,16 +126,36 @@ index
 init
 : create a new, empty workspace — see {app_name}-init(1)
 
+# ARGUMENTS
+
+The global options -json, -db and -debug go before the verb: {app_name}
+-json project list. After the verb they are refused, not ignored. So is any
+other flag a verb does not have, and any surplus argument.
+init, index and merge never open the ambient database, so -db is refused for
+them as well; init takes its target as kb init PATH, merge as -a, -b and -out.
+
+A name that begins with a dash is given after --, as in
+{app_name} project show -- -name, so that it is not read as a flag. Words
+that follow a verb's fixed arguments and are free text (an observation body,
+a project description, a retraction note) are taken as they are, dashes
+included.
+
 # EXIT STATUS
 
 0
 : success
 
 1
-: the verb ran but failed (database error, not found, etc.)
+: the command line was fine and the verb ran but failed: not found, no
+  results, a value the knowledge base rejects (an unknown kind or status), a
+  database error
 
 2
-: usage error (bad flags, unknown verb)
+: usage error: the command line itself is wrong and nothing was attempted.
+  An unknown verb, subverb or flag; a missing or surplus argument; a flag
+  without its value or with one that does not parse; a malformed id; a
+  missing required flag. A script can tell "fix the command" (2) from
+  "handle the result" (1)
 
 # SEE ALSO
 
@@ -709,8 +729,13 @@ before ATTACHing, so a database predating decision records (or any other
 table) still merges instead of failing outright.
 
 Unlike every other verb, merge operates entirely on the explicit -a/-b/-out
-paths — it ignores --db and never opens (or creates) the ambient
+paths — a --db is refused, and it never opens (or creates) the ambient
 ./agents/knowledge.db.
+
+Both inputs must exist, be non-empty database files, and be two different
+files; anything else is refused before any file is touched. A mistyped -a
+therefore fails, instead of merging an empty database in its place and
+leaving a zero-byte file at the typo.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a
@@ -948,7 +973,14 @@ DR-0001. Where a bare id is ambiguous, the command reports the candidates and
 asks for --project or --workspace rather than choosing one.
 
 list
-: print matching records, one per line
+: print matching records, one per line. --status, --kind, --trigger and
+  --initiative filter on those fields and --since DATE (YYYY, YYYY-MM or
+  YYYY-MM-DD) keeps records dated on or after it; filters combine.
+  "no matching records" means a real filter matched nothing. A value that
+  no record carries and the vocabularies below do not list is a typo, and
+  is an error that names what is known. A value outside the vocabularies
+  that some record does carry still filters. --workspace and --project
+  cannot be combined, since workspace-tier records have no project
 
 show
 : print one record with its body and its relations resolved in both
@@ -1209,7 +1241,9 @@ or overwrites data.
 
 # OPTIONS
 
-None beyond the standard options.
+None beyond the standard options. The global -db option does not apply: init
+creates PATH/agents/knowledge.db, so the target is named as the PATH argument,
+and an explicit -db is refused (exit 2) rather than ignored.
 
 # EXAMPLES
 

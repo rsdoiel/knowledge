@@ -38,7 +38,10 @@ see kb-import(1).</p>
 workspace, it reports that and leaves the existing database untouched;
 it never truncates or overwrites data.</p>
 <h1 id="options">OPTIONS</h1>
-<p>None beyond the standard options.</p>
+<p>None beyond the standard options. The global -db option does not
+apply: init creates PATH/agents/knowledge.db, so the target is named as
+the PATH argument, and an explicit -db is refused (exit 2) rather than
+ignored.</p>
 <h1 id="examples">EXAMPLES</h1>
 <pre class="shell"><code>kb init
 kb init ~/NewWorkspace</code></pre>

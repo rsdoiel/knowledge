@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -78,7 +79,7 @@ type recordFlags struct {
  */
 func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("record requires a subverb: list, show, new, set-status, supersede, fmt or concepts")
+		return usageErrorf("record requires a subverb: list, show, new, set-status, supersede, fmt or concepts")
 	}
 	flags, err := parseRecordFlags(args[1:])
 	if err != nil {
@@ -102,7 +103,7 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	case "concepts":
 		return recordConcepts(kb, jsonOut, flags, out)
 	default:
-		return fmt.Errorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt or concepts", args[0])
+		return usageErrorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt or concepts", args[0])
 	}
 }
 
@@ -157,6 +158,12 @@ func toEntry(r knowledge.Record, names map[int64]string) recordListEntry {
 
 // recordList prints the records matching the filter flags.
 func recordList(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
+	if len(f.args) != 0 {
+		return usageErrorf("usage: record list [--project P] [--status S] ... (takes no positional argument, got %q)", f.args[0])
+	}
+	if err := validateRecordFilters(kb, f); err != nil {
+		return err
+	}
 	filter := knowledge.RecordFilter{
 		Project: f.project, Status: f.status, Kind: f.kind,
 		Trigger: f.trigger, Initiative: f.initiative, Since: f.since,
@@ -188,6 +195,131 @@ func recordList(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io
 		fmt.Fprintln(out, "no matching records")
 	}
 	return nil
+}
+
+/** validateRecordFilters refuses a `record list` filter that could only ever answer
+ * "no matching records" because of a mistake, so a typo is not mistaken for an
+ * empty result.
+ *
+ * A malformed --since, or --workspace together with --project (workspace-tier
+ * records have no project), is a mistake in the command line: a usage error.
+ * A --project no project has, or a --status, --kind, --trigger or --initiative
+ * no record carries and the documented vocabulary does not list, names
+ * something that does not exist: a plain error that lists what does. The
+ * vocabularies are documented rather than enforced, so a value outside them
+ * that some record really carries is a real filter and passes. A value inside
+ * a vocabulary passes even when nothing carries it yet: matching nothing is a
+ * legitimate answer for it.
+ *
+ * Parameters:
+ *   kb (*knowledge.KnowledgeBase) — the open knowledge base.
+ *   f  (recordFlags)              — the parsed flags.
+ *
+ * Returns:
+ *   error — nil if every filter is usable.
+ *
+ * Example:
+ *   if err := validateRecordFilters(kb, f); err != nil { return err }
+ */
+func validateRecordFilters(kb *knowledge.KnowledgeBase, f recordFlags) error {
+	if f.workspace && f.project != "" {
+		return usageErrorf("--workspace and --project cannot be combined: workspace-tier records have no project")
+	}
+	if f.since != "" {
+		if err := checkSinceDate(f.since); err != nil {
+			return err
+		}
+	}
+	if f.project != "" {
+		p, err := kb.ProjectByName(f.project)
+		if err != nil {
+			return err
+		}
+		if p == nil {
+			projects, err := kb.Projects()
+			if err != nil {
+				return err
+			}
+			names := make([]string, len(projects))
+			for i, pr := range projects {
+				names[i] = pr.Name
+			}
+			return fmt.Errorf("unknown project %q; known projects: %s", f.project, joinKnown(names))
+		}
+	}
+	for _, c := range []struct {
+		field, plural, value string
+		vocabulary           []string
+	}{
+		{"status", "statuses", f.status, knowledge.RecordStatuses},
+		{"kind", "kinds", f.kind, knowledge.RecordKinds},
+		{"trigger", "triggers", f.trigger, knowledge.RecordTriggers},
+		{"initiative", "initiatives", f.initiative, nil},
+	} {
+		if c.value == "" {
+			continue
+		}
+		carried, err := kb.DistinctRecordValues(c.field)
+		if err != nil {
+			return err
+		}
+		known := append([]string(nil), c.vocabulary...)
+		for _, v := range carried {
+			if !containsString(known, v) {
+				known = append(known, v)
+			}
+		}
+		if !containsString(known, c.value) {
+			return fmt.Errorf("unknown %s %q; known %s: %s", c.field, c.value, c.plural, joinKnown(known))
+		}
+	}
+	return nil
+}
+
+/** checkSinceDate accepts the date forms a record's date column can be compared
+ * against as text: YYYY, YYYY-MM or YYYY-MM-DD, and only real dates.
+ *
+ * Parameters:
+ *   s (string) — the --since value.
+ *
+ * Returns:
+ *   error — a usage error naming --since, or nil.
+ *
+ * Example:
+ *   err := checkSinceDate("2026-09") // nil
+ *   err = checkSinceDate("yesterday") // usage error
+ */
+func checkSinceDate(s string) error {
+	layout := map[int]string{4: "2006", 7: "2006-01", 10: "2006-01-02"}[len(s)]
+	if layout != "" {
+		if _, err := time.Parse(layout, s); err == nil {
+			return nil
+		}
+	}
+	return usageErrorf("invalid --since %q; want YYYY, YYYY-MM or YYYY-MM-DD", s)
+}
+
+func containsString(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// joinKnown renders the values an unknown filter could have meant, capped so
+// a database with hundreds of initiatives does not print hundreds of them. An
+// empty list says so rather than printing nothing.
+func joinKnown(values []string) string {
+	const limit = 20
+	if len(values) == 0 {
+		return "(none recorded)"
+	}
+	if len(values) > limit {
+		return strings.Join(values[:limit], ", ") + fmt.Sprintf(", ... (%d more)", len(values)-limit)
+	}
+	return strings.Join(values, ", ")
 }
 
 // dashIfEmpty renders an empty column as "-", never as spaces, so every
@@ -268,8 +400,8 @@ func projectLabels(records []knowledge.Record, names map[int64]string) []string 
 // recordShow prints one record with its relations resolved in both
 // directions. Only supersedes is stored; superseded_by is its inverse.
 func recordShow(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
-	if len(f.args) < 1 {
-		return fmt.Errorf("record show requires a RECORD_ID")
+	if len(f.args) != 1 {
+		return usageErrorf("usage: record show RECORD_ID")
 	}
 	rec, err := resolveRecord(kb, f.args[0], f)
 	if err != nil {
@@ -335,8 +467,8 @@ func qualify(r knowledge.Record, names map[int64]string) string {
 // `kb observation sources`: read-only visibility into what wikilink-tagging
 // (see wikilink-tagging-design.md) has linked to a record.
 func recordConcepts(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
-	if len(f.args) < 1 {
-		return fmt.Errorf("record concepts requires a RECORD_ID")
+	if len(f.args) != 1 {
+		return usageErrorf("usage: record concepts RECORD_ID")
 	}
 	rec, err := resolveRecord(kb, f.args[0], f)
 	if err != nil {
@@ -461,8 +593,8 @@ func joinNotes(note, addition string) string {
 
 // recordSetStatus writes a record's status to both the file and the database.
 func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
-	if len(f.args) < 2 {
-		return fmt.Errorf("record set-status requires a RECORD_ID and a STATUS")
+	if len(f.args) != 2 {
+		return usageErrorf("usage: record set-status RECORD_ID STATUS")
 	}
 	id, status := f.args[0], f.args[1]
 	rec, err := resolveRecord(kb, id, f)
@@ -508,8 +640,8 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 // multi-decision episode while the rest stand, which is why superseded_by
 // never implies status superseded.
 func recordSupersede(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
-	if len(f.args) < 2 {
-		return fmt.Errorf("record supersede requires a NEW and an OLD record id")
+	if len(f.args) != 2 {
+		return usageErrorf("usage: record supersede NEW OLD")
 	}
 	newer, err := resolveRecord(kb, f.args[0], f)
 	if err != nil {

@@ -40,7 +40,10 @@ func cmdExport(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "export only this project and everything reachable from it")
 	outPath := fs.String("out", "", "write to this path instead of stdout")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noExtraArgs(fs, "usage: export [-project NAME] [-out FILE]"); err != nil {
 		return err
 	}
 
@@ -81,7 +84,10 @@ func cmdImport(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	inPath := fs.String("in", "", "read from this path instead of stdin")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noExtraArgs(fs, "usage: import [-in FILE]"); err != nil {
 		return err
 	}
 

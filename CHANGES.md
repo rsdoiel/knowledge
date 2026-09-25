@@ -3,6 +3,175 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.13 — 2026-09-24
+
+A sweep for commands that answer a mistake with success. Every verb was run
+with empty, malformed, unknown and surplus input against a copy of the real
+database, and each one that exited 0 for input it had not understood, or lost
+part of it, is fixed, along with the `kb search` hyphen bug found while testing
+Harvey's `/kb search`. Several changes are visible to scripts: usage errors now
+exit 2, unknown flags and surplus arguments are refused instead of dropped, and
+three verbs that ignored `--db` now refuse it. Read **Upgrade notes** before
+updating a script. The decisions behind the changes are DR-0040 to DR-0044.
+Every fix below was written red first, and the command-line changes were
+checked by running a build from before the change alongside the new one, on a
+copy of the real database.
+
+### Added
+
+- `CleanName(kind, name)`, exported (DR-0042): trims surrounding whitespace from a
+  project or concept name and refuses one that is empty afterwards. It is the
+  one definition of a usable name, shared by the library and the CLI.
+- `DistinctRecordValues(field)` (DR-0043): the values a record's `status`, `kind`,
+  `trigger` or `initiative` actually takes in this database, sorted and
+  without the empty string. The field name is spliced into SQL, so only those
+  four are accepted. It exists so `record list` can tell a typo from a real
+  filter that matches nothing.
+- An ARGUMENTS section in `kb(1)` (DR-0041): global options go before the verb,
+  a name that begins with a dash follows `--`, and free text after a verb's
+  fixed arguments is taken as typed. EXIT STATUS now says exactly what 1 and 2
+  mean.
+
+### Changed
+
+- **Usage errors exit 2** (they exited 1; DR-0040). `kb -help` had always
+  documented 2 for "usage error", but only an unknown verb produced it, so a
+  script could not tell "fix the command" from "handle the result". Exit 2 now
+  means the command line itself is wrong and nothing was attempted: an unknown
+  verb, subverb or flag, a missing or surplus argument, a flag without its value
+  or with one that does not parse, a malformed id, a missing required flag. Exit
+  1 stays for a command line that was fine and a result that was not: not found,
+  no results, a value the knowledge base rejects (an unknown kind or status), a
+  database error. Over 67 commands run through the old and new binaries, 35
+  changed from 1 to 2, all of them real mistakes, and the other 32 kept their
+  codes. About 75 error sites were converted; a mechanical edit of mine dropped
+  a word from one message and was caught by auditing the diff.
+- **Unknown flags and surplus arguments are refused** (they were dropped;
+  DR-0041). Of 25 verbs probed, 15 accepted a bogus flag and 19 ignored an extra
+  argument; all 25 now refuse both. The damage was real: `source add T more
+  words` stored the title `T` and lost the rest, `record new --title A decision`
+  kept only `A`, `source link 1 1 --relationship` with no value linked anyway,
+  and `project list --json` printed plain text and exited 0, ignoring the
+  option. A global option after the verb is now refused with a message saying it
+  goes before it (`kb --json project list`). Verbs with plain positionals check
+  their fixed arguments for flag shape and their count; FlagSet verbs check
+  their leftovers; the `record` verbs check for exactly the arguments they take.
+  **A name that begins with a dash now needs `--`** on the verbs that take one
+  (`kb project show -- -name`), as `concept delete` already did. Free-text tails
+  are unchanged: `project set-description P a -x b`, a retraction note and an
+  observation body may contain dashes. Over 65 commands the old and new binaries
+  left an identical database and identical exit codes, apart from the two
+  intended cases.
+- **`init`, `index` and `merge` refuse `--db`** (DR-0041). None of them opens
+  the ambient database, and `--db` was dropped silently: `kb --db rt.db init`
+  reported success and created `./agents/knowledge.db`, and `rt.db` never
+  existed. Refused rather than honoured because `--db` names a database file
+  while `init` creates a workspace, and any verb that does use the database
+  already open-or-creates an explicit path. `kb --db x init -help` still prints
+  the page.
+- **`record list` validates its filters** (DR-0043). Every mistake used to read
+  as `no matching records`. A `--status`, `--kind`, `--trigger` or
+  `--initiative` that no record carries and the vocabulary does not list is now
+  an error naming what is known; `--project` naming no project is an error
+  listing the known ones; `--since` must be a real `YYYY`, `YYYY-MM` or
+  `YYYY-MM-DD`; and `--workspace` with `--project` is refused, since
+  workspace-tier records have no project. The vocabularies are documented rather
+  than enforced, so a value outside them that some record does carry still
+  filters, and a value inside them that matches nothing is still a valid empty
+  answer. On a copy of the real 44-record database, 16 valid filters were
+  byte-identical and 9 mistakes became errors.
+- **Project and concept names are trimmed, and a blank name or observation body
+  is refused** (DR-0042). `kb project add '  '` created a project named two
+  spaces, `kb concept add ''` an empty concept, and `kb observation add ... ''`
+  an empty body; all three then showed up in every list, and `' harvey '` was a
+  second project beside `harvey`. This is in the library, so ingest, Harvey and
+  a script get it too. An observation body is only refused when blank and is
+  otherwise stored exactly as given. `import` and `merge` use raw SQL and are
+  unchanged, so an existing database with such rows still loads.
+- `kb search ''` and `kb search ' '` are usage errors (exit 2, DR-0040,
+  DR-0041), not `no results`.
+
+### Fixed
+
+- **`kb project rename demo ''` corrupted a project that owns records**
+  (DR-0042). The command rewrites every owned record's `project:` frontmatter
+  before the library sees the new name, so a blank name wrote `project: ""` into
+  each file, renamed the row to an empty string, and the next ingest hit `UNIQUE
+  constraint failed: records.uuid`, the deadlock DR-0026 exists to prevent. The
+  name is now cleaned before any file is staged, so the files and the row cannot
+  disagree about it, and `--dry-run` refuses too. Found while verifying the name
+  fix on a real scratch corpus.
+- **`kb merge` succeeded on inputs that do not exist** (DR-0044). `kb merge -a x
+  -b y -out z` with neither present exited 0, created zero-byte `x` and `y`, and
+  wrote a schema-only `z`, so a mistyped `-a` merged an empty database and
+  reported success. Cause: each input was opened with `sql.Open` and a pragma,
+  and SQLite creates a missing file. Now a missing input (exit 1, naming the
+  flag and path), a directory or other non-file, and a zero-byte file are
+  refused before anything is opened, as is `-a` and `-b` naming the same file by
+  any spelling or symlink (exit 2). A directory used to fail with SQLite's
+  `unable to open database file: out of memory (14)`. A refused merge changes
+  nothing on disk, and a test compares the directory before and after. A
+  zero-byte main file with a non-empty `-wal` is not refused; that state could
+  not be produced with this driver, so it is a defensive allowance, not an
+  observed case. A real merge of the actual database with an older backup gives
+  an identical 14-table summary and identical merged content (518 rows
+  compared).
+- **`kb VERB SUBVERB -help` did something different for every verb** (DR-0041).
+  `project add -help` printed `kb: flag: help requested` and exited 1, `project
+  show -help` looked up a project named `-help`, `document frontmatter -help`
+  tried to open a file called `-help`, and `record list -help` said `unknown
+  flag`. It now prints the verb's page and exits 0, before any database is
+  opened, so it works outside a workspace and creates nothing. A help flag after
+  other flags (`project add --status active -help`) is answered too. It is not a
+  scan of every argument: `kb observation add --project p note pass -h to it`
+  still records its body. Checked over 33 subverbs in three spellings.
+- **`kb search` failed on any term containing a hyphen** (`map-reduce`,
+  `JSON-L`, `cross-machine`) with `SQL logic error: no such column: reduce`,
+  because FTS5 reads `a-b` as `a` minus column `b`. v0.0.11's punctuation fix
+  retried only on a syntax error, so a hyphen slipped past it. `Search` now
+  retries once as a quoted phrase on any failure of the raw term; a trailing `*`
+  stays outside the quotes so prefix search still works, and the documented
+  syntax (AND, phrases, NOT, OR, prefix) is unchanged. Of 23 terms run against a
+  copy of the real database, 11 gave identical results and 12 that errored now
+  return results (`map-reduce` 4, `JSON-L` 17, `cross-machine` 30). Harvey's
+  `/kb search` calls the same function and is fixed with it.
+- `TestImportJSONL_SameNameDifferentUUIDMergesUnderLocalProject` failed about
+  one run in 40 (test only; no product change). It asserted that the local
+  project's description wins a tie, but `updated_at` has one-second resolution
+  and DR-0025's last-writer-wins correctly lets the incoming row win when the
+  clock ticks between the two creations. Both timestamps are now pinned, and
+  the two cases that used to happen only by accident, newer incoming wins and
+  an exact tie keeps the local row, are tests of their own. The old test failed
+  3 of 3 with a forced tick; the new ones pass with it, and 600 runs are
+  clean.
+
+### Upgrade notes
+
+For scripts:
+
+- Exit 2 now means a usage error. A script that treated any non-zero as failure
+  is unaffected. One that tested for exactly 1 to mean "not found" still gets 1
+  for a lookup that found nothing, and now gets 2 for a mistyped command line.
+- `--json`, `--db` and `--debug` go before the verb. After it they are refused,
+  where they used to be ignored (`--json` after the verb printed plain text).
+- A name that begins with a dash needs `--`: `kb project show -- -name`.
+- `kb --db PATH init`, `index` and `merge` are refused. Use `kb init PATH`, and
+  `merge`'s `-a`, `-b` and `-out`.
+- `record list` exits 1 for a typo'd `--status`, `--kind`, `--trigger`,
+  `--initiative` or `--project`, and 2 for a malformed `--since`. A script that
+  relied on those returning an empty list should check for the value first.
+- `kb merge` fails on a missing or empty input instead of merging an empty
+  database. A zero-byte `.db` left by an earlier failed merge can be deleted.
+
+For library callers:
+
+- `AddProject`, `AddProjectWithStatus`, `AddConcept`, `AddConceptWithIdentifier`,
+  `ResolveConceptName`, `RenameProject`, `RenameProjectRow` and `RenameConcept`
+  trim the name and return an error for a blank one. `AddObservation` and
+  `AddObservationWithSource` return an error for a blank body. A caller that
+  passed untrimmed names now gets the trimmed name's row, not a new one.
+- New exports: `CleanName` and `DistinctRecordValues`.
+
 ## v0.0.12 — 2026-09-23
 
 The corpus-improvement toolchain moves out of `cmd/kb` and into the

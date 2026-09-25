@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 )
@@ -19,13 +20,16 @@ import (
 //
 // An unrecognized "-"-prefixed argument, or a recognized string flag with no
 // following value, is an error. boolFlags may be nil when a caller has none.
+// An undeclared -h, -help or --help is a request for help, not a typo, and is
+// reported as flag.ErrHelp so dispatch can print the verb's page, exactly as
+// it does for the FlagSet-based subverbs.
 func splitFlags(args []string, strFlags map[string]*string, boolFlags map[string]*bool) ([]string, error) {
 	var positional []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if target, ok := strFlags[arg]; ok {
 			if i+1 >= len(args) {
-				return nil, fmt.Errorf("%s requires a value", arg)
+				return nil, usageErrorf("%s requires a value", arg)
 			}
 			*target = args[i+1]
 			i++
@@ -35,8 +39,11 @@ func splitFlags(args []string, strFlags map[string]*string, boolFlags map[string
 			*target = true
 			continue
 		}
+		if isHelpFlag(arg) {
+			return nil, flag.ErrHelp
+		}
 		if strings.HasPrefix(arg, "-") {
-			return nil, fmt.Errorf("unknown flag %q", arg)
+			return nil, withGlobalHint(fmt.Sprintf("unknown flag %q", arg), []string{arg})
 		}
 		positional = append(positional, arg)
 	}

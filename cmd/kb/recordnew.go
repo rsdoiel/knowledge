@@ -47,8 +47,8 @@ const slugMaxLen = 50
  *   err := recordFmt(kb, false, recordFlags{args: []string{"CMTools/decisions"}}, os.Stdout)
  */
 func recordFmt(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
-	if len(f.args) < 1 {
-		return fmt.Errorf("record fmt requires a PATH")
+	if len(f.args) != 1 {
+		return usageErrorf("usage: record fmt PATH")
 	}
 	dir, err := filepath.Abs(f.args[0])
 	if err != nil {
@@ -137,14 +137,17 @@ func recordFmt(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
  *   err := recordNew(kb, false, flags, os.Stdout) // writes decisions/0170-....md
  */
 func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
+	if len(f.args) != 0 {
+		return usageErrorf("usage: record new --title T --trigger X (--project P | --workspace) (takes no positional argument, got %q)", f.args[0])
+	}
 	if f.title == "" {
-		return fmt.Errorf("record new requires --title")
+		return usageErrorf("record new requires --title")
 	}
 	if f.trigger == "" {
-		return fmt.Errorf("record new requires --trigger; the empty-trigger concession is for converted records only")
+		return usageErrorf("record new requires --trigger; the empty-trigger concession is for converted records only")
 	}
 	if f.project == "" && !f.workspace {
-		return fmt.Errorf("record new requires --project P or --workspace")
+		return usageErrorf("record new requires --project P or --workspace")
 	}
 
 	scope := "project"

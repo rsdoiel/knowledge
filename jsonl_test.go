@@ -339,20 +339,33 @@ func TestImportJSONL_ReimportIsNoOp(t *testing.T) {
 	}
 }
 
-func TestImportJSONL_SameNameDifferentUUIDMergesUnderLocalProject(t *testing.T) {
-	// Two independently-created databases both have a project named
-	// "shared" but with different uuids (no cross-machine sync has
-	// happened yet) -- importing kbB's export into kbA must attach kbB's
-	// observation to kbA's existing local "shared" row, not create a
-	// second "shared" project or drop the observation.
+// importSameNameProject builds two independently created databases that each
+// hold a project named "shared" under different uuids (no cross-machine sync
+// has happened), gives kbB an observation, pins each project's updated_at to
+// the stamps given, imports kbB's export into kbA, and returns kbA's single
+// "shared" project.
+//
+// The stamps are pinned rather than left to CURRENT_TIMESTAMP on purpose.
+// updated_at has one-second resolution and is what a last-writer-wins import
+// compares (DR-0025), so whether kbA's or kbB's description survives depends
+// on which second each AddProject landed in. Left to the clock, a test that
+// asserts a winner fails whenever the second ticks between the two calls,
+// about one run in forty. Whatever the stamps, the project must not be
+// duplicated and kbB's observation must attach to the local row.
+func importSameNameProject(t *testing.T, stampLocal, stampIncoming string) (*KnowledgeBase, *Project) {
+	t.Helper()
 	kbA := openTestKB(t)
 	if _, err := kbA.AddProject("shared", "kbA's version"); err != nil {
 		t.Fatalf("AddProject on kbA: %v", err)
 	}
-
 	kbB := openTestKB(t)
 	if _, err := kbB.AddProject("shared", "kbB's version"); err != nil {
 		t.Fatalf("AddProject on kbB: %v", err)
+	}
+	for kb, stamp := range map[*KnowledgeBase]string{kbA: stampLocal, kbB: stampIncoming} {
+		if _, err := kb.db.Exec(`UPDATE projects SET updated_at = ? WHERE name = 'shared'`, stamp); err != nil {
+			t.Fatalf("pin updated_at: %v", err)
+		}
 	}
 	pB, err := kbB.ProjectByName("shared")
 	if err != nil || pB == nil {
@@ -381,15 +394,44 @@ func TestImportJSONL_SameNameDifferentUUIDMergesUnderLocalProject(t *testing.T) 
 	if err != nil || pA == nil {
 		t.Fatalf("ProjectByName on kbA: %v", err)
 	}
-	if pA.Description != "kbA's version" {
-		t.Errorf("kbA local project description = %q, want %q (local row must win, not be overwritten)", pA.Description, "kbA's version")
-	}
 	obs, err := kbA.Observations(pA.ID)
 	if err != nil {
 		t.Fatalf("kbA.Observations: %v", err)
 	}
 	if len(obs) != 1 || obs[0].Body != "observed on kbB" {
 		t.Errorf("kbA 'shared' observations = %+v, want kbB's observation attached to the local project row", obs)
+	}
+	return kbA, pA
+}
+
+func TestImportJSONL_SameNameDifferentUUIDMergesUnderLocalProject(t *testing.T) {
+	// Importing kbB's export into kbA must attach kbB's observation to kbA's
+	// existing local "shared" row, not create a second "shared" project or
+	// drop the observation. The local row is the newer one here, so its
+	// description survives (see importSameNameProject for why this is pinned).
+	_, pA := importSameNameProject(t, "2020-01-02 00:00:00", "2020-01-01 00:00:00")
+	if pA.Description != "kbA's version" {
+		t.Errorf("kbA local project description = %q, want %q (the local row is newer, so it must win)", pA.Description, "kbA's version")
+	}
+}
+
+// The other half of DR-0025's last-writer-wins: when the incoming row is the
+// newer one its description replaces the local one, and it still merges under
+// the single local row instead of creating a second project. This used to
+// happen only by accident, whenever the clock ticked between the two creations.
+func TestImportJSONL_SameNameDifferentUUIDNewerIncomingDescriptionWins(t *testing.T) {
+	_, pA := importSameNameProject(t, "2020-01-01 00:00:00", "2020-01-02 00:00:00")
+	if pA.Description != "kbB's version" {
+		t.Errorf("kbA project description = %q, want %q (the incoming row is newer, so it must win)", pA.Description, "kbB's version")
+	}
+}
+
+// A tie keeps the local row: the comparison is strictly "incoming is newer".
+// Two projects created within the same second tie, which is the common case.
+func TestImportJSONL_SameNameDifferentUUIDTieKeepsTheLocalDescription(t *testing.T) {
+	_, pA := importSameNameProject(t, "2020-01-01 00:00:00", "2020-01-01 00:00:00")
+	if pA.Description != "kbA's version" {
+		t.Errorf("kbA project description = %q, want %q (equal timestamps keep the local row)", pA.Description, "kbA's version")
 	}
 }
 

@@ -16,7 +16,7 @@ func init() {
 
 func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: concept <add|list|rename|delete|suggest> ...")
+		return usageErrorf("usage: concept <add|list|rename|delete|suggest> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -31,7 +31,7 @@ func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 	case "suggest":
 		return cmdConceptSuggest(kb, dl, jsonOut, rest, out)
 	default:
-		return fmt.Errorf("unknown concept subcommand %q", sub)
+		return usageErrorf("unknown concept subcommand %q", sub)
 	}
 }
 
@@ -40,17 +40,19 @@ func cmdConceptAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	fs.SetOutput(io.Discard)
 	identifierType := fs.String("identifier-type", "", "e.g. doi, orcid, ror")
 	identifierValue := fs.String("identifier-value", "", "normalized identifier value")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	rest := fs.Args()
 	if len(rest) == 0 {
-		return fmt.Errorf("usage: concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]")
+		return usageErrorf("usage: concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]")
 	}
-	name := rest[0]
+	name, err := knowledge.CleanName("concept", rest[0])
+	if err != nil {
+		return err
+	}
 	desc := strings.Join(rest[1:], " ")
 	var id int64
-	var err error
 	if *identifierType != "" || *identifierValue != "" {
 		id, err = logKBCall(dl, "AddConceptWithIdentifier", map[string]any{"name": name, "identifier_type": *identifierType, "identifier_value": *identifierValue}, func() (int64, error) {
 			return kb.AddConceptWithIdentifier(name, desc, *identifierType, *identifierValue)
@@ -77,11 +79,16 @@ func cmdConceptAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 // project rename, nothing refuses this beyond a name collision: a concept
 // has no corpus of external files to desync.
 func cmdConceptRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) != 2 {
-		return fmt.Errorf("usage: concept rename OLD NEW")
+	args, argErr := plainArgs(args, 2, 2, 2, "usage: concept rename OLD NEW")
+	if argErr != nil {
+		return argErr
 	}
-	old, new := args[0], args[1]
-	err := logKBCallErr(dl, "RenameConcept", map[string]any{"old": old, "new": new}, func() error {
+	old := args[0]
+	new, err := knowledge.CleanName("concept", args[1])
+	if err != nil {
+		return err
+	}
+	err = logKBCallErr(dl, "RenameConcept", map[string]any{"old": old, "new": new}, func() error {
 		return kb.RenameConcept(old, new)
 	})
 	if err != nil {
@@ -98,6 +105,10 @@ func cmdConceptRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 }
 
 func cmdConceptList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	args, argErr := plainArgs(args, 0, 0, 0, "usage: concept list")
+	if argErr != nil {
+		return argErr
+	}
 	concepts, err := logKBCall(dl, "Concepts", nil, kb.Concepts)
 	if err != nil {
 		return err
@@ -128,11 +139,11 @@ func cmdConceptSuggest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, 
 	fs.SetOutput(io.Discard)
 	projectName := fs.String("project", "", "scope to one project")
 	limit := fs.Int("limit", 20, "maximum number of suggestions")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	if len(fs.Args()) != 0 {
-		return fmt.Errorf("usage: concept suggest [--project NAME] [--limit N]")
+		return usageErrorf("usage: concept suggest [--project NAME] [--limit N]")
 	}
 
 	suggestions, err := kb.SuggestConcepts(*projectName, *limit)
@@ -199,12 +210,15 @@ func cmdConceptDelete(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 	}
 	var force, dryRun bool
 	positional, err := splitFlags(flagArgs, nil, map[string]*bool{"--force": &force, "--dry-run": &dryRun})
+	if errors.Is(err, flag.ErrHelp) {
+		return err
+	}
 	if err != nil {
-		return fmt.Errorf("%v; %s", err, usage)
+		return usageErrorf("%v; %s", err, usage)
 	}
 	positional = append(positional, afterDash...)
 	if len(positional) != 1 {
-		return fmt.Errorf("%s", usage)
+		return usageErrorf("%s", usage)
 	}
 	name := positional[0]
 

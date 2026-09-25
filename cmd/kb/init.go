@@ -48,7 +48,7 @@ func cmdInit(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []str
 	case 1:
 		root = args[0]
 	default:
-		return fmt.Errorf("init takes a single optional PATH, got %d arguments", len(args))
+		return usageErrorf("init takes a single optional PATH, got %d arguments", len(args))
 	}
 
 	absRoot, err := filepath.Abs(root)

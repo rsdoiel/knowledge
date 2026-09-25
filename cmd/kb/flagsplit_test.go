@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"reflect"
 	"testing"
 )
@@ -87,5 +89,20 @@ func TestSplitFlags_NoArgsReturnsNoPositionals(t *testing.T) {
 	}
 	if len(positional) != 0 {
 		t.Errorf("positional = %v, want none", positional)
+	}
+}
+
+// A bare help flag that is not a declared flag is a help request, reported as
+// flag.ErrHelp so dispatch can answer with the verb's page. Any other unknown
+// flag is still an ordinary error.
+func TestSplitFlags_HelpFlagReportsErrHelp(t *testing.T) {
+	for _, h := range []string{"-h", "-help", "--help"} {
+		_, err := splitFlags([]string{"--dry-run", h}, nil, map[string]*bool{"--dry-run": new(bool)})
+		if !errors.Is(err, flag.ErrHelp) {
+			t.Errorf("splitFlags(--dry-run %s) error = %v, want flag.ErrHelp", h, err)
+		}
+	}
+	if _, err := splitFlags([]string{"--bogus"}, nil, nil); err == nil || errors.Is(err, flag.ErrHelp) {
+		t.Errorf("splitFlags(--bogus) error = %v, want an ordinary unknown-flag error", err)
 	}
 }

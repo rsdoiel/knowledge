@@ -18,7 +18,7 @@ func init() {
 
 func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: project <add|list|show|concepts|set-status|set-description|rename> ...")
+		return usageErrorf("usage: project <add|list|show|concepts|set-status|set-description|rename> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -37,7 +37,7 @@ func cmdProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 	case "rename":
 		return cmdProjectRename(kb, dl, jsonOut, rest, out)
 	default:
-		return fmt.Errorf("unknown project subcommand %q", sub)
+		return usageErrorf("unknown project subcommand %q", sub)
 	}
 }
 
@@ -45,17 +45,19 @@ func cmdProjectAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	fs := flag.NewFlagSet("project add", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	status := fs.String("status", "", "concept, active, paused, or concluded (default: active)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	rest := fs.Args()
 	if len(rest) == 0 {
-		return fmt.Errorf("usage: project add [--status concept|active|paused|concluded] NAME [DESCRIPTION]")
+		return usageErrorf("usage: project add [--status concept|active|paused|concluded] NAME [DESCRIPTION]")
 	}
-	name := rest[0]
+	name, err := knowledge.CleanName("project", rest[0])
+	if err != nil {
+		return err
+	}
 	desc := strings.Join(rest[1:], " ")
 	var id int64
-	var err error
 	if *status != "" {
 		id, err = logKBCall(dl, "AddProjectWithStatus", map[string]any{"name": name, "description": desc, "status": *status}, func() (int64, error) {
 			return kb.AddProjectWithStatus(name, desc, *status)
@@ -79,8 +81,9 @@ func cmdProjectAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 }
 
 func cmdProjectSetStatus(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: project set-status NAME STATUS")
+	args, argErr := plainArgs(args, 2, 2, 2, "usage: project set-status NAME STATUS")
+	if argErr != nil {
+		return argErr
 	}
 	name, status := args[0], args[1]
 	err := logKBCallErr(dl, "SetProjectStatus", map[string]any{"name": name, "status": status}, func() error {
@@ -103,8 +106,9 @@ func cmdProjectSetStatus(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool
 // description works the same in both places. A bare NAME is a usage error
 // rather than a clear: clearing takes an explicit empty string.
 func cmdProjectSetDescription(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: project set-description NAME DESCRIPTION")
+	args, argErr := plainArgs(args, 2, -1, 1, "usage: project set-description NAME DESCRIPTION")
+	if argErr != nil {
+		return argErr
 	}
 	name := args[0]
 	desc := strings.Join(args[1:], " ")
@@ -142,14 +146,21 @@ func cmdProjectRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 	fs.SetOutput(io.Discard)
 	root := fs.String("root", "", "workspace root record paths are relative to (default: inferred from the database path)")
 	dryRun := fs.Bool("dry-run", false, "report what a rename would rewrite without writing anything")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	rest := fs.Args()
 	if len(rest) != 2 {
-		return fmt.Errorf("usage: project rename [--root PATH] [--dry-run] OLD NEW")
+		return usageErrorf("usage: project rename [--root PATH] [--dry-run] OLD NEW")
 	}
-	old, new := rest[0], rest[1]
+	old := rest[0]
+	// Cleaned before anything is staged: this verb rewrites every owned
+	// record's project: frontmatter before the library sees NEW, so a padded
+	// name would reach the files but not the database row (DR-0026).
+	new, err := knowledge.CleanName("project", rest[1])
+	if err != nil {
+		return err
+	}
 
 	p, err := kb.ProjectByName(old)
 	if err != nil {
@@ -286,6 +297,10 @@ func cmdProjectRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 }
 
 func cmdProjectList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	args, argErr := plainArgs(args, 0, 0, 0, "usage: project list")
+	if argErr != nil {
+		return argErr
+	}
 	projects, err := logKBCall(dl, "Projects", nil, kb.Projects)
 	if err != nil {
 		return err
@@ -304,8 +319,9 @@ func cmdProjectList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 }
 
 func cmdProjectShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: project show NAME")
+	args, argErr := plainArgs(args, 1, 1, 1, "usage: project show NAME")
+	if argErr != nil {
+		return argErr
 	}
 	name := args[0]
 	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": name}, func() (*knowledge.Project, error) {
@@ -328,8 +344,9 @@ func cmdProjectShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 }
 
 func cmdProjectConcepts(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: project concepts NAME")
+	args, argErr := plainArgs(args, 1, 1, 1, "usage: project concepts NAME")
+	if argErr != nil {
+		return argErr
 	}
 	name := args[0]
 	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": name}, func() (*knowledge.Project, error) {

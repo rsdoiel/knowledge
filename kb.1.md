@@ -1,6 +1,6 @@
-%kb(1) user manual | version 0.0.12 036bd79
+%kb(1) user manual | version 0.0.13 fd588ef
 % R. S. Doiel
-% 2026-09-23
+% 2026-09-24
 
 # NAME
 
@@ -122,16 +122,36 @@ index
 init
 : create a new, empty workspace — see kb-init(1)
 
+# ARGUMENTS
+
+The global options -json, -db and -debug go before the verb: kb
+-json project list. After the verb they are refused, not ignored. So is any
+other flag a verb does not have, and any surplus argument.
+init, index and merge never open the ambient database, so -db is refused for
+them as well; init takes its target as kb init PATH, merge as -a, -b and -out.
+
+A name that begins with a dash is given after --, as in
+kb project show -- -name, so that it is not read as a flag. Words
+that follow a verb's fixed arguments and are free text (an observation body,
+a project description, a retraction note) are taken as they are, dashes
+included.
+
 # EXIT STATUS
 
 0
 : success
 
 1
-: the verb ran but failed (database error, not found, etc.)
+: the command line was fine and the verb ran but failed: not found, no
+  results, a value the knowledge base rejects (an unknown kind or status), a
+  database error
 
 2
-: usage error (bad flags, unknown verb)
+: usage error: the command line itself is wrong and nothing was attempted.
+  An unknown verb, subverb or flag; a missing or surplus argument; a flag
+  without its value or with one that does not parse; a malformed id; a
+  missing required flag. A script can tell "fix the command" (2) from
+  "handle the result" (1)
 
 # SEE ALSO
 

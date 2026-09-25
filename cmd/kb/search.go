@@ -17,9 +17,14 @@ func init() {
 
 func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: search TERM")
+		return usageErrorf("usage: search TERM")
 	}
 	term := strings.Join(args, " ")
+	// A blank term matches nothing by construction: the command line is wrong,
+	// not the result empty.
+	if strings.TrimSpace(term) == "" {
+		return usageErrorf("usage: search TERM")
+	}
 	results, err := logKBCall(dl, "Search", map[string]any{"term": term}, func() ([]knowledge.KBSearchResult, error) {
 		return kb.Search(term)
 	})
@@ -53,6 +58,10 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 }
 
 func cmdSummary(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	args, argErr := plainArgs(args, 0, 0, 0, "usage: summary")
+	if argErr != nil {
+		return argErr
+	}
 	s, err := logKBCall(dl, "Summary", nil, kb.Summary)
 	if err != nil {
 		return err
@@ -70,7 +79,10 @@ func cmdFormat(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	fs := flag.NewFlagSet("format", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "project name; omit for all projects")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noExtraArgs(fs, "usage: format [--project NAME]"); err != nil {
 		return err
 	}
 	var projectID int64

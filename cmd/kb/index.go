@@ -83,17 +83,17 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 			all = true
 		default:
 			if strings.HasPrefix(arg, "-") {
-				return fmt.Errorf("unknown flag %q", arg)
+				return usageErrorf("unknown flag %q", arg)
 			}
 			if dir != "" {
-				return fmt.Errorf("index takes a single PATH, got %q and %q", dir, arg)
+				return usageErrorf("index takes a single PATH, got %q and %q", dir, arg)
 			}
 			dir = arg
 		}
 	}
 	if all {
 		if dir == "" {
-			return fmt.Errorf("index --all requires a ROOT; see kb help index")
+			return usageErrorf("index --all requires a ROOT; see kb help index")
 		}
 		if toStdout {
 			return fmt.Errorf("--all and --stdout cannot be combined")
@@ -101,7 +101,7 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 		return cmdIndexAll(dl, jsonOut, dir, check, out)
 	}
 	if dir == "" {
-		return fmt.Errorf("index requires a PATH; see kb help index")
+		return usageErrorf("index requires a PATH; see kb help index")
 	}
 	if check && toStdout {
 		return fmt.Errorf("--check and --stdout cannot be combined")

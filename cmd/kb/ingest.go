@@ -167,11 +167,11 @@ func parseIngestFlags(args []string) (path, root string, dryRun bool, err error)
 	}
 	switch len(positional) {
 	case 0:
-		return "", "", false, fmt.Errorf("ingest requires a PATH; see kb help ingest")
+		return "", "", false, usageErrorf("ingest requires a PATH; see kb help ingest")
 	case 1:
 		return positional[0], root, dryRun, nil
 	default:
-		return "", "", false, fmt.Errorf("ingest takes a single PATH, got %q and %q", positional[0], positional[1])
+		return "", "", false, usageErrorf("ingest takes a single PATH, got %q and %q", positional[0], positional[1])
 	}
 }
 

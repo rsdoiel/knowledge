@@ -104,6 +104,293 @@
 
 ## To explore
 
+### Bugs collected for v0.0.13
+
+Found 2026-09-24 by probing every verb with empty, malformed and unknown
+input against a scratch copy of the real database (v0.0.12 plus `fd588ef`).
+None fixed yet; each wants a test written red first. The export/import round
+trip was also checked and is clean: 14 tables' row counts identical.
+
+- [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** *Fix as landed:* new
+  exported `knowledge.CleanName(kind, name)` (trim, refuse empty), applied in
+  `AddProject`, `AddProjectWithStatus`, `AddConceptWithIdentifier` (so
+  `AddConcept` too), `ResolveConceptName`, `RenameProject`,
+  `RenameProjectRow` and `RenameConcept`; `AddObservationWithSource` refuses a
+  whitespace-only body but stores a real body exactly as given. The legacy
+  experiments-to-projects migration calls the unexported `addProject` so a
+  strange old name cannot fail `Open`. `import` and `merge` use raw SQL and are
+  deliberately untouched: a historical row must still load. The CLI cleans
+  the name before echoing it, and `project rename` cleans NEW *before staging
+  any file*. **Found while verifying, worse than the report:** `kb project
+  rename demo ''` on a project that owns records went through. It rewrote the
+  record to `project: ""`, renamed the row to `""`, and the next ingest hit
+  the `records.uuid` UNIQUE deadlock DR-0026 exists to prevent. (A padded NEW
+  was consistent in v0.0.12, padded in both the files and the row; trimming in
+  the library alone would have put it in the files but not the row, so NEW is
+  cleaned before any file is staged. An earlier line here called that a
+  v0.0.12 bug; it was not.) The blank name is refused and the padded one
+  trimmed now (checked old vs new binary on a real scratch corpus). 23 tests, 18 red
+  first (`blankname_test.go` at the root and in `cmd/kb`); the other 5 are
+  regression guards (untrimmed body, refusal already provided by the
+  library). Real-corpus ingest compared old vs new binary: 302 dump rows,
+  identical. Man pages not yet updated to mention the trimming. *Original
+  report:* **`project add`, `concept add` and `observation add` accept an empty or
+  whitespace-only name/body, and store names untrimmed.** `kb project add ''`
+  and `kb project add '  '` both exit 0 and create two distinct projects
+  (ids 15 and 16, names `""` and `"  "`); `kb concept add ''` creates an empty
+  concept; `kb observation add --project P note ''` stores an empty body. All
+  three then show up in every list. `' harvey '` is stored as a separate
+  project from `harvey`, and a multi-line name is accepted. `record new`
+  already refuses an empty `--title`, so the guard exists in one verb only.
+  Likely fix: trim and reject empty in the library's `AddProject`,
+  `AddConcept` and `AddObservation`, so `import`, `merge` and ingest are
+  covered too, not only the CLI.
+
+- [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** *Fix as landed:*
+  `wantsVerbHelp` (`cmd/kb/main.go`) answers a help flag directly after the
+  subverb (and after `document review`'s own subverb) with the verb's page,
+  before any database is opened, so it works outside a workspace and creates
+  nothing. A help flag after other flags is caught two ways: a FlagSet subverb
+  returns `flag.ErrHelp`, which `dispatch` now turns into the page (exit 0);
+  the hand-rolled parsers share `splitFlags`, which now reports an undeclared
+  `-h`/`-help`/`--help` as `flag.ErrHelp` too (`concept delete` wrapped its
+  error with `%v`, dropping the chain; now passes it through). Deliberately
+  *not* a scan of every argument: `kb observation add --project p note pass -h
+  to it` must record its body, and a test pins that. A genuinely unknown flag
+  still errors. Checked live: all 33 subverbs x 3 spellings (99 runs) print the
+  right page, exit 0, empty stderr, no database created. `subverbhelp_test.go`
+  (every help case red first: 119 subtests for the first change, 7 more plus a
+  `splitFlags` unit test for the second) and 2 guard tests that already passed. *Not
+  changed:* `kb bogus add -help` still fails as an unknown verb (exit 1 outside a
+  workspace, 2 inside). *Original report:* **A subverb's `-help` is not handled, so `kb VERB SUBVERB -help` does
+  something different for each verb.** Top-level `kb VERB -help` prints the
+  manual, as `kb -help` promises, but one level down: `project add`,
+  `observation add`, `document tag` and `concept suggest` print the Go flag
+  package's `kb: flag: help requested` and exit 1; `project show -help` looks
+  up a project named `-help`; `project list -help` ignores it and lists;
+  `document frontmatter -help` tries to open a file called `-help`;
+  `record show|list|new`, `document list|ingest` and `concept delete` say
+  `unknown flag "-help"`. Likely fix: treat `flag.ErrHelp` (and a bare `-help`
+  in the hand-rolled parsers) as "print the verb's page, exit 0".
+
+- [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** *Fix as landed:* a
+  `usageError` type (`cmd/kb/usage.go`: `usageErrorf`, `wrapUsage`,
+  `isUsageError`, `parseFlags`); `dispatch` exits 2 for one and 1 for anything
+  else. About 75 sites converted: every `usage:` message, unknown
+  subverb/flag, `X requires ...`, malformed ids, every FlagSet parse failure
+  (via `parseFlags`), `splitFlags`' unknown flag and missing value, and the
+  commands' own flag-value checks (`--confidence`, `--set`, `--accept`,
+  surplus path arguments to `index`, `init`, `ingest`). **Decision taken, flag
+  if you disagree:** a value the library rejects after the command line
+  parsed (`observation add` with an unknown kind, `project set-status` with an
+  unknown status) stays exit 1; and `unknown project`/`unknown concept` from
+  `--project`/`--concept` are lookups, so exit 1 like `project show nosuch`.
+  `kb -help`'s EXIT STATUS now says exactly this (`helptext.go` and `kb.1.md`;
+  the HTML pages are not regenerated). Checked live, old vs new binary over 67
+  commands: 35 changed, all 1 to 2 and all real command-line mistakes; the 32
+  others unchanged (every success still 0, every not-found/no-results still 1).
+  `usageexit_test.go`: 51 cases red first, 8 more mutation-verified, plus
+  guards for runtime failures, `--json` and the exits that were already 2.
+  My own mechanical edit dropped a word from one message ("document review
+  subverb"); caught by auditing the diff and fixed. *Original report:* **Usage
+  errors exit 1, but `kb -help` documents 2 for "usage error (bad flags,
+  unknown verb)".** Only an unknown top-level verb exits 2. A missing
+  argument (`search`, `project show`, `observation add`), an unknown flag
+  (`observation add --bogus`) and a bad flag value (`concept suggest --limit
+  abc`) all exit 1, indistinguishable from "the verb ran and found nothing".
+  Either the code or the EXIT STATUS section is wrong; the workspace
+  convention (root `CLAUDE.md`) is 2 for usage errors.
+
+- [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** *Fix as landed:* the
+  survey was wider than the three cases reported. Of 25 verbs probed, 15
+  accepted a bogus flag and 19 dropped a surplus argument (recounted from the
+  old binary; an earlier figure of 13 here was wrong); now all 25 refuse both
+  with exit 2. Three families. Verbs with plain positionals checked only
+  `len(args) < N`: new `plainArgs(args, min, max, fixed, usage)` (`usage.go`)
+  rejects flag-shaped arguments among the fixed ones and enforces the count,
+  with `--` as the terminator so a dash-leading name still works. FlagSet
+  verbs never looked at `fs.Args()`: new `noExtraArgs`. The `record` verbs
+  checked `<` where they needed `!=`. Also folded in: `source add T more
+  words` silently stored the title "T" and lost the rest, `record new ...
+  --title A decision` kept only "A", `source link ... --relationship` with no
+  value or with a stray argument linked anyway (now `splitFlags`), `search ''`
+  and `search ' '` are usage errors instead of "no results". **Behaviour
+  change to know about:** a name that begins with a dash now needs `--` on the
+  verbs that take a name (`kb project show -- -name`); concept delete already
+  worked that way (DR-0039). Free-text tails (`project set-description P a -x
+  b`, `source retract 1 note -x`, observation bodies) are unchanged. `project
+  list --json` used to print plain text and exit 0, ignoring `--json`; it is
+  now refused with a hint that global options go before the verb. Documented
+  in a new ARGUMENTS section of `kb(1)` (`helptext.go`, `kb.1.md`; HTML not
+  regenerated). Checked old vs new binary over 65 valid commands: identical
+  database and identical exit codes except the two intended (`--json` after
+  the verb, and a word-split title). `ignoredinput_test.go`: every behaviour
+  case red first against a non-validating stub. *Original report:* **Some
+  verbs silently ignore what they do not understand.** `kb project
+  list -bogus` and `kb project list extra args` exit 0 and list; `kb project
+  show x y` looks up `x` and drops `y`. `kb search ''` exits 1 with `no results
+  for ""` where a usage error is the honest answer.
+
+- [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** *Fix as landed:* the
+  same silent drop hit `index` and `merge`, which share init's branch in
+  `mainRun` (none of the three opens the ambient database), so an explicit
+  `--db`/`-db` is now refused for all three with exit 2 and a message naming
+  where the target really goes (`kb init PATH`; index reads record files;
+  merge takes `-a`, `-b`, `-out`); `dbOptionRefusal` in `cmd/kb/main.go`.
+  Refused rather than honoured because `--db` names a database *file* while
+  init creates a *workspace* (`PATH/agents/knowledge.db`), and any verb that
+  does use the database already open-or-creates an explicit path (DR-0022), so
+  nothing is lost. A help request still wins (`kb --db x init -help` prints the
+  page). Documented in `kb-init(1)` and the ARGUMENTS section of `kb(1)`
+  (HTML not regenerated). Checked live, old vs new binary: old exited 0 for all
+  three and created the wrong files, new exits 2 and creates nothing; plain
+  `init`, `index` and `--db X project list` unchanged. `dbflag_test.go`, red
+  first. *Original report:* **`kb --db PATH init` ignores `--db` and creates
+  `./agents/knowledge.db` instead.** `init` takes its own `PATH` argument and never reads the global
+  `--db`, which `kb-init(1)` implies but nowhere says, so `kb --db rt.db init`
+  reports success while creating a database somewhere the caller did not
+  name. Likely fix: refuse `--db` with `init` and name `kb init PATH`.
+
+- [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** *Fix as landed:* wider
+  than reported: every `record list` filter answered a mistake with "no
+  matching records". `validateRecordFilters` (`cmd/kb/record.go`) now runs
+  before the query. **The rule that mattered:** the status/kind/trigger
+  vocabularies are documented, not enforced, so a record can legitimately carry
+  a status outside them; rejecting every out-of-vocabulary value would have made
+  such records unlistable. So a value is an error only if it is neither in the
+  vocabulary nor carried by any record, and the message lists what is known.
+  A real value that matches nothing (`--status rejected` on a database with no
+  rejected record) stays a valid, empty answer. New library query
+  `DistinctRecordValues(field)` (whitelisted to status, kind, trigger,
+  initiative, since the name is spliced into SQL). `--project` naming no project
+  is an error listing the known ones (exit 1, a lookup); an existing project
+  with no records is still empty and exit 0. `--since` must be a real YYYY,
+  YYYY-MM or YYYY-MM-DD (exit 2; `--since yesterday` used to compare as text
+  and match nothing); `--workspace` with `--project` is exit 2, since
+  workspace-tier records have no project. Validation lives in the CLI, not in
+  `ListRecords`, which the library and harvey also call. Checked live on a copy
+  of the real 44-record database, old vs new, over 25 filter combinations: the
+  16 valid ones byte-identical, the 9 mistakes now errors. Documented under
+  `list` in `kb-record(1)` (HTML not regenerated). One wording bug of mine
+  ("known statuss") caught in that run and fixed test-first. Real data note:
+  no record in this database carries an initiative, so `--initiative X` is
+  always an error here, which is accurate. `recordfilters_test.go`,
+  `recordvalues_test.go`, red first. *Original report:* **`kb record list
+  --status bogus` and `--project nosuch` exit 0 with `no matching records`,** where `observation list --project nosuch` and `document
+  list --project nosuch` both fail with a not-found error. An unknown status
+  or project is a typo the caller wants told about, not an empty result.
+
+- [x] **FIXED 2026-09-24 (test only; no product change).** *Fix as landed:* a
+  helper `importSameNameProject(t, stampLocal, stampIncoming)` in
+  `jsonl_test.go` pins both projects' `updated_at` explicitly (the idiom the
+  DR-0025 tests already use), so the outcome no longer depends on which second
+  each `AddProject` landed in. The original test now uses a *newer local* row,
+  and the two neighbouring cases that used to happen only by accident are
+  tests of their own: newer incoming wins, and an exact tie keeps the local
+  row (which pins the strict `>` in `jsonl.go`). Verified: the old test failed
+  3 of 3 with a forced 1.1 s tick between the creations; all three new tests
+  pass with the same tick; three mutations of the comparison (`>=`, never, always)
+  are each caught by exactly the test that names them; 600 focused runs and 200
+  runs of the whole import/merge set are clean (the old test failed 1 in 40 and
+  1 in 150). Swept for the same assumption elsewhere: a scan for tests that
+  build two databases, cross-import or merge them, assert a value and never
+  back-date found only this one (the other match, `Records_UnionAcceptance`,
+  has empty descriptions on both sides and asserts on records), and 150 runs of
+  every import/merge/export test found no other failure. 25 full runs of the
+  root package and 8 of `cmd/kb` also passed, which on their own would have
+  proved little for a 1-in-40 flake. *Original report:* **Flaky test:
+  `TestImportJSONL_SameNameDifferentUUIDMergesUnderLocalProject`
+  (`jsonl_test.go`) fails about 1 run in 40.** Found 2026-09-24 in a full
+  `go test ./...` that had passed minutes earlier with no change to the root
+  package (`-count=40` reproduced one failure: `kbA local project description =
+  "kbB's version", want "kbA's version"`). Cause, confirmed: the test creates
+  kbA's `shared` project and then kbB's, and `updated_at` is
+  `CURRENT_TIMESTAMP` at one-second resolution. Usually the two tie and the
+  local row wins, which is what the test asserts. When the clock ticks between
+  the two `AddProject` calls kbB is genuinely newer and DR-0025's
+  last-writer-wins correctly lets it win. Forcing a 1.1 s gap made the flip
+  happen every time. So the product is right and the test's premise is wrong
+  one run in forty. Likely fix: set both rows' `updated_at` explicitly (kbA
+  newer or equal) instead of relying on wall-clock ties, and add a sibling
+  test for the newer-incoming-wins case that is currently only accidental. Check the
+  other `jsonl_test.go` and `knowledge_merge_test.go` cases that build two
+  databases back to back for the same assumption.
+
+- [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** *Fix as landed:* cause
+  confirmed: `checkpointAndCopy` opens each input with `sql.Open` and runs a
+  pragma, and SQLite creates a file that is not there. `checkMergeInputs`
+  (`cmd/kb/merge.go`) now runs before anything opens them and refuses: a
+  missing input (exit 1, naming the flag and path), a directory or other
+  non-file (it used to fail with SQLite's misleading `unable to open database
+  file: out of memory (14)`), a zero-byte file (exactly what the old behaviour
+  left behind), and `-a` and `-b` naming the same file by any spelling or
+  symlink (exit 2; the "merge" was a copy, and a repeated path is almost
+  certainly a typo, compared with `os.SameFile`). A refused merge changes
+  nothing on disk, and a test asserts the directory listing is identical
+  before and after. **One allowance I could not verify:** a zero-byte main
+  file with a non-empty `-wal` is not refused, on the theory that a WAL
+  database may hold data only in its sidecar. Probing showed a WAL database's
+  main file is at least one page from the moment WAL mode is set, so I could
+  not produce that state; it is kept as a defensive allowance (refusing a file
+  that might hold real data is the worse mistake) and the comments say so.
+  Checked live, old vs new binary: the six bad-input cases (five exited 0, one
+  gave the misleading message) now fail cleanly and leave no files; a real merge
+  of the actual database with an older backup gives an identical 14-table
+  summary and identical merged content (518 rows compared). (My first content
+  comparison hashed the empty string for every table because of a bad query;
+  caught by the constant hash and redone.) Also corrected `kb-merge(1)`, which
+  still said merge "ignores --db" (it is refused since the `--db` fix).
+  `mergeinputs_test.go`, red first. *Original report:* **`kb merge` succeeds on
+  input paths that do not exist, and leaves empty files behind.** Found 2026-09-24 while checking surplus arguments:
+  `kb merge -a x -b y -out z` with neither `x` nor `y` present exits 0, prints
+  the per-table summary, creates zero-byte `x` and `y` (SQLite opens a missing
+  path and creates it) and writes a schema-only `z`. A mistyped `-a` therefore
+  merges an empty database into the real one and reports success. Likely fix:
+  stat both inputs first and refuse a missing one (exit 1, naming the path),
+  with a test that no file is created. Not fixed with the ignored-input work;
+  it is a missing-file check, not an argument-shape one.
+
+- [ ] **Revisit exit codes greater than 1.** Filed 2026-09-24 at RSDOIEL's
+  request, as something useful to explore later, not a bug. `kb` exits 0, 1 or
+  2 and nothing else. DR-0040 (accepted) settled the split, 2 for a mistake in
+  the command line and 1 for everything else, and left these open, so this
+  starts from them rather than reopening it:
+
+  - **Should 1 be split further?** Today "not found", "no results", a value the
+    library rejects and a database or file error all exit 1. A script that needs
+    to tell "the record is not there" from "the database is unreadable" has to
+    parse stderr. Candidates are `sysexits.h` (64 usage, 65 data, 66 no input,
+    74 I/O), which DR-0040 set aside because the published contract is 0, 1, 2;
+    or a smaller step, such as one code for "found nothing" and another for "could
+    not run". The question to answer first is which distinctions a real script
+    branches on, not which are available.
+  - **The workspace convention disagrees.** The root `CLAUDE.md` (written for the
+    Deno tools) says 1 when a search-style tool finds nothing and 2 on a usage or
+    I/O error. `kb` keeps file and database errors at 1, as `kb -help` has said
+    since v0.0.1. Decide whether the two should agree, and which moves. Moving
+    `kb`'s I/O errors to 2 would collide with its own usage code.
+  - **A value the library rejects** (an unknown observation kind or project
+    status) exits 1 because the check lives in the library. Making it 2 wants a
+    typed invalid-value error from the library, and a decision on which library
+    errors count. `merge -a x -b x` is 2 and a missing `-a` is 1; worth checking
+    that the whole set still reads as consistent once this is on the table.
+  - **Nothing enforces the classification.** A new verb that returns a plain
+    `fmt.Errorf` for a bad argument exits 1 again, silently. A test that runs
+    every registered verb with a bogus flag and a surplus argument and asserts 2
+    would make DR-0040 and DR-0041 permanent, and is worth having whatever is
+    decided about the codes themselves.
+
+  Any change here is a breaking change for scripts: it needs an upgrade note, and
+  because DR-0040 is accepted it wants a new record that supersedes or amends it,
+  not an edit.
+
+- [ ] **Low priority, possibly by design: no validation on free-text-looking
+  fields.** `source add T --published notadate` and `--url 'not a url'` and an
+  empty `source add ''` title all succeed; `record new --trigger bogus`
+  succeeds silently. Records' vocabularies are documented rather than
+  enforced (see the `cancelled` item), so the trigger case may be intended;
+  the source fields want a decision on whether a date must parse.
+
 - [x] **FIXED 2026-09-24 (unreleased, for v0.0.13).** **`kb search` fails on any term containing a hyphen** (`map-reduce`, `records-portability`, `cross-machine`, `JSON-L`, `spot-check`), with `SQL logic error: no such column: reduce (1)`. Found 2026-09-24 in v0.0.12 (and v0.0.11) while live-testing harvey's learning mode; confirmed against the real database with the installed `kb`. Cause (unverified in code, consistent with every failure): FTS5 reads `a-b` as `a` minus column `b`. v0.0.11's punctuation fix (`c702c9d`) only retries with the term quoted when the first attempt fails with an *FTS5 syntax error*; a hyphen raises a different error, `no such column`, so it is never retried. Dots (`v0.0.11`) work and hyphens do not, which is why the v0.0.11 fix looked complete. Hyphenated names are common here (concepts such as `map-reduce`, `harness-engineering`, `scholarly-provenance`), and harvey's `/kb search` goes through the same `Search`. Likely fix: also retry on `no such column` (or quote the term up front whenever it contains anything but letters, digits and the documented operators), with a test written red first for each hyphenated case above. **Fix as landed:** `Search` now retries once as a quoted phrase when the raw term fails for *any* reason (hyphen and colon give `no such column`, an unbalanced quote gives `unterminated string`, the rest `fts5: syntax error`), not only on a syntax error; a trailing `*` stays outside the quotes so prefix search still works. Six tests in `knowledge_test.go` (`TestSearch_*`), five red first; the last pins the documented syntax (AND, phrase, order, prefix, NOT, OR) unchanged. Checked with a built `kb` against a copy of the real database: 23 terms, 11 identical to v0.0.12 (all documented syntax, dots, `C++`, apostrophes), 12 that errored now return results (`map-reduce` 4, `records-portability` 9, `JSON-L` 17, `cross-machine` 30, ...) or a clean "no results", none that worked changed. Not yet in a release; the v0.0.13 CHANGES entry is RSDOIEL's step.
 
 - [x] **FIXED 2026-09-23 (DR-0037).** **`document frontmatter` prints `known-concept proposals` in a different order every run.** Found 2026-09-23 by comparing two builds: the same binary, same file, six runs gave six different orderings (same items each time). Cause: `EligibleTagConcepts` (`documenttag.go`, moved from `cmd/kb` in L2) builds its result by ranging over a map, so the order is unspecified, and `knownKeywordProposals` passes it straight to the report. Same class as the `excludeNearExisting` tie-break bug fixed before v0.0.11. Likely fix: `sort.Strings` the result, with a test written red first. Not fixed inside L3 because L1-L3 are pure moves.

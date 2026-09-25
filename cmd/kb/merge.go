@@ -31,11 +31,14 @@ func cmdMerge(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 	bPath := fs.String("b", "", "path to the second knowledge.db")
 	outPath := fs.String("out", "", "path for the merged knowledge.db (must not exist)")
 	force := fs.Bool("force", false, "resolve name/uuid collisions by reconciling b's identity to a's, instead of aborting")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
-	if *aPath == "" || *bPath == "" || *outPath == "" {
-		return fmt.Errorf("usage: merge -a PATH -b PATH -out PATH [-force]")
+	if *aPath == "" || *bPath == "" || *outPath == "" || fs.NArg() > 0 {
+		return usageErrorf("usage: merge -a PATH -b PATH -out PATH [-force]")
+	}
+	if err := checkMergeInputs(*aPath, *bPath); err != nil {
+		return err
 	}
 
 	// Progress text (collision-reconciliation notice, per-table summary)
@@ -207,4 +210,78 @@ func copyFile(srcPath, dstPath string) error {
 	defer dst.Close()
 	_, err = io.Copy(dst, src)
 	return err
+}
+
+/** checkMergeInput refuses a merge input that is not an existing, non-empty
+ * knowledge base file, before anything opens it. Opening is what used to go
+ * wrong: runMerge checkpoints each input with sql.Open, and SQLite creates a
+ * file that is not there, so a mistyped -a merged an empty database and
+ * reported success, leaving a zero-byte file at the typo.
+ *
+ * A zero-byte file is refused too, since that is exactly what the old
+ * behaviour left behind. The exception is one with data in its -wal sidecar,
+ * which merge would checkpoint before it copies. That is a defensive allowance,
+ * not an observed case: with this driver a WAL database's main file is at least
+ * one page from the moment WAL mode is set, so no such state was produced, but
+ * refusing a file that might hold real data is the worse mistake.
+ *
+ * Parameters:
+ *   flagName (string) — "-a" or "-b"; only used to name the input in the error.
+ *   path     (string) — the input path as given.
+ *
+ * Returns:
+ *   error — nil, or a message saying the input does not exist, is a
+ *           directory or other non-file, or is empty.
+ *
+ * Example:
+ *   if err := checkMergeInput("-a", "agents/knowledge.db"); err != nil { return err }
+ */
+func checkMergeInput(flagName, path string) error {
+	info, err := os.Stat(path)
+	switch {
+	case os.IsNotExist(err):
+		return fmt.Errorf("merge input %s: %s does not exist", flagName, path)
+	case err != nil:
+		return fmt.Errorf("merge input %s: %w", flagName, err)
+	case info.IsDir():
+		return fmt.Errorf("merge input %s: %s is a directory, not a knowledge base", flagName, path)
+	case !info.Mode().IsRegular():
+		return fmt.Errorf("merge input %s: %s is not a regular file", flagName, path)
+	case info.Size() == 0:
+		if wal, err := os.Stat(path + "-wal"); err == nil && wal.Size() > 0 {
+			return nil
+		}
+		return fmt.Errorf("merge input %s: %s is empty (0 bytes), not a knowledge base", flagName, path)
+	}
+	return nil
+}
+
+/** checkMergeInputs validates both merge inputs and that they are two
+ * different files. Naming one file twice is a slip of the fingers, and the
+ * "merge" would just be a copy, so it is a usage error. Files are compared
+ * with os.SameFile, so ./a.db, an absolute path and a symlink to it all count.
+ *
+ * Parameters:
+ *   aPath (string) — the -a input.
+ *   bPath (string) — the -b input.
+ *
+ * Returns:
+ *   error — from checkMergeInput, or a usage error if -a and -b are one file.
+ *
+ * Example:
+ *   if err := checkMergeInputs("a.db", "b.db"); err != nil { return err }
+ */
+func checkMergeInputs(aPath, bPath string) error {
+	if err := checkMergeInput("-a", aPath); err != nil {
+		return err
+	}
+	if err := checkMergeInput("-b", bPath); err != nil {
+		return err
+	}
+	infoA, errA := os.Stat(aPath)
+	infoB, errB := os.Stat(bPath)
+	if errA == nil && errB == nil && os.SameFile(infoA, infoB) {
+		return usageErrorf("-a and -b are the same file (%s): nothing to merge", aPath)
+	}
+	return nil
 }

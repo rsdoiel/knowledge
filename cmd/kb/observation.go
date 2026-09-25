@@ -16,7 +16,7 @@ func init() {
 
 func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: observation <add|list|show|update|sources> ...")
+		return usageErrorf("usage: observation <add|list|show|update|sources> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -31,7 +31,7 @@ func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 	case "sources":
 		return cmdObservationSources(kb, dl, jsonOut, rest, out)
 	default:
-		return fmt.Errorf("unknown observation subcommand %q", sub)
+		return usageErrorf("unknown observation subcommand %q", sub)
 	}
 }
 
@@ -40,12 +40,12 @@ func cmdObservationAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, 
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "project name (required)")
 	sourceDOI := fs.String("source-doi", "", "normalized DOI of the source paper")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	rest := fs.Args()
 	if *project == "" || len(rest) < 2 {
-		return fmt.Errorf("usage: observation add --project NAME KIND BODY...")
+		return usageErrorf("usage: observation add --project NAME KIND BODY...")
 	}
 	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": *project}, func() (*knowledge.Project, error) {
 		return kb.ProjectByName(*project)
@@ -84,11 +84,14 @@ func cmdObservationList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 	fs := flag.NewFlagSet("observation list", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "project name (required)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noExtraArgs(fs, "usage: observation list --project NAME"); err != nil {
 		return err
 	}
 	if *project == "" {
-		return fmt.Errorf("usage: observation list --project NAME")
+		return usageErrorf("usage: observation list --project NAME")
 	}
 	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": *project}, func() (*knowledge.Project, error) {
 		return kb.ProjectByName(*project)
@@ -130,12 +133,13 @@ type observationDetail struct {
 }
 
 func cmdObservationShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: observation show ID")
+	args, argErr := plainArgs(args, 1, 1, 1, "usage: observation show ID")
+	if argErr != nil {
+		return argErr
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid observation id %q", args[0])
+		return usageErrorf("invalid observation id %q", args[0])
 	}
 	o, err := logKBCall(dl, "ObservationByID", map[string]any{"id": id}, func() (*knowledge.Observation, error) {
 		return kb.ObservationByID(id)
@@ -182,11 +186,11 @@ func cmdObservationShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 // row plus this edge.
 func cmdObservationUpdate(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: observation update ID BODY...")
+		return usageErrorf("usage: observation update ID BODY...")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid observation id %q", args[0])
+		return usageErrorf("invalid observation id %q", args[0])
 	}
 	body := strings.Join(args[1:], " ")
 
@@ -218,12 +222,13 @@ func cmdObservationUpdate(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut boo
 }
 
 func cmdObservationSources(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: observation sources ID")
+	args, argErr := plainArgs(args, 1, 1, 1, "usage: observation sources ID")
+	if argErr != nil {
+		return argErr
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid observation id %q", args[0])
+		return usageErrorf("invalid observation id %q", args[0])
 	}
 	sources, err := logKBCall(dl, "ObservationSources", map[string]any{"observation_id": id}, func() ([]knowledge.Source, error) {
 		return kb.ObservationSources(id)
