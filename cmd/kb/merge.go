@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -138,7 +137,7 @@ func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Wri
 			}
 			formatDivergences(&msg, divergences)
 			msg.WriteString("aborting: resolve collisions or pass -force to reconcile b's identity to a's for each one")
-			return nil, 0, divergences, errors.New(msg.String())
+			return nil, 0, divergences, dataErrorf("%s", msg.String())
 		}
 		fmt.Fprintf(out, "%d name/uuid collision(s) found:\n", len(collisions))
 		for _, c := range collisions {
@@ -243,18 +242,18 @@ func checkMergeInput(flagName, path string) error {
 	info, err := os.Stat(path)
 	switch {
 	case os.IsNotExist(err):
-		return fmt.Errorf("merge input %s: %s does not exist", flagName, path)
+		return noInputf("merge input %s: %s does not exist", flagName, path)
 	case err != nil:
 		return fmt.Errorf("merge input %s: %w", flagName, err)
 	case info.IsDir():
-		return fmt.Errorf("merge input %s: %s is a directory, not a knowledge base", flagName, path)
+		return noInputf("merge input %s: %s is a directory, not a knowledge base", flagName, path)
 	case !info.Mode().IsRegular():
-		return fmt.Errorf("merge input %s: %s is not a regular file", flagName, path)
+		return noInputf("merge input %s: %s is not a regular file", flagName, path)
 	case info.Size() == 0:
 		if wal, err := os.Stat(path + "-wal"); err == nil && wal.Size() > 0 {
-			return fmt.Errorf("merge input %s: %s is empty (0 bytes), not a knowledge base; its %s-wal was left untouched", flagName, path, path)
+			return dataErrorf("merge input %s: %s is empty (0 bytes), not a knowledge base; its %s-wal was left untouched", flagName, path, path)
 		}
-		return fmt.Errorf("merge input %s: %s is empty (0 bytes), not a knowledge base", flagName, path)
+		return dataErrorf("merge input %s: %s is empty (0 bytes), not a knowledge base", flagName, path)
 	}
 	return nil
 }

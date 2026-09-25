@@ -419,7 +419,7 @@ var fountainAnnotationTypes = map[int]bool{
 func segmentFountain(src []byte) ([]DocumentSection, map[string]string, error) {
 	doc, err := fountain.Parse(src)
 	if err != nil {
-		return nil, nil, fmt.Errorf("knowledge: parse fountain: %w", err)
+		return nil, nil, invalidf("knowledge: parse fountain: %w", err)
 	}
 	titlePage := map[string]string{}
 	for _, e := range doc.TitlePage {
@@ -572,7 +572,7 @@ func ParseDocumentFile(path, formatOverride string) (*ParsedDocument, error) {
 		format = detectFormat(path)
 	}
 	if format == "pdf" {
-		return nil, fmt.Errorf("knowledge: %s: pdf documents are not yet supported (no text-extraction path exists)", path)
+		return nil, invalidf("knowledge: %s: pdf documents are not yet supported (no text-extraction path exists)", path)
 	}
 
 	pd := &ParsedDocument{Format: format, Checksum: checksum(data)}
@@ -730,7 +730,7 @@ func (kb *KnowledgeBase) PromoteDocumentSummary(sectionID int64) error {
 		sectionID,
 	).Scan(&status, &summaryBody, &heading, &level, &documentID)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("knowledge: no document section with id %d", sectionID)
+		return notFoundf("knowledge: no document section with id %d", sectionID)
 	}
 	if err != nil {
 		return err

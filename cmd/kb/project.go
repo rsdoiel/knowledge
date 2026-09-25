@@ -167,14 +167,14 @@ func cmdProjectRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("knowledge: project %q not found", old)
+		return notFoundf("knowledge: project %q not found", old)
 	}
 	existing, err := kb.ProjectByName(new)
 	if err != nil {
 		return err
 	}
 	if existing != nil {
-		return fmt.Errorf("knowledge: project %q already exists", new)
+		return negativef("knowledge: project %q already exists", new)
 	}
 
 	records, err := kb.RecordsByProject(p.ID)
@@ -331,7 +331,7 @@ func cmdProjectShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("project %q not found", name)
+		return notFoundf("project %q not found", name)
 	}
 	if jsonOut {
 		return printJSON(out, p)
@@ -356,7 +356,7 @@ func cmdProjectConcepts(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("project %q not found", name)
+		return notFoundf("project %q not found", name)
 	}
 	concepts, err := logKBCall(dl, "ProjectConcepts", map[string]any{"project_id": p.ID}, func() ([]knowledge.Concept, error) {
 		return kb.ProjectConcepts(p.ID)

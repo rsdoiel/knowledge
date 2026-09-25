@@ -54,14 +54,14 @@ func cmdLinkProject(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("project %q not found", args[0])
+		return notFoundf("project %q not found", args[0])
 	}
 	c, err := conceptByName(kb, dl, args[1])
 	if err != nil {
 		return err
 	}
 	if c == nil {
-		return fmt.Errorf("concept %q not found", args[1])
+		return notFoundf("concept %q not found", args[1])
 	}
 	if err := logKBCallErr(dl, "LinkProjectConcept", map[string]any{"project_id": p.ID, "concept_id": c.ID}, func() error {
 		return kb.LinkProjectConcept(p.ID, c.ID)
@@ -92,7 +92,7 @@ func cmdLinkObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 		return err
 	}
 	if c == nil {
-		return fmt.Errorf("concept %q not found", args[1])
+		return notFoundf("concept %q not found", args[1])
 	}
 	if err := logKBCallErr(dl, "LinkObservationConcept", map[string]any{"observation_id": obsID, "concept_id": c.ID}, func() error {
 		return kb.LinkObservationConcept(obsID, c.ID)

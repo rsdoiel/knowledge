@@ -152,7 +152,7 @@ func cmdDocumentReviewList(kb *knowledge.KnowledgeBase, jsonOut bool, args []str
 	if projectName != "" {
 		p, err := kb.ProjectByName(projectName)
 		if err != nil || p == nil {
-			return fmt.Errorf("unknown project %q", projectName)
+			return notFoundf("unknown project %q", projectName)
 		}
 		projectID = p.ID
 	}
@@ -211,14 +211,14 @@ func cmdDocumentIngest(kb *knowledge.KnowledgeBase, jsonOut bool, args []string,
 
 	p, err := kb.ProjectByName(project)
 	if err != nil || p == nil {
-		return fmt.Errorf("unknown project %q", project)
+		return notFoundf("unknown project %q", project)
 	}
 
 	summary, err := kb.IngestDocument(p.ID, path, knowledge.DocumentIngestOptions{
 		Title: title, Format: format, DryRun: dryRun,
 	})
 	if err != nil {
-		return err
+		return asContent(err)
 	}
 
 	if jsonOut {
@@ -249,7 +249,7 @@ func cmdDocumentList(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, o
 	if projectName != "" {
 		p, err := kb.ProjectByName(projectName)
 		if err != nil || p == nil {
-			return fmt.Errorf("unknown project %q", projectName)
+			return notFoundf("unknown project %q", projectName)
 		}
 		projectID = p.ID
 	}
@@ -291,7 +291,7 @@ func cmdDocumentShow(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, o
 		return err
 	}
 	if doc == nil {
-		return fmt.Errorf("no document with id %d", docID)
+		return notFoundf("no document with id %d", docID)
 	}
 	sections, err := kb.DocumentSections(docID)
 	if err != nil {

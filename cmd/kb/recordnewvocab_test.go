@@ -62,8 +62,10 @@ func TestCmdRecord_NewRefusesUnknownTriggerAndKind(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error = %v, want it to contain %q", err, tc.want)
 			}
-			if isUsageError(err) {
-				t.Errorf("error %v is a usage error; an unknown value is a lookup that found nothing (exit 1), as for record list", err)
+			// A value being written, not searched for: a usage error here, though the
+			// same unknown value as a record list filter is a lookup (exit 1). DR-0047.
+			if !isUsageError(err) {
+				t.Errorf("error %v is not a usage error; an unknown trigger or kind given to record new is exit 2", err)
 			}
 			if names := newDirEntries(t, root); len(names) != 0 {
 				t.Errorf("a refused record left files behind: %v", names)

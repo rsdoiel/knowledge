@@ -70,7 +70,7 @@ func cmdDocumentFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, args []strin
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("unknown project %q", *projectName)
+		return notFoundf("unknown project %q", *projectName)
 	}
 
 	concepts, err := kb.Concepts()
@@ -90,7 +90,7 @@ func cmdDocumentFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, args []strin
 				continue
 			}
 			if !known[strings.ToLower(name)] {
-				return fmt.Errorf("unknown concept %q", name)
+				return notFoundf("unknown concept %q", name)
 			}
 			explicit = append(explicit, name)
 		}

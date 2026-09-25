@@ -51,7 +51,7 @@ func cmdExport(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	if *outPath != "" {
 		f, err := os.Create(*outPath)
 		if err != nil {
-			return fmt.Errorf("export: create %s: %w", *outPath, err)
+			return asCreate(fmt.Errorf("export: create %s: %w", *outPath, err))
 		}
 		defer f.Close()
 		dest = f
@@ -105,7 +105,7 @@ func cmdImport(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return knowledge.ImportJSONL(kb, src)
 	})
 	if err != nil {
-		return err
+		return asContent(err)
 	}
 	if jsonOut {
 		return printJSON(out, summary)

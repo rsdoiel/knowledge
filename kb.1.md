@@ -144,20 +144,58 @@ the one-line spelling. A name with any other control character is refused.
 
 # EXIT STATUS
 
+kb follows the workspace exit-code convention (workspace DR-0003, applied
+here by DR-0047): 0 and 1 answer the question that was asked, 2 says the command
+was wrong, and the sysexits(3) numbers above that say what went wrong, so a
+script or a calling tool can tell them apart from the number alone. With -json
+the error on stderr carries the class name beside the number, for example
+{"error": "...", "class": "no_input", "code": 66}.
+
 0
-: success
+: success. A listing that matches nothing is still success
 
 1
-: the command line was fine and the verb ran but failed: not found, no
-  results, a value the knowledge base rejects (an unknown kind or status), a
-  database error
+: the command ran correctly and the answer is no: search found nothing; there
+  is no such project, concept, observation, source, record or document; a
+  record list filter value that nothing carries; an index that is stale; or the
+  current state forbids the operation (a concept or source still linked, a
+  rename onto a name that already exists)
 
 2
-: usage error: the command line itself is wrong and nothing was attempted.
-  An unknown verb, subverb or flag; a missing or surplus argument; a flag
-  without its value or with one that does not parse; a malformed id; a
-  missing required flag. A script can tell "fix the command" (2) from
+: usage error: the command line itself is wrong and nothing was attempted. An
+  unknown verb, subverb or flag; a missing or surplus argument; a missing
+  required flag; any bad value passed on the command line, whether it does not
+  parse (a malformed id or date), is outside a closed vocabulary (an observation
+  kind, a project status, a record status, kind or trigger given to record new
+  or set-status), or is blank. A script can tell "fix the command" (2) from
   "handle the result" (1)
+
+65
+: content the command read is wrong: a malformed record file, JSONL or
+  document; a file that is not a knowledge base, including a zero-byte one; a
+  merge identity collision without -force. Distinct from 2: the command was
+  right and the data was not
+
+66
+: a named input or the workspace is missing: no such file or directory, a
+  directory where a file is needed, or no agents/knowledge.db here
+
+70
+: an internal error, or an error nothing classified. It is never the answer for
+  a known condition: report it
+
+73
+: an output could not be created: the file exists, or its directory cannot be
+  made (merge -out, export -out, init, index, record new)
+
+74
+: a read or write failed part way: a disk or database I/O error
+
+75
+: the database is locked. Retrying later may succeed
+
+77
+: the operating system refused access
 
 # SEE ALSO
 

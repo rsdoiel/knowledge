@@ -32,7 +32,7 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return err
 	}
 	if len(results) == 0 {
-		return fmt.Errorf("no results for %q", term)
+		return negativef("no results for %q", term)
 	}
 	if jsonOut {
 		return printJSON(out, results)
@@ -94,7 +94,7 @@ func cmdFormat(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 			return err
 		}
 		if p == nil {
-			return fmt.Errorf("project %q not found", *project)
+			return notFoundf("project %q not found", *project)
 		}
 		projectID = p.ID
 	}

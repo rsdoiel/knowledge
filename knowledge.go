@@ -1065,7 +1065,7 @@ func (kb *KnowledgeBase) AddObservationRelation(fromID, toID int64, relationship
 			return err
 		}
 		if n == 0 {
-			return fmt.Errorf("knowledge: no observation with id %d", id)
+			return notFoundf("knowledge: no observation with id %d", id)
 		}
 	}
 	_, err := kb.db.Exec(
@@ -1320,17 +1320,38 @@ func (kb *KnowledgeBase) Concepts() ([]Concept, error) {
  *   conceptID     (int64) — ID of the concept.
  *
  * Returns:
- *   error — on database failure.
+ *   error — ErrNotFound for an observation or concept that does not exist, or on database failure.
  *
  * Example:
  *   err := kb.LinkObservationConcept(obsID, conceptID)
  */
 func (kb *KnowledgeBase) LinkObservationConcept(observationID, conceptID int64) error {
+	if err := kb.requireRow("observations", observationID, "observation"); err != nil {
+		return err
+	}
+	if err := kb.requireRow("concepts", conceptID, "concept"); err != nil {
+		return err
+	}
 	_, err := kb.db.Exec(
 		`INSERT OR IGNORE INTO observation_concepts (observation_id, concept_id) VALUES (?, ?)`,
 		observationID, conceptID,
 	)
 	return err
+}
+
+// requireRow returns an ErrNotFound error unless table has a row with the given
+// id. table is always a literal from this package, never caller input. It exists
+// so a link to an id that is not there says so, instead of failing with the
+// database's raw foreign-key error.
+func (kb *KnowledgeBase) requireRow(table string, id int64, what string) error {
+	var n int
+	if err := kb.db.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE id = ?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return notFoundf("knowledge: no %s with id %d", what, id)
+	}
+	return nil
 }
 
 /** LinkProjectConcept associates a project with a concept. Duplicate links are
@@ -1341,12 +1362,18 @@ func (kb *KnowledgeBase) LinkObservationConcept(observationID, conceptID int64) 
  *   conceptID (int64) — ID of the concept.
  *
  * Returns:
- *   error — on database failure.
+ *   error — ErrNotFound for a project or concept that does not exist, or on database failure.
  *
  * Example:
  *   err := kb.LinkProjectConcept(projectID, conceptID)
  */
 func (kb *KnowledgeBase) LinkProjectConcept(projectID, conceptID int64) error {
+	if err := kb.requireRow("projects", projectID, "project"); err != nil {
+		return err
+	}
+	if err := kb.requireRow("concepts", conceptID, "concept"); err != nil {
+		return err
+	}
 	_, err := kb.db.Exec(
 		`INSERT OR IGNORE INTO project_concepts (project_id, concept_id) VALUES (?, ?)`,
 		projectID, conceptID,
@@ -2114,7 +2141,7 @@ func (kb *KnowledgeBase) ShowSource(id int64) (*Source, error) {
  *   id (int64) — source primary key.
  *
  * Returns:
- *   error — if the source is linked or not found.
+ *   error — ErrInUse if the source is linked, ErrNotFound if there is no such source.
  *
  * Example:
  *   err := kb.RemoveSource(1) // fails if linked
@@ -2127,10 +2154,16 @@ func (kb *KnowledgeBase) RemoveSource(id int64) error {
 		return err
 	}
 	if count > 0 {
-		return fmt.Errorf("source %d is linked to %d observation(s); unlink first", id, count)
+		return inUsef("source %d is linked to %d observation(s); unlink first", id, count)
 	}
-	_, err := kb.db.Exec(`DELETE FROM sources WHERE id = ?`, id)
-	return err
+	res, err := kb.db.Exec(`DELETE FROM sources WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return notFoundf("source %d not found", id)
+	}
+	return nil
 }
 
 /** RetractSource sets retracted=1 and records a retraction note on the source
@@ -2141,17 +2174,23 @@ func (kb *KnowledgeBase) RemoveSource(id int64) error {
  *   note (string) — free-text retraction note.
  *
  * Returns:
- *   error — on database failure.
+ *   error — ErrNotFound if there is no such source, or on database failure.
  *
  * Example:
  *   err := kb.RetractSource(1, "Retracted 2026-07-01 by publisher")
  */
 func (kb *KnowledgeBase) RetractSource(id int64, note string) error {
-	_, err := kb.db.Exec(
+	res, err := kb.db.Exec(
 		`UPDATE sources SET retracted = 1, retraction_note = ? WHERE id = ?`,
 		note, id,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return notFoundf("source %d not found", id)
+	}
+	return nil
 }
 
 /** LinkObservationSource creates an observation_sources row linking an
@@ -2163,12 +2202,18 @@ func (kb *KnowledgeBase) RetractSource(id int64, note string) error {
  *   relationship  (string) — label, e.g. "cited" or "retrieved".
  *
  * Returns:
- *   error — on database failure.
+ *   error — ErrNotFound for an observation or source that does not exist, or on database failure.
  *
  * Example:
  *   err := kb.LinkObservationSource(42, 1, "retrieved")
  */
 func (kb *KnowledgeBase) LinkObservationSource(observationID, sourceID int64, relationship string) error {
+	if err := kb.requireRow("observations", observationID, "observation"); err != nil {
+		return err
+	}
+	if err := kb.requireRow("sources", sourceID, "source"); err != nil {
+		return err
+	}
 	_, err := kb.db.Exec(
 		`INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship)
 		 VALUES (?, ?, ?)`,

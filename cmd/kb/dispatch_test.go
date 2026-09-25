@@ -44,7 +44,10 @@ func TestDispatch_CallsMatchedVerbWithRemainingArgs(t *testing.T) {
 	}
 }
 
-func TestDispatch_HandlerErrorReturnsExitCode1(t *testing.T) {
+// A handler that returns an error nothing classified exits 70 (internal), not 1
+// (DR-0047 item 4): the error text still reaches the user, but a gap in the
+// classification is visible as a different code instead of hiding as "not found".
+func TestDispatch_UnclassifiedHandlerErrorExits70(t *testing.T) {
 	verbs := map[string]verbFunc{
 		"boom": func(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 			return errors.New("boom")
@@ -52,8 +55,8 @@ func TestDispatch_HandlerErrorReturnsExitCode1(t *testing.T) {
 	}
 	var out, errOut bytes.Buffer
 	code := dispatch(verbs, nil, nil, false, []string{"boom"}, &out, &errOut)
-	if code != 1 {
-		t.Errorf("exit code = %d, want 1", code)
+	if code != 70 {
+		t.Errorf("exit code = %d, want 70", code)
 	}
 	if !strings.Contains(errOut.String(), "boom") {
 		t.Errorf("errOut = %q, want it to contain the handler's error", errOut.String())

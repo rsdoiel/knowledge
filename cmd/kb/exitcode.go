@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"os"
@@ -51,12 +53,10 @@ var allExitClasses = []exitClass{
 }
 
 // unclassifiedFallback is the class an error that nothing classified exits
-// with. DR-0047 item 4 makes it classInternal (70), so a site nobody classified
-// shows up as "internal error" instead of hiding as a negative answer. Until
-// every site is classified (X2 of exit-codes-plan.md) it stays classNegative,
-// the code v0.0.13 gave every such error, so X0 and X1 change no exit code for
-// an unclassified site. X2 flips it and deletes this comment.
-var unclassifiedFallback = classNegative
+// with: internal (70), so a site nobody classified shows up as an "internal
+// error" instead of hiding as a negative answer (DR-0047 item 4). Until X2 of
+// exit-codes-plan.md it was negative (1), the code v0.0.13 gave every such error.
+var unclassifiedFallback = classInternal
 
 /** classedError carries an exit class with an error. Error and Unwrap forward
  * to the wrapped error, so a message reads exactly as it did before it was
@@ -246,7 +246,7 @@ func classify(err error) (exitClass, bool) {
 	// files wraps it with classedAs(classData, ...) so the outermost class wins.
 	var inUse *knowledge.ConceptInUseError
 	switch {
-	case errors.Is(err, knowledge.ErrNotFound), errors.As(err, &inUse):
+	case errors.Is(err, knowledge.ErrNotFound), errors.Is(err, knowledge.ErrInUse), errors.As(err, &inUse):
 		return classNegative, true
 	case errors.Is(err, knowledge.ErrInvalid):
 		return classUsage, true
@@ -254,6 +254,12 @@ func classify(err error) (exitClass, bool) {
 	var se3 *sqlite.Error
 	if errors.As(err, &se3) {
 		return sqliteClass(se3.Code()), true
+	}
+	// Content that would not decode is wrong content, whichever verb read it.
+	var syn *json.SyntaxError
+	var typ *json.UnmarshalTypeError
+	if errors.As(err, &syn) || errors.As(err, &typ) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return classData, true
 	}
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -319,4 +325,56 @@ func sqliteClass(code int) exitClass {
 		return classData
 	}
 	return classIO
+}
+
+/** asContent reclassifies the library's invalid-value error as wrong content
+ * (exit 65). A library ErrInvalid means usage (2) when it came from an argument,
+ * which the library cannot tell; a verb that reads a file wraps the error it got
+ * back with this, so a malformed record or document is 65. An error that already
+ * carries an explicit class, or is not an ErrInvalid, is returned unchanged.
+ *
+ * Parameters:
+ *   err (error) — an error from reading or parsing a file; may be nil.
+ *
+ * Returns:
+ *   error — err, or err classed as data.
+ *
+ * Example:
+ *   return asContent(fmt.Errorf("reading DR-%s: %w", id, err))
+ */
+func asContent(err error) error {
+	var ce *classedError
+	if err == nil || errors.As(err, &ce) || !errors.Is(err, knowledge.ErrInvalid) {
+		return err
+	}
+	return classedAs(classData, err)
+}
+
+/** asCreate reclassifies a failure to create an output as cant_create (exit
+ * 73): the file or directory could not be made. A missing parent or an existing
+ * target is not "no input" here, it is an output that cannot be created. A
+ * permission failure keeps its own class (77), a failure part way through
+ * writing stays io (74), and an error that already carries an explicit class is
+ * returned unchanged.
+ *
+ * Parameters:
+ *   err (error) — an error from creating a file or directory; may be nil.
+ *
+ * Returns:
+ *   error — err, or err classed as cant_create.
+ *
+ * Example:
+ *   return asCreate(fmt.Errorf("creating %s: %w", dir, err))
+ */
+func asCreate(err error) error {
+	var ce *classedError
+	if err == nil || errors.As(err, &ce) || errors.Is(err, fs.ErrPermission) {
+		return err
+	}
+	var pe *fs.PathError
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrExist) ||
+		(errors.As(err, &pe) && (pe.Op == "open" || pe.Op == "mkdir" || pe.Op == "create")) {
+		return classedAs(classCantCreate, err)
+	}
+	return err
 }

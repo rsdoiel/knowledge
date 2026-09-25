@@ -102,8 +102,8 @@ func TestMainRun_AmbientOpenGuardsMissingWorkspace(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	code := mainRun([]string{"project", "list"}, &out, &errOut)
-	if code != 1 {
-		t.Fatalf("exit code = %d, want 1; stderr=%s", code, errOut.String())
+	if code != 66 { // no_input: there is no workspace here
+		t.Fatalf("exit code = %d, want 66; stderr=%s", code, errOut.String())
 	}
 	if !strings.Contains(errOut.String(), "kb init") {
 		t.Errorf("errOut = %q, want it to mention kb init", errOut.String())

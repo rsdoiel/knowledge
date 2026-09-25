@@ -136,7 +136,7 @@ func cmdSourceShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 		return kb.ShowSource(id)
 	})
 	if err != nil {
-		return fmt.Errorf("source %d not found", id)
+		return notFoundf("source %d not found", id)
 	}
 	if jsonOut {
 		return printJSON(out, s)

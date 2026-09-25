@@ -66,7 +66,7 @@ func cmdInit(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []str
 
 	newKB, err := knowledge.Open(dbPath)
 	if err != nil {
-		return fmt.Errorf("init: %w", err)
+		return asCreate(fmt.Errorf("init: %w", err))
 	}
 	newKB.Close()
 

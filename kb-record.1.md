@@ -53,7 +53,11 @@ set-status
 : set a record's status in both its file and the database. The promotion path
   from proposed to accepted. Also refreshes the corpus's index.md if one is
   already present, since status is one of the fields it renders — never
-  creates one where the corpus has not already opted in
+  creates one where the corpus has not already opted in. A status outside the
+  vocabularies below is refused (exit 2) unless a record already carries it, the
+  rule record new applies to --trigger and --kind and record list applies to its
+  filters, so a typo such as "acepted" cannot leave a record in limbo; the file and
+  database are untouched. Ingest of a hand-edited file still only warns
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on

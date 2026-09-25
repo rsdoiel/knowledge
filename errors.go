@@ -32,6 +32,19 @@ var ErrInvalid = errors.New("invalid")
  */
 var ErrNotFound = errors.New("not found")
 
+/** ErrInUse marks an error the library raises because an operation is refused
+ * while the item is still referenced: a source still linked to an observation.
+ * Match it with errors.Is; the message is unchanged. It is a refusal the current
+ * state forces, so kb exits 1 for it (workspace DR-0003 class "negative"). A
+ * concept still linked has its own typed error, *ConceptInUseError.
+ *
+ * Example:
+ *   if err := kb.RemoveSource(1); errors.Is(err, knowledge.ErrInUse) {
+ *       // unlink it first
+ *   }
+ */
+var ErrInUse = errors.New("in use")
+
 // sentinelError is an error with its own message that also matches a sentinel
 // under errors.Is, so marking an error adds a class without adding a word to
 // what a user reads. Unwrap reaches a cause given with %w, as fmt.Errorf's does.
@@ -53,6 +66,9 @@ func markedf(kind error, format string, a ...any) error {
 
 // invalidf is fmt.Errorf whose result matches ErrInvalid.
 func invalidf(format string, a ...any) error { return markedf(ErrInvalid, format, a...) }
+
+// inUsef is fmt.Errorf whose result matches ErrInUse.
+func inUsef(format string, a ...any) error { return markedf(ErrInUse, format, a...) }
 
 // notFoundf is fmt.Errorf whose result matches ErrNotFound.
 func notFoundf(format string, a ...any) error { return markedf(ErrNotFound, format, a...) }

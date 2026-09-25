@@ -96,7 +96,7 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 			return usageErrorf("index --all requires a ROOT; see kb help index")
 		}
 		if toStdout {
-			return fmt.Errorf("--all and --stdout cannot be combined")
+			return usageErrorf("--all and --stdout cannot be combined")
 		}
 		return cmdIndexAll(dl, jsonOut, dir, check, out)
 	}
@@ -104,14 +104,14 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 		return usageErrorf("index requires a PATH; see kb help index")
 	}
 	if check && toStdout {
-		return fmt.Errorf("--check and --stdout cannot be combined")
+		return usageErrorf("--check and --stdout cannot be combined")
 	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return err
 	}
 	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory", dir)
+		return noInputf("%s is not a directory", dir)
 	}
 
 	index, count, err := renderCorpusIndex(abs)
@@ -129,7 +129,7 @@ func cmdIndex(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []st
 		return err
 	}
 	if err := os.WriteFile(target, []byte(index), 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", target, err)
+		return asCreate(fmt.Errorf("writing %s: %w", target, err))
 	}
 	plural := "s"
 	if count == 1 {
@@ -152,7 +152,7 @@ func renderCorpusIndex(dir string) (index string, count int, err error) {
 	for _, path := range files {
 		rf, err := knowledge.ParseRecordFile(path)
 		if err != nil {
-			return "", 0, fmt.Errorf("cannot index %s: %w", filepath.Base(path), err)
+			return "", 0, asContent(fmt.Errorf("cannot index %s: %w", filepath.Base(path), err))
 		}
 		records = append(records, rf)
 	}
@@ -208,7 +208,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 		return err
 	}
 	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory", root)
+		return noInputf("%s is not a directory", root)
 	}
 	dirs, err := discoverIndexedCorpora(abs)
 	if err != nil {
@@ -263,7 +263,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 		writeIndexAllText(out, summary)
 	}
 	if needsAttention > 0 {
-		return fmt.Errorf("%d of %d corpora need attention; see above", needsAttention, len(summary.Corpora))
+		return negativef("%d of %d corpora need attention; see above", needsAttention, len(summary.Corpora))
 	}
 	return nil
 }
@@ -372,12 +372,12 @@ func checkIndex(target, want string, out io.Writer) error {
 	got, err := os.ReadFile(target)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("%s does not exist; run kb index to generate it", target)
+			return negativef("%s does not exist; run kb index to generate it", target)
 		}
 		return err
 	}
 	if string(got) != want {
-		return fmt.Errorf("%s is stale; run kb index to regenerate it", target)
+		return negativef("%s is stale; run kb index to regenerate it", target)
 	}
 	fmt.Fprintf(out, "%s is up to date\n", target)
 	return nil
@@ -405,10 +405,10 @@ func regenerateIndexIfPresent(dir string) error {
 	}
 	index, _, err := renderCorpusIndex(dir)
 	if err != nil {
-		return fmt.Errorf("cannot regenerate index: %w", err)
+		return asContent(fmt.Errorf("cannot regenerate index: %w", err))
 	}
 	if err := os.WriteFile(target, []byte(index), 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", target, err)
+		return asCreate(fmt.Errorf("writing %s: %w", target, err))
 	}
 	return nil
 }

@@ -244,7 +244,7 @@ func validateRecordFilters(kb *knowledge.KnowledgeBase, f recordFlags) error {
 			for i, pr := range projects {
 				names[i] = pr.Name
 			}
-			return fmt.Errorf("unknown project %q; known projects: %s", f.project, joinKnown(names))
+			return notFoundf("unknown project %q; known projects: %s", f.project, joinKnown(names))
 		}
 	}
 	for _, c := range []struct {
@@ -298,7 +298,7 @@ func checkRecordVocabulary(kb *knowledge.KnowledgeBase, field, plural, value str
 		}
 	}
 	if !containsString(known, value) {
-		return fmt.Errorf("unknown %s %q; known %s: %s", field, value, plural, joinKnown(known))
+		return notFoundf("unknown %s %q; known %s: %s", field, value, plural, joinKnown(known))
 	}
 	return nil
 }
@@ -373,17 +373,17 @@ func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*know
 	case f.workspace:
 		r, err := kb.RecordByIdentity(workspace, 0, "workspace", id)
 		if err != nil {
-			return nil, fmt.Errorf("no record DR-%s in the workspace tier", id)
+			return nil, notFoundf("no record DR-%s in the workspace tier", id)
 		}
 		return r, nil
 	case f.project != "":
 		p, err := kb.ProjectByName(f.project)
 		if err != nil || p == nil {
-			return nil, fmt.Errorf("unknown project %q", f.project)
+			return nil, notFoundf("unknown project %q", f.project)
 		}
 		r, err := kb.RecordByIdentity(workspace, p.ID, "project", id)
 		if err != nil {
-			return nil, fmt.Errorf("no record DR-%s in project %s", id, f.project)
+			return nil, notFoundf("no record DR-%s in project %s", id, f.project)
 		}
 		return r, nil
 	}
@@ -394,7 +394,7 @@ func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*know
 	}
 	switch len(matches) {
 	case 0:
-		return nil, fmt.Errorf("no record DR-%s", id)
+		return nil, notFoundf("no record DR-%s", id)
 	case 1:
 		return &matches[0], nil
 	}
@@ -407,7 +407,7 @@ func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*know
 		}
 		where = append(where, "--project "+names[m.ProjectID])
 	}
-	return nil, fmt.Errorf("DR-%s is ambiguous across %s; qualify it with one of: %s",
+	return nil, usageErrorf("DR-%s is ambiguous across %s; qualify it with one of: %s",
 		id, strings.Join(projectLabels(matches, names), ", "), strings.Join(where, ", "))
 }
 
@@ -539,7 +539,7 @@ func resolveWithinRoot(root, rel string) (string, error) {
 	joined := filepath.Join(root, rel)
 	inside, err := filepath.Rel(root, joined)
 	if err != nil || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf(
+		return "", dataErrorf(
 			"record path %q resolves outside the workspace root %s; refusing to read or write it",
 			rel, root)
 	}
@@ -554,7 +554,7 @@ func loadRecordFile(root string, rec *knowledge.Record) (*knowledge.RecordFile, 
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("reading DR-%s at %s: %w", rec.RecordID, path, err)
+		return nil, nil, asContent(fmt.Errorf("reading DR-%s at %s: %w", rec.RecordID, path, err))
 	}
 	rf, err := knowledge.ParseRecord(raw, rec.Path)
 	if err != nil {
@@ -624,6 +624,17 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 		return usageErrorf("usage: record set-status RECORD_ID STATUS")
 	}
 	id, status := f.args[0], f.args[1]
+	// A status is a value being written, and the promotion path at that, so a
+	// typo is refused before any record or file is touched, by the rule record
+	// new applies to trigger and kind: outside the vocabulary and carried by no
+	// record is an error (DR-0048). An unknown one is a usage error here, where the
+	// same value as a record list filter is a lookup.
+	if strings.TrimSpace(status) == "" {
+		return usageErrorf("record set-status needs a status; known statuses: %s", joinKnown(knowledge.RecordStatuses))
+	}
+	if err := checkRecordVocabulary(kb, "status", "statuses", status, knowledge.RecordStatuses); err != nil {
+		return wrapUsage(err)
+	}
 	rec, err := resolveRecord(kb, id, f)
 	if err != nil {
 		return err
@@ -679,12 +690,12 @@ func recordSupersede(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 		return err
 	}
 	if newer.ProjectID != older.ProjectID || newer.Scope != older.Scope {
-		return fmt.Errorf(
+		return usageErrorf(
 			"DR-%s and DR-%s are in different tiers; supersession is same-tier only, because writing both sides would mean writing into another repository",
 			newer.RecordID, older.RecordID)
 	}
 	if newer.ID == older.ID {
-		return fmt.Errorf("DR-%s cannot supersede itself", newer.RecordID)
+		return usageErrorf("DR-%s cannot supersede itself", newer.RecordID)
 	}
 
 	root := recordRoot(kb, f)

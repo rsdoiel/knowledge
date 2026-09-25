@@ -639,7 +639,7 @@ func (kb *KnowledgeBase) UpdateRecordStatus(id int64, status string) error {
 		return err
 	}
 	if n == 0 {
-		return fmt.Errorf("knowledge: no record with id %d", id)
+		return notFoundf("knowledge: no record with id %d", id)
 	}
 	return nil
 }
@@ -672,7 +672,7 @@ func (kb *KnowledgeBase) UpdateRecordPath(id int64, path string) error {
 		return err
 	}
 	if n == 0 {
-		return fmt.Errorf("knowledge: no record with id %d", id)
+		return notFoundf("knowledge: no record with id %d", id)
 	}
 	return nil
 }
@@ -707,7 +707,7 @@ func (kb *KnowledgeBase) AddRecordRelation(fromID, toID int64, relationship stri
 			return err
 		}
 		if n == 0 {
-			return fmt.Errorf("knowledge: no record with id %d", id)
+			return notFoundf("knowledge: no record with id %d", id)
 		}
 	}
 	_, err := kb.db.Exec(

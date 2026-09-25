@@ -64,8 +64,8 @@ func TestMerge_MissingInputIsRefusedAndCreatesNothing(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, out, errOut := runMergeArgs(tc.args...)
-			if code != 1 {
-				t.Errorf("exit %d, want 1; stdout=%.100q stderr=%q", code, out, errOut)
+			if code != 66 { // no_input: a named input is missing (DR-0047)
+				t.Errorf("exit %d, want 66; stdout=%.100q stderr=%q", code, out, errOut)
 			}
 			if !strings.Contains(errOut, tc.path) || !strings.Contains(errOut, "does not exist") {
 				t.Errorf("stderr = %q, want it to name %q and say it does not exist", errOut, tc.path)
@@ -98,8 +98,14 @@ func TestMerge_NotAKnowledgeBaseIsRefused(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, out, errOut := runMergeArgs(tc.args...)
-			if code != 1 {
-				t.Errorf("exit %d, want 1; stdout=%.100q stderr=%q", code, out, errOut)
+			// A directory is a missing input (66); a zero-byte file is content
+			// that is not a knowledge base (65).
+			wantCode := 66
+			if tc.want == "is empty" {
+				wantCode = 65
+			}
+			if code != wantCode {
+				t.Errorf("exit %d, want %d; stdout=%.100q stderr=%q", code, wantCode, out, errOut)
 			}
 			if !strings.Contains(errOut, tc.want) {
 				t.Errorf("stderr = %q, want it to contain %q", errOut, tc.want)
@@ -160,7 +166,7 @@ func TestMerge_ValidMergeStillWorks(t *testing.T) {
 		t.Errorf("merged projects = %q, want both pa and pb", list.String())
 	}
 	// The output still may not exist already (existing behaviour).
-	if code, _, errOut := runMergeArgs("-a", "a.db", "-b", "b.db", "-out", "o.db"); code != 1 || !strings.Contains(errOut, "already exists") {
+	if code, _, errOut := runMergeArgs("-a", "a.db", "-b", "b.db", "-out", "o.db"); code != 73 || !strings.Contains(errOut, "already exists") {
 		t.Errorf("merging onto an existing -out: exit %d, stderr %q", code, errOut)
 	}
 }
@@ -169,7 +175,7 @@ func TestMerge_RefusalUnderJSONIsAnEnvelope(t *testing.T) {
 	mergeDir(t)
 	var out, errOut bytes.Buffer
 	code := mainRun([]string{"--json", "merge", "-a", "missing.db", "-b", "b.db", "-out", "o.db"}, &out, &errOut)
-	if code != 1 || out.Len() != 0 {
+	if code != 66 || out.Len() != 0 {
 		t.Fatalf("exit %d, stdout %q", code, out.String())
 	}
 	var env struct {
@@ -243,8 +249,8 @@ func TestMerge_ZeroByteMainWithWALIsRefusedAndTouchesNothing(t *testing.T) {
 	}
 	before := listing(t, dir)
 	code, out, errOut := runMergeArgs("-a", "z.db", "-b", "b.db", "-out", "o.db")
-	if code != 1 {
-		t.Fatalf("exit %d, want 1; stdout=%.100q stderr=%q", code, out, errOut)
+	if code != 65 { // a zero-byte main file is content that is not a knowledge base
+		t.Fatalf("exit %d, want 65; stdout=%.100q stderr=%q", code, out, errOut)
 	}
 	if !strings.Contains(errOut, "z.db") || !strings.Contains(errOut, "is empty") {
 		t.Errorf("stderr = %q, want it to name z.db and say it is empty", errOut)

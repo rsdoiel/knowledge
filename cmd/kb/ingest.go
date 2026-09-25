@@ -123,7 +123,7 @@ func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return fmt.Errorf("resolving %s: %w", path, err)
 	}
 	if fi, err := os.Stat(absPath); err != nil || !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory", path)
+		return noInputf("%s is not a directory", path)
 	}
 
 	ing := &ingester{

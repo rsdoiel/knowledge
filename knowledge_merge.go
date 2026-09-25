@@ -3,6 +3,7 @@ package knowledge
 import (
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"os"
 )
 
@@ -324,7 +325,7 @@ type MergeTableSummary struct {
  */
 func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, error) {
 	if _, err := os.Stat(mergedPath); err == nil {
-		return nil, fmt.Errorf("knowledge: merge target %s already exists", mergedPath)
+		return nil, markedf(fs.ErrExist, "knowledge: merge target %s already exists", mergedPath)
 	}
 
 	kb, err := Open(mergedPath)

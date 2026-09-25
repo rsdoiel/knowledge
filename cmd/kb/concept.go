@@ -146,6 +146,9 @@ func cmdConceptSuggest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, 
 		return usageErrorf("usage: concept suggest [--project NAME] [--limit N]")
 	}
 
+	if *limit < 0 {
+		return usageErrorf("invalid --limit %d; want zero or more", *limit)
+	}
 	suggestions, err := kb.SuggestConcepts(*projectName, *limit)
 	if err != nil {
 		return err
@@ -247,7 +250,7 @@ func cmdConceptDelete(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 		if err != nil {
 			var inUse *knowledge.ConceptInUseError
 			if errors.As(err, &inUse) {
-				return fmt.Errorf("concept %q is still linked to %s; nothing was deleted "+
+				return negativef("concept %q is still linked to %s; nothing was deleted "+
 					"(use --force to unlink and delete, or --dry-run to preview)", name, conceptLinkSummary(inUse.Usage))
 			}
 			return err

@@ -209,13 +209,12 @@ func TestUsageHelpersStillWork(t *testing.T) {
 	}
 }
 
-// X0 changes no observable exit code for a site nobody has classified yet: it
-// still exits 1, as v0.0.13 did. DR-0047 item 4 makes that 70; the fallback
-// flips at the end of X2, when the sites are classified, and this test is then
-// replaced by one that expects 70.
-func TestExitCodeFor_UnclassifiedKeepsTheLegacyCodeUntilX2(t *testing.T) {
-	if got := exitCodeFor(errors.New("plain")); got != classNegative {
-		t.Errorf("exitCodeFor(plain) = %v, want the legacy fallback (negative, 1) until X2", got)
+// An error nothing classified exits 70, never 1 (DR-0047 item 4): a site nobody
+// classified must show up, not hide as a negative answer. X0 kept the legacy 1
+// while the sites were unclassified; X2 classified them and flipped this.
+func TestExitCodeFor_UnclassifiedIsInternal(t *testing.T) {
+	if got := exitCodeFor(errors.New("plain")); got != classInternal {
+		t.Errorf("exitCodeFor(plain) = %v, want internal (70)", got)
 	}
 	if got := exitCodeFor(usageErrorf("x")); got != classUsage {
 		t.Errorf("exitCodeFor(usage) = %v, want usage", got)
@@ -251,7 +250,7 @@ func TestDispatch_ExitsWithTheClassOfTheError(t *testing.T) {
 		{"cant create", cantCreatef("exists"), 73},
 		{"io", ioErrorf("disk"), 74},
 		{"a real missing file", fmt.Errorf("read: %w", fs.ErrNotExist), 66},
-		{"a plain error (legacy until X2)", errors.New("plain"), 1},
+		{"a plain error", errors.New("plain"), 70},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, out, _ := dispatchFailing(t, false, tc.failure)
@@ -291,7 +290,7 @@ func TestPrintError_JSONEnvelopeCarriesClassAndCode(t *testing.T) {
 		{notFoundf("nope"), "negative", 1},
 		{dataErrorf("bad"), "data", 65},
 		{noInputf("gone"), "no_input", 66},
-		{errors.New("plain"), "negative", 1}, // legacy fallback until X2
+		{errors.New("plain"), "internal", 70},
 	} {
 		code, out, errOut := dispatchFailing(t, true, tc.failure)
 		var env struct {

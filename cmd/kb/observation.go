@@ -54,7 +54,7 @@ func cmdObservationAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, 
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("project %q not found", *project)
+		return notFoundf("project %q not found", *project)
 	}
 	kind := rest[0]
 	body := strings.Join(rest[1:], " ")
@@ -100,7 +100,7 @@ func cmdObservationList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 		return err
 	}
 	if p == nil {
-		return fmt.Errorf("project %q not found", *project)
+		return notFoundf("project %q not found", *project)
 	}
 	obs, err := logKBCall(dl, "Observations", map[string]any{"project_id": p.ID}, func() ([]knowledge.Observation, error) {
 		return kb.Observations(p.ID)
@@ -145,7 +145,7 @@ func cmdObservationShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 		return kb.ObservationByID(id)
 	})
 	if err != nil {
-		return fmt.Errorf("observation %d not found", id)
+		return notFoundf("observation %d not found", id)
 	}
 	rels, err := logKBCall(dl, "ObservationRelationsFor", map[string]any{"id": id}, func() ([]knowledge.RelatedObservation, error) {
 		return kb.ObservationRelationsFor(id)
@@ -198,7 +198,7 @@ func cmdObservationUpdate(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut boo
 		return kb.ObservationByID(id)
 	})
 	if err != nil {
-		return fmt.Errorf("observation %d not found", id)
+		return notFoundf("observation %d not found", id)
 	}
 	newID, err := logKBCall(dl, "AddObservation", map[string]any{"project_id": old.ProjectID, "kind": old.Kind}, func() (int64, error) {
 		return kb.AddObservation(old.ProjectID, old.Kind, body)

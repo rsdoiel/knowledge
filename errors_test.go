@@ -156,3 +156,56 @@ func TestConceptInUseError_IsStillATypedError(t *testing.T) {
 		t.Error("a concept in use is a refusal, neither not-found nor invalid")
 	}
 }
+
+// Operations on an id that is not there must say so, not fail with a raw
+// foreign-key error (source link 99 99 exited 74) or a plain unclassified one
+// (document review promote 99 exited 70), and must never claim success
+// (source retract 99 used to exit 0 saying "source 99 retracted").
+func TestNotFound_ForIDsThatAreNotThere(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("p", "")
+	oid, _ := kb.AddObservation(pid, "note", "b")
+	cid, _ := kb.AddConcept("C", "")
+	sid, _ := kb.AddSource(Source{Title: "S"})
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{"RetractSource", func() error { return kb.RetractSource(99, "n") }},
+		{"RemoveSource", func() error { return kb.RemoveSource(99) }},
+		{"LinkObservationSource missing observation", func() error { return kb.LinkObservationSource(99, sid, "cited") }},
+		{"LinkObservationSource missing source", func() error { return kb.LinkObservationSource(oid, 99, "cited") }},
+		{"LinkObservationConcept missing observation", func() error { return kb.LinkObservationConcept(99, cid) }},
+		{"LinkObservationConcept missing concept", func() error { return kb.LinkObservationConcept(oid, 99) }},
+		{"LinkProjectConcept missing project", func() error { return kb.LinkProjectConcept(99, cid) }},
+		{"LinkProjectConcept missing concept", func() error { return kb.LinkProjectConcept(pid, 99) }},
+		{"PromoteDocumentSummary", func() error { return kb.PromoteDocumentSummary(99) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal("succeeded on an id that does not exist")
+			}
+			if !errors.Is(err, ErrNotFound) {
+				t.Errorf("error %v is not ErrNotFound", err)
+			}
+		})
+	}
+}
+
+func TestRemoveSource_LinkedIsInUse(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("p", "")
+	oid, _ := kb.AddObservation(pid, "note", "b")
+	sid, _ := kb.AddSource(Source{Title: "S"})
+	if err := kb.LinkObservationSource(oid, sid, "cited"); err != nil {
+		t.Fatal(err)
+	}
+	err := kb.RemoveSource(sid)
+	if !errors.Is(err, ErrInUse) {
+		t.Errorf("error %v is not ErrInUse", err)
+	}
+	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid) {
+		t.Error("a linked source is a refusal, neither not-found nor invalid")
+	}
+}

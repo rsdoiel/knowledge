@@ -55,7 +55,7 @@ func recordFmt(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 		return err
 	}
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory", f.args[0])
+		return noInputf("%s is not a directory", f.args[0])
 	}
 
 	files, err := collectRecordFiles(dir)
@@ -149,11 +149,13 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 	if f.project == "" && !f.workspace {
 		return usageErrorf("record new requires --project P or --workspace")
 	}
+	// Values being written, not searched for: a bad one is a usage error here,
+	// where the same unknown value as a record list filter is a lookup (DR-0047).
 	if err := checkRecordVocabulary(kb, "trigger", "triggers", f.trigger, knowledge.RecordTriggers); err != nil {
-		return err
+		return wrapUsage(err)
 	}
 	if err := checkRecordVocabulary(kb, "kind", "kinds", f.kind, knowledge.RecordKinds); err != nil {
-		return err
+		return wrapUsage(err)
 	}
 
 	scope := "project"
@@ -168,7 +170,7 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 	root := recordRoot(kb, f)
 	absDir := filepath.Join(root, dir)
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
-		return fmt.Errorf("creating %s: %w", absDir, err)
+		return asCreate(fmt.Errorf("creating %s: %w", absDir, err))
 	}
 
 	id, err := nextRecordID(absDir)
@@ -209,7 +211,7 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 	name := id + "-" + slugify(f.title) + ".md"
 	path := filepath.Join(absDir, name)
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s already exists", path)
+		return cantCreatef("%s already exists", path)
 	}
 	if err := os.WriteFile(path, rendered, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)

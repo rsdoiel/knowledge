@@ -58,24 +58,20 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	if len(rest) == 0 {
 		dl, err := openDebugLogIfRequested(debugOn, errOut)
 		if err != nil {
-			fmt.Fprintf(errOut, "kb: opening debug log: %v\n", err)
-			return 1
+			return failWith(errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
 		}
 		defer dl.Close()
 		resolvedPath, err := resolveDBPath(dbPath)
 		if err != nil {
-			fmt.Fprintf(errOut, "kb: %v\n", err)
-			return 1
+			return failWith(errOut, jsonOut, err)
 		}
 		kb, err := knowledge.Open(resolvedPath)
 		if err != nil {
-			fmt.Fprintf(errOut, "kb: open %s: %v\n", resolvedPath, err)
-			return 1
+			return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
 		}
 		defer kb.Close()
 		if err := runTUI(kb, dl); err != nil {
-			fmt.Fprintf(errOut, "kb: %v\n", err)
-			return 1
+			return failWith(errOut, jsonOut, err)
 		}
 		return 0
 	}
@@ -106,8 +102,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 
 	dl, err := openDebugLogIfRequested(debugOn, errOut)
 	if err != nil {
-		fmt.Fprintf(errOut, "kb: opening debug log: %v\n", err)
-		return 1
+		return failWith(errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
 	}
 	defer dl.Close()
 
@@ -133,8 +128,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 
 	resolvedPath, err := resolveDBPath(dbPath)
 	if err != nil {
-		fmt.Fprintf(errOut, "kb: %v\n", err)
-		return 1
+		return failWith(errOut, jsonOut, err)
 	}
 
 	// The ambient-open guard (DR-0021 item 4, narrowed by DR-0022): a verb
@@ -149,19 +143,38 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// -in agents/knowledge.jsonl) relies on.
 	if dbPath == "" && rest[0] != "import" {
 		if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
-			fmt.Fprintf(errOut, "kb: no %s here; run \"kb init\" to start a new workspace, or \"kb import -in FILE\" to rebuild one from an export\n", resolvedPath)
-			return 1
+			return failWith(errOut, jsonOut, noInputf("no %s here; run \"kb init\" to start a new workspace, or \"kb import -in FILE\" to rebuild one from an export", resolvedPath))
 		}
 	}
 
 	kb, err := knowledge.Open(resolvedPath)
 	if err != nil {
-		fmt.Fprintf(errOut, "kb: open %s: %v\n", resolvedPath, err)
-		return 1
+		return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
 	}
 	defer kb.Close()
 
 	return dispatch(verbs, kb, dl, jsonOut, rest, out, errOut)
+}
+
+/** failWith prints err as kb reports every error, plain or as the JSON envelope,
+ * and returns the exit status its class calls for. mainRun uses it for the
+ * failures that happen before a verb runs: the debug log, the database path, and
+ * opening the database.
+ *
+ * Parameters:
+ *   errOut  (io.Writer) — where the error goes.
+ *   jsonOut (bool)      — whether --json was given.
+ *   err     (error)     — the failure.
+ *
+ * Returns:
+ *   int — the exit status for err's class.
+ *
+ * Example:
+ *   return failWith(errOut, jsonOut, noInputf("no workspace here"))
+ */
+func failWith(errOut io.Writer, jsonOut bool, err error) int {
+	printError(errOut, jsonOut, err)
+	return exitCodeFor(err).Code
 }
 
 /** dbOptionRefusal is the usage error for a --db given to a verb that never
