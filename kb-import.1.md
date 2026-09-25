@@ -36,7 +36,9 @@ because the cache is built fresh from this file's own uuids on the way in.
 Unresolvable references (a uuid the file never defines a parent for) and
 unrecognized record types are skipped, not fatal — only malformed JSON
 aborts the import. The returned summary reports, per record type, how many
-lines were read, newly imported, or skipped.
+lines were read, newly imported, or skipped. Exit status: 65 for malformed JSON
+or a row the schema rejects, 66 when -in does not exist, 77 when it cannot be
+read, 74 for a read that fails part way.
 
 # SEE ALSO
 

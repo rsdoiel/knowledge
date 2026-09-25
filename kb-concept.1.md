@@ -45,7 +45,8 @@ rename
 delete
 : remove a concept, its links, and its search entry. NAME must match exactly,
   including case. A concept still linked to a project, observation, record or
-  document section is refused, with the counts, and nothing changes; --force
+  document section is refused (exit 1, the current state forbids it), with the
+  counts, and nothing changes; --force
   unlinks it from all of them and deletes it (the projects, observations,
   records and documents themselves are untouched, only the links go).
   --dry-run reports what would happen and changes nothing. A NAME that looks

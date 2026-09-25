@@ -51,8 +51,11 @@ decisions/README.md, so one is never created.
 
 --check compares PATH/index.md against a fresh render and reports drift as an
 error instead of writing: missing, or different from what the current records
-would produce. It exits non-zero either way, so it fits a pre-commit hook or
-CI step; the remedy either way is running index without --check. --check and
+would produce. It exits 1 for either (a normal "no": the index is out of date),
+so it fits a pre-commit hook or CI step; the remedy either way is running index
+without --check. A record that cannot be read or parsed is a failure, not drift,
+and exits with its own class instead: 65 for a malformed record, 66 for a PATH
+that is missing or not a directory. --check and
 --stdout cannot be combined.
 
 --all walks ROOT and processes every directory that already has an index.md
@@ -64,7 +67,10 @@ corpora (each with their own index.md) are handled independently, never
 folded together. One bad corpus does not stop the rest: --all keeps going
 and reports every corpus, then exits non-zero if any needed attention, so a
 pre-commit hook can gate on the whole workspace in one call rather than
-naming each corpus by hand. --all and --stdout cannot be combined. See
+naming each corpus by hand: 1 if the only trouble is stale indexes, and the
+class of the first failure (65 for a malformed record, 77 for a file it may
+not write) if any corpus could not be indexed at all, since a failure is more
+serious than drift. --all and --stdout cannot be combined. See
 TODO.md's index-regeneration item (index --check and the auto-refresh on
 set-status/supersede) for the single-corpus half this completes.
 
@@ -82,7 +88,7 @@ directory as ROOT still finds the corpora inside it.
 : write the index to standard output instead of index.md (PATH form only)
 
 --check
-: verify index.md is current without writing it; non-zero exit on drift
+: verify index.md is current without writing it; exit 1 on drift
 
 --all
 : process every already-indexed corpus under ROOT instead of one PATH

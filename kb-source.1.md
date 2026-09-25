@@ -40,7 +40,8 @@ add
   a value is trimmed
 
 remove
-: delete a source — fails if it's still linked to any observation
+: delete a source — fails (exit 1) if it's still linked to any observation, and
+  also for an ID that does not exist
 
 retract
 : mark a source retracted with a note (does not delete it)

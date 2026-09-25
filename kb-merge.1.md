@@ -32,7 +32,11 @@ files; anything else is refused before any file is touched. A mistyped -a
 therefore fails, instead of merging an empty database in its place and
 leaving a zero-byte file at the typo. A zero-byte file is refused even when a
 -wal file sits beside it: SQLite discards that -wal on opening an empty main
-file, so merge refuses first and leaves the -wal untouched.
+file, so merge refuses first and leaves the -wal untouched. The exit status
+says which: 66 for an input that does not exist or is not a file, 65 for a
+zero-byte file or one that is not a knowledge base, 2 for -a and -b naming the
+same file, 73 when -out already exists, and 65 for an identity collision
+reported without -force.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a

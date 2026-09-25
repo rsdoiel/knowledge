@@ -41,7 +41,10 @@ list
   YYYY-MM-DD) keeps records dated on or after it; filters combine.
   "no matching records" means a real filter matched nothing. A value that
   no record carries and the vocabularies below do not list is a typo, and
-  is an error that names what is known. A value outside the vocabularies
+  is an error that names what is known (exit 1, a lookup that found nothing;
+  record new and set-status, which write a value, exit 2 for the same thing).
+  A record ID that exists in more than one tier is ambiguous and exits 2:
+  qualify it with --project or --workspace. A value outside the vocabularies
   that some record does carry still filters. --workspace and --project
   cannot be combined, since workspace-tier records have no project
 

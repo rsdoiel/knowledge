@@ -571,7 +571,8 @@ rename
 delete
 : remove a concept, its links, and its search entry. NAME must match exactly,
   including case. A concept still linked to a project, observation, record or
-  document section is refused, with the counts, and nothing changes; --force
+  document section is refused (exit 1, the current state forbids it), with the
+  counts, and nothing changes; --force
   unlinks it from all of them and deletes it (the projects, observations,
   records and documents themselves are untouched, only the links go).
   --dry-run reports what would happen and changes nothing. A NAME that looks
@@ -708,7 +709,8 @@ add
   a value is trimmed
 
 remove
-: delete a source — fails if it's still linked to any observation
+: delete a source — fails (exit 1) if it's still linked to any observation, and
+  also for an ID that does not exist
 
 retract
 : mark a source retracted with a note (does not delete it)
@@ -805,7 +807,11 @@ files; anything else is refused before any file is touched. A mistyped -a
 therefore fails, instead of merging an empty database in its place and
 leaving a zero-byte file at the typo. A zero-byte file is refused even when a
 -wal file sits beside it: SQLite discards that -wal on opening an empty main
-file, so merge refuses first and leaves the -wal untouched.
+file, so merge refuses first and leaves the -wal untouched. The exit status
+says which: 66 for an input that does not exist or is not a file, 65 for a
+zero-byte file or one that is not a knowledge base, 2 for -a and -b naming the
+same file, 73 when -out already exists, and 65 for an identity collision
+reported without -force.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a
@@ -867,6 +873,10 @@ with import. This is the no-file-access alternative to merge; when both
 databases are reachable as files, merge is the more thorough tool (it
 also detects and can reconcile name collisions).
 
+Exit status: 73 when -out cannot be created (it names a directory, or its
+directory is missing), 77 when the OS refuses, 74 if a write fails part way, 1
+for a -project that does not exist.
+
 With --json, a text confirmation is only meaningful once -out is given
 (the JSON-L stream itself has already gone to stdout otherwise): it
 becomes a {"lines_written": N, "path": "..."} object instead of the plain
@@ -918,7 +928,9 @@ because the cache is built fresh from this file's own uuids on the way in.
 Unresolvable references (a uuid the file never defines a parent for) and
 unrecognized record types are skipped, not fatal — only malformed JSON
 aborts the import. The returned summary reports, per record type, how many
-lines were read, newly imported, or skipped.
+lines were read, newly imported, or skipped. Exit status: 65 for malformed JSON
+or a row the schema rejects, 66 when -in does not exist, 77 when it cannot be
+read, 74 for a read that fails part way.
 
 # SEE ALSO
 
@@ -1054,7 +1066,10 @@ list
   YYYY-MM-DD) keeps records dated on or after it; filters combine.
   "no matching records" means a real filter matched nothing. A value that
   no record carries and the vocabularies below do not list is a typo, and
-  is an error that names what is known. A value outside the vocabularies
+  is an error that names what is known (exit 1, a lookup that found nothing;
+  record new and set-status, which write a value, exit 2 for the same thing).
+  A record ID that exists in more than one tier is ambiguous and exits 2:
+  qualify it with --project or --workspace. A value outside the vocabularies
   that some record does carry still filters. --workspace and --project
   cannot be combined, since workspace-tier records have no project
 
@@ -1242,8 +1257,11 @@ decisions/README.md, so one is never created.
 
 --check compares PATH/index.md against a fresh render and reports drift as an
 error instead of writing: missing, or different from what the current records
-would produce. It exits non-zero either way, so it fits a pre-commit hook or
-CI step; the remedy either way is running index without --check. --check and
+would produce. It exits 1 for either (a normal "no": the index is out of date),
+so it fits a pre-commit hook or CI step; the remedy either way is running index
+without --check. A record that cannot be read or parsed is a failure, not drift,
+and exits with its own class instead: 65 for a malformed record, 66 for a PATH
+that is missing or not a directory. --check and
 --stdout cannot be combined.
 
 --all walks ROOT and processes every directory that already has an index.md
@@ -1255,7 +1273,10 @@ corpora (each with their own index.md) are handled independently, never
 folded together. One bad corpus does not stop the rest: --all keeps going
 and reports every corpus, then exits non-zero if any needed attention, so a
 pre-commit hook can gate on the whole workspace in one call rather than
-naming each corpus by hand. --all and --stdout cannot be combined. See
+naming each corpus by hand: 1 if the only trouble is stale indexes, and the
+class of the first failure (65 for a malformed record, 77 for a file it may
+not write) if any corpus could not be indexed at all, since a failure is more
+serious than drift. --all and --stdout cannot be combined. See
 TODO.md's index-regeneration item (index --check and the auto-refresh on
 set-status/supersede) for the single-corpus half this completes.
 
@@ -1273,7 +1294,7 @@ directory as ROOT still finds the corpora inside it.
 : write the index to standard output instead of index.md (PATH form only)
 
 --check
-: verify index.md is current without writing it; non-zero exit on drift
+: verify index.md is current without writing it; exit 1 on drift
 
 --all
 : process every already-indexed corpus under ROOT instead of one PATH
