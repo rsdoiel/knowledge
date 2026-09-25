@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1
+id="lifting-cmdkb-logic-into-the-library-implementation-plan">Lifting
+<code>cmd/kb</code> Logic into the Library — Implementation Plan</h1>
+<p>See <a href="library-lift-design.html">library-lift-design.md</a> for
+rationale and the decisions this implements (DR-0035,
+<code>proposed</code>). Work items L1 → L5. TDD-first: the library-level
+test for each item is written and confirmed red before the code moves.
+Pure move: no behavior changes, and the existing <code>cmd/kb</code>
+tests pass <strong>unchanged</strong> after every item. One commit per
+item, made only when RSDOIEL asks.</p>
+<p>Every new exported symbol gets the <code>/** … */</code> block
+(description, parameters, returns, example).</p>
+<hr />
+<h2 id="l1-document-ingest">L1 — Document ingest</h2>
+<p><strong>Move:</strong> <code>ingestNewDocument</code>,
+<code>reingestChangedDocument</code>, <code>tagSection</code>,
+<code>tagDensity</code>, <code>densityLinkCandidates</code>,
+<code>wholeDocumentText</code>, <code>stripCodeSpans</code> from
+<code>cmd/kb/document.go</code> into a new
+<code>documentingest.go</code> (root package).</p>
+<p><strong>New API (sketch):</strong>
+<code>(*KnowledgeBase).IngestDocument(projectID, path, title, opts) (DocumentIngestResult, error)</code>.
+The result carries what <code>documentIngestSummary</code> carries today
+(created/updated/unchanged, sections added/updated/stale, removed
+headings, parser warning).</p>
+<p><strong>Red tests first:</strong> ingest a fixture → new document,
+gist + sections present; re-ingest unchanged → no-op; re-ingest with one
+changed body → <code>summary_stale</code> set, summary kept; removed
+heading reported, not deleted. Port the assertions from
+<code>cmd/kb/document_test.go</code>.</p>
+<p><strong>Also settle:</strong> which path form
+<code>IngestDocument</code> stores (relative to what). Document it in
+the function’s block; it becomes a cross-consumer contract.</p>
+<p><strong>DONE 2026-09-23</strong> (uncommitted).
+<code>documentingest.go</code> holds <code>IngestDocument</code>,
+<code>DocumentIngestOptions</code> (Title, Format, DryRun) and
+<code>DocumentIngestResult</code> (same JSON tags as the old summary;
+<code>cmd/kb</code> aliases it), plus the verbatim-moved bodies.
+<code>StripCodeSpans</code> is exported because <code>concept.go</code>,
+<code>documentfrontmatter.go</code> and <code>documenttag.go</code> in
+<code>cmd/kb</code> also call it (the plan listed only
+<code>documenttag.go</code>; the compiler found the rest).
+<strong>Stored-path form:</strong> the path is stored exactly as passed,
+and <code>DocumentByPath</code> is an exact string match; this is
+documented on <code>IngestDocument</code>. <strong>Temporary
+duplication:</strong> <code>documenttag.go</code> keeps local copies of
+the two code-span regexes, removed when L2 moves
+<code>excludedSpans</code>. 16 new library tests written red first; all
+pre-existing <code>cmd/kb</code> tests pass unmodified. Live check: old
+(HEAD) and new binaries run on copies of the real
+<code>knowledge.db</code> over 9 real files (fresh, repeat, changed file
+with a renamed heading, dry run, missing file): stdout and the resulting
+documents/sections/concept-link tables were byte-identical.</p>
+<p><strong>Done when:</strong> <code>cmdDocumentIngest</code> is parse →
+<code>IngestDocument</code> → render; <code>go test ./...</code> green
+with <code>cmd/kb</code> tests untouched.</p>
+<h2 id="l2-tag-and-fuzzy-tag-text-transforms">L2 — Tag and fuzzy-tag
+text transforms</h2>
+<p><strong>Move:</strong> <code>tagDocumentText</code>,
+<code>insertWikilink</code>, <code>alreadyWikilinked</code>,
+<code>excludedSpans</code>, <code>eligibleConcepts</code> from
+<code>documenttag.go</code>; <code>insertFootnote</code>,
+<code>nearestPrecedingHeading</code>, <code>nextSectionBoundary</code>,
+<code>nextFootnoteLabel</code>, <code>fuzzyExcludedSpans</code>,
+<code>fuzzyThreshold</code>, <code>fuzzyEligible</code> from
+<code>documentfuzzytag.go</code>.</p>
+<p><strong>New API (sketch):</strong> <code>TagDocumentText</code>,
+<code>FuzzyTagDocumentText</code>,
+<code>(*KnowledgeBase).EligibleTagConcepts</code>. Text in, text out;
+<strong>no file I/O in the library.</strong>
+<code>cmdDocumentTag</code>/<code>cmdDocumentFuzzyTag</code> keep
+reading and writing files.</p>
+<p><strong>Red tests first:</strong> move the existing text-level tests;
+keep the two v0.0.11 regression cases (two near-misses in one section
+must not splice a marker inside an earlier footnote’s definition; second
+run is a no-op).</p>
+<p><strong>Caution:</strong> move verbatim. The fuzzy-tag byte-offset
+logic already had one corruption bug; do not “tidy” it.</p>
+<p><strong>DONE 2026-09-23</strong> (uncommitted).
+<code>documenttag.go</code>/<code>documentfuzzytag.go</code> in the root
+package: <code>TagDocumentText</code>,
+<code>(*KnowledgeBase).EligibleTagConcepts</code>,
+<code>FuzzyEligible</code>, <code>FuzzyTagDocumentText</code>,
+<code>FuzzyTagInsertion</code> (same JSON tags; <code>cmd/kb</code>
+aliases it). <code>FuzzyTagDocumentText</code> is the per-file loop that
+lived inline in <code>cmdDocumentFuzzyTag</code>, moved verbatim with
+its two-breakpoint offset tracking. The two cmd unit-test files
+(<code>documenttag_test.go</code>,
+<code>documentfuzzytag_test.go</code>) moved to the root with the logic
+they test; 8 new tests cover the exported surface, including a
+text-level port of the two-near-misses corruption regression. The
+<code>cmd</code> tests for the verbs are unmodified. L1’s temporary
+regex copy in <code>cmd/kb/documenttag.go</code> is gone; three regexes
+now have a marked temporary copy in <code>documentfrontmatter.go</code>
+until L4. Live check: old (pre-L1 HEAD) vs new binary, both on scratch
+copies of 11 files, every mode incl. dry-run, write, second run,
+<code>--concept</code>, and error cases: output (738 lines) and
+rewritten files byte-identical; two near-misses in one section verified
+in isolation. <strong>Process slip, fixed:</strong> my first comparison
+run used a database copy still holding real document rows, so the old
+binary edited the real
+<code>harvey/knowledge-learning-mode-feature-request.md</code>. Restored
+from git (the diff was only tag/footnote insertions); the rerun deleted
+the copy’s document rows and ran from a scratch cwd.</p>
+<h2 id="l3-concept-suggest-with-clustering">L3 — Concept suggest with
+clustering</h2>
+<p><strong>Move:</strong> <code>scoreCandidateTerms</code>,
+<code>tokenizeCandidateItems</code> from <code>concept.go</code>;
+<code>fuzzyTermsClose</code>, <code>excludeNearExisting</code>,
+<code>clusterCandidateTerms</code>, <code>minFuzzyTermLength</code> from
+<code>conceptcluster.go</code>.</p>
+<p><strong>New API (sketch):</strong>
+<code>(*KnowledgeBase).SuggestConcepts(projectID, limit) (ConceptSuggestions, error)</code>
+with <code>Candidates</code> and <code>NearExisting</code>, matching the
+<code>--json</code> shape
+<code>{"candidates": …, "near_existing": …}</code>.</p>
+<p><strong>Red tests first:</strong> the chunking/chunkings/chunked
+cluster, the cat/cot/cog/dog anti-drift chain, and the short-word
+false-positive gate
+(<code>table</code>/<code>stable</code>/<code>able</code> must not
+cluster).</p>
+<p><strong>DONE 2026-09-23</strong> (uncommitted).
+<code>conceptsuggest.go</code> and <code>conceptcluster.go</code> in the
+root package. New exported API:
+<code>(*KnowledgeBase).SuggestConcepts(project string, limit int)</code>
+(takes a project <em>name</em>, not an id, since that is what
+<code>ListRecords</code> filters on, and what a caller has),
+<code>ConceptSuggestions</code>, <code>ConceptCandidate</code>,
+<code>NearExistingMatch</code> (same JSON tags; <code>cmd/kb</code>
+aliases <code>candidateTerm</code> to <code>ConceptCandidate</code> for
+<code>documentfrontmatter.go</code> until L4), and
+<code>CandidateTerms</code>. That last one was not in the plan:
+<code>documentfrontmatter.go</code> shared the tokenizer’s pattern,
+stopword list and record-id filter, and one exported function was
+cheaper than a second copy of a 40-word list.
+<code>tokenizeCandidateItems</code> now takes its tokens from it; that
+is the only non-verbatim change, and the moved tests pass unchanged.
+<code>cmd/kb/conceptcluster.go</code> is deleted. The 29 unit tests for
+the moved logic moved with it; the 21 CLI-level tests stayed. 9 new
+library tests cover <code>SuggestConcepts</code> and
+<code>CandidateTerms</code>. The <code>--debug</code> trace for
+<code>concept suggest</code> now logs the candidate count, no longer the
+item count (design decision 6). Live check against the real
+<code>knowledge.db</code> (read-only): pre-L3 vs new binary, 24
+invocations (text and <code>--json</code>, uncapped 1,583 lines, all 9
+project scopes, <code>--limit</code> values, error cases)
+byte-identical; real db unchanged. The frontmatter scorer, also changed,
+matched on 7 real files apart from a pre-existing ordering
+nondeterminism (filed in <code>TODO.md</code>).</p>
+<h2 id="l4-frontmatter-propose-apply">L4 — Frontmatter propose /
+apply</h2>
+<p><strong>Move:</strong>
+<code>proposeTitle</code>/<code>Author</code>/<code>DateCreated</code>/<code>DateModified</code>,
+<code>detectByline</code>, <code>knownKeywordProposals</code>,
+<code>scoreDocumentCandidateTerms</code>, <code>comparisonScope</code>,
+and the <code>yaml.Node</code> writer helpers from
+<code>documentfrontmatter.go</code>. The <code>git*</code> helpers
+become the default implementation of a new <code>Provenance</code>
+interface (design decision 5).</p>
+<p><strong>New API (sketch):</strong> <code>ProposeFrontmatter</code>,
+<code>ApplyFrontmatter(raw, accepted) ([]byte, error)</code> returning
+bytes, not writing.</p>
+<p><strong>Red tests first:</strong> tests use a fake
+<code>Provenance</code>, so no real <code>git init</code> is needed at
+the library level; keep one <code>GitProvenance</code> test using a real
+<code>t.TempDir()</code> repo. Keep the v0.0.11 regressions:
+<code>title: ""</code> must not lock a field, and
+<code>--set FIELD=</code> must write.</p>
+<p><strong>DONE 2026-09-23</strong> (uncommitted).
+<code>provenance.go</code>: the <code>Provenance</code> interface
+(<code>FirstCommit</code>, <code>LastCommit</code>,
+<code>ConfigUserName(dir)</code>, <code>FileTime</code>) and
+<code>GitProvenance{}</code>, the verbatim git and filesystem primitives
+and this module’s only <code>os/exec</code>.
+<code>documentfrontmatter.go</code>: <code>ProposeFrontmatter</code>,
+<code>ApplyFrontmatter</code>, <code>FrontmatterAccept</code>,
+<code>FrontmatterResult</code>, <code>FrontmatterFieldReport</code>,
+<code>FrontmatterKeywordReport</code>, <code>FrontmatterSignal</code>,
+<code>IsFrontmatterScalarField</code>, plus the verbatim proposers,
+scoring and YAML helpers. Both functions take the file’s bytes and
+return bytes: the library never reads or writes the file, so a caller’s
+own permission layer stays in charge (<code>spliceFrontmatter</code> is
+the pure half of the old <code>writeDocumentFile</code>; the atomic
+write stays in <code>cmd/kb</code> as <code>writeFileAtomic</code>). A
+nil <code>Provenance</code> means <code>GitProvenance</code>. One API
+surprise, kept from the CLI: <code>ApplyFrontmatter</code> creates a
+new-candidate keyword’s concept in the database before returning (never
+on a dry run), so a caller that then fails to write leaves the concept
+behind. 25 unit tests moved with the logic, and the git-backed ones
+still run against a real repository; 17 new tests use a fake
+<code>Provenance</code>; 17 CLI-level tests stayed.
+<code>cmd/kb/documentfrontmatter.go</code> went from 936 lines to about
+230. The two temporary regex copies from L2 and the
+<code>candidateTerm</code> alias from L3 are gone. Live check: pre-L3
+binary vs new, 6,781 lines of output over every mode (reports and
+<code>--json</code> for 7 files, single-field accepts, multi-field
+accept with key order normalized, <code>--set</code>, empty
+<code>--set</code>, dry runs, keywords known/new/rejected in real and
+dry-run modes with concept-table checks, error cases), in a scratch git
+repo with fixed commit dates: identical, and the real repo and database
+untouched. <strong>Two pre-existing nondeterminisms were found and filed
+in <code>TODO.md</code> rather than fixed inside a pure
+move.</strong></p>
+<h2 id="l5-record-ingest-deferred-optional">L5 — Record ingest
+(deferred, optional)</h2>
+<p><code>ingester</code> in <code>ingest.go</code> (629 lines, the most
+stateful piece). <strong>Do not start</strong> until L1–L4 have shipped
+and harvey’s need is concrete (see design decision 4). If started, gets
+its own short plan.</p>
+<h2 id="release">Release</h2>
+<p>After L4: bump to <strong>v0.0.12</strong> via
+<code>codemeta.json</code> + <code>cmt</code> regeneration (never
+hand-edit generated files), <code>CHANGES.md</code> section, a smoke
+test of every affected <code>kb</code> verb against a copy of the real
+<code>agents/knowledge.db</code> <strong>before</strong> tagging, and
+<code>--prerelease</code> on the GitHub release. Tag/publish is
+RSDOIEL’s step.</p>
+<hr />
+<h2
+id="addendum-false-positive-fixes-2026-09-23-dr-0036-uncommitted">Addendum
+— false-positive fixes (2026-09-23, DR-0036, uncommitted)</h2>
+<p>Done between L2 and L3, as a separate change from the pure moves
+above, after the L2 tree was green. Found while updating harvey’s
+skills; measured over 159 real documents before any code changed. Three
+fixes, each with tests written red first: (1) <code>FuzzyEligible</code>
+gets a concept-length floor (6) and a 6-letter shared-prefix rule for
+distance-2 matches (614 → 224 proposals, all 14 measured false positives
+gone, all 10 true positives kept); (2) <code>fuzzyTermsClose</code>
+requires a shared first letter in both tiers (first tried as a
+stem-prefix rule; the red test showed <code>nesting/testing</code> is a
+<em>raw</em> distance-1 match, so that could not work); (3)
+<code>--accept-keywords</code> validates before any write, and
+<code>--dry-run</code> no longer creates concepts (a fourth bug, found
+while writing the tests). One existing test was corrected because it had
+passed an unproposed term. Verified old-vs-new on real data; the
+constants are provisional. The fuzzy-tag gate lives in the library
+(<code>documentfuzzytag.go</code>), so harvey inherits it. The
+clustering and keyword fixes are in <code>cmd/kb</code> and move with L3
+and L4.</p>
+<hr />
+<h2
+id="addendum-2-bugs-fixed-before-v0.0.12-2026-09-23-dr-0037-uncommitted">Addendum
+2 — bugs fixed before v0.0.12 (2026-09-23, DR-0037, uncommitted)</h2>
+<p>RSDOIEL’s bar: no known bugs before the release. Six items, each
+written red first, then verified on real data with an old-vs-new binary
+comparison.</p>
+<ol type="1">
+<li><strong>Map-order output</strong>, five sites:
+<code>EligibleTagConcepts</code> (sorted), <code>frontmatter</code>
+accepted/<code>--set</code> fields (one pass in canonical order; a test
+also guards that <code>frontmatterFieldOrder</code> covers exactly the
+scalar fields), the unknown <code>--set</code> field in an error
+(alphabetical), <code>RemovedHeadings</code> (the old document’s order,
+each heading once), and <code>project rename</code>’s notes (sorted).
+The last two were found by a static audit of every <code>range</code>
+over a map, not from the TODO.</li>
+<li><strong>Punctuation-edged concept names</strong> (<code>C++</code>,
+<code>F#</code>, <code>.NET</code>): a shared
+<code>conceptNameMatches</code> replaces the <code>\b</code> regexes in
+<code>MatchConceptNames</code>, <code>MatchConceptNameCounts</code> and
+<code>insertWikilink</code>. A differential test against the old regex
+on 4,000 random strings agrees exactly for letter-edged names. The old
+rule was wrong both ways: it missed <code>C++</code> and matched
+<code>.NET</code> inside <code>ASP.NET</code>.</li>
+<li><strong>A name with no letter or digit never matches.</strong> Found
+by the live check: the real database holds a junk concept
+<code>...</code> that <code>\b</code> had always kept inert, and the new
+matcher would have made it match every ellipsis.</li>
+<li><strong>Wikilinks inside code minted concepts</strong> (documents
+and records). Over 159 real documents ingest goes from 213 concepts to
+147; none is newly minted and all 66 that stopped are examples inside
+code, not real tags.</li>
+</ol>
+<p>Verification of the finished tree: 6,781 lines of
+<code>document frontmatter</code> output identical to the pre-change
+binary; 60 read-only invocations against the real database each stable
+across 5 runs and identical to the pre-change binary; the file-taking
+verbs give one output across 12 full runs where the pre-fix binary gave
+12. The real database was never written. <strong>Known and left for the
+user:</strong> the real database’s junk concept <code>...</code> (id
+162), which cannot match now (<code>kb concept delete</code> was added
+afterwards, see Addendum 3; it is linked to two records); the
+<code>cancelled</code>-status request and the corpus-improvement
+exploration in <code>TODO.md</code> is an open question, not a bug (the
+<code>cancelled</code>-status request was done afterwards, Addendum
+3).</p>
+<hr />
+<h2
+id="addendum-3-two-more-items-for-v0.0.12-2026-09-23-dr-0038-dr-0039-uncommitted">Addendum
+3 — two more items for v0.0.12 (2026-09-23, DR-0038, DR-0039,
+uncommitted)</h2>
+<p>RSDOIEL approved DR-0037 (<code>accepted</code>, at their
+instruction) and asked for the concept delete verb and the
+<code>cancelled</code> status to be included in the release.</p>
+<ol type="1">
+<li><strong><code>cancelled</code> status (DR-0038).</strong> Added to
+<code>RecordStatuses</code>; documented in <code>kb help record</code>
+with the adopted-then-abandoned meaning and the reason-in-the-body
+convention. Tests written red first;
+<code>list --status cancelled</code> and the index rendering already
+worked and are pinned by tests. <code>DECISION_RECORD_FORMAT.md</code>
+is not on this machine and still needs the line wherever it lives.</li>
+<li><strong><code>kb concept delete</code> (DR-0039).</strong> Two
+design questions put to RSDOIEL and answered: local delete with a
+documented caveat (no tombstone), and refuse a linked concept unless
+<code>--force</code>. <code>ConceptUsage</code> and
+<code>DeleteConcept</code> do the rows in one transaction, then the
+search entry; the CLI adds <code>--dry-run</code> and the
+<code>--</code> terminator, since junk concept names look like flags.
+Live check on a scratch copy of the real database: <code>...</code>
+refused (2 records), previewed, then deleted with <code>--force</code>;
+record and record row untouched, search entry gone,
+<code>integrity_check</code> ok; the real database was not touched.
+<strong>A claim of mine was wrong and a test caught it:</strong> I had
+written that a file still naming the concept “recreates it the next time
+it is ingested”. Ingest skips an unchanged file, so the concept stays
+deleted until that file changes (or the database is rebuilt from files);
+the note, help text and library doc now say so. Also corrected:
+<code>...</code> is linked to two records, not one.</li>
+</ol>
+<p>The man pages (<code>kb-record.1.md</code>,
+<code>kb-concept.1.md</code>) are generated from
+<code>helptext.go</code> by <code>make kb-topics-help</code> and are
+regenerated at release prep, when the version is bumped.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="lifting-cmdkb-logic-into-the-knowledge-library-design">Lifting
+<code>cmd/kb</code> Logic into the <code>knowledge</code> Library —
+Design</h1>
+<p><strong>Status (2026-09-23):</strong> Decisions drafted with
+recommendations, awaiting RSDOIEL’s review. Nothing implemented. See
+<code>library-lift-plan.md</code> for the phased build and
+<code>decisions/0035-*.md</code> (status <code>proposed</code>) for the
+record.</p>
+<p><strong>References:</strong> -
+<code>../harvey/knowledge-learning-mode-design.md</code> — the consumer
+this lift exists for. That document’s decision 1 (Harvey consumes the
+library, it does not shell out to <code>kb</code>) is what makes this
+lift a prerequisite. - <code>module-extraction-design.md</code> /
+<code>-plan.md</code> — the reverse move (harvey → this module), and the
+“pure move, one commit per item” ground rule this design reuses. -
+<code>DR-0032</code>, <code>DR-0033</code>, <code>DR-0034</code> — the
+three v0.0.11 features whose logic currently lives in
+<code>package main</code> and is unreachable from any importer.</p>
+<h2 id="motivation">Motivation</h2>
+<p><code>cmd/kb</code> is <code>package main</code>. Go cannot import
+it, so everything implemented there is available to exactly one caller:
+the <code>kb</code> binary. Sizing the current state (line counts from
+<code>wc -l</code>, 2026-09-23):</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Capability</th>
+<th scope="col">Where its logic lives</th>
+<th scope="col">Lines</th>
+<th scope="col">Importable today?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Document ingest (new + re-ingest, tagging, density)</td>
+<td><code>cmd/kb/document.go</code>
+<code>ingestNewDocument</code>/<code>reingestChangedDocument</code></td>
+<td>703 (file)</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Record ingest</td>
+<td><code>cmd/kb/ingest.go</code> <code>ingester</code></td>
+<td>629</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>document tag</code></td>
+<td><code>cmd/kb/documenttag.go</code> <code>tagDocumentText</code>,
+<code>eligibleConcepts</code></td>
+<td>377</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>document fuzzy-tag</code></td>
+<td><code>cmd/kb/documentfuzzytag.go</code></td>
+<td>362</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>document frontmatter</code></td>
+<td><code>cmd/kb/documentfrontmatter.go</code></td>
+<td>907</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>concept suggest</code> + fuzzy clustering</td>
+<td><code>cmd/kb/concept.go</code>, <code>conceptcluster.go</code></td>
+<td>351 + 197</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Review queue, draft, promote, recall, fuzzy <em>matching</em></td>
+<td>root package (<code>documents.go</code>,
+<code>retrieval.go</code>)</td>
+<td>—</td>
+<td><strong>Yes</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The library already owns the storage and review primitives; the
+<em>workflows</em> that compose them are what’s stranded. A second
+consumer (Harvey) would otherwise either shell out to <code>kb</code>
+and parse <code>--json</code>, or copy the logic. RSDOIEL chose the
+third path — lift it — on 2026-09-23.</p>
+<p><strong>The lift is smaller than the line counts suggest.</strong>
+Every lift candidate imports only <code>knowledge</code>,
+<code>yaml.v3</code>, and stdlib (checked by reading each file’s import
+block). What ties them to <code>package main</code> is a thin layer:
+<code>flag</code> parsing, <code>io.Writer</code> rendering,
+<code>printJSON</code>, and the <code>report*</code> functions. The pure
+logic underneath — <code>tagDocumentText</code>,
+<code>insertFootnote</code>,
+<code>proposeTitle</code>/<code>proposeAuthor</code>/…,
+<code>scoreCandidateTerms</code>, <code>clusterCandidateTerms</code>,
+the <code>ingester</code> — is already separable.</p>
+<h2 id="decisions">Decisions</h2>
+<ol type="1">
+<li><p><strong>Library functions take data and return result structs.
+They never touch <code>flag</code>, <code>io.Writer</code>,
+<code>os.Exit</code>, or JSON.</strong> <code>cmd/kb</code> keeps flag
+parsing and all rendering; each <code>cmdX</code> shrinks to <em>parse
+flags → call library → render result</em>. The result structs are what
+<code>--json</code> already serializes, so the JSON contract is
+unchanged by construction.</p></li>
+<li><p><strong>Text-transforming verbs are lifted as pure text → text
+functions; the caller owns the file write.</strong>
+<code>TagDocumentText(text, names)</code> returns the new text and what
+it inserted; it does not open a file. This is the decision with the most
+downstream weight: Harvey has its own permission-checked write path
+(<code>safe_mode</code>, <code>permissions</code> in
+<code>agents/harvey.yaml</code>), and a library function that quietly
+rewrites a user’s document would bypass it. <code>cmd/kb</code> keeps
+doing the read/write itself, exactly as today.</p></li>
+<li><p><strong>Pure move, behavior-preserving, one commit per lift
+item.</strong> No behavior changes ride along. The existing
+<code>cmd/kb</code> tests are the characterization net: they stay and
+must pass unchanged. Tests that exercise lifted <em>logic</em> move with
+it into the root package; the cmd tests that remain prove the CLI
+surface didn’t move. TDD still applies to the new exported surface —
+write the library-level test first, confirm red, then move the
+code.</p></li>
+<li><p><strong>Lift order follows Harvey’s need, not file
+size:</strong></p>
+<ul>
+<li><strong>L1</strong> document ingest (<code>IngestDocument</code>) —
+Harvey’s session-to- document pipeline cannot exist without it.</li>
+<li><strong>L2</strong> tag / fuzzy-tag text transforms — the curation
+pass.</li>
+<li><strong>L3</strong> concept suggest (with clustering).</li>
+<li><strong>L4</strong> frontmatter propose/apply.</li>
+<li><strong>L5</strong> record ingest (<code>IngestRecords</code>) —
+<strong>last and optional.</strong> Harvey’s decisions realignment (item
+6) needs <code>kb ingest harvey/decisions</code> run occasionally, not
+in an interactive loop, and the <code>ingester</code> is the largest and
+most stateful piece. Recommend deferring until L1–L4 have shipped and
+Harvey’s actual need is visible.</li>
+</ul></li>
+<li><p><strong>Frontmatter provenance goes behind an injected
+interface.</strong> L4 is this module’s first <code>exec.Command</code>
+(git). Lifted as-is, every importer inherits a hidden subprocess.
+Proposed: a small <code>Provenance</code> interface (first-commit
+author/date, last-commit date, <code>git config user.name</code>,
+filesystem times) with <code>GitProvenance{}</code> as the default the
+CLI uses. Harvey can supply its own, and tests need no real
+<code>git init</code>. <strong>Not verified:</strong> whether Harvey’s
+<code>allowed_commands</code>/<code>safe_mode</code> would actually have
+blocked a library-internal <code>exec</code> — it may not intercept at
+that layer at all. The interface is justified by testability and caller
+control regardless; the safe_mode angle is a bonus to check, not the
+rationale.</p></li>
+<li><p><strong>Debug tracing stays in <code>cmd/kb</code>.</strong>
+<code>logKBCall</code> wraps individual KB method calls in the CLI.
+Lifted functions call <code>kb</code> methods directly, so the
+<code>--debug</code> JSONL trace becomes coarser for lifted verbs: one
+event at the lifted-call boundary (the wrapper logs it) instead of one
+per internal KB call. Accepted cost. Note that
+<code>cmdDocumentTag</code>, <code>cmdDocumentFuzzyTag</code> and
+<code>cmdDocumentFrontmatter</code> don’t receive a
+<code>DebugLog</code> today anyway, so for those the trace gets no
+worse.</p></li>
+<li><p><strong>Additive only; one release.</strong> L1–L4 ship together
+as v0.0.12. No existing exported symbol changes; <code>cmd/kb</code>
+output is byte-identical. Every new exported symbol carries the
+workspace’s <code>/** … */</code> block (description, parameters,
+returns, example).</p></li>
+<li><p><strong>Proposed names (signature sketches — final shapes are
+settled by the plan’s red tests, not fixed here):</strong></p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// L1</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> IngestDocument<span class="op">(</span>projectID <span class="dt">int64</span><span class="op">,</span> path <span class="dt">string</span><span class="op">,</span> opts DocumentIngestOptions<span class="op">)</span> <span class="op">(</span>DocumentIngestResult<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// opts: Title, Format, DryRun</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">// L2</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TagDocumentText<span class="op">(</span>text <span class="dt">string</span><span class="op">,</span> names <span class="op">[]</span><span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="op">[]</span><span class="dt">string</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> EligibleTagConcepts<span class="op">(</span>text <span class="dt">string</span><span class="op">,</span> candidates <span class="op">[]</span><span class="dt">string</span><span class="op">)</span> <span class="op">([]</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> FuzzyTagDocumentText<span class="op">(</span>text <span class="dt">string</span><span class="op">,</span> matches <span class="op">[]</span>FuzzyConceptMatch<span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="op">[]</span>FuzzyTagInsertion<span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">// L3</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> SuggestConcepts<span class="op">(</span>project <span class="dt">string</span><span class="op">,</span> limit <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>ConceptSuggestions<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// project name, &quot;&quot; = all</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">// L4</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> ProposeFrontmatter<span class="op">(</span>path <span class="dt">string</span><span class="op">,</span> raw <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> prov Provenance<span class="op">)</span> <span class="op">(</span>FrontmatterResult<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>kb <span class="op">*</span>KnowledgeBase<span class="op">)</span> ApplyFrontmatter<span class="op">(</span>path <span class="dt">string</span><span class="op">,</span> raw <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> prov Provenance<span class="op">,</span> accept FrontmatterAccept<span class="op">,</span> dryRun <span class="dt">bool</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> FrontmatterResult<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div></li>
+</ol>
+<h2 id="risks-stated-rather-than-glossed">Risks, stated rather than
+glossed</h2>
+<ul>
+<li><strong>Two v0.0.11 features each hit a design self-contradiction
+that only hand-computation caught</strong> (see DR-0032/0034). A lift
+that “just moves code” must not re-derive the algorithms — move them
+verbatim and let the existing red-green history stand. Any temptation to
+“clean up while we’re here” is the failure mode.</li>
+<li><strong><code>DocumentByPath</code> is keyed on the stored path
+string.</strong> Once Harvey is a second ingester, relative-vs-absolute
+path convention becomes a cross-consumer contract, not an internal
+detail. L1 must document which form <code>IngestDocument</code> stores.
+(Checked only that the lookup is an exact string match; not yet checked
+what <code>cmdDocumentIngest</code> normalizes to.)</li>
+<li><strong><code>DECISION_RECORD_FORMAT.md</code> is cited by root
+<code>CLAUDE.md</code> at <code>~/WorkLab/</code>, but that path doesn’t
+exist on this machine.</strong> Not blocking —
+<code>kb record new</code> scaffolds the format — but the pointer is
+stale here.</li>
+</ul>
+<h2 id="deferred-explicitly">Deferred, explicitly</h2>
+<ul>
+<li><strong>L5 record ingest</strong> — see decision 4.</li>
+<li>Renaming <code>KnowledgeBase</code>/<code>Open</code> to avoid the
+package-name stutter — already deferred since the module split; still
+its own follow-up.</li>
+<li>Any API for the TUI. It is a <code>cmd/kb</code> concern and stays
+there.</li>
+</ul>
+<h2 id="open-questions-for-rsdoiel">Open questions for RSDOIEL</h2>
+<ol type="1">
+<li>Is deferring L5 acceptable, or should the lift be complete before
+Harvey starts? (Recommendation: defer.)</li>
+<li><code>Provenance</code> as an interface (decision 5) versus lifting
+<code>exec.Command</code> directly and accepting the hidden subprocess.
+(Recommendation: interface.)</li>
+</ol>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
