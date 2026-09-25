@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.13
+version: 0.0.14
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,25 +33,25 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-09-24
+date_released: 2026-09-25
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.13
+## knowledge 0.0.14
 
-A sweep for commands that answer a mistake with success. Every verb was run with empty, malformed, unknown and surplus input against a copy of the real database, and each one that exited 0 for input it did not understand, or lost part of it, is fixed, plus a `kb search` bug on hyphenated terms. Several changes are visible to scripts, so read the upgrading notes below. The decisions behind them are DR-0040 to DR-0044.
+`kb` now says what kind of failure it was from the exit number alone, and a batch of inputs it used to accept without a word are refused. Read the upgrading notes below before updating a script. The exit codes follow one convention for every command-line tool in the workspace (workspace DR-0003); the decisions for `kb` are DR-0045 to DR-0049. The whole change was checked by running the v0.0.13 build beside the new one, on a copy of the real database, over 362 commands in plain and `--json` mode.
 
-Usage errors now exit 2 (they exited 1; DR-0040), as `kb -help` always documented: an unknown verb, subverb or flag, a missing or surplus argument, a malformed id or flag value. Exit 1 stays for a command line that was fine and a result that was not: not found, no results, a value the knowledge base rejects, a database error. Unknown flags and surplus arguments are refused instead of dropped (DR-0041): of 25 verbs probed, 15 accepted a bogus flag and 19 ignored an extra argument, so `source add T more words` stored the title `T`, `record new --title A decision` kept only `A`, and `project list --json` printed plain text. A name that begins with a dash now follows `--` (`kb project show -- -name`).
+Exit 1 is now the normal "no" (not found, no results, a stale index, an operation the current state forbids), as it is for `grep` and `diff`; 2 is a usage error; and the `sysexits(3)` numbers above that say what went wrong: 65 wrong content (a malformed record or JSONL, a file that is not a knowledge base, a merge collision), 66 a missing input or workspace, 69 an unreachable service, 70 an internal error, 73 an output that cannot be created, 74 an I/O error, 75 a locked database, 77 permission denied. An error nothing classified is 70, never 1. The `--json` error object carries the class and the number.
 
-`init`, `index` and `merge` never open the ambient database, and a `--db` given to them was dropped silently (`kb --db rt.db init` created `./agents/knowledge.db`); it is now refused (DR-0041). `record list` validates its filters (DR-0043), where every mistake used to read as `no matching records`: a `--status`, `--kind`, `--trigger`, `--initiative` or `--project` that nothing carries is an error naming what is known, `--since` must be a real date, and `--workspace` with `--project` is refused. The vocabularies are documented, not enforced, so a value outside them that a record really carries still filters.
+Commands that work through many items do all they can and then exit with the class of the first failure, instead of 0: `kb ingest` (a record that does not parse, two files claiming one identity), `index --all`, and `source check-retractions` (69; it also no longer marks an unreachable source as checked).
 
-Project and concept names are trimmed, and a blank name or observation body is refused, in the library as well as the CLI (DR-0042): `kb project add '  '` used to create a project named two spaces. That also closes a corruption: `kb project rename demo ''` on a project that owns records wrote `project: ""` into every record, renamed the row to an empty string, and left the next ingest failing on `UNIQUE constraint failed: records.uuid`. `kb merge` now checks its inputs before opening them (DR-0044). A mistyped `-a` used to merge an empty database, exit 0 and leave a zero-byte file at the typo; a missing, empty or directory input, or `-a` and `-b` naming the same file, is now refused, and a refused merge changes nothing on disk.
+Mistakes that used to succeed are refused: `source retract` or `remove` on an id that does not exist; `source add` with a blank title, a bad `--published`, `--url` or `--doi` (a mistyped DOI read as "not retracted"); `record new` or `record set-status` with a trigger, kind or status outside the vocabulary that no record carries; `kb init --bogus`, which created a directory named `--bogus`; `kb search --json foo`, which searched for that text; a negative `concept suggest --limit`.
 
-`kb VERB SUBVERB -help` prints the verb's page and exits 0 (DR-0041; it printed `flag: help requested`, or looked up a project named `-help`). `kb search` no longer fails on `map-reduce`, `JSON-L` or other hyphenated terms, which FTS5 read as a column filter. A flaky import test, failing about one run in 40 on a one-second clock race in the test rather than in the product, is fixed.
+Project and concept names are one line: interior whitespace collapses and control characters are refused, so a hard-wrapped `[[wikilink]]` is the ordinary concept instead of a second one with a newline in its name (DR-0046). `--` now works on every verb that takes a name, title or path, and `kb merge` refuses a zero-byte input even beside a `-wal`.
 
-Upgrading: a script that tested for exit 1 to mean a mistyped command should expect 2; one that tested for 1 to mean not found still gets 1. `--json`, `--db` and `--debug` go before the verb and are refused after it. `kb --db PATH init` becomes `kb init PATH`. A typo'd `record list` filter now fails where it printed an empty list. Library callers: `AddProject`, `AddProjectWithStatus`, `AddConcept`, `AddConceptWithIdentifier`, `ResolveConceptName`, `RenameProject`, `RenameProjectRow` and `RenameConcept` trim the name and return an error for a blank one, `AddObservation` and `AddObservationWithSource` return an error for a blank body, and `CleanName` and `DistinctRecordValues` are new. A zero-byte `.db` left by an earlier failed merge can be deleted.
+Upgrading: a script that treated any non-zero as failure is unaffected. One that treated 1 as "the command failed" must also handle 2 and the numbers above it; the table in CHANGES.md lists every changed status. The three knowledge skills in `agents/skills` branch on the new codes.
 
 ## Authors
 

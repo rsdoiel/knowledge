@@ -6,13 +6,13 @@ import (
 
 const (
     // Version number of release
-    Version = "0.0.13"
+    Version = "0.0.14"
 
     // ReleaseDate, the date version.go was generated
-    ReleaseDate = "2026-09-24"
+    ReleaseDate = "2026-09-25"
 
     // ReleaseHash, the Git hash when version.go was generated
-    ReleaseHash = "1aa3e79"
+    ReleaseHash = "2d6239c"
     LicenseText = `
 knowledge is a SQLite3-backed knowledge base module for tracking projects, observations, and concepts
 Copyright (C) 2026 R. S. Doiel

@@ -3,11 +3,10 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased
+## v0.0.14 — 2026-09-25
 
-**Not yet released.** The heading, the date and the version are set at release prep,
-and the four `codemeta.json` fields with them. Everything below is written and tested
-red first; the decisions are workspace DR-0003 and knowledge DR-0045 to DR-0049.
+Everything below is written and tested red first. The decisions are workspace DR-0003 and
+knowledge DR-0045 to DR-0049.
 
 `kb` now tells a script *what kind* of failure it was from the exit number alone, and
 a batch of inputs that were accepted silently are refused. The exit codes follow one
