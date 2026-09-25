@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -104,5 +106,70 @@ func TestSplitFlags_HelpFlagReportsErrHelp(t *testing.T) {
 	}
 	if _, err := splitFlags([]string{"--bogus"}, nil, nil); err == nil || errors.Is(err, flag.ErrHelp) {
 		t.Errorf("splitFlags(--bogus) error = %v, want an ordinary unknown-flag error", err)
+	}
+}
+
+// `--` ends flag recognition, as it does for the verbs that already handle it
+// (DR-0039, DR-0041): everything after it is positional, dashes included. Without
+// it a source title or an ingest path that begins with a dash could not be given.
+func TestSplitFlags_DoubleDashEndsFlags(t *testing.T) {
+	var by string
+	var force bool
+	str := map[string]*string{"--by": &by}
+	boo := map[string]*bool{"--force": &force}
+	for _, tc := range []struct {
+		name  string
+		args  []string
+		want  []string
+		by    string
+		force bool
+	}{
+		{"dash-leading value", []string{"--", "-1 considered harmful"}, []string{"-1 considered harmful"}, "", false},
+		{"flags before it still apply", []string{"--by", "me", "--force", "--", "-x"}, []string{"-x"}, "me", true},
+		{"a real flag after it is positional", []string{"a", "--", "--force", "--by"}, []string{"a", "--force", "--by"}, "", false},
+		{"only the first one is consumed", []string{"--", "--", "b"}, []string{"--", "b"}, "", false},
+		{"nothing after it", []string{"a", "--"}, []string{"a"}, "", false},
+		{"help after it is positional", []string{"--", "--help"}, []string{"--help"}, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			by, force = "", false
+			got, err := splitFlags(tc.args, str, boo)
+			if err != nil {
+				t.Fatalf("splitFlags(%v) = %v", tc.args, err)
+			}
+			if fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Errorf("positional = %q, want %q", got, tc.want)
+			}
+			if by != tc.by || force != tc.force {
+				t.Errorf("by=%q force=%v, want by=%q force=%v", by, force, tc.by, tc.force)
+			}
+		})
+	}
+}
+
+// A flag's value is consumed before `--` is looked at, so `--by --` gives the
+// flag the value "--", as any other string would.
+func TestSplitFlags_DoubleDashAsFlagValue(t *testing.T) {
+	var by string
+	got, err := splitFlags([]string{"--by", "--", "x"}, map[string]*string{"--by": &by}, nil)
+	if err != nil || by != "--" || fmt.Sprint(got) != "[x]" {
+		t.Errorf("got %v, %v, by=%q; want [x], nil, by=--", got, err, by)
+	}
+}
+
+func TestCmdSource_AddAcceptsDashLeadingTitleAfterDoubleDash(t *testing.T) {
+	kb := openTestKB(t)
+	var out bytes.Buffer
+	if err := cmdSource(kb, nil, false, []string{"add", "--", "-1 considered harmful"}, &out); err != nil {
+		t.Fatalf("source add -- TITLE: %v", err)
+	}
+	sources, _ := kb.ListSources()
+	if len(sources) != 1 || sources[0].Title != "-1 considered harmful" {
+		t.Errorf("sources = %+v, want one titled \"-1 considered harmful\"", sources)
+	}
+	// Without `--` it is still a mistyped flag.
+	out.Reset()
+	if err := cmdSource(kb, nil, false, []string{"add", "-1 considered harmful"}, &out); err == nil {
+		t.Error("a dash-leading title without -- must still be refused as an unknown flag")
 	}
 }

@@ -131,10 +131,16 @@ init, index and merge never open the ambient database, so -db is refused for
 them as well; init takes its target as kb init PATH, merge as -a, -b and -out.
 
 A name that begins with a dash is given after --, as in
-kb project show -- -name, so that it is not read as a flag. Words
-that follow a verb's fixed arguments and are free text (an observation body,
-a project description, a retraction note) are taken as they are, dashes
-included.
+kb project show -- -name, so that it is not read as a flag. Every verb
+that takes a name, title or path accepts --, record, document, ingest and
+source add included. Words that follow a verb's fixed arguments and are free
+text (an observation body, a project description, a retraction note) are taken
+as they are, dashes included.
+
+A project or concept name is one line. Surrounding whitespace is trimmed and
+any interior run of whitespace, a newline or a tab included, becomes a single
+space, so a [[wikilink]] wrapped across two lines names the same concept as
+the one-line spelling. A name with any other control character is refused.
 
 # EXIT STATUS
 

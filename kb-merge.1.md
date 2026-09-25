@@ -30,7 +30,9 @@ paths — a --db is refused, and it never opens (or creates) the ambient
 Both inputs must exist, be non-empty database files, and be two different
 files; anything else is refused before any file is touched. A mistyped -a
 therefore fails, instead of merging an empty database in its place and
-leaving a zero-byte file at the typo.
+leaving a zero-byte file at the typo. A zero-byte file is refused even when a
+-wal file sits beside it: SQLite discards that -wal on opening an empty main
+file, so merge refuses first and leaves the -wal untouched.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a

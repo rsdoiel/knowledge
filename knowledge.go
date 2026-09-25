@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
@@ -544,28 +545,42 @@ func (kb *KnowledgeBase) AddProject(name, description string) (int64, error) {
 	return kb.addProject(name, description, "active")
 }
 
-/** CleanName trims surrounding whitespace from a project or concept name and
- * refuses one that is empty afterwards. A blank name is never meaningful: it
- * sorts first in every list, cannot be typed back to select it, and used to be
- * storable by `kb project add ''`. Trimming matches what ingest already does to
- * wikilink and tag text, so a padded name resolves to the row it plainly means
- * instead of forking a duplicate.
+/** CleanName makes a project or concept name one tidy line: it trims the ends,
+ * collapses every interior run of whitespace (a newline, a tab, a non-breaking
+ * space, two spaces) to a single space, and refuses a name that is empty
+ * afterwards or holds any other control character.
+ *
+ * A blank name is never meaningful: it sorts first in every list, cannot be
+ * typed back to select it, and used to be storable by `kb project add ''`.
+ * Trimming matches what ingest already does to wikilink and tag text, so a
+ * padded name resolves to the row it plainly means instead of forking a
+ * duplicate. Collapsing does the same for a hard-wrapped [[wikilink]]: the
+ * wrapped spelling and the one-line spelling are the same concept, and neither
+ * can put a newline into a project list row or a directory name. A control
+ * character such as ESC or NUL is never part of a real name and would reach the
+ * terminal as typed, so it is refused (DR-0046, reversing DR-0042 item 1's
+ * "interior whitespace is left alone").
  *
  * Parameters:
  *   kind (string) — "project" or "concept"; only used in the error message.
  *   name (string) — the name as supplied.
  *
  * Returns:
- *   string — the trimmed name.
- *   error  — if the trimmed name is empty.
+ *   string — the cleaned name.
+ *   error  — if the cleaned name is empty or holds a control character.
  *
  * Example:
- *   name, err := CleanName("project", "  harvey ") // "harvey", nil
+ *   name, err := CleanName("concept", "deterministic\noutput") // "deterministic output", nil
  */
 func CleanName(kind, name string) (string, error) {
-	name = strings.TrimSpace(name)
+	name = strings.Join(strings.Fields(name), " ")
 	if name == "" {
-		return "", fmt.Errorf("knowledge: %s name must not be empty", kind)
+		return "", invalidf("knowledge: %s name must not be empty", kind)
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			return "", invalidf("knowledge: %s name must not contain the control character %U", kind, r)
+		}
 	}
 	return name, nil
 }
@@ -600,7 +615,7 @@ var validProjectStatuses = map[string]bool{
  */
 func (kb *KnowledgeBase) AddProjectWithStatus(name, description, status string) (int64, error) {
 	if !validProjectStatuses[status] {
-		return 0, fmt.Errorf("knowledge: invalid project status %q (want concept, active, paused, or concluded)", status)
+		return 0, invalidf("knowledge: invalid project status %q (want concept, active, paused, or concluded)", status)
 	}
 	name, err := CleanName("project", name)
 	if err != nil {
@@ -664,7 +679,7 @@ func (kb *KnowledgeBase) refreshProjectFTS(id int64, name, description string) {
  */
 func (kb *KnowledgeBase) SetProjectStatus(name, status string) error {
 	if !validProjectStatuses[status] {
-		return fmt.Errorf("knowledge: invalid project status %q (want concept, active, paused, or concluded)", status)
+		return invalidf("knowledge: invalid project status %q (want concept, active, paused, or concluded)", status)
 	}
 	res, err := kb.db.Exec(
 		`UPDATE projects SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?`,
@@ -678,7 +693,7 @@ func (kb *KnowledgeBase) SetProjectStatus(name, status string) error {
 		return fmt.Errorf("knowledge: set project status: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("knowledge: project %q not found", name)
+		return notFoundf("knowledge: project %q not found", name)
 	}
 	return nil
 }
@@ -717,7 +732,7 @@ func (kb *KnowledgeBase) SetProjectDescription(name, description string) error {
 		description, name,
 	).Scan(&id)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("knowledge: project %q not found", name)
+		return notFoundf("knowledge: project %q not found", name)
 	}
 	if err != nil {
 		return fmt.Errorf("knowledge: set project description: %w", err)
@@ -805,7 +820,7 @@ func (kb *KnowledgeBase) resolveProjectRename(old, new string) (int64, string, e
 	var description string
 	err := kb.db.QueryRow(`SELECT id, description FROM projects WHERE name = ?`, old).Scan(&id, &description)
 	if err == sql.ErrNoRows {
-		return 0, "", fmt.Errorf("knowledge: project %q not found", old)
+		return 0, "", notFoundf("knowledge: project %q not found", old)
 	}
 	if err != nil {
 		return 0, "", fmt.Errorf("knowledge: rename project: %w", err)
@@ -908,12 +923,12 @@ func (kb *KnowledgeBase) AddObservation(projectID int64, kind, body string) (int
  */
 func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, sourceDOI string) (int64, error) {
 	if !IsValidKind(kind) {
-		return 0, fmt.Errorf("knowledge: invalid kind %q; must be one of: %s",
+		return 0, invalidf("knowledge: invalid kind %q; must be one of: %s",
 			kind, strings.Join(ValidObservationKinds, ", "))
 	}
 	// Only a blank body is refused; a real one is stored exactly as given.
 	if strings.TrimSpace(body) == "" {
-		return 0, fmt.Errorf("knowledge: observation body must not be empty")
+		return 0, invalidf("knowledge: observation body must not be empty")
 	}
 	u, err := uuid.NewV7()
 	if err != nil {
@@ -1244,7 +1259,7 @@ func (kb *KnowledgeBase) RenameConcept(old, new string) error {
 	var description string
 	err = kb.db.QueryRow(`SELECT id, description FROM concepts WHERE name = ?`, old).Scan(&id, &description)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("knowledge: concept %q not found", old)
+		return notFoundf("knowledge: concept %q not found", old)
 	}
 	if err != nil {
 		return fmt.Errorf("knowledge: rename concept: %w", err)
@@ -1982,17 +1997,28 @@ type Source struct {
  * row with the same (type, value) pair is returned instead of creating a
  * duplicate.
  *
+ * The title is trimmed and must not be blank. published_date, when set, must be
+ * YYYY, YYYY-MM or YYYY-MM-DD. A "url" identifier must be an absolute URL and a
+ * "doi" identifier a bare 10.NNNN/suffix DOI; other identifier types are not
+ * checked. Nothing is rewritten beyond trimming whitespace. The JSONL importer
+ * does not call AddSource and is not held to these checks.
+ *
  * Parameters:
  *   s (Source) — source metadata; ID field is ignored.
  *
  * Returns:
  *   int64 — the ID of the inserted or existing row.
- *   error — on database failure.
+ *   error — for a blank title or a malformed date, url or doi (nothing is
+ *           inserted), or on database failure.
  *
  * Example:
  *   id, err := kb.AddSource(Source{Title: "SPARQL 1.1", IdentifierType: "doi", IdentifierValue: "10.1234/sparql"})
  */
 func (kb *KnowledgeBase) AddSource(s Source) (int64, error) {
+	s, err := cleanSource(s)
+	if err != nil {
+		return 0, err
+	}
 	if s.IdentifierType != "" && s.IdentifierValue != "" {
 		var id int64
 		err := kb.db.QueryRow(

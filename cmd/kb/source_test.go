@@ -180,3 +180,56 @@ func TestCmdSource_UnknownSubcommand(t *testing.T) {
 		t.Error("expected an error for an unknown source subcommand")
 	}
 }
+
+// `source add` used to accept a blank title, a malformed --published and a
+// malformed --url or --doi, then say "source added". AddSource now refuses them
+// and the verb reports the library's error with nothing stored.
+func TestCmdSource_AddRefusesMistakes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"blank title", []string{"add", "   "}, "title must not be empty"},
+		{"empty title", []string{"add", ""}, "title must not be empty"},
+		{"bad date", []string{"add", "T", "--published", "notadate"}, `invalid published date "notadate"`},
+		{"impossible date", []string{"add", "T", "--published", "2026-13-45"}, "invalid published date"},
+		{"bad url", []string{"add", "T", "--url", "not a url"}, `invalid url "not a url"`},
+		{"bad doi", []string{"add", "T", "--doi", "zzz"}, `invalid doi "zzz"`},
+		{"pasted doi url", []string{"add", "T", "--doi", "https://doi.org/10.1234/x"}, "bare form"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kb := openTestKB(t)
+			var out bytes.Buffer
+			err := cmdSource(kb, nil, false, tc.args, &out)
+			if err == nil {
+				t.Fatalf("succeeded with %q, want an error", out.String())
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %v, want it to contain %q", err, tc.want)
+			}
+			if out.Len() != 0 {
+				t.Errorf("stdout = %q, want it empty on error", out.String())
+			}
+			sources, lerr := kb.ListSources()
+			if lerr != nil || len(sources) != 0 {
+				t.Errorf("ListSources = %v, %v, want none stored", sources, lerr)
+			}
+		})
+	}
+}
+
+func TestCmdSource_AddAcceptsPartialDatesAndGoodIdentifiers(t *testing.T) {
+	for _, args := range [][]string{
+		{"add", "T1", "--published", "2026"},
+		{"add", "T2", "--published", "2026-09"},
+		{"add", "T3", "--published", "2026-09-24", "--url", "https://example.org/a"},
+		{"add", "T4", "--doi", "10.1234/example"},
+	} {
+		kb := openTestKB(t)
+		var out bytes.Buffer
+		if err := cmdSource(kb, nil, false, args, &out); err != nil {
+			t.Errorf("source %v = %v, want it accepted", args, err)
+		}
+	}
+}

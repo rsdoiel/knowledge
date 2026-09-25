@@ -219,11 +219,14 @@ func copyFile(srcPath, dstPath string) error {
  * reported success, leaving a zero-byte file at the typo.
  *
  * A zero-byte file is refused too, since that is exactly what the old
- * behaviour left behind. The exception is one with data in its -wal sidecar,
- * which merge would checkpoint before it copies. That is a defensive allowance,
- * not an observed case: with this driver a WAL database's main file is at least
- * one page from the moment WAL mode is set, so no such state was produced, but
- * refusing a file that might hold real data is the worse mistake.
+ * behaviour left behind, and whether or not a -wal sidecar sits beside it. An
+ * earlier version let a zero-byte file with a non-empty -wal through, in case
+ * the data lived only in the WAL. It cannot: SQLite discards the WAL of a
+ * zero-byte main file when it opens it, even for a young database with every
+ * page still in the WAL, so nothing was being protected. Letting it through made
+ * merge exit 0 with no rows from that input and delete its -wal (DR-0046,
+ * reversing DR-0044 item 4). Refusing before anything opens the file leaves the
+ * -wal exactly as found, and the error says so.
  *
  * Parameters:
  *   flagName (string) — "-a" or "-b"; only used to name the input in the error.
@@ -249,7 +252,7 @@ func checkMergeInput(flagName, path string) error {
 		return fmt.Errorf("merge input %s: %s is not a regular file", flagName, path)
 	case info.Size() == 0:
 		if wal, err := os.Stat(path + "-wal"); err == nil && wal.Size() > 0 {
-			return nil
+			return fmt.Errorf("merge input %s: %s is empty (0 bytes), not a knowledge base; its %s-wal was left untouched", flagName, path, path)
 		}
 		return fmt.Errorf("merge input %s: %s is empty (0 bytes), not a knowledge base", flagName, path)
 	}

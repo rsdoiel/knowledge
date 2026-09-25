@@ -30,7 +30,14 @@ via source link, recording the relationship (default: cited).
 add
 : register a source; --doi/--url set its identifier (doi takes priority
   if both are given); adding one whose identifier already exists returns
-  the existing source's id instead of duplicating it
+  the existing source's id instead of duplicating it. The title is trimmed
+  and must not be blank. --published must be YYYY, YYYY-MM or YYYY-MM-DD and
+  a real date. --url must be an absolute URL with a scheme and a host. --doi
+  must be the bare form 10.NNNN/suffix; a pasted doi: or https://doi.org/
+  prefix is refused rather than rewritten, because a mistyped DOI would
+  otherwise be checked against Retraction Watch, find nothing, and read as
+  "not retracted". Other identifier types are not checked. Whitespace around
+  a value is trimmed
 
 remove
 : delete a source — fails if it's still linked to any observation

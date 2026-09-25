@@ -83,7 +83,7 @@ func (kb *KnowledgeBase) conceptIDByExactName(name string) (int64, error) {
 	var id int64
 	err := kb.db.QueryRow(`SELECT id FROM concepts WHERE name = ?`, name).Scan(&id)
 	if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("knowledge: concept %q not found", name)
+		return 0, notFoundf("knowledge: concept %q not found", name)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: look up concept: %w", err)

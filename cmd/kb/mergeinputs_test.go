@@ -180,10 +180,11 @@ func TestMerge_RefusalUnderJSONIsAnEnvelope(t *testing.T) {
 	}
 }
 
-// A zero-byte main file counts as empty only when its -wal sidecar has nothing
-// either. Not an observed state (a WAL database's main file is at least a page
-// from the moment WAL mode is set), so this pins a defensive allowance: a file
-// that might hold real data is not refused.
+// A zero-byte main file is refused whatever its -wal sidecar holds (DR-0046,
+// reversing DR-0044 item 4). The allowance assumed the data might live only in
+// the WAL. It cannot: SQLite discards the WAL of a zero-byte main file on open,
+// so nothing is lost by refusing, and accepting it made merge exit 0 with no
+// rows and delete the input's -wal.
 func TestCheckMergeInput(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name string, size int) string {
@@ -210,7 +211,7 @@ func TestCheckMergeInput(t *testing.T) {
 		{"a real file", full, ""},
 		{"zero bytes, nothing in a WAL", empty, "is empty"},
 		{"zero bytes, empty WAL", emptyWal, "is empty"},
-		{"zero bytes but data in the WAL", walOnly, ""},
+		{"zero bytes but data in the WAL", walOnly, "is empty"},
 		{"missing", filepath.Join(dir, "nope.db"), "does not exist"},
 		{"directory", sub, "is a directory"},
 	} {
@@ -225,5 +226,37 @@ func TestCheckMergeInput(t *testing.T) {
 				t.Errorf("error %q should name the flag -a", err)
 			}
 		})
+	}
+}
+
+// The refusal for a zero-byte main file with a WAL leaves both files exactly as
+// they were and says the -wal was not touched. Before DR-0046 merge exited 0,
+// reported zero rows for that input, and SQLite deleted the -wal on open.
+func TestMerge_ZeroByteMainWithWALIsRefusedAndTouchesNothing(t *testing.T) {
+	dir := mergeDir(t)
+	if err := os.WriteFile("z.db", nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	walBytes := bytes.Repeat([]byte{0x37}, 4096)
+	if err := os.WriteFile("z.db-wal", walBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := listing(t, dir)
+	code, out, errOut := runMergeArgs("-a", "z.db", "-b", "b.db", "-out", "o.db")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1; stdout=%.100q stderr=%q", code, out, errOut)
+	}
+	if !strings.Contains(errOut, "z.db") || !strings.Contains(errOut, "is empty") {
+		t.Errorf("stderr = %q, want it to name z.db and say it is empty", errOut)
+	}
+	if !strings.Contains(errOut, "-wal") {
+		t.Errorf("stderr = %q, want it to mention that the -wal was left untouched", errOut)
+	}
+	if after := listing(t, dir); after != before {
+		t.Errorf("a refused merge changed the directory:\n before: %s\n after:  %s", before, after)
+	}
+	got, err := os.ReadFile("z.db-wal")
+	if err != nil || !bytes.Equal(got, walBytes) {
+		t.Errorf("the input's -wal was altered or removed (err %v)", err)
 	}
 }

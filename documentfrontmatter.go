@@ -320,7 +320,7 @@ func frontmatterNode(raw []byte) (node *yaml.Node, bodyOffset int, hadBlock bool
 		return &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}, loc[1], true, nil
 	}
 	if doc.Content[0].Kind != yaml.MappingNode {
-		return nil, 0, false, fmt.Errorf("knowledge: frontmatter is not a mapping")
+		return nil, 0, false, invalidf("knowledge: frontmatter is not a mapping")
 	}
 	return doc.Content[0], loc[1], true, nil
 }
@@ -622,7 +622,7 @@ func (kb *KnowledgeBase) frontmatterRun(path string, raw []byte, prov Provenance
 	for _, field := range setFields {
 		value := accept.Set[field]
 		if !frontmatterScalarFields[field] {
-			return nil, FrontmatterResult{}, fmt.Errorf("unknown frontmatter field %q", field)
+			return nil, FrontmatterResult{}, invalidf("unknown frontmatter field %q", field)
 		}
 		setValues[field] = value
 	}
@@ -633,7 +633,7 @@ func (kb *KnowledgeBase) frontmatterRun(path string, raw []byte, prov Provenance
 			continue
 		}
 		if !frontmatterScalarFields[f] {
-			return nil, FrontmatterResult{}, fmt.Errorf("unknown frontmatter field %q", f)
+			return nil, FrontmatterResult{}, invalidf("unknown frontmatter field %q", f)
 		}
 		acceptedFields[f] = true
 	}

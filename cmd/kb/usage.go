@@ -7,41 +7,26 @@ import (
 	"strings"
 )
 
-/** usageError marks an error as a mistake in the command line itself: a
- * missing or surplus argument, an unknown subverb or flag, a flag without its
- * value, a malformed id, or a missing required flag. Nothing was attempted.
- * dispatch exits 2 for these and 1 for everything else, which is what `kb
- * -help` documents. A command line that parsed and then failed (not found, no
- * results, a database error) is not a usage error.
- *
- * Fields:
- *   err (error) — the underlying error; Error and Unwrap forward to it.
- *
- * Example:
- *   return usageErrorf("usage: project show NAME")
- */
-type usageError struct {
-	err error
-}
-
-func (u *usageError) Error() string { return u.err.Error() }
-func (u *usageError) Unwrap() error { return u.err }
-
-/** usageErrorf is fmt.Errorf that marks its result as a usage error. %w works
- * as it does in fmt.Errorf, so a wrapped cause stays reachable.
+/** usageErrorf is fmt.Errorf that marks its result as a usage error: a mistake
+ * in the command line itself (a missing or surplus argument, an unknown subverb
+ * or flag, a flag without its value, a bad value passed on the command line, or
+ * a missing required flag). Nothing was attempted. dispatch exits 2 for these
+ * (workspace DR-0003, kb DR-0047). A command line that parsed and then failed
+ * (not found, no results, a database error) is not a usage error. %w works as
+ * it does in fmt.Errorf, so a wrapped cause stays reachable.
  *
  * Parameters:
  *   format (string) — a fmt.Errorf format.
  *   a      (...any) — the format's arguments.
  *
  * Returns:
- *   error — a *usageError.
+ *   error — a *classedError of classUsage.
  *
  * Example:
  *   return usageErrorf("invalid observation id %q", args[0])
  */
 func usageErrorf(format string, a ...any) error {
-	return &usageError{err: fmt.Errorf(format, a...)}
+	return classErrorf(classUsage, format, a...)
 }
 
 /** wrapUsage marks an existing error as a usage error and leaves nil alone. An
@@ -53,7 +38,7 @@ func usageErrorf(format string, a ...any) error {
  *
  * Returns:
  *   error — nil, err itself for flag.ErrHelp or an existing usage error, or a
- *           *usageError wrapping err.
+ *           usage-class error wrapping err.
  *
  * Example:
  *   if err := fs.Parse(args); err != nil {
@@ -64,7 +49,7 @@ func wrapUsage(err error) error {
 	if err == nil || errors.Is(err, flag.ErrHelp) || isUsageError(err) {
 		return err
 	}
-	return &usageError{err: err}
+	return classedAs(classUsage, err)
 }
 
 /** isUsageError reports whether err, or anything it wraps, is a usage error.
@@ -73,14 +58,14 @@ func wrapUsage(err error) error {
  *   err (error) — the error to test; may be nil.
  *
  * Returns:
- *   bool — true if a *usageError is in err's chain.
+ *   bool — true if err's exit class is usage.
  *
  * Example:
  *   if isUsageError(err) { return 2 }
  */
 func isUsageError(err error) bool {
-	var u *usageError
-	return errors.As(err, &u)
+	class, classified := classify(err)
+	return classified && class == classUsage
 }
 
 /** parseFlags is fs.Parse for a verb's FlagSet, with a parse failure marked as

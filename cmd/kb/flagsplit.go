@@ -18,6 +18,11 @@ import (
 // ("kb -json ingest DIR --dry-run" -- -json is global, --dry-run is
 // ingest's). Folding it into this helper would erase that boundary.
 //
+// A bare "--" ends flag recognition: everything after it is positional, dashes
+// included, as on the verbs that handle it themselves (DR-0039, DR-0041). A
+// flag's value is taken before "--" is considered, so "--by --" gives --by the
+// value "--". Only the first "--" is consumed; a second one is positional.
+//
 // An unrecognized "-"-prefixed argument, or a recognized string flag with no
 // following value, is an error. boolFlags may be nil when a caller has none.
 // An undeclared -h, -help or --help is a request for help, not a typo, and is
@@ -27,6 +32,10 @@ func splitFlags(args []string, strFlags map[string]*string, boolFlags map[string
 	var positional []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if arg == "--" {
+			positional = append(positional, args[i+1:]...)
+			break
+		}
 		if target, ok := strFlags[arg]; ok {
 			if i+1 >= len(args) {
 				return nil, usageErrorf("%s requires a value", arg)

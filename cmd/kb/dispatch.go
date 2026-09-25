@@ -39,10 +39,7 @@ func dispatch(verbs map[string]verbFunc, kb *knowledge.KnowledgeBase, dl *DebugL
 			return 0
 		}
 		printError(errOut, jsonOut, err)
-		if isUsageError(err) {
-			return 2
-		}
-		return 1
+		return exitCodeFor(err).Code
 	}
 	return 0
 }

@@ -184,16 +184,18 @@ func tagSection(kb *KnowledgeBase, sectionID int64, text string, keywords []stri
 	// not a tag: minting a concept from it polluted the vocabulary with junk such
 	// as "..." and "recall: ..." (DR-0037). `kb document tag`, density-linking and
 	// fuzzy-tag already exclude code the same way.
+	//
+	// Each name goes through CleanName first, so a hard-wrapped [[a<newline>b]]
+	// is the same concept as [[a b]] (DR-0046). One CleanName refuses, a control
+	// character, is not a tag: it is skipped, not allowed to fail the document.
 	for _, m := range wikilinkPattern.FindAllStringSubmatch(StripCodeSpans(text), -1) {
-		name := strings.TrimSpace(m[1])
-		if name != "" && !seen[strings.ToLower(name)] {
+		if name, err := CleanName("concept", m[1]); err == nil && !seen[strings.ToLower(name)] {
 			seen[strings.ToLower(name)] = true
 			names = append(names, name)
 		}
 	}
 	for _, kw := range keywords {
-		name := strings.TrimSpace(kw)
-		if name != "" && !seen[strings.ToLower(name)] {
+		if name, err := CleanName("concept", kw); err == nil && !seen[strings.ToLower(name)] {
 			seen[strings.ToLower(name)] = true
 			names = append(names, name)
 		}

@@ -149,6 +149,12 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 	if f.project == "" && !f.workspace {
 		return usageErrorf("record new requires --project P or --workspace")
 	}
+	if err := checkRecordVocabulary(kb, "trigger", "triggers", f.trigger, knowledge.RecordTriggers); err != nil {
+		return err
+	}
+	if err := checkRecordVocabulary(kb, "kind", "kinds", f.kind, knowledge.RecordKinds); err != nil {
+		return err
+	}
 
 	scope := "project"
 	dir := filepath.Join("agents", "projects", f.project, "decisions")

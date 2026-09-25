@@ -68,7 +68,11 @@ new
   or not they get filled. Writes the file; does not ingest it. --trigger is
   required here even though a converted record may carry an empty one,
   because on a newly authored record it is cheap and accurate to say where
-  the need was discovered
+  the need was discovered. --trigger and --kind follow the rule record list
+  uses for its filters: a value outside the vocabularies below is refused
+  unless a record already in the database carries it, and the error names
+  what is known. That catches a typo before it is written into a file, where
+  it would otherwise become a value the filter rule accepts
 
 fmt
 : rewrite every record under PATH into canonical form. This is the

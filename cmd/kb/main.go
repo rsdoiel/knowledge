@@ -124,8 +124,9 @@ func mainRun(args []string, out, errOut io.Writer) int {
 		// dropped silently: `kb --db rt.db init` created ./agents/knowledge.db
 		// and never rt.db. Refuse it and say where the target really goes.
 		if dbPath != "" {
-			printError(errOut, jsonOut, dbOptionRefusal(rest[0]))
-			return 2
+			refusal := dbOptionRefusal(rest[0])
+			printError(errOut, jsonOut, refusal)
+			return exitCodeFor(refusal).Code
 		}
 		return dispatch(verbs, nil, dl, jsonOut, rest, out, errOut)
 	}

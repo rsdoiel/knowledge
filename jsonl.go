@@ -259,7 +259,7 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 			return fmt.Errorf("knowledge: export: %w", err)
 		}
 		if p == nil {
-			return fmt.Errorf("knowledge: export: project %q not found", projectName)
+			return notFoundf("knowledge: export: project %q not found", projectName)
 		}
 		projectID = p.ID
 	}

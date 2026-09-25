@@ -1,7 +1,6 @@
 package knowledge
 
 import (
-	"fmt"
 	"math"
 	"regexp"
 	"sort"
@@ -242,7 +241,7 @@ func (kb *KnowledgeBase) SuggestConcepts(project string, limit int) (ConceptSugg
 			return ConceptSuggestions{}, err
 		}
 		if p == nil {
-			return ConceptSuggestions{}, fmt.Errorf("unknown project %q", project)
+			return ConceptSuggestions{}, notFoundf("unknown project %q", project)
 		}
 		projectID = p.ID
 	}

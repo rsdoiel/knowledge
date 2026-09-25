@@ -395,19 +395,28 @@ func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64
 	var names []string
 	// A wikilink inside code is an example of the syntax, not a tag (DR-0037);
 	// the same rule document ingest applies.
-	for _, m := range wikilinkPattern.FindAllStringSubmatch(knowledge.StripCodeSpans(rf.Record.Body), -1) {
-		name := strings.TrimSpace(m[1])
-		if name != "" && !seen[strings.ToLower(name)] {
+	// Names are cleaned first, so a hard-wrapped [[a<newline>b]] is the concept
+	// [[a b]] (DR-0046). A control character makes CleanName refuse: the link is
+	// not a tag, and is reported rather than failing the record.
+	addName := func(raw string) {
+		name, err := knowledge.CleanName("concept", raw)
+		if err != nil {
+			if strings.TrimSpace(raw) != "" {
+				ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+					"%s: skipped tag %q: %v", rf.Record.Path, raw, err))
+			}
+			return
+		}
+		if !seen[strings.ToLower(name)] {
 			seen[strings.ToLower(name)] = true
 			names = append(names, name)
 		}
 	}
+	for _, m := range wikilinkPattern.FindAllStringSubmatch(knowledge.StripCodeSpans(rf.Record.Body), -1) {
+		addName(m[1])
+	}
 	for _, tag := range rf.Tags {
-		name := strings.TrimSpace(tag)
-		if name != "" && !seen[strings.ToLower(name)] {
-			seen[strings.ToLower(name)] = true
-			names = append(names, name)
-		}
+		addName(tag)
 	}
 	for _, name := range names {
 		if recordIDLikeWikilink.MatchString(name) {

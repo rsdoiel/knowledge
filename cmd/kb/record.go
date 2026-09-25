@@ -256,22 +256,49 @@ func validateRecordFilters(kb *knowledge.KnowledgeBase, f recordFlags) error {
 		{"trigger", "triggers", f.trigger, knowledge.RecordTriggers},
 		{"initiative", "initiatives", f.initiative, nil},
 	} {
-		if c.value == "" {
-			continue
-		}
-		carried, err := kb.DistinctRecordValues(c.field)
-		if err != nil {
+		if err := checkRecordVocabulary(kb, c.field, c.plural, c.value, c.vocabulary); err != nil {
 			return err
 		}
-		known := append([]string(nil), c.vocabulary...)
-		for _, v := range carried {
-			if !containsString(known, v) {
-				known = append(known, v)
-			}
+	}
+	return nil
+}
+
+/** checkRecordVocabulary applies the rule shared by `record list` filters and
+ * `record new`: a value outside a field's documented vocabulary is an error
+ * only if no record in the database carries it either. The vocabularies are
+ * documented rather than enforced, so a value some record really carries is an
+ * established convention and passes; a value in the vocabulary passes even when
+ * nothing carries it yet. An empty value is not checked.
+ *
+ * Parameters:
+ *   kb         (*knowledge.KnowledgeBase) — the open knowledge base.
+ *   field      (string)   — "status", "kind", "trigger" or "initiative".
+ *   plural     (string)   — the field's plural, for the message.
+ *   value      (string)   — the value to check.
+ *   vocabulary ([]string) — the documented values; nil for a free-text field.
+ *
+ * Returns:
+ *   error — a plain "unknown FIELD ..." error listing what is accepted, or nil.
+ *
+ * Example:
+ *   err := checkRecordVocabulary(kb, "trigger", "triggers", "desing", knowledge.RecordTriggers)
+ */
+func checkRecordVocabulary(kb *knowledge.KnowledgeBase, field, plural, value string, vocabulary []string) error {
+	if value == "" {
+		return nil
+	}
+	carried, err := kb.DistinctRecordValues(field)
+	if err != nil {
+		return err
+	}
+	known := append([]string(nil), vocabulary...)
+	for _, v := range carried {
+		if !containsString(known, v) {
+			known = append(known, v)
 		}
-		if !containsString(known, c.value) {
-			return fmt.Errorf("unknown %s %q; known %s: %s", c.field, c.value, c.plural, joinKnown(known))
-		}
+	}
+	if !containsString(known, value) {
+		return fmt.Errorf("unknown %s %q; known %s: %s", field, value, plural, joinKnown(known))
 	}
 	return nil
 }

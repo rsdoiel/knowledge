@@ -135,10 +135,16 @@ init, index and merge never open the ambient database, so -db is refused for
 them as well; init takes its target as kb init PATH, merge as -a, -b and -out.
 
 A name that begins with a dash is given after --, as in
-{app_name} project show -- -name, so that it is not read as a flag. Words
-that follow a verb's fixed arguments and are free text (an observation body,
-a project description, a retraction note) are taken as they are, dashes
-included.
+{app_name} project show -- -name, so that it is not read as a flag. Every verb
+that takes a name, title or path accepts --, record, document, ingest and
+source add included. Words that follow a verb's fixed arguments and are free
+text (an observation body, a project description, a retraction note) are taken
+as they are, dashes included.
+
+A project or concept name is one line. Surrounding whitespace is trimmed and
+any interior run of whitespace, a newline or a tab included, becomes a single
+space, so a [[wikilink]] wrapped across two lines names the same concept as
+the one-line spelling. A name with any other control character is refused.
 
 # EXIT STATUS
 
@@ -644,7 +650,14 @@ via source link, recording the relationship (default: cited).
 add
 : register a source; --doi/--url set its identifier (doi takes priority
   if both are given); adding one whose identifier already exists returns
-  the existing source's id instead of duplicating it
+  the existing source's id instead of duplicating it. The title is trimmed
+  and must not be blank. --published must be YYYY, YYYY-MM or YYYY-MM-DD and
+  a real date. --url must be an absolute URL with a scheme and a host. --doi
+  must be the bare form 10.NNNN/suffix; a pasted doi: or https://doi.org/
+  prefix is refused rather than rewritten, because a mistyped DOI would
+  otherwise be checked against Retraction Watch, find nothing, and read as
+  "not retracted". Other identifier types are not checked. Whitespace around
+  a value is trimmed
 
 remove
 : delete a source — fails if it's still linked to any observation
@@ -735,7 +748,9 @@ paths — a --db is refused, and it never opens (or creates) the ambient
 Both inputs must exist, be non-empty database files, and be two different
 files; anything else is refused before any file is touched. A mistyped -a
 therefore fails, instead of merging an empty database in its place and
-leaving a zero-byte file at the typo.
+leaving a zero-byte file at the typo. A zero-byte file is refused even when a
+-wal file sits beside it: SQLite discards that -wal on opening an empty main
+file, so merge refuses first and leaves the -wal untouched.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a
@@ -1005,7 +1020,11 @@ new
   or not they get filled. Writes the file; does not ingest it. --trigger is
   required here even though a converted record may carry an empty one,
   because on a newly authored record it is cheap and accurate to say where
-  the need was discovered
+  the need was discovered. --trigger and --kind follow the rule record list
+  uses for its filters: a value outside the vocabularies below is refused
+  unless a record already in the database carries it, and the error names
+  what is known. That catches a typo before it is written into a file, where
+  it would otherwise become a value the filter rule accepts
 
 fmt
 : rewrite every record under PATH into canonical form. This is the

@@ -986,3 +986,38 @@ func TestCmdIngest_WikilinkBothInAndOutOfCodeStillLinks(t *testing.T) {
 		t.Errorf("RecordConcepts = %+v, want Both linked by its real mention", concepts)
 	}
 }
+
+// A hard-wrapped [[wikilink]] in a record body is the ordinary one-line concept,
+// and a wikilink holding a control character is skipped with a warning rather
+// than minting a concept or failing the record (DR-0046).
+func TestCmdIngest_HardWrappedWikilinkIsTheOrdinaryConcept(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[deterministic\noutput]] and [[deterministic output]] again.\n"}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "deterministic output" {
+		t.Errorf("RecordConcepts = %+v, want one concept 'deterministic output'", concepts)
+	}
+}
+
+func TestCmdIngest_ControlCharacterWikilinkIsSkipped(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nBad [[esc\x1bseq]] and good [[Keeper]].\n"}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "Keeper" {
+		t.Errorf("RecordConcepts = %+v, want only Keeper", concepts)
+	}
+}

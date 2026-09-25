@@ -185,16 +185,16 @@ func ParseRecord(data []byte, path string) (*RecordFile, error) {
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(front), &doc); err != nil {
-		return nil, fmt.Errorf("knowledge: %s: parse frontmatter: %w", path, err)
+		return nil, invalidf("knowledge: %s: parse frontmatter: %w", path, err)
 	}
 	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("knowledge: %s: frontmatter is not a mapping", path)
+		return nil, invalidf("knowledge: %s: frontmatter is not a mapping", path)
 	}
 	mapping := doc.Content[0]
 
 	var fm recordFrontmatter
 	if err := mapping.Decode(&fm); err != nil {
-		return nil, fmt.Errorf("knowledge: %s: decode frontmatter: %w", path, err)
+		return nil, invalidf("knowledge: %s: decode frontmatter: %w", path, err)
 	}
 
 	rf := &RecordFile{
@@ -232,7 +232,7 @@ func ParseRecord(data []byte, path string) (*RecordFile, error) {
 	}
 	for _, name := range requiredFields {
 		if !present[name] {
-			return nil, fmt.Errorf("knowledge: %s: required frontmatter field %q is missing", path, name)
+			return nil, invalidf("knowledge: %s: required frontmatter field %q is missing", path, name)
 		}
 	}
 	for _, tc := range []struct{ name, value string }{
@@ -243,7 +243,7 @@ func ParseRecord(data []byte, path string) (*RecordFile, error) {
 		{"kind", rf.Record.Kind},
 	} {
 		if tc.value == "" {
-			return nil, fmt.Errorf("knowledge: %s: required frontmatter field %q is empty", path, tc.name)
+			return nil, invalidf("knowledge: %s: required frontmatter field %q is empty", path, tc.name)
 		}
 	}
 
@@ -259,7 +259,7 @@ func ParseRecord(data []byte, path string) (*RecordFile, error) {
 // this version does not model. It returns the set of keys seen.
 func inspectMapping(rf *RecordFile, mapping *yaml.Node) (map[string]bool, error) {
 	if len(mapping.Content)%2 != 0 {
-		return nil, fmt.Errorf("malformed frontmatter mapping")
+		return nil, invalidf("malformed frontmatter mapping")
 	}
 	known := knownFieldNames()
 	quoted := make(map[string]bool, len(quotedFields))
@@ -404,14 +404,14 @@ func RenderRecordFile(rf *RecordFile) ([]byte, error) {
 func splitFrontmatter(s string) (front, body string, err error) {
 	lines := strings.Split(s, "\n")
 	if len(lines) == 0 || lines[0] != "---" {
-		return "", "", fmt.Errorf("no frontmatter: file does not start with ---")
+		return "", "", invalidf("no frontmatter: file does not start with ---")
 	}
 	for i := 1; i < len(lines); i++ {
 		if lines[i] == "---" {
 			return strings.Join(lines[1:i], "\n"), strings.Join(lines[i+1:], "\n"), nil
 		}
 	}
-	return "", "", fmt.Errorf("no frontmatter: closing --- not found")
+	return "", "", invalidf("no frontmatter: closing --- not found")
 }
 
 // checksum returns a stable digest of the raw file bytes, so that ingest can
