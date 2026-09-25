@@ -131,6 +131,24 @@ func runIngest(t *testing.T, kb *knowledge.KnowledgeBase, args ...string) ingest
 	return s
 }
 
+// runIngestExpectingFailure is runIngest for a run that has failures. The summary
+// is printed before the error is returned (the good records were still ingested),
+// so it is decoded here and returned with the error, which must be non-nil: since
+// X3 a bulk command that had failures exits with the class of the first one.
+func runIngestExpectingFailure(t *testing.T, kb *knowledge.KnowledgeBase, args ...string) (ingestSummary, error) {
+	t.Helper()
+	var out bytes.Buffer
+	err := cmdIngest(kb, nil, true, args, &out)
+	if err == nil {
+		t.Fatalf("cmdIngest %v succeeded, want it to report the failure as an error", args)
+	}
+	var s ingestSummary
+	if jerr := json.Unmarshal(out.Bytes(), &s); jerr != nil {
+		t.Fatalf("decoding summary: %v\n%s", jerr, out.String())
+	}
+	return s, err
+}
+
 func TestCmdIngest_AddsRecords(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	dir := filepath.Join(root, "clasm", "decisions")
@@ -459,7 +477,7 @@ func TestCmdIngest_NeverWritesToRecordFiles(t *testing.T) {
 	}
 }
 
-func TestCmdIngest_ParseFailureIsReportedNotFatal(t *testing.T) {
+func TestCmdIngest_ParseFailureIsReportedAndItsGoodNeighboursIngested(t *testing.T) {
 	kb, root := openWorkspaceKB(t)
 	dir := filepath.Join(root, "clasm", "decisions")
 	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
@@ -467,7 +485,10 @@ func TestCmdIngest_ParseFailureIsReportedNotFatal(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	s := runIngest(t, kb, dir)
+	s, err := runIngestExpectingFailure(t, kb, dir)
+	if got := exitCodeFor(err); got != classData {
+		t.Errorf("class = %v, want data: the file's content is wrong", got)
+	}
 	if s.Added != 1 {
 		t.Errorf("summary = %+v, want the good record still ingested", s)
 	}

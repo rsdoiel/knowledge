@@ -80,6 +80,17 @@ type ingester struct {
 	summary   ingestSummary
 	byIdent   map[identityKey]*ingestedRecord
 	order     []*ingestedRecord
+	// firstFail is the first thing that went wrong, in path order. Ingest keeps
+	// going after a failure, so every record it can is ingested, but the command
+	// exits with this error's class (workspace DR-0003 rule 4, DR-0047 item 6).
+	firstFail error
+}
+
+// noteFailure remembers the first failure so cmdIngest can exit with its class.
+func (ing *ingester) noteFailure(err error) {
+	if ing.firstFail == nil {
+		ing.firstFail = err
+	}
 }
 
 /** cmdIngest implements `kb ingest PATH [--dry-run] [--root DIR]`: it walks a
@@ -151,9 +162,18 @@ func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	})
 
 	if jsonOut {
-		return printJSON(out, ing.summary)
+		if err := printJSON(out, ing.summary); err != nil {
+			return err
+		}
+	} else {
+		writeIngestText(out, ing.summary)
 	}
-	writeIngestText(out, ing.summary)
+	// The summary above is the report; a failure still exits non-zero, with the
+	// class of the first one, after every record that could be ingested was.
+	if ing.firstFail != nil {
+		return fmt.Errorf("ingest: %d error(s), listed above; the records that could be ingested were: %w",
+			len(ing.summary.Errors), ing.firstFail)
+	}
 	return nil
 }
 
@@ -237,6 +257,7 @@ func (ing *ingester) upsertAll(files []string) {
 		if err != nil {
 			ing.summary.Failed++
 			ing.summary.Errors = append(ing.summary.Errors, err.Error())
+			ing.noteFailure(asContent(err))
 			continue
 		}
 		name := ing.relativeTo(file)
@@ -249,6 +270,7 @@ func (ing *ingester) upsertAll(files []string) {
 		if err != nil {
 			ing.summary.Failed++
 			ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf("%s: %v", name, err))
+			ing.noteFailure(asContent(err))
 			continue
 		}
 		rf.Record.ProjectID = projectID
@@ -261,6 +283,7 @@ func (ing *ingester) upsertAll(files []string) {
 			if problem := identityCollision(existing, &rf.Record, name); problem != "" {
 				ing.summary.Failed++
 				ing.summary.Errors = append(ing.summary.Errors, problem)
+				ing.noteFailure(dataErrorf("%s", problem))
 				continue
 			}
 			// A path change alongside a body change is genuinely ambiguous —
@@ -282,6 +305,7 @@ func (ing *ingester) upsertAll(files []string) {
 				if uerr := ing.kb.UpdateRecordPath(existing.ID, rf.Record.Path); uerr != nil {
 					ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf(
 						"%s: update path: %v", name, uerr))
+					ing.noteFailure(uerr)
 				}
 			}
 		case err == nil:
@@ -295,6 +319,7 @@ func (ing *ingester) upsertAll(files []string) {
 			if err != nil {
 				ing.summary.Failed++
 				ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf("%s: %v", name, err))
+				ing.noteFailure(asContent(err))
 				continue
 			}
 			rec.dbID = id
@@ -466,6 +491,7 @@ func (ing *ingester) resolveAll() {
 			if err := ing.kb.ClearRecordRelationsFrom(rec.dbID); err != nil {
 				ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf(
 					"%s: clear relations: %v", name, err))
+				ing.noteFailure(err)
 			}
 		}
 
@@ -522,6 +548,7 @@ func (ing *ingester) relate(rec *ingestedRecord, entry, relationship, name strin
 	}
 	if err := ing.kb.AddRecordRelation(rec.dbID, target, relationship); err != nil {
 		ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf("%s: %v", name, err))
+		ing.noteFailure(err)
 	}
 }
 

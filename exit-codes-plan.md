@@ -164,6 +164,24 @@ fails: exit 69 and the other sources checked. A collision: 65 and nothing writte
 
 ---
 
+**DONE 2026-09-25** (uncommitted). Bulk commands now exit with the class of the first failure,
+in path order, after doing everything they can: `kb ingest` (65 for content, 77 for an unreadable
+file, 65 for an identity collision; warnings and unresolved references stay exit 0; the summary
+is still printed, in `--json` too, with the error on stderr; `--dry-run` reports the same),
+`index --all` (a failed corpus outranks a stale one; stale alone is still 1), and `source
+check-retractions` (a new `knowledge.RetractionCheckError` carries the count and the first
+cause; every source is tried; the command wraps checker errors as unavailable, so 69; the JSON
+result gains `failed`; a source that could not be looked up is no longer stamped
+`last_checked_at`, which used to make an unreachable service read as "checked, clear"). The merge
+identity collision is 65, tested. `document ingest` takes one file, so it was never bulk.
+Tests: `ingestexit_test.go`, `indexallexit_test.go`, `checkretractions_test.go`,
+`retractionfailures_test.go`; two old ingest tests updated to the new contract (the summary is
+still decoded, the error must now be data). Matrix (35 commands): the only change from X2 is
+`ingest recs` 0 to 65; the real decision records of all three tiers still ingest with exit 0.
+Docs: EXIT STATUS gained the 69 row and the bulk rule; `ingest` and `check-retractions` pages
+updated. `document tag`/`fuzzy-tag` stop at the first failure rather than continuing, which is
+also non-zero; not changed.
+
 ## X4 — Enforcement
 
 **Add:** a test that runs every registered verb and subverb with a bogus flag and

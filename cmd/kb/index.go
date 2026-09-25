@@ -217,6 +217,14 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 
 	summary := indexAllSummary{Root: abs, Check: check}
 	needsAttention := 0
+	// firstFail is the first corpus that could not be indexed at all. A stale
+	// index is a normal negative answer; a failure outranks it (X3, DR-0047).
+	var firstFail error
+	noteFailure := func(err error) {
+		if firstFail == nil {
+			firstFail = err
+		}
+	}
 	for _, dir := range dirs {
 		r := indexCorpusResult{Dir: dir}
 		index, count, err := renderCorpusIndex(dir)
@@ -224,6 +232,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 			r.Status, r.Detail = "error", err.Error()
 			summary.Corpora = append(summary.Corpora, r)
 			needsAttention++
+			noteFailure(asContent(err))
 			continue
 		}
 		r.Records = count
@@ -234,6 +243,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 			case rerr != nil:
 				r.Status, r.Detail = "error", rerr.Error()
 				needsAttention++
+				noteFailure(rerr)
 			case string(got) != index:
 				r.Status = "stale"
 				needsAttention++
@@ -247,6 +257,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 			r.Status, r.Detail = "error", err.Error()
 			summary.Corpora = append(summary.Corpora, r)
 			needsAttention++
+			noteFailure(asCreate(err))
 			continue
 		}
 		r.Status = "written"
@@ -261,6 +272,9 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 		}
 	} else {
 		writeIndexAllText(out, summary)
+	}
+	if firstFail != nil {
+		return fmt.Errorf("%d of %d corpora need attention; see above: %w", needsAttention, len(summary.Corpora), firstFail)
 	}
 	if needsAttention > 0 {
 		return negativef("%d of %d corpora need attention; see above", needsAttention, len(summary.Corpora))

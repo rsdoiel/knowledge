@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -243,12 +244,21 @@ func cmdSourceCheckRetractions(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOu
 		progressOut = io.Discard
 	}
 	start := time.Now()
-	checked, updated, err := kb.CheckRetractions(
-		func(doi string) (bool, string, error) {
-			return knowledge.CheckDOIRetraction(doi, knowledge.DefaultRetractionWatchURL)
-		},
-		progressOut,
-	)
+	checked, updated, err := kb.CheckRetractions(func(doi string) (bool, string, error) {
+		retracted, note, err := retractionChecker(doi)
+		if err != nil {
+			// Any failure to get an answer (no route, a bad status, an
+			// undecodable reply) means the service is unavailable, exit 69:
+			// nothing can be said about the DOI.
+			return false, "", unavailablef("%s: %w", doi, err)
+		}
+		return retracted, note, nil
+	}, progressOut)
+	var checkErr *knowledge.RetractionCheckError
+	failed := 0
+	if errors.As(err, &checkErr) {
+		failed = checkErr.Failed
+	}
 	// CheckRetractions returns (int, int, error) -- doesn't fit
 	// logKBCall's single-result shape, so this is logged directly rather
 	// than forcing an awkward wrapper type.
@@ -261,18 +271,35 @@ func cmdSourceCheckRetractions(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOu
 	if err != nil {
 		fields["error"] = err.Error()
 	}
+	fields["failed"] = failed
 	dl.Log("kb_call", fields)
-	if err != nil {
-		return err
+	if err != nil && checkErr == nil {
+		return err // the database, not a lookup: nothing was reported
 	}
+	// Some lookups may have failed; the rest were still checked, so the counts
+	// are printed either way, and err (if any) is returned after them.
 	if jsonOut {
-		return printJSON(out, struct {
+		if perr := printJSON(out, struct {
 			Checked int `json:"checked"`
 			Updated int `json:"updated"`
-		}{Checked: checked, Updated: updated})
+			Failed  int `json:"failed"`
+		}{Checked: checked, Updated: updated, Failed: failed}); perr != nil {
+			return perr
+		}
+		return err
 	}
 	fmt.Fprintf(out, "Checked %d DOI source(s); %d newly marked as retracted.\n", checked, updated)
-	return nil
+	if failed > 0 {
+		fmt.Fprintf(out, "%d could not be checked and are NOT known to be clear: run it again when the service is reachable.\n", failed)
+	}
+	return err
+}
+
+// retractionChecker looks a DOI up in the retraction service. It is a variable
+// so a test can stand in for the network. Its errors are classed as unavailable
+// by cmdSourceCheckRetractions, whatever the checker returns.
+var retractionChecker = func(doi string) (bool, string, error) {
+	return knowledge.CheckDOIRetraction(doi, knowledge.DefaultRetractionWatchURL)
 }
 
 func parseSourceID(args []string, usage string) (int64, error) {

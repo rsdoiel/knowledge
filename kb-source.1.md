@@ -47,7 +47,11 @@ retract
 
 check-retractions
 : query the Retraction Watch API for every registered, non-retracted DOI
-  source and mark hits as retracted; requires network access
+  source and mark hits as retracted; requires network access. It tries every
+  source even if one lookup fails. A source it could not look up is not "not
+  retracted": it is counted as not checked, its last-checked date is left alone,
+  and the command exits 69 after printing the counts. Run it again when the
+  service is reachable
 
 # SEE ALSO
 

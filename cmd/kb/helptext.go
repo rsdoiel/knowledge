@@ -151,7 +151,10 @@ the one-line spelling. A name with any other control character is refused.
 {app_name} follows the workspace exit-code convention (workspace DR-0003, applied
 here by DR-0047): 0 and 1 answer the question that was asked, 2 says the command
 was wrong, and the sysexits(3) numbers above that say what went wrong, so a
-script or a calling tool can tell them apart from the number alone. With -json
+script or a calling tool can tell them apart from the number alone. A command that
+works through many items (ingest, index --all, source check-retractions) does all it
+can, prints the counts, and then exits with the class of the first failure: it does
+not exit 0 with failures, and one bad item does not stop the good ones. With -json
 the error on stderr carries the class name beside the number, for example
 {"error": "...", "class": "no_input", "code": 66}.
 
@@ -183,6 +186,10 @@ the error on stderr carries the class name beside the number, for example
 66
 : a named input or the workspace is missing: no such file or directory, a
   directory where a file is needed, or no agents/knowledge.db here
+
+69
+: a network service could not be reached: source check-retractions, after it has
+  tried every source. The sources it could not look up are not known to be clear
 
 70
 : an internal error, or an error nothing classified. It is never the answer for
@@ -705,7 +712,11 @@ retract
 
 check-retractions
 : query the Retraction Watch API for every registered, non-retracted DOI
-  source and mark hits as retracted; requires network access
+  source and mark hits as retracted; requires network access. It tries every
+  source even if one lookup fails. A source it could not look up is not "not
+  retracted": it is counted as not checked, its last-checked date is left alone,
+  and the command exits 69 after printing the counts. Run it again when the
+  service is reachable
 
 # SEE ALSO
 
@@ -941,6 +952,12 @@ the workspace tier. An optional DR- prefix is stripped. supersedes and
 superseded_by are same-tier only, so a qualified entry in either is reported
 as malformed rather than resolved. superseded_by is never stored directly: it
 is the inverse of the supersedes on the other record.
+
+A file that cannot be ingested (a record that does not parse, two files claiming
+one identity, a file that cannot be read) is reported in the summary and the rest
+are still ingested, but the command then exits with the class of the first such
+failure, in path order (65 for wrong content, 77 for a file it may not read, and
+so on), instead of 0. A warning or an unresolved reference is not a failure.
 
 Nothing about a reference is fatal. A target that is not in the database yet
 leaves the relation unwritten and adds a line to the summary; re-run once it

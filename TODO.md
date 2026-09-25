@@ -102,6 +102,34 @@
   works and both sides are written, but it is the second bullet above and
   should be revisited once `cancelled` exists.
 
+- [ ] **Ship the knowledge skills and an agent document in this repository**, so a
+  language-model harness or a system like Claude Code can use `kb` after installing it,
+  without hand-copying files out of the Laboratory workspace. Filed 2026-09-25 at
+  RSDOIEL's request. State today, so the item starts from facts:
+  - Three skills exist, `setup-knowledge-base`, `update-knowledge-base` and
+    `review-knowledge-base`, each a `SKILL.md` plus `scripts/compiled.bash` and
+    `compiled.ps1` (`compatibility: claude-code, harvey`). They live in the
+    Laboratory root's `agents/skills/` and again in `harvey/agents/skills/`; **every file
+    differs between the two copies**, and their `kb_version` pins disagree
+    (`setup` says 0.0.10; `update` and `review` say 0.0.12). Nothing states which copy is
+    canonical. This repository has neither skills nor an agent document.
+  - Wanted: (1) the three skills in this repository, made canonical, with the Laboratory
+    and `harvey` copies becoming consumers; (2) an agent document that tells a harness what
+    `kb` is and how to use it safely: the verbs, `--json`, the exit-code table (workspace
+    DR-0003), that writes go through `kb` and never raw SQL (it keeps the search index in
+    step), the decision-record workflow, and the standing rule that a model may write a
+    record but never accept one.
+  - To decide: the layout (`skills/` or `agents/skills/`); one agent document or an
+    `AGENTS.md` plus a `CLAUDE.md` that points at it, since harnesses look for different
+    names; how they are distributed (in the release zips, and whether `make install`
+    places them for Claude Code); how they are kept from drifting (a test that each
+    skill's `kb_version` matches `codemeta.json`, and the four-field release-prep check
+    extended to cover it); whether the Windows `.ps1` scripts stay.
+  - **Sequence:** after the exit-code work (X6), because the skill scripts currently read
+    `kb`'s exit status and the agent document should describe the new codes. `harvey`'s
+    own skills sync (H2 of its learning-mode plan, skills 0.6.1) should be checked so this
+    does not undo it. Wants a design note and a DR, since it fixes a canonical location.
+
 ## To explore
 
 ### Bugs collected for v0.0.13
@@ -350,13 +378,13 @@ trip was also checked and is clean: 14 tables' row counts identical.
   with a test that no file is created. Not fixed with the ignored-input work;
   it is a missing-file check, not an argument-shape one.
 
-- [ ] **Exit-codes X3 to X6 remain** (see `exit-codes-plan.md`). X0 to X2 are done. Known
-  gaps at the X2 commit, so nobody assumes otherwise: `kb ingest` still exits 0 when
-  records fail (X3); `source check-retractions` does not yet use 69 for an unreachable
-  service (X3; add the 69 row to the EXIT STATUS help when it does); no test yet runs
-  every verb with a bogus flag (X4); the per-verb man pages, the upgrade note and the
-  three skill scripts that read `kb`'s exit status still describe the old codes (X6).
-  Only the main EXIT STATUS section was updated at X2. **No release before X6.**
+- [ ] **Exit-codes X4 to X6 remain** (see `exit-codes-plan.md`). X0 to X3 are done. Known
+  gaps, so nobody assumes otherwise: no test yet runs every verb with a bogus flag and a
+  surplus argument (X4); no old-versus-new comparison on the real database yet (X5, the
+  DR-0040 method); the per-verb man pages, the upgrade note and the three skill scripts
+  that read `kb`'s exit status still describe the old codes (X6). The main EXIT STATUS
+  section, `ingest` and `source check-retractions` pages are current. **No release before
+  X6.**
 
 - [ ] **Two traps that are not exit-code questions** (noted in DR-0048). `kb project add
   NAME description --status paused` stores "description --status paused" as the

@@ -2286,9 +2286,39 @@ func (kb *KnowledgeBase) FindOrCreateSource(title, identifierType, identifierVal
 	})
 }
 
+/** RetractionCheckError reports that CheckRetractions checked every source it
+ * could but some could not be checked: the lookup failed, or a retraction it
+ * found could not be recorded. A source that could not be checked is not "not
+ * retracted", so the caller must not read silence as reassurance. The counts
+ * CheckRetractions returned alongside it are valid. Unwrap reaches the first
+ * failure, so errors.Is and errors.As see its cause.
+ *
+ * Fields:
+ *   Checked (int)   — sources that got an answer.
+ *   Failed  (int)   — sources that could not be checked.
+ *   First   (error) — the first failure.
+ *
+ * Example:
+ *   var ce *knowledge.RetractionCheckError
+ *   if errors.As(err, &ce) { fmt.Println(ce.Failed, "could not be checked") }
+ */
+type RetractionCheckError struct {
+	Checked int
+	Failed  int
+	First   error
+}
+
+func (e *RetractionCheckError) Error() string {
+	return fmt.Sprintf("check retractions: %d source(s) could not be checked; first failure: %v", e.Failed, e.First)
+}
+
+func (e *RetractionCheckError) Unwrap() error { return e.First }
+
 /** CheckRetractions queries checker for every non-retracted source with
- * identifier_type = "doi" and marks any hits as retracted. It also updates
- * last_checked_at for every source it queries. Progress is written to out.
+ * identifier_type = "doi" and marks any hits as retracted. It sets
+ * last_checked_at for every source the checker answered for, and only those: a
+ * source whose lookup failed has not been checked. Every source is tried even
+ * after a failure. Progress is written to out.
  *
  * Parameters:
  *   checker (func(doi string) (bool, string, error)) — returns (retracted,
@@ -2296,9 +2326,11 @@ func (kb *KnowledgeBase) FindOrCreateSource(title, identifierType, identifierVal
  *   out     (io.Writer) — destination for per-source status lines.
  *
  * Returns:
- *   checked (int)   — number of DOI sources queried.
+ *   checked (int)   — number of DOI sources the checker gave an answer for.
  *   updated (int)   — number of sources newly marked as retracted.
- *   error           — on database failure (checker errors are logged, not fatal).
+ *   error           — a *RetractionCheckError when some sources could not be
+ *                     checked (the rest still were, and the counts are valid),
+ *                     or another error on database failure.
  *
  * Example:
  *   checked, updated, err := kb.CheckRetractions(
@@ -2337,22 +2369,32 @@ func (kb *KnowledgeBase) CheckRetractions(
 	}
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	var failed int
+	var first error
+	fail := func(err error) {
+		failed++
+		if first == nil {
+			first = err
+		}
+	}
 	for _, s := range sources {
 		retracted, note, cerr := checker(s.doi)
+		if cerr != nil {
+			fmt.Fprintf(out, "  [skip] %s (%s): %v\n", s.doi, s.title, cerr)
+			fail(cerr)
+			continue
+		}
 		checked++
 
-		// Update last_checked_at regardless of outcome.
+		// The lookup got an answer, so the source has been checked.
 		_, _ = kb.db.Exec(
 			`UPDATE sources SET last_checked_at = ? WHERE id = ?`, now, s.id,
 		)
 
-		if cerr != nil {
-			fmt.Fprintf(out, "  [skip] %s (%s): %v\n", s.doi, s.title, cerr)
-			continue
-		}
 		if retracted {
 			if rerr := kb.RetractSource(s.id, note); rerr != nil {
 				fmt.Fprintf(out, "  [error] could not retract %s: %v\n", s.doi, rerr)
+				fail(rerr)
 				continue
 			}
 			updated++
@@ -2360,6 +2402,9 @@ func (kb *KnowledgeBase) CheckRetractions(
 		} else {
 			fmt.Fprintf(out, "  [ok] %s — %s\n", s.doi, s.title)
 		}
+	}
+	if first != nil {
+		return checked, updated, &RetractionCheckError{Checked: checked, Failed: failed, First: first}
 	}
 	return checked, updated, nil
 }

@@ -147,7 +147,10 @@ the one-line spelling. A name with any other control character is refused.
 kb follows the workspace exit-code convention (workspace DR-0003, applied
 here by DR-0047): 0 and 1 answer the question that was asked, 2 says the command
 was wrong, and the sysexits(3) numbers above that say what went wrong, so a
-script or a calling tool can tell them apart from the number alone. With -json
+script or a calling tool can tell them apart from the number alone. A command that
+works through many items (ingest, index --all, source check-retractions) does all it
+can, prints the counts, and then exits with the class of the first failure: it does
+not exit 0 with failures, and one bad item does not stop the good ones. With -json
 the error on stderr carries the class name beside the number, for example
 {"error": "...", "class": "no_input", "code": 66}.
 
@@ -179,6 +182,10 @@ the error on stderr carries the class name beside the number, for example
 66
 : a named input or the workspace is missing: no such file or directory, a
   directory where a file is needed, or no agents/knowledge.db here
+
+69
+: a network service could not be reached: source check-retractions, after it has
+  tried every source. The sources it could not look up are not known to be clear
 
 70
 : an internal error, or an error nothing classified. It is never the answer for

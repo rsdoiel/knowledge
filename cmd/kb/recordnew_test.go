@@ -64,7 +64,10 @@ func TestCmdIngest_DifferentUUIDSameIdentityIsRefused(t *testing.T) {
 	if s := runIngest(t, kb, wl); s.Added != 1 {
 		t.Fatalf("first workspace = %+v, want 1 added", s)
 	}
-	s := runIngest(t, kb, lab)
+	s, err := runIngestExpectingFailure(t, kb, lab)
+	if got := exitCodeFor(err); got != classData {
+		t.Errorf("class = %v, want data: two files claim one identity", got)
+	}
 
 	if s.Added != 0 || s.Updated != 0 {
 		t.Errorf("second workspace = %+v, want nothing written", s)

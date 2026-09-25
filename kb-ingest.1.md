@@ -30,6 +30,12 @@ superseded_by are same-tier only, so a qualified entry in either is reported
 as malformed rather than resolved. superseded_by is never stored directly: it
 is the inverse of the supersedes on the other record.
 
+A file that cannot be ingested (a record that does not parse, two files claiming
+one identity, a file that cannot be read) is reported in the summary and the rest
+are still ingested, but the command then exits with the class of the first such
+failure, in path order (65 for wrong content, 77 for a file it may not read, and
+so on), instead of 0. A warning or an unresolved reference is not a failure.
+
 Nothing about a reference is fatal. A target that is not in the database yet
 leaves the relation unwritten and adds a line to the summary; re-run once it
 has been ingested. Failing instead would make ingest order significant, which
