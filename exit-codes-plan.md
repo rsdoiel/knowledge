@@ -258,6 +258,12 @@ the rest 74. Also fixed: a record that failed to insert was counted as added AND
 constraint class and the count. Rerunning X5 with the fix changes only that one exit code (0 to 65);
 no 70 anywhere.
 
+**Harness kept (2026-09-25, at the user's request):** `scripts/compare-exit-codes.py` (standard library,
+`uv run`) and `scripts/README.md`. It builds its own template from any workspace and discovers names from the
+database instead of hard-coding them; run against the real workspace with the v0.0.13 baseline it gave 362
+commands, 48 changed codes, the same transitions as the manual run, no 70, and left the real database
+untouched. Exits 1 on a 70 or a hang, so a release can gate on it.
+
 ## X6 — Documentation, scripts, and the workspace
 
 **Change:** the EXIT STATUS section of the `kb` help text and `kb.1.md`, and each
