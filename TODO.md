@@ -3,6 +3,7 @@
 
 ## Requested features
 
+- [ ] `kb check-db` this would check the knowledge's SQLite3 database against the JSONL dump file agenct to it if it exists (example knowledge.db and knowledge.jsonl). It would determine if the knowlege.jsonl file was newer and should be loaded if a merge is neccessary and give a recommendation. This would help keep knolwedge bases better syncronized across machines where I use git version control for the agents directory tree in a workspace.
 - [x] `[[double-bracket]]` inline concept tagging when ingesting Markdown
   record bodies, beyond formal frontmatter. Filed as
   `wikilink-tagging-feature-request.md` (2026-09-08) — inspired by
@@ -378,9 +379,8 @@ trip was also checked and is clean: 14 tables' row counts identical.
   with a test that no file is created. Not fixed with the ignored-input work;
   it is a missing-file check, not an argument-shape one.
 
-- [ ] **Exit-codes X5 and X6 remain** (see `exit-codes-plan.md`). X0 to X4 are done. Known
-  gaps, so nobody assumes otherwise: no old-versus-new comparison on the real database yet (X5, the
-  DR-0040 method); the per-verb man pages, the upgrade note and the three skill scripts
+- [ ] **Exit-codes X6 remains** (see `exit-codes-plan.md`). X0 to X5 are done. Known
+  gaps, so nobody assumes otherwise: the per-verb man pages, the upgrade note and the three skill scripts
   that read `kb`'s exit status still describe the old codes (X6). The main EXIT STATUS
   section, `ingest` and `source check-retractions` pages are current. **No release before
   X6.**

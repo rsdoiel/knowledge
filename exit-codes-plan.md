@@ -222,6 +222,42 @@ real `agents/knowledge.db` only through the copy.
 
 ---
 
+**DONE 2026-09-25** (fixes uncommitted). Method as DR-0040: the v0.0.13 tree (`4c6fc3e`) built as
+the baseline and the current tree, 387 commands in plain and `--json` mode, each on a fresh copy of
+a template workspace (the real `knowledge.db`, copies of the real decision records of all three
+tiers, the real document, a copy of `knowledge.jsonl`, and a few bad inputs), run from a scratch
+directory named `Laboratory` (the workspace name is the root directory's name, and the real records
+were ingested under it). Groups: synopsis-derived (path only, bogus flag first and last, minimal,
+surplus), 55 read-only commands on real data, writes on real data, and about 80 provoked failures
+(one or more per class, with real names). The real database and all three repositories were
+verified unchanged afterwards. Result: 331 of 387 identical; 49 exit codes changed, each a row of
+DR-0047 or DR-0048; the ~55 read-only commands on real data are byte-identical; stdout differs only
+in the version and hash lines; stderr only where a message improved (raw `FOREIGN KEY constraint
+failed` became "no source with id 99"); the `--json` output differs only by the added `failed` field
+of `source check-retractions`. Transitions: 0 to 1 (2: `source remove`/`retract` on a missing id),
+0 to 2 (11: bad status, trigger, source date or doi, blank source title, negative limit, flag-shaped
+init and search), 0 to 65 (`ingest` of malformed records), 1 to 2 (13), 1 to 65 (5), 1 to 66 (11),
+1 to 73 (4), 1 to 74 (`import` of a directory), 0 to 74 (`ingest --root nosuchroot`, see below).
+
+**Regressions X5 found in the X2 work, fixed with tests (uncommitted):** four commands that exited 1
+in v0.0.13 exited 70 after X2, because the library raised a plain error for a refusal the current
+state forces: `concept rename X Y` when Y exists, a project rename blocked by the records it owns,
+`document review promote` on a section that is not drafted, and `document frontmatter
+--accept-keywords` with an unknown keyword (a bad value, so usage 2). New library marker
+`ErrConflict` (negative, 1) for the first three; the keyword error is `ErrInvalid`. Cases added to
+`exitcodes_verbs_test.go` and `errors_test.go`. Left as 70 on purpose: an unsupported Go value type in
+the frontmatter writer and a bad field name to `DistinctRecordValues` (programmer errors), and "FTS5
+not compiled in".
+
+**Decided (draft DR-0049, `proposed`, for the user's review):** `ingest --root nosuchroot` (a wrong
+workspace name, so every record hits `UNIQUE constraint failed: records.uuid`) went from exit 0 with
+"3 failed" to 74, because DR-0047 item 4 sent any other SQLite error to io. Every SQLite constraint
+violation (primary code 19) is now class data, 65; busy/locked stays 75, corrupt/not-a-database 65,
+the rest 74. Also fixed: a record that failed to insert was counted as added AND failed (`2 added ...
+2 failed`, as in v0.0.13); it is now a failure only. DR-0049 records `ErrConflict`, the keyword fix, the
+constraint class and the count. Rerunning X5 with the fix changes only that one exit code (0 to 65);
+no 70 anywhere.
+
 ## X6 — Documentation, scripts, and the workspace
 
 **Change:** the EXIT STATUS section of the `kb` help text and `kb.1.md`, and each
