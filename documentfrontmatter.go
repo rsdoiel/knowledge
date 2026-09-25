@@ -726,7 +726,7 @@ func (kb *KnowledgeBase) frontmatterRun(path string, raw []byte, prov Provenance
 	}
 	for _, name := range acceptKeywordNames {
 		if !known[strings.ToLower(name)] && !proposedNew[strings.ToLower(name)] {
-			return nil, FrontmatterResult{}, fmt.Errorf("keyword %q is neither a known concept nor a proposed new candidate; nothing was written (run `kb concept add %s` first to create it)", name, name)
+			return nil, FrontmatterResult{}, invalidf("keyword %q is neither a known concept nor a proposed new candidate; nothing was written (run `kb concept add %s` first to create it)", name, name)
 		}
 	}
 

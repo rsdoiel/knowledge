@@ -736,7 +736,7 @@ func (kb *KnowledgeBase) PromoteDocumentSummary(sectionID int64) error {
 		return err
 	}
 	if status != "drafted" {
-		return fmt.Errorf("knowledge: document section %d is %q, not drafted; draft it first", sectionID, status)
+		return conflictf("knowledge: document section %d is %q, not drafted; draft it first", sectionID, status)
 	}
 	if _, err := kb.db.Exec(`UPDATE document_sections SET summary_status = 'reviewed' WHERE id = ?`, sectionID); err != nil {
 		return err

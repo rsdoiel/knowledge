@@ -209,3 +209,65 @@ func TestRemoveSource_LinkedIsInUse(t *testing.T) {
 		t.Error("a linked source is a refusal, neither not-found nor invalid")
 	}
 }
+
+// Found by X5's comparison on the real database: refusals the current state
+// forces were plain errors and so exited 70 ("internal"), not 1. `concept rename
+// RSS Markdown` (the target exists), `document review promote 1` (the section is
+// not drafted), and a project rename blocked by the records it owns. ErrConflict
+// marks them; kb classes it negative, like ErrInUse.
+
+func TestErrConflict_ForRefusalsTheCurrentStateForces(t *testing.T) {
+	kb := openTestKB(t)
+	kb.AddConcept("A", "")
+	kb.AddConcept("B", "")
+	kb.AddProject("p1", "")
+	kb.AddProject("p2", "")
+	pid, _ := kb.AddProject("owner", "")
+	if _, err := kb.AddRecord(Record{
+		ProjectID: pid, Scope: "project", RecordID: "0001", Title: "t", Date: "2026-09-25",
+		Status: "proposed", Kind: "decision", Path: "x/0001-t.md", UUID: "11111111-1111-7111-8111-111111111111", Workspace: "w",
+	}); err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+	dpid, _ := kb.AddProject("docs", "")
+	path := writeTempFile(t, "a.md", "## S\n\nbody\n")
+	if _, err := kb.IngestDocument(dpid, path, DocumentIngestOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	_, secs, _ := ingestSections(t, kb, path)
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{"RenameConcept onto an existing name", func() error { return kb.RenameConcept("A", "B") }},
+		{"RenameConcept to its own name", func() error { return kb.RenameConcept("A", "A") }},
+		{"RenameProject onto an existing name", func() error { return kb.RenameProject("p1", "p2") }},
+		{"RenameProject that owns records", func() error { return kb.RenameProject("owner", "renamed") }},
+		{"PromoteDocumentSummary of a section not drafted", func() error { return kb.PromoteDocumentSummary(secs["S"].ID) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal("succeeded, want a refusal")
+			}
+			if !errors.Is(err, ErrConflict) {
+				t.Errorf("error %v is not ErrConflict", err)
+			}
+			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid) || errors.Is(err, ErrInUse) {
+				t.Errorf("error %v also matches another marker", err)
+			}
+		})
+	}
+}
+
+// An unknown keyword given for --accept-keywords is a bad value on the command
+// line, not an internal error.
+func TestApplyFrontmatter_UnknownAcceptKeywordIsInvalid(t *testing.T) {
+	kb := openTestKB(t)
+	_, _, err := kb.ApplyFrontmatter("a.md", []byte("# T\n\nbody\n"), gitLikeProvenance,
+		FrontmatterAccept{Keywords: []string{"zzznotaconcept"}}, true)
+	if !errors.Is(err, ErrInvalid) {
+		t.Errorf("error %v is not ErrInvalid", err)
+	}
+}

@@ -317,6 +317,8 @@ func (ing *ingester) upsertAll(files []string) {
 		if !ing.dryRun && rec.dbID == 0 {
 			id, err := ing.kb.AddRecord(rf.Record)
 			if err != nil {
+				// It was counted as added above; it was not, so it is only a failure.
+				ing.summary.Added--
 				ing.summary.Failed++
 				ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf("%s: %v", name, err))
 				ing.noteFailure(asContent(err))

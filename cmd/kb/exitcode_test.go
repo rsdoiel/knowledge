@@ -373,8 +373,13 @@ func TestSqliteClass_ByResultCode(t *testing.T) {
 		{10, classIO},                 // SQLITE_IOERR
 		{13, classIO},                 // SQLITE_FULL
 		{14, classIO},                 // SQLITE_CANTOPEN
-		{19, classIO},                 // SQLITE_CONSTRAINT: any other code is io
-		{1, classIO},                  // SQLITE_ERROR
+		{19, classData},               // SQLITE_CONSTRAINT: the data conflicts with the schema (DR-0049)
+		{2067, classData},             // SQLITE_CONSTRAINT_UNIQUE
+		{1555, classData},             // SQLITE_CONSTRAINT_PRIMARYKEY
+		{1299, classData},             // SQLITE_CONSTRAINT_NOTNULL
+		{275, classData},              // SQLITE_CONSTRAINT_CHECK
+		{787, classData},              // SQLITE_CONSTRAINT_FOREIGNKEY
+		{1, classIO},                  // SQLITE_ERROR: any other code is io
 	} {
 		if got := sqliteClass(tc.code); got != tc.want {
 			t.Errorf("sqliteClass(%d) = %v, want %v", tc.code, got, tc.want)
@@ -401,6 +406,29 @@ func TestClassify_RealSqliteErrors(t *testing.T) {
 	}
 	if got, classified := classify(err); !classified || got != classData {
 		t.Errorf("classify(not a database: %v) = %v, %v; want data", err, got, classified)
+	}
+
+	// A constraint violation is data that conflicts with the schema, not an I/O
+	// failure: the shape of the `ingest --root nosuchroot` failure (DR-0049).
+	cdb, err := sql.Open("sqlite", filepath.Join(dir, "constraint.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cdb.Close()
+	if _, err := cdb.Exec(`CREATE TABLE u (a TEXT UNIQUE NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cdb.Exec(`INSERT INTO u VALUES ('x')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{`INSERT INTO u VALUES ('x')`, `INSERT INTO u VALUES (NULL)`} {
+		_, cerr := cdb.Exec(q)
+		if cerr == nil {
+			t.Fatalf("%s should violate a constraint", q)
+		}
+		if got, classified := classify(cerr); !classified || got != classData {
+			t.Errorf("classify(%v) = %v, %v; want data (65)", cerr, got, classified)
+		}
 	}
 
 	lockedPath := filepath.Join(dir, "locked.db")

@@ -246,7 +246,8 @@ func classify(err error) (exitClass, bool) {
 	// files wraps it with classedAs(classData, ...) so the outermost class wins.
 	var inUse *knowledge.ConceptInUseError
 	switch {
-	case errors.Is(err, knowledge.ErrNotFound), errors.Is(err, knowledge.ErrInUse), errors.As(err, &inUse):
+	case errors.Is(err, knowledge.ErrNotFound), errors.Is(err, knowledge.ErrInUse),
+		errors.Is(err, knowledge.ErrConflict), errors.As(err, &inUse):
 		return classNegative, true
 	case errors.Is(err, knowledge.ErrInvalid):
 		return classUsage, true
@@ -305,7 +306,8 @@ func exitCodeFor(err error) exitClass {
 /** sqliteClass maps a SQLite result code to an exit class: busy or locked
  * (SQLITE_BUSY 5, SQLITE_LOCKED 6) is temp_fail, since a retry may succeed; a
  * corrupt file or one that is not a database (SQLITE_CORRUPT 11, SQLITE_NOTADB
- * 26) is data; any other code is io. Extended result codes carry the primary
+ * 26) is data, and so is a constraint violation (SQLITE_CONSTRAINT 19: the data
+ * offered conflicts with the schema or the stored rows); any other code is io. Extended result codes carry the primary
  * code in their low byte.
  *
  * Parameters:
@@ -322,6 +324,11 @@ func sqliteClass(code int) exitClass {
 	case 5, 6:
 		return classTempFail
 	case 11, 26:
+		return classData
+	case 19:
+		// SQLITE_CONSTRAINT, whichever extended code (UNIQUE, PRIMARY KEY, NOT
+		// NULL, CHECK, FOREIGN KEY): the data offered conflicts with what the
+		// schema or the stored rows allow. Not an I/O failure (DR-0049).
 		return classData
 	}
 	return classIO

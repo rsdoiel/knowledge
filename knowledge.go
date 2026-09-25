@@ -776,7 +776,7 @@ func (kb *KnowledgeBase) RenameProject(old, new string) error {
 		return fmt.Errorf("knowledge: rename project: %w", err)
 	}
 	if records > 0 {
-		return fmt.Errorf(
+		return conflictf(
 			"knowledge: project %q owns %d record(s); renaming would desync its corpus's project: frontmatter from the database on the next ingest — rewrite the corpus's frontmatter and re-ingest first",
 			old, records)
 	}
@@ -830,7 +830,7 @@ func (kb *KnowledgeBase) resolveProjectRename(old, new string) (int64, string, e
 		return 0, "", fmt.Errorf("knowledge: rename project: %w", err)
 	}
 	if taken > 0 {
-		return 0, "", fmt.Errorf("knowledge: project %q already exists", new)
+		return 0, "", conflictf("knowledge: project %q already exists", new)
 	}
 	return id, description, nil
 }
@@ -1269,7 +1269,7 @@ func (kb *KnowledgeBase) RenameConcept(old, new string) error {
 		return fmt.Errorf("knowledge: rename concept: %w", err)
 	}
 	if taken > 0 {
-		return fmt.Errorf("knowledge: concept %q already exists", new)
+		return conflictf("knowledge: concept %q already exists", new)
 	}
 	if _, err := kb.db.Exec(`UPDATE concepts SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, new, id); err != nil {
 		return fmt.Errorf("knowledge: rename concept: %w", err)

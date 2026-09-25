@@ -159,3 +159,30 @@ func TestMerge_CollisionIsExit65(t *testing.T) {
 		t.Errorf("class = %v, want data (65)", got)
 	}
 }
+
+// Ingesting records under the wrong workspace name (`--root` naming another
+// directory) finds no record by identity, tries to insert each, and every insert
+// hits UNIQUE constraint failed: records.uuid. That is data that conflicts with
+// what is stored, not an I/O failure: 65, and the failures are counted (DR-0049).
+func TestCmdIngest_WrongRootHitsUniqueConstraintsAndExits65(t *testing.T) {
+	dir, run := ingestDir(t)
+	// Workspace-tier records carrying their uuids, as real record files do.
+	writeRaw(t, dir, "0001-a.md", workspaceRecord("0001", "First", "11111111-1111-7111-8111-111111111111"))
+	writeRaw(t, dir, "0002-b.md", workspaceRecord("0002", "Second", "22222222-2222-7222-8222-222222222222"))
+	if code, out, errOut := run(false); code != 0 {
+		t.Fatalf("first ingest: exit %d, stdout %q stderr %q", code, out, errOut)
+	}
+	other := filepath.Join(filepath.Dir(dir), "..", "otherworkspace")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := run(false, "--root", other)
+	if code != 65 {
+		t.Errorf("exit %d, want 65 (data conflict); stdout %q stderr %q", code, out, errOut)
+	}
+	// A record that could not be inserted was not added: it is counted once, as a
+	// failure. It used to be counted as added and failed ("2 added ... 2 failed").
+	if !strings.HasPrefix(out, "0 added, 0 updated, 0 skipped, 2 failed") || !strings.Contains(out, "UNIQUE") {
+		t.Errorf("stdout %q should say 0 added and 2 failed, and show the constraint", out)
+	}
+}

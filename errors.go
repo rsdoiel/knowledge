@@ -32,6 +32,21 @@ var ErrInvalid = errors.New("invalid")
  */
 var ErrNotFound = errors.New("not found")
 
+/** ErrConflict marks an error the library raises because the current state of
+ * the knowledge base forbids an operation that was otherwise well formed: a
+ * rename onto a name that is already taken, a project that still owns records, a
+ * document section that is not in the state a promotion needs. Match it with
+ * errors.Is; the message is unchanged. kb exits 1 for it (workspace DR-0003 class
+ * "negative": the command ran correctly and the answer is no). An item that is
+ * still referenced has its own marker, ErrInUse.
+ *
+ * Example:
+ *   if err := kb.RenameConcept("old", "new"); errors.Is(err, knowledge.ErrConflict) {
+ *       // "new" already exists
+ *   }
+ */
+var ErrConflict = errors.New("conflict")
+
 /** ErrInUse marks an error the library raises because an operation is refused
  * while the item is still referenced: a source still linked to an observation.
  * Match it with errors.Is; the message is unchanged. It is a refusal the current
@@ -66,6 +81,9 @@ func markedf(kind error, format string, a ...any) error {
 
 // invalidf is fmt.Errorf whose result matches ErrInvalid.
 func invalidf(format string, a ...any) error { return markedf(ErrInvalid, format, a...) }
+
+// conflictf is fmt.Errorf whose result matches ErrConflict.
+func conflictf(format string, a ...any) error { return markedf(ErrConflict, format, a...) }
 
 // inUsef is fmt.Errorf whose result matches ErrInUse.
 func inUsef(format string, a ...any) error { return markedf(ErrInUse, format, a...) }

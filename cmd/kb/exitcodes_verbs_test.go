@@ -108,6 +108,8 @@ func TestVerbs_NegativeIsExit1(t *testing.T) {
 		{name: "concept delete missing", args: []string{"concept", "delete", "nosuch"}},
 		{name: "concept delete while linked", setup: seedLinked(), args: []string{"concept", "delete", "C"}},
 		{name: "concept rename missing", args: []string{"concept", "rename", "nosuch", "x"}},
+		{name: "concept rename onto an existing name", setup: [][]string{{"concept", "add", "A"}, {"concept", "add", "B"}}, args: []string{"concept", "rename", "A", "B"}},
+		{name: "document review promote of a section not drafted", setup: [][]string{{"project", "add", "P", "d"}, {"document", "ingest", "doc.md", "--project", "P"}}, files: map[string]string{"doc.md": "## S\n\nbody\n"}, args: []string{"document", "review", "promote", "1"}},
 		{name: "observation show", args: []string{"observation", "show", "99"}},
 		{name: "observation update", args: []string{"observation", "update", "99", "text"}},
 		{name: "observation list unknown project", args: []string{"observation", "list", "--project", "nosuch"}},
@@ -152,6 +154,7 @@ func TestVerbs_UsageIsExit2(t *testing.T) {
 		{name: "index --check with --stdout", args: []string{"index", "--check", "--stdout", "."}},
 		{name: "unknown subverb", args: []string{"project", "bogus"}},
 		{name: "malformed id", args: []string{"observation", "show", "abc"}},
+		{name: "unknown --accept-keywords value", files: map[string]string{"doc.md": "# T\n\nbody\n"}, args: []string{"document", "frontmatter", "doc.md", "--accept-keywords", "zzznotaconcept"}},
 		{name: "negative concept suggest limit", args: []string{"concept", "suggest", "--limit", "-1"}},
 		{name: "unparseable date", args: []string{"record", "list", "--since", "yesterday"}},
 	} {
