@@ -6,8 +6,8 @@ Generated file. Do not hand-edit.
 DR-0049  2026-09-25  accepted     correction   live-test        -     State conflicts and constraint violations in kb's exit codes (X5 findings)
 DR-0048  2026-09-25  accepted     decision     request          -     record set-status refuses an unknown status; X2's amendments to DR-0047
 DR-0047  2026-09-25  accepted     decision     request          -     kb adopts the workspace exit-code convention and supersedes DR-0040
-DR-0046  2026-09-25  proposed     decision     live-test        -     Close DR-0041, DR-0042 and DR-0044's open questions: -- everywhere, one-line names, no WAL allowance
-DR-0045  2026-09-25  proposed     decision     request          -     Refuse a malformed source and an unknown record trigger or kind at authoring time
+DR-0046  2026-09-25  accepted     decision     live-test        -     Close DR-0041, DR-0042 and DR-0044's open questions: -- everywhere, one-line names, no WAL allowance
+DR-0045  2026-09-25  accepted     decision     request          -     Refuse a malformed source and an unknown record trigger or kind at authoring time
 DR-0044  2026-09-24  accepted     correction   live-test        -     kb merge refuses inputs that are missing, empty, not a file, or the same file twice
 DR-0043  2026-09-24  accepted     decision     live-test        -     kb record list: a filter value is an error only when nothing carries it
 DR-0042  2026-09-24  accepted     correction   live-test        -     Project and concept names are trimmed and blank ones refused in the library; import and merge stay raw

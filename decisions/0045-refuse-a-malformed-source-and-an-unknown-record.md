@@ -2,7 +2,7 @@
 id: "0045"
 title: "Refuse a malformed source and an unknown record trigger or kind at authoring time"
 date: "2026-09-25"
-status: proposed
+status: accepted
 kind: decision
 trigger: request
 project: knowledge

@@ -2,7 +2,7 @@
 id: "0046"
 title: "Close DR-0041, DR-0042 and DR-0044's open questions: -- everywhere, one-line names, no WAL allowance"
 date: "2026-09-25"
-status: proposed
+status: accepted
 kind: decision
 trigger: live-test
 project: knowledge
