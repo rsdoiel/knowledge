@@ -1,4 +1,4 @@
-%kb-record(1) user manual | version 0.0.14 2d6239c
+%kb-record(1) user manual | version 0.0.14 e470e93
 % R. S. Doiel
 % 2026-09-25
 
@@ -21,6 +21,8 @@ kb record new --title T --trigger G (--project P | --workspace) [--kind K] [--di
 kb record fmt PATH [--dry-run]
 
 kb record concepts RECORD_ID [--project P] [--workspace]
+
+kb record delete RECORD_ID [--project P] [--workspace] [--root DIR] [--dry-run]
 
 # DESCRIPTION
 
@@ -89,6 +91,15 @@ fmt
 concepts
 : list the concepts ingest linked to a record, from [[Name]] wikilinks in its
   body and its frontmatter tags list
+
+delete
+: drop the database row of a record whose file is already gone: its relations, its
+  concept links and its search entry go with it. A record's file is the truth and
+  ingest is additive, so a row whose file vanished otherwise stays (ingest only
+  reports it). While the file exists this is refused (exit 1), because the next
+  ingest of the changed file would only undo it, and kb never deletes a
+  decision record from disk: delete the file yourself first, or retire the record
+  with set-status cancelled. --dry-run reports and changes nothing.
 
 new, set-status, supersede and fmt are the only commands that write a record
 file; ingest never does. A record is written proposed and stays proposed: a

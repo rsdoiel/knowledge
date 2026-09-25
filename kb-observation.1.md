@@ -1,4 +1,4 @@
-%kb-observation(1) user manual | version 0.0.14 2d6239c
+%kb-observation(1) user manual | version 0.0.14 e470e93
 % R. S. Doiel
 % 2026-09-25
 
@@ -17,6 +17,8 @@ kb observation show ID
 kb observation update ID BODY...
 
 kb observation sources ID
+
+kb observation delete ID [--force] [--dry-run]
 
 # DESCRIPTION
 
@@ -46,6 +48,19 @@ update
 
 sources
 : list the sources cited by an observation (see kb-source(1))
+
+delete
+: delete an observation and its search entry. One with concept links, source
+  links, or supersession relations (in either direction) is refused with the
+  counts (exit 1); --force removes those links and relations and the
+  observation, and the concepts, sources and other observations stay. To remove
+  a single link instead, see kb-unlink(1). --dry-run reports and changes
+  nothing.
+
+Deletion is local to one database, with no tombstone: kb-merge(1) and
+kb-import(1) from a database that still has the row bring it back, so
+delete it there as well. `agents/knowledge.jsonl` is re-exported from the database,
+so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
 
 # SEE ALSO
 

@@ -1,4 +1,4 @@
-%kb-link(1) user manual | version 0.0.14 2d6239c
+%kb-link(1) user manual | version 0.0.14 e470e93
 % R. S. Doiel
 % 2026-09-25
 
@@ -19,5 +19,5 @@ silent no-op.
 
 # SEE ALSO
 
-kb-project(1), kb-observation(1), kb-concept(1)
+kb-project(1), kb-observation(1), kb-concept(1), kb-unlink(1)
 

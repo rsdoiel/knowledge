@@ -6,7 +6,7 @@ release notes; maintained going forward.
 ## v0.0.14 — 2026-09-25
 
 Everything below is written and tested red first. The decisions are workspace DR-0003 and
-knowledge DR-0045 to DR-0049.
+knowledge DR-0045 to DR-0050.
 
 `kb` now tells a script *what kind* of failure it was from the exit number alone, and
 a batch of inputs that were accepted silently are refused. The exit codes follow one
@@ -18,6 +18,19 @@ commands in plain and `--json` mode, on a copy of the real database.
 
 ### Added
 
+- **Removal verbs** (DR-0050), so a mistake is fixable without raw SQL, which skips the search
+  index: `kb project delete NAME` (for a stray empty project; a project that owns any observation,
+  record or document is always refused, `--force` or not, and `--force` removes only its concept
+  links), `kb observation delete ID` (refused while it has concept links, source links or
+  supersessions; `--force` removes them), `kb document delete ID` (refused while any section's
+  summary is reviewed, since that is human-gated data; `--force` deletes anyway) and `kb record
+  delete RECORD_ID` (only once the record's file is gone, because `ingest` is additive and the file is
+  the truth; `kb` never deletes a decision record from disk). `kb unlink project|observation|source`
+  is the inverse of `link` and `source link`. Each takes `--dry-run`, refuses with what and how many
+  (exit 1), and treats a target or link that is not there as exit 1, not success. A delete is local to
+  one database: `kb merge` and `kb import` from a database that still has the row bring it back. Library:
+  `DeleteProject`, `DeleteObservation`, `DeleteDocument`, `DeleteRecord`, their `...Usage` functions, the
+  three `Unlink...` functions and `InUseError`.
 - **Exit codes** (DR-0003, DR-0047, DR-0048, DR-0049): 0 success; 1 a normal negative
   answer (not found, no results, a stale index, an operation the current state forbids);
   2 usage; 65 wrong content; 66 a missing input or workspace; 69 an unreachable service;
@@ -105,6 +118,9 @@ treated 1 as "the command failed" now also has to handle 2 and the numbers above
   `superseded`, `rejected` and `cancelled` that no record carries.
 - The three knowledge skills in `agents/skills/` branch on the new codes; a skill or script
   that ran `kb --db PATH index ...` must drop `--db` (it has been refused since v0.0.13).
+
+The new removal commands change no existing status. A script that used `sqlite3` to delete a row
+still works and still skips the search index; `kb` now has a supported form.
 
 For library callers:
 

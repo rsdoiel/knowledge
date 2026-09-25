@@ -1,4 +1,4 @@
-%kb-topics(1) user manual | version 0.0.14 2d6239c
+%kb-topics(1) user manual | version 0.0.14 e470e93
 % R. S. Doiel
 % 2026-09-25
 
@@ -26,6 +26,9 @@ concept
 
 link
 : link projects and observations to concepts
+
+unlink
+: remove a link between a project or observation and a concept, or an observation and a source
 
 source
 : manage cited sources and retraction checking

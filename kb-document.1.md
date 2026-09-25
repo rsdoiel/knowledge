@@ -1,4 +1,4 @@
-%kb-document(1) user manual | version 0.0.14 2d6239c
+%kb-document(1) user manual | version 0.0.14 e470e93
 % R. S. Doiel
 % 2026-09-25
 
@@ -25,6 +25,8 @@ kb document tag --project P [--concept NAME,...] [--dry-run]
 kb document fuzzy-tag --project P [--concept NAME,...] [--dry-run]
 
 kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]
+
+kb document delete ID [--force] [--dry-run]
 
 # DESCRIPTION
 
@@ -138,6 +140,18 @@ frontmatter
   first process dependency -- shells out to `git` for provenance,
   falling back to filesystem timestamps when `git` itself fails (not a
   repository, or a genuinely untracked file).
+
+delete
+: delete a document, its sections, their concept links and the search entries of
+  any promoted summaries. A document with a section whose summary is reviewed is
+  refused (exit 1): a reviewed summary is human-gated data and deleting it loses
+  it. --force deletes anyway. Ingesting the file again recreates the document,
+  without the reviewed summaries. --dry-run reports and changes nothing.
+
+Deletion is local to one database, with no tombstone: kb-merge(1) and
+kb-import(1) from a database that still has the row bring it back, so
+delete it there as well. `agents/knowledge.jsonl` is re-exported from the database,
+so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
 
 # VOCABULARIES
 

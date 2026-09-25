@@ -1,4 +1,4 @@
-%kb(1) user manual | version 0.0.14 2d6239c
+%kb(1) user manual | version 0.0.14 e470e93
 % R. S. Doiel
 % 2026-09-25
 
@@ -85,8 +85,9 @@ observation
 concept
 : manage concepts — see kb-concept(1)
 
-link
-: link projects/observations to concepts — see kb-link(1)
+link, unlink
+: link projects/observations to concepts, and remove those links — see
+  kb-link(1) and kb-unlink(1)
 
 source
 : manage cited sources and retraction checking — see kb-source(1)

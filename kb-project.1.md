@@ -1,4 +1,4 @@
-%kb-project(1) user manual | version 0.0.14 2d6239c
+%kb-project(1) user manual | version 0.0.14 e470e93
 % R. S. Doiel
 % 2026-09-25
 
@@ -21,6 +21,8 @@ kb project set-status NAME STATUS
 kb project set-description NAME DESCRIPTION
 
 kb project rename [--root PATH] [--dry-run] OLD NEW
+
+kb project delete NAME [--force] [--dry-run]
 
 # DESCRIPTION
 
@@ -66,6 +68,20 @@ rename
   writing anything. --root sets the workspace root record paths are
   relative to (default: inferred from the database path). See DR-0026
   (knowledge/decisions/), which supersedes DR-0024's outright refusal.
+
+delete
+: delete a project. Meant for a stray empty one (a failed ingest can leave one).
+  A project that owns any observation, record or document is refused, with
+  --force or without: one command must never destroy work, so delete or move
+  the content first (exit 1). A project attached only to concepts is refused
+  unless --force, which removes those links and the project; the concepts stay.
+  --dry-run reports what would happen and changes nothing. A NAME that looks
+  like a flag is given after --.
+
+Deletion is local to one database, with no tombstone: kb-merge(1) and
+kb-import(1) from a database that still has the row bring it back, so
+delete it there as well. `agents/knowledge.jsonl` is re-exported from the database,
+so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
 
 # CAVEATS
 
