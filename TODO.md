@@ -379,11 +379,11 @@ trip was also checked and is clean: 14 tables' row counts identical.
   with a test that no file is created. Not fixed with the ignored-input work;
   it is a missing-file check, not an argument-shape one.
 
-- [ ] **Exit-codes X6 remains** (see `exit-codes-plan.md`). X0 to X5 are done. Known
-  gaps, so nobody assumes otherwise: the per-verb man pages, the upgrade note and the three skill scripts
-  that read `kb`'s exit status still describe the old codes (X6). The main EXIT STATUS
-  section, `ingest` and `source check-retractions` pages are current. **No release before
-  X6.**
+- [x] **Exit-code work X0 to X6 is DONE 2026-09-25** (see `exit-codes-plan.md`). Not in scope and still
+  open, so nobody assumes otherwise: the copies of the knowledge skills under `harvey/agents/skills/` are
+  older and different and were not updated (see the skills item above); the HTML pages are not regenerated;
+  `CHANGES.md`'s `## Unreleased` section needs its heading, date and version at release prep. **The four
+  `codemeta.json` fields are the release-prep check, and there is no release before the user runs it.**
 
 - [ ] **Two traps that are not exit-code questions** (noted in DR-0048). `kb project add
   NAME description --status paused` stores "description --status paused" as the

@@ -280,6 +280,25 @@ and both indexes are current.
 
 ---
 
+**DONE 2026-09-25** (uncommitted). (1) The main EXIT STATUS help section and `kb.1.md` (X2, X3), and the
+verb pages where a status is notable: `index` (1 for drift, the failure's class otherwise, `--all`
+ranking), `merge` (66, 65, 2, 73, 65), `record` (lookup 1 versus write 2, ambiguous id 2), `concept
+delete` (1), `source remove` (1, including a missing id), `export` (73, 77, 74, 1) and `import` (65,
+66, 77, 74); their man page sources regenerated. (2) `CHANGES.md` gains an `## Unreleased` section with
+Added, Changed, Fixed and Upgrade notes (a table of every changed status, v0.0.13 against now, then the
+script and library notes); it has no date or version, which release prep sets, and the four
+`codemeta.json` fields are still the user's release-prep check. (3) The three skills in `agents/skills/`
+(root copies only): `review-knowledge-base`'s bash and PowerShell scripts now branch on the codes
+(project show 1 is "not found", anything else is passed on; search 1 is "no results", 2 or more is a
+failure; the index check reports a failure that is not drift), tested with `pwsh` and bash against both
+the new and the v0.0.13 `kb`; all three `SKILL.md` gained an Exit codes table and a row per condition;
+skill versions bumped (`kb_version` unchanged, the codes ship with an unreleased `kb`). The update and
+setup scripts run under `set -e` and pass `kb`'s status straight through, so they needed no logic
+change. **Found on the way:** the review script passed `--db` to `kb index`, which has refused it since
+v0.0.13, and its `|| true` had hidden the failure, so the index check never ran; fixed in both scripts
+and the SKILL.md example. `harvey/agents/skills/` holds older, different copies (every file differs);
+not touched, left to the skills-in-repo TODO.
+
 ## Order and risk
 
 X0 → X1 → X2 → X3 → X4 → X5 → X6. X0 and X1 change no observable exit code: they

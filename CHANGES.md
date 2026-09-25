@@ -3,6 +3,120 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+**Not yet released.** The heading, the date and the version are set at release prep,
+and the four `codemeta.json` fields with them. Everything below is written and tested
+red first; the decisions are workspace DR-0003 and knowledge DR-0045 to DR-0049.
+
+`kb` now tells a script *what kind* of failure it was from the exit number alone, and
+a batch of inputs that were accepted silently are refused. The exit codes follow one
+convention for every command-line tool in the workspace (workspace DR-0003): 0 and 1
+answer the question that was asked, 2 says the command was wrong, and the `sysexits(3)`
+numbers above that say what went wrong. Read **Upgrade notes** before updating a script.
+The whole change was checked by running the v0.0.13 build alongside the new one, 387
+commands in plain and `--json` mode, on a copy of the real database.
+
+### Added
+
+- **Exit codes** (DR-0003, DR-0047, DR-0048, DR-0049): 0 success; 1 a normal negative
+  answer (not found, no results, a stale index, an operation the current state forbids);
+  2 usage; 65 wrong content; 66 a missing input or workspace; 69 an unreachable service;
+  70 an internal error; 73 an output that cannot be created; 74 an I/O error; 75 a locked
+  database; 77 permission denied. An error nothing classified is 70, never 1, so a gap
+  shows as an internal error. The main page's EXIT STATUS section lists them.
+- The `--json` error object carries the class and the number beside the message:
+  `{"error": "...", "class": "no_input", "code": 66}`.
+- Library: `ErrInvalid`, `ErrNotFound`, `ErrInUse`, `ErrConflict` (markers matched with
+  `errors.Is`, message text unchanged) and `RetractionCheckError`.
+- `kb source add` checks what it is given (DR-0045): a blank title, a `--published`
+  that is not `YYYY`, `YYYY-MM` or `YYYY-MM-DD`, a `--url` that is not absolute, and a
+  `--doi` that is not the bare `10.NNNN/suffix` form are refused. The DOI check matters:
+  `check-retractions` sends the DOI to Retraction Watch, and a mistyped one used to read
+  as "not retracted".
+
+### Changed
+
+- **Bulk commands do everything they can, then exit with the class of the first failure**
+  instead of 0: `kb ingest` (65 for a record that does not parse or two files claiming
+  one identity, 77 for one it may not read), `index --all` (a corpus that could not be
+  indexed outranks a stale one), and `source check-retractions` (69, after trying every
+  source). The summary is still printed, in `--json` too. A record that failed to insert
+  is counted as failed only; it was counted as added as well.
+- `source check-retractions` stamps `last_checked_at` only on a source it got an answer
+  for. It used to stamp the ones it could not reach and report them checked. The `--json`
+  result gains `failed`.
+- A project or concept name is one line (DR-0046): surrounding whitespace is trimmed,
+  any interior run of whitespace (a newline, a tab) becomes a single space, and a control
+  character is refused. A hard-wrapped `[[wikilink]]` in a document or record is now the
+  ordinary one-line concept; it used to mint a second concept with a newline in its name.
+- `--` ends flag recognition for `record`, `document`, `ingest` and `source add` too
+  (DR-0046), so a dash-leading title or path can be given.
+- `kb merge` refuses a zero-byte input whether or not a `-wal` sits beside it (DR-0046):
+  SQLite discards that WAL on opening an empty file, so the allowance protected nothing,
+  and merge used to exit 0 with no rows and delete the `-wal`.
+- `record new` and `record set-status` refuse a trigger, kind or status outside the
+  vocabulary unless a record already carries it (DR-0045, DR-0048); they wrote it
+  silently before. `record list` filters keep their lookup behaviour (exit 1).
+- Failures before a verb runs (no workspace, the database will not open, the debug log)
+  are reported like any other error, so they honour `--json` and carry a class.
+- `kb search` and `kb init` read a flag-shaped first argument as a mistyped option
+  (exit 2), and take a dash-leading term or path after `--`.
+
+### Fixed
+
+- Silent successes: `source retract 99` and `source remove 99` on an id that does not
+  exist exited 0; `source link` and `link observation` with a missing id failed with a
+  raw foreign-key error (74); `concept suggest --limit -1` was accepted; `kb init --bogus`
+  created a workspace in a directory named `--bogus`; `kb search --json foo` searched for
+  the text and answered "no results"; `kb ingest` with failed records exited 0.
+- Refusals the current state forces are exit 1, not an internal error: a rename onto a
+  name that exists, a project that still owns records, a section not yet drafted.
+- A SQLite constraint violation is wrong data (65), not an I/O failure (74): an ingest
+  under the wrong workspace root now says so.
+- `document frontmatter --accept-keywords` with an unknown keyword is a usage error.
+- `agents/skills/review-knowledge-base` passed `--db` to `kb index`, which has refused it
+  since v0.0.13 (exit 2), and its `|| true` hid the failure: the index check never ran.
+
+### Upgrade notes
+
+For scripts. **Exit 1 no longer means "anything went wrong".** It is the normal "no"
+(not found, nothing matched, a stale index, refused by the current state), as it is for
+`grep` and `diff`. A script that treated any non-zero as failure is unaffected. One that
+treated 1 as "the command failed" now also has to handle 2 and the numbers above it.
+
+| What happened | v0.0.13 | now |
+|---------------|---------|-----|
+| A bad value on the command line: unknown observation kind or project status, a blank name, a bad `--published`, `--url` or `--doi`, a negative `--limit`; an unknown record status, trigger or kind given to `record new` or `set-status` | 1, or 0 (`record new`, `source add`) | 2 |
+| A named input or the workspace is missing (`ingest`, `import -in`, `merge`, `index`, no `agents/knowledge.db`) | 1 | 66 |
+| Wrong content: a malformed record, JSONL or document; a file that is not a knowledge base; a zero-byte merge input; a merge collision; a constraint violation | 1 | 65 |
+| `ingest` with records that could not be ingested | 0 | 65, 77 or the first failure's class |
+| An output cannot be created: `merge -out` exists, `export -out`, `init` | 1 | 73 |
+| An I/O error; a locked database; permission denied | 1 | 74; 75; 77 |
+| `check-retractions` with lookups that failed | 0 | 69 |
+| `source retract` or `remove` on an id that does not exist | 0 | 1 |
+| Not found, `search` finds nothing, a stale index, a concept or source still linked | 1 | 1 (unchanged) |
+| An internal error | 1 | 70 |
+
+- `--json` failures before the verb runs (no workspace, an unreadable database) are now
+  JSON on stderr; they were plain text.
+- `kb search` and `kb init` refuse a flag-shaped first word; `kb search -- -x` searches for
+  a dash-leading term.
+- `record set-status ID STATUS` refuses a status outside `proposed`, `accepted`,
+  `superseded`, `rejected` and `cancelled` that no record carries.
+- The three knowledge skills in `agents/skills/` branch on the new codes; a skill or script
+  that ran `kb --db PATH index ...` must drop `--db` (it has been refused since v0.0.13).
+
+For library callers:
+
+- `AddSource` trims and validates (`ErrInvalid`); `RemoveSource`, `RetractSource`,
+  `LinkObservationSource`, `LinkObservationConcept` and `LinkProjectConcept` return
+  `ErrNotFound` for an id that is not there (`RetractSource` and `RemoveSource` returned
+  nil); `RemoveSource` on a linked source is `ErrInUse`.
+- `CleanName` collapses interior whitespace and refuses control characters.
+- `CheckRetractions` returns a `*RetractionCheckError` after checking every source when
+  some could not be checked, and its `checked` counts the answered ones only.
+
 ## v0.0.13 — 2026-09-24
 
 A sweep for commands that answer a mistake with success. Every verb was run
