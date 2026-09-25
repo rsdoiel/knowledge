@@ -131,6 +131,63 @@
     own skills sync (H2 of its learning-mode plan, skills 0.6.1) should be checked so this
     does not undo it. Wants a design note and a DR, since it fixes a canonical location.
 
+- [x] **Verbs that remove, unlink or retire, so a mistake is fixable without raw SQL.** Filed
+  2026-09-25 at RSDOIEL's request, who wanted it resolved in the v0.0.14 release. **DONE 2026-09-25**
+  (DR-0050, `proposed`, design `removal-verbs-design.md`, plan `removal-verbs-plan.md`, uncommitted):
+  `project delete`, `observation delete`, `document delete`, `record delete` (only once the file is gone) and
+  a new `unlink` verb (`project`, `observation`, `source`), all as the shapes the user chose: project never
+  cascades, a reviewed summary gates a document, `--force` and `--dry-run` as `concept delete`. Tested red
+  first, mutation-checked, smoke-tested on a copy of the real database (row counts and search entries agree),
+  the compare harness shows no existing exit code changed. Not added on purpose: `document review reject`,
+  `cancel` verbs. Release prep redone (notes, CHANGES, derived files, man pages, `update-knowledge-base`
+  skill). The original item follows.
+  Checked 2026-09-25 by running each plausible verb on a scratch database. Today only three
+  commands remove or retire anything: `concept delete` (DR-0039, and with `--force` the only way
+  to unlink a concept), `source remove` (refuses while linked) and `source retract` (marks, does
+  not delete). Everything below exits 2 "unknown subcommand". The only gap the TODO already
+  mentioned was a stray empty project left by a failed ingest ("no verb to remove the stray row").
+  - **Missing:** `project delete`; `observation delete`; `document delete`; `record delete`;
+    unlinking a concept from a project or observation (`link` has no inverse) and a source from an
+    observation (`source link` has none); `document review reject` (dropped on purpose earlier:
+    `knowledge` cannot un-draft a summary); `cancel` on a project or record (records already have
+    `record set-status ID cancelled`, DR-0038; projects have `paused` and `concluded`).
+  - **What each entity depends on** (foreign keys, from the schema): a project owns
+    `observations`, `records`, `documents` and `project_concepts`; an observation has
+    `observation_concepts`, `observation_sources` and `observation_relations` (both directions); a
+    document owns `document_sections`, which own `document_section_concepts`; a record has
+    `record_concepts` and `record_relations` (both directions). Search entries (`kb_fts`) exist for
+    concepts, observations, projects, records and document summaries and must go with their row.
+  - **The pattern to follow is `concept delete`** (DR-0039): refuse while something depends on it
+    and say what, `--force` to unlink and delete, `--dry-run` to preview, one transaction then the
+    search entry, `--` for a dash-leading name, a library function with a typed refusal, and
+    exit 1 for a refusal (`ErrInUse`/`ErrConflict`).
+  - **Constraints that shape every one of them.** (1) Deletion is local: `kb merge` and `kb import`
+    into a non-empty database only add rows, so a database that still has the row brings it back;
+    DR-0039 chose no tombstones and said so in the man page, and the same caveat applies to all of
+    these. `agents/knowledge.jsonl` is authoritative (workspace DR-0002) and the hook re-exports it
+    on commit, so a delete does reach a database rebuilt from it. (2) A record's file is the source of
+    truth and `ingest` is additive by design: it never deletes a row whose file vanished, only reports
+    it. Deleting a row while its file exists is undone the next time the file changes and is ingested.
+    (3) Accepted decision records are history: the sanctioned ways to retire one are `superseded`,
+    `rejected` and `cancelled`, not deletion. (4) A reviewed document summary is human-gated data;
+    deleting a document loses it.
+  - **Proposed shapes, to decide** (a design note and a DR come first, tests before code, one commit
+    per verb): `project delete NAME` refuses unless the project owns nothing (no observations,
+    records or documents), `--force` removes only its concept links, so it removes stray empty
+    projects and never cascades into content; `observation delete ID [--force] [--dry-run]` refuses
+    while it has concept, source or relation links, `--force` unlinks and deletes; `document delete ID`
+    refuses while any section has a reviewed summary, `--force` deletes anyway, and says a re-ingest
+    of the file recreates it; `record delete ID` only when the record's file is gone (it removes the
+    row, relations, concept links and search entry), and refuses while the file exists, pointing at
+    `set-status cancelled`; an inverse of `link` and of `source link` (the shape is open: a new
+    `unlink` verb, or `remove` subverbs).
+  - **Release consequence.** The v0.0.14 prep is already committed (8ecabfd). Adding verbs means
+    redoing it: `codemeta.json` releaseNotes and the four-field check, `CHANGES.md`, the man pages
+    and `kb-topics`, the `update-knowledge-base` skill's verb list, and a rerun of
+    `scripts/compare-exit-codes.py` (new verbs add no changed exit codes, but the synopsis-derived
+    checks must cover them). Each new verb also needs the every-command test to reach it, which the
+    SYNOPSIS-derived registry does automatically.
+
 ## To explore
 
 ### Bugs collected for v0.0.13

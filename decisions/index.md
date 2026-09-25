@@ -3,6 +3,7 @@
 Generated file. Do not hand-edit.
 
 ```
+DR-0050  2026-09-25  accepted     decision     request          -     Removal verbs: project, observation, document and record delete, and unlink
 DR-0049  2026-09-25  accepted     correction   live-test        -     State conflicts and constraint violations in kb's exit codes (X5 findings)
 DR-0048  2026-09-25  accepted     decision     request          -     record set-status refuses an unknown status; X2's amendments to DR-0047
 DR-0047  2026-09-25  accepted     decision     request          -     kb adopts the workspace exit-code convention and supersedes DR-0040
