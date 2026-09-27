@@ -102,9 +102,10 @@ manage observations — see kb-observation(1)
 <dd>
 manage concepts — see kb-concept(1)
 </dd>
-<dt>link</dt>
+<dt>link, unlink</dt>
 <dd>
-link projects/observations to concepts — see kb-link(1)
+link projects/observations to concepts, and remove those links — see
+kb-link(1) and kb-unlink(1)
 </dd>
 <dt>source</dt>
 <dd>
@@ -159,29 +160,92 @@ and merge never open the ambient database, so -db is refused for them as
 well; init takes its target as kb init PATH, merge as -a, -b and
 -out.</p>
 <p>A name that begins with a dash is given after –, as in kb project
-show – -name, so that it is not read as a flag. Words that follow a
-verb’s fixed arguments and are free text (an observation body, a project
-description, a retraction note) are taken as they are, dashes
-included.</p>
+show – -name, so that it is not read as a flag. Every verb that takes a
+name, title or path accepts –, record, document, ingest and source add
+included. Words that follow a verb’s fixed arguments and are free text
+(an observation body, a project description, a retraction note) are
+taken as they are, dashes included.</p>
+<p>A project or concept name is one line. Surrounding whitespace is
+trimmed and any interior run of whitespace, a newline or a tab included,
+becomes a single space, so a [[wikilink]] wrapped across two lines names
+the same concept as the one-line spelling. A name with any other control
+character is refused.</p>
 <h1 id="exit-status">EXIT STATUS</h1>
+<p>kb follows the workspace exit-code convention (workspace DR-0003,
+applied here by DR-0047): 0 and 1 answer the question that was asked, 2
+says the command was wrong, and the sysexits(3) numbers above that say
+what went wrong, so a script or a calling tool can tell them apart from
+the number alone. A command that works through many items (ingest, index
+–all, source check-retractions) does all it can, prints the counts, and
+then exits with the class of the first failure: it does not exit 0 with
+failures, and one bad item does not stop the good ones. With -json the
+error on stderr carries the class name beside the number, for example
+{“error”: “…”, “class”: “no_input”, “code”: 66}.</p>
 <dl>
 <dt>0</dt>
 <dd>
-success
+success. A listing that matches nothing is still success
 </dd>
 <dt>1</dt>
 <dd>
-the command line was fine and the verb ran but failed: not found, no
-results, a value the knowledge base rejects (an unknown kind or status),
-a database error
+the command ran correctly and the answer is no: search found nothing;
+there is no such project, concept, observation, source, record or
+document; a record list filter value that nothing carries; an index that
+is stale; or the current state forbids the operation (a concept or
+source still linked, a rename onto a name that already exists, a project
+that still owns records, a document section not yet drafted)
 </dd>
 <dt>2</dt>
 <dd>
 usage error: the command line itself is wrong and nothing was attempted.
-An unknown verb, subverb or flag; a missing or surplus argument; a flag
-without its value or with one that does not parse; a malformed id; a
-missing required flag. A script can tell “fix the command” (2) from
-“handle the result” (1)
+An unknown verb, subverb or flag; a missing or surplus argument; a
+missing required flag; any bad value passed on the command line, whether
+it does not parse (a malformed id or date), is outside a closed
+vocabulary (an observation kind, a project status, a record status, kind
+or trigger given to record new or set-status), or is blank. A script can
+tell “fix the command” (2) from “handle the result” (1)
+</dd>
+<dt>65</dt>
+<dd>
+content the command read is wrong: a malformed record file, JSONL or
+document; a file that is not a knowledge base, including a zero-byte
+one; a merge identity collision without -force; a record whose identity
+or uuid conflicts with what is already stored (ingest under the wrong
+workspace root shows as constraint failures). Distinct from 2: the
+command was right and the data was not
+</dd>
+<dt>66</dt>
+<dd>
+a named input or the workspace is missing: no such file or directory, a
+directory where a file is needed, or no agents/knowledge.db here
+</dd>
+<dt>69</dt>
+<dd>
+a network service could not be reached: source check-retractions, after
+it has tried every source. The sources it could not look up are not
+known to be clear
+</dd>
+<dt>70</dt>
+<dd>
+an internal error, or an error nothing classified. It is never the
+answer for a known condition: report it
+</dd>
+<dt>73</dt>
+<dd>
+an output could not be created: the file exists, or its directory cannot
+be made (merge -out, export -out, init, index, record new)
+</dd>
+<dt>74</dt>
+<dd>
+a read or write failed part way: a disk or database I/O error
+</dd>
+<dt>75</dt>
+<dd>
+the database is locked. Retrying later may succeed
+</dd>
+<dt>77</dt>
+<dd>
+the operating system refused access
 </dd>
 </dl>
 <h1 id="see-also">SEE ALSO</h1>

@@ -46,7 +46,9 @@ on the way in.</p>
 <p>Unresolvable references (a uuid the file never defines a parent for)
 and unrecognized record types are skipped, not fatal — only malformed
 JSON aborts the import. The returned summary reports, per record type,
-how many lines were read, newly imported, or skipped.</p>
+how many lines were read, newly imported, or skipped. Exit status: 65
+for malformed JSON or a row the schema rejects, 66 when -in does not
+exist, 77 when it cannot be read, 74 for a read that fails part way.</p>
 <h1 id="see-also">SEE ALSO</h1>
 <p>kb(1), kb-export(1), kb-merge(1)</p>
 </section>

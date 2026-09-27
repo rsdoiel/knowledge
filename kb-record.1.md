@@ -1,4 +1,4 @@
-%kb-record(1) user manual | version 0.0.14 b8d7653
+%kb-record(1) user manual | version 0.0.14 84de289
 % R. S. Doiel
 % 2026-09-25
 

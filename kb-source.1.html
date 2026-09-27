@@ -38,11 +38,19 @@ cited).</p>
 <dd>
 register a source; –doi/–url set its identifier (doi takes priority if
 both are given); adding one whose identifier already exists returns the
-existing source’s id instead of duplicating it
+existing source’s id instead of duplicating it. The title is trimmed and
+must not be blank. –published must be YYYY, YYYY-MM or YYYY-MM-DD and a
+real date. –url must be an absolute URL with a scheme and a host. –doi
+must be the bare form 10.NNNN/suffix; a pasted doi: or https://doi.org/
+prefix is refused rather than rewritten, because a mistyped DOI would
+otherwise be checked against Retraction Watch, find nothing, and read as
+“not retracted”. Other identifier types are not checked. Whitespace
+around a value is trimmed
 </dd>
 <dt>remove</dt>
 <dd>
-delete a source — fails if it’s still linked to any observation
+delete a source — fails (exit 1) if it’s still linked to any
+observation, and also for an ID that does not exist
 </dd>
 <dt>retract</dt>
 <dd>
@@ -51,7 +59,11 @@ mark a source retracted with a note (does not delete it)
 <dt>check-retractions</dt>
 <dd>
 query the Retraction Watch API for every registered, non-retracted DOI
-source and mark hits as retracted; requires network access
+source and mark hits as retracted; requires network access. It tries
+every source even if one lookup fails. A source it could not look up is
+not “not retracted”: it is counted as not checked, its last-checked date
+is left alone, and the command exits 69 after printing the counts. Run
+it again when the service is reachable
 </dd>
 </dl>
 <h1 id="see-also">SEE ALSO</h1>

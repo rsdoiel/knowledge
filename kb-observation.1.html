@@ -26,6 +26,7 @@
 <p>kb observation show ID</p>
 <p>kb observation update ID BODY…</p>
 <p>kb observation sources ID</p>
+<p>kb observation delete ID [–force] [–dry-run]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>An observation is a timestamped note attached to a project. KIND is
 one of note, finding, decision, question, or hypothesis.</p>
@@ -59,7 +60,21 @@ unlike kb-project(1)’s set-description
 <dd>
 list the sources cited by an observation (see kb-source(1))
 </dd>
+<dt>delete</dt>
+<dd>
+delete an observation and its search entry. One with concept links,
+source links, or supersession relations (in either direction) is refused
+with the counts (exit 1); –force removes those links and relations and
+the observation, and the concepts, sources and other observations stay.
+To remove a single link instead, see kb-unlink(1). –dry-run reports and
+changes nothing.
+</dd>
 </dl>
+<p>Deletion is local to one database, with no tombstone: kb-merge(1) and
+kb-import(1) from a database that still has the row bring it back, so
+delete it there as well. <code>agents/knowledge.jsonl</code> is
+re-exported from the database, so a delete reaches a database rebuilt
+from it. See DR-0050 (knowledge/decisions/).</p>
 <h1 id="see-also">SEE ALSO</h1>
 <p>kb-project(1), kb-link(1), kb-source(1)</p>
 </section>

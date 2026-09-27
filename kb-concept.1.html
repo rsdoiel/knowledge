@@ -53,14 +53,14 @@ file. See DR-0024 (knowledge/decisions/).
 <dd>
 remove a concept, its links, and its search entry. NAME must match
 exactly, including case. A concept still linked to a project,
-observation, record or document section is refused, with the counts, and
-nothing changes; –force unlinks it from all of them and deletes it (the
-projects, observations, records and documents themselves are untouched,
-only the links go). –dry-run reports what would happen and changes
-nothing. A NAME that looks like a flag (—, -x) is passed after –, as
-everywhere else. The concepts most worth deleting are junk ones minted
-from a documentation example, so this exists to remove them. See DR-0038
-(knowledge/decisions/).
+observation, record or document section is refused (exit 1, the current
+state forbids it), with the counts, and nothing changes; –force unlinks
+it from all of them and deletes it (the projects, observations, records
+and documents themselves are untouched, only the links go). –dry-run
+reports what would happen and changes nothing. A NAME that looks like a
+flag (—, -x) is passed after –, as everywhere else. The concepts most
+worth deleting are junk ones minted from a documentation example, so
+this exists to remove them. See DR-0038 (knowledge/decisions/).
 Two things delete does not do, and prints a note about each. It does not
 touch files: a record or document that still contains [<a
 href="#name">Name</a>], or lists the name in tags or keywords, recreates
