@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="removal-verbs-implementation-plan">Removal verbs: implementation
+plan</h1>
+<p>Implements DR-0050 (<code>proposed</code>); see
+<code>removal-verbs-design.md</code>. TDD: every test is written and
+confirmed red before its code. One commit per phase, made only when
+RSDOIEL asks. Every new exported symbol gets the <code>/** */</code>
+block (description, parameters, returns, example).</p>
+<h2 id="r1-the-library">R1: the library</h2>
+<p><code>removal.go</code>, <code>removal_test.go</code>.
+<code>InUseError</code>; <code>UnlinkProjectConcept</code>,
+<code>UnlinkObservationConcept</code>,
+<code>UnlinkObservationSource</code>;
+<code>ProjectUsage</code>/<code>DeleteProject</code>;
+<code>ObservationUsage</code>/<code>DeleteObservation</code>;
+<code>DocumentUsage</code>/<code>DeleteDocument</code>;
+<code>RecordUsage</code>/<code>DeleteRecord</code>.</p>
+<p><strong>Red tests first:</strong> for each delete, a missing target
+is <code>ErrNotFound</code>; an in-use target is <code>ErrInUse</code>
+and nothing changes (row counts identical); <code>force</code> removes
+the links and the row and the <code>kb_fts</code> entry; a project that
+owns content is refused even with <code>force</code>; a document with a
+reviewed section is refused and one without is not; each unlink removes
+exactly one link and a missing link is <code>ErrNotFound</code>. Nothing
+outside the target is touched (other rows’ counts unchanged).</p>
+<h2 id="r2-the-commands">R2: the commands</h2>
+<p><code>cmd/kb/unlink.go</code>, and <code>delete</code> subverbs in
+<code>project.go</code>, <code>observation.go</code>,
+<code>document.go</code>, <code>record.go</code>. <code>--force</code>
+and <code>--dry-run</code> as <code>concept delete</code>;
+<code>--</code> for a dash-leading name; JSON result with the counts.
+<code>record delete</code> stats the file first.</p>
+<p><strong>Red tests first:</strong> each verb’s success,
+<code>--dry-run</code> changes nothing, refusal exits 1 with what and
+how many and changes nothing, <code>--force</code> where it applies, a
+missing target is 1, a bad id is 2, <code>--json</code> shape.
+<code>record delete</code> with the file present is refused and with it
+gone deletes; a project that owns content is refused with
+<code>--force</code>. Cases added to
+<code>exitcodes_verbs_test.go</code>.</p>
+<h2 id="r3-help-and-the-registry">R3: help and the registry</h2>
+<p>SYNOPSIS lines and descriptions on each verb’s page;
+<code>UnlinkHelpText</code>, <code>printHelp</code> case,
+<code>kb-unlink.1.md</code>, <code>KB_TOPICS</code> in the Makefile
+(<code>help_dispatch_test.go</code> enforces it, and that the verb
+appears in <code>kb(1)</code>), the topics page. The SYNOPSIS-derived
+every-command tests reach the new commands with no edit.</p>
+<h2 id="r4-verification">R4: verification</h2>
+<p>Full suite; the every-command tests;
+<code>scripts/compare-exit-codes.py</code> against the v0.0.13 build (no
+existing exit code may change; the new commands appear as additions). A
+smoke test of each verb on a copy of the real database, then a check
+that <code>sqlite3</code> row counts and <code>kb search</code> agree
+afterwards (the search entry must go with the row).</p>
+<h2 id="status-2026-09-25">Status (2026-09-25)</h2>
+<p>R1 to R5 done, uncommitted. R1: <code>removal.go</code> +
+<code>removal_test.go</code> (mutation-checked: force on a project that
+owns content, the search entry). R2: <code>cmd/kb/removal.go</code>,
+<code>unlink.go</code>, <code>removal_cmd_test.go</code>
+(mutation-checked: the record file check, refusing a missing link); the
+delete subverbs are wired in <code>project.go</code>,
+<code>observation.go</code>, <code>document.go</code>,
+<code>record.go</code>. R3: SYNOPSIS lines and descriptions on the four
+pages, <code>UnlinkHelpText</code>, <code>printHelp</code>,
+<code>KB_TOPICS</code>; the registry-driven every-command tests reached
+the new commands with no edit and pass. R4: full suite;
+<code>scripts/compare-exit-codes.py</code> (VERBS gained
+<code>unlink</code>): 55 changed codes, the existing 48 plus 7 that are
+the new commands (2 to 1, and 2 to 0 for
+<code>observation delete 1</code> on the copy), no 70; smoke test on a
+copy of the real database in a workspace named <code>Laboratory</code>:
+stray project deleted and gone from search, <code>harvey</code> refused
+(163 observations, 3 records, 1 document) even with
+<code>--force</code>, an observation link/refuse/unlink/delete cycle,
+the real document refused (8 reviewed summaries), a record refused while
+its file existed and deleted once it was gone (<code>records</code> 56
+to 55, <code>kb_fts</code> 527 to 526). R5: release notes,
+<code>CHANGES.md</code>, derived files, 17 man pages, the four-field
+check, and the <code>update-knowledge-base</code> skill (new actions
+<code>project-delete</code>, <code>observation-delete</code>,
+<code>document-delete</code>, <code>record-delete</code>,
+<code>unlink</code>; skill version 0.6.5).</p>
+<h2 id="r5-release-prep-again">R5: release prep, again</h2>
+<p><code>CHANGES.md</code>, <code>codemeta.json</code> releaseNotes and
+the four fields, regenerated derived files and man pages, the
+<code>update-knowledge-base</code> skill’s verb list, and the four-field
+check.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

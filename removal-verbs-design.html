@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="removal-verbs-design-note">Removal verbs: design note</h1>
+<p>Decisions: DR-0050 (<code>proposed</code>). Plan:
+<code>removal-verbs-plan.md</code>. Filed as a TODO item on 2026-09-25
+after RSDOIEL asked whether a delete, remove or cancel verb was
+unimplemented.</p>
+<h2 id="where-things-stand">Where things stand</h2>
+<p>Running each plausible verb on a scratch database showed three
+commands that remove or retire something today:
+<code>concept delete</code> (DR-0039), <code>source remove</code> and
+<code>source retract</code>. <code>project delete</code>,
+<code>observation delete</code>, <code>document delete</code>,
+<code>record delete</code>, <code>unlink</code> and
+<code>document review reject</code> all exit 2, unknown. The TODO had
+noted only one of them, in passing: a failed ingest left a stray empty
+project “with no verb to remove the stray row”.</p>
+<h2 id="what-depends-on-what">What depends on what</h2>
+<p>From the schema’s foreign keys:</p>
+<table>
+<colgroup>
+<col style="width: 7%" />
+<col style="width: 45%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col">Entity</th>
+<th scope="col">Depends on it (rows to remove or refuse for)</th>
+<th scope="col">Search entry (<code>kb_fts</code> source_type,
+source_id)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>project</td>
+<td><code>observations</code>, <code>records</code>,
+<code>documents</code> (owned); <code>project_concepts</code>
+(links)</td>
+<td><code>project</code>, project id</td>
+</tr>
+<tr>
+<td>observation</td>
+<td><code>observation_concepts</code>, <code>observation_sources</code>,
+<code>observation_relations</code> (from and to)</td>
+<td><code>observation</code>, observation id</td>
+</tr>
+<tr>
+<td>document</td>
+<td><code>document_sections</code>, which own
+<code>document_section_concepts</code></td>
+<td><code>document_summary</code>, each section id (only promoted
+summaries are indexed)</td>
+</tr>
+<tr>
+<td>record</td>
+<td><code>record_concepts</code>, <code>record_relations</code> (from
+and to)</td>
+<td><code>record</code>, record id</td>
+</tr>
+</tbody>
+</table>
+<h2 id="constraints">Constraints</h2>
+<ol type="1">
+<li><strong>Local deletion.</strong> <code>kb merge</code> and
+<code>kb import</code> into a non-empty database only add rows, so a
+database that still has the row brings it back (DR-0039). No tombstones.
+Every verb’s page says so. <code>agents/knowledge.jsonl</code> is
+authoritative (workspace DR-0002); the hook re-exports it, so a delete
+reaches a database rebuilt from it.</li>
+<li><strong>A record’s file is the source of truth.</strong>
+<code>ingest</code> is additive: it never deletes a row whose file
+vanished, only reports it. A row deleted while its file exists comes
+back the next time the file changes and is ingested. Accepted records
+are history (DR-0038); <code>superseded</code>, <code>rejected</code>
+and <code>cancelled</code> are how they are retired.</li>
+<li><strong>A reviewed summary is human-gated data.</strong> Deleting a
+document loses it.</li>
+<li><strong>The library does no file I/O</strong> (the rule from the
+library lift, DR-0035). A library function cannot check that a record’s
+file is gone; the CLI does, and only then calls the library.</li>
+</ol>
+<h2 id="shapes">Shapes</h2>
+<p><code>project delete NAME [--force] [--dry-run]</code>: refused if
+the project owns any observation, record or document, with or without
+<code>--force</code>. Attached only to concepts: refused unless
+<code>--force</code>, which removes the concept links and the project.
+Never cascades.</p>
+<p><code>observation delete ID [--force] [--dry-run]</code>: refused
+while it has concept links, source links or relations in either
+direction; <code>--force</code> removes them and the observation.</p>
+<p><code>document delete ID [--force] [--dry-run]</code>: refused while
+any section’s summary is <code>reviewed</code>; <code>--force</code>
+deletes anyway. Otherwise removes the document, its sections and their
+concept links, and any search entries.</p>
+<p><code>record delete RECORD_ID [--project P | --workspace] [--root DIR] [--dry-run]</code>:
+only when the file is gone. The CLI stats <code>ROOT/rec.Path</code>:
+present is a refusal (exit 1) pointing at deleting the file or
+<code>set-status cancelled</code>; absent calls
+<code>DeleteRecord</code>, which removes the row, relations, concept
+links and search entry in one transaction.</p>
+<p><code>unlink project PROJECT_NAME CONCEPT_NAME</code>,
+<code>unlink observation OBS_ID CONCEPT_NAME</code>,
+<code>unlink source OBS_ID SOURCE_ID</code>: names exact; a missing
+entity or a missing link is exit 1 “not found”, never a silent success
+(the class of bug found in <code>source retract</code>).</p>
+<h2 id="library">Library</h2>
+<p>A typed refusal <code>InUseError{Entity, Name, Counts}</code> that
+matches <code>ErrInUse</code> under <code>errors.Is</code>, so the CLI’s
+classifier already exits 1 for it. <code>ConceptInUseError</code> stays
+as it is. New functions, each documented with a <code>/** */</code>
+block: <code>ProjectUsage</code> and <code>DeleteProject</code>;
+<code>ObservationUsage</code> and <code>DeleteObservation</code>;
+<code>DocumentUsage</code> and <code>DeleteDocument</code>;
+<code>RecordUsage</code> and <code>DeleteRecord</code>;
+<code>UnlinkProjectConcept</code>,
+<code>UnlinkObservationConcept</code>,
+<code>UnlinkObservationSource</code>. A missing target is
+<code>ErrNotFound</code>. Rows go in one transaction, then the search
+entry, as <code>DeleteConcept</code> does.</p>
+<h2 id="exit-codes-workspace-dr-0003">Exit codes (workspace
+DR-0003)</h2>
+<p>Refusal 1; target or link not found 1; usage (a bad flag, a malformed
+id) 2; a record file that cannot be examined for a reason other than
+absence is classified from the error (77, 74).</p>
+<h2 id="not-doing">Not doing</h2>
+<p><code>document review reject</code> (<code>knowledge</code> cannot
+un-draft a summary), <code>cancel</code> verbs
+(<code>record set-status cancelled</code>, project <code>paused</code>
+and <code>concluded</code> already exist), tombstones, cascading project
+delete.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

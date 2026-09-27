@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="splitting-kbs-exit-codes-implementation-plan">Splitting
+<code>kb</code>’s Exit Codes — Implementation Plan</h1>
+<p>Implements knowledge DR-0047 (<code>accepted</code> 2026-09-25),
+which applies workspace DR-0003 (the convention, <code>accepted</code>
+2026-09-25) and supersedes DR-0040 (<code>superseded</code>). Work items
+X0 → X6. TDD-first: the test for each item is written and confirmed red
+before the code changes. One commit per item, made only when RSDOIEL
+asks. Every new exported symbol gets the <code>/** … */</code> block
+(description, parameters, returns, example).</p>
+<p>Facts this plan rests on, measured 2026-09-25 on a scratch database
+with the v0.0.13 binary: 171 error constructions in <code>cmd/kb</code>,
+215 in the library, one typed error (<code>ConceptInUseError</code>).
+Today every failure but a usage mistake exits 1; <code>kb ingest</code>
+with two bad records of three exits 0. The skill scripts read only
+success or failure, and treat any failure of <code>project show</code>
+as “not found”.</p>
+<p>The codes (workspace DR-0003): 0 ok, 1 negative, 2 usage, 65 data, 66
+no_input, 69 unavailable, 70 internal, 73 cant_create, 74 io, 75
+temp_fail, 77 no_permission, 78 config.</p>
+<hr />
+<h2 id="x0-the-classifier">X0 — The classifier</h2>
+<p><strong>Add:</strong> in <code>cmd/kb</code>, a class type and one
+function <code>exitCodeFor(err) (class, code)</code>.
+<code>usageError</code> (<code>cmd/kb/usage.go</code>) becomes one case
+of it; <code>usageErrorf</code>, <code>wrapUsage</code> and
+<code>isUsageError</code> keep working, so nothing that uses them
+changes. New constructors: <code>notFoundf</code> (1),
+<code>negativef</code> (1, for a refusal the current state forces),
+<code>dataErrorf</code> (65), <code>noInputf</code> (66),
+<code>cantCreatef</code> (73), <code>unavailablef</code> (69).
+<code>dispatch</code> and <code>printError</code> call
+<code>exitCodeFor</code>; <code>printError</code>’s JSON envelope gains
+<code>class</code> and <code>code</code>.</p>
+<p><strong>Red tests first (<code>exitcodes_test.go</code>):</strong> a
+table of (error → class, code) for each constructor;
+<code>errors.Is</code> through <code>%w</code> wrapping;
+<code>fs.ErrNotExist</code> → 66, <code>fs.ErrPermission</code> → 77,
+<code>fs.ErrExist</code> → 73, a <code>*fs.PathError</code> → 74, a
+<code>net.Error</code> and a <code>*url.Error</code> → 69, an
+unclassified <code>errors.New</code> → <strong>70</strong> (not 1);
+<code>flag.ErrHelp</code> still exits 0; the JSON envelope carries
+<code>class</code> and <code>code</code>.</p>
+<p><strong>Done when:</strong> the table passes, and the existing
+<code>usageexit_test.go</code> passes unchanged (2 stays 2).</p>
+<p><strong>DONE 2026-09-25</strong> (<code>cmd/kb/exitcode.go</code>,
+<code>exitcode_test.go</code>; <code>usage.go</code>,
+<code>dispatch.go</code>, <code>output.go</code>, <code>main.go</code>
+wired). An unclassified error keeps the legacy exit 1 through
+<code>unclassifiedFallback</code>, which X2 flips to
+<code>classInternal</code>. Contrary to what this plan first said, X0 is
+not free of observable change: errors that wrap
+<code>fs.ErrNotExist</code> now exit 66 (<code>document ingest</code>
+and <code>import</code> of a missing file, correctly;
+<code>init /proc/x</code> and <code>export</code> into a missing
+directory too, which X2 refines to 73/77 with <code>cantCreatef</code>).
+The JSON envelope gained <code>class</code> and <code>code</code>.</p>
+<hr />
+<h2 id="x1-library-typed-errors-and-sqlite-classification">X1 — Library
+typed errors and SQLite classification</h2>
+<p><strong>Add (root package):</strong> <code>ErrNotFound</code> and
+<code>ErrInvalid</code> sentinels, wrapped with <code>%w</code> by the
+library’s own validation and not-found returns;
+<code>ConceptInUseError</code> is kept and classed 1. The library sites:
+<code>IsValidKind</code> and project-status checks,
+<code>CleanName</code>, <code>AddSource</code>’s checks (DR-0045),
+record vocabulary warnings stay warnings, <code>RenameProject</code> and
+<code>RenameConcept</code> on a missing name, <code>ImportJSONL</code>
+and <code>MergeKnowledgeBases</code> refusals. SQLite errors are
+classified in the CLI’s classifier by driver error code: busy or locked
+→ 75, “not a database” or corrupt → 65, any other → 74.</p>
+<p><strong>Red tests first:</strong> for each library function that
+rejects a value, <code>errors.Is(err, ErrInvalid)</code> (the CLI maps
+it to 2 for an argument and to 65 for content a file verb read: DR-0047
+item 3); each that misses a name,
+<code>errors.Is(err, ErrNotFound)</code>; a database held locked by a
+second connection gives 75; a text file opened as a database gives 65. A
+test that the message text of each error is unchanged (the change adds a
+class, not new wording).</p>
+<p><strong>Done when:</strong> all pass and <code>go test ./...</code>
+at the root is green with no message changes.</p>
+<p><strong>DONE 2026-09-25</strong> (<code>errors.go</code>;
+<code>errors_test.go</code>; <code>sqliteClass</code> and the sentinel
+cases in <code>classify</code>). Sites converted: the value checks
+(<code>CleanName</code>, project status, observation kind and body,
+<code>AddSource</code>, frontmatter
+<code>--set</code>/<code>--accept</code> fields, record and frontmatter
+parse errors) to <code>invalidf</code>; the missing-name returns
+(project, concept, export, suggest) to <code>notFoundf</code>.
+<code>ImportJSONL</code>’s 15 line-error wrappers and the merge refusals
+are left plain: the file verbs classify them at the call site in X2.
+Mutation checks on <code>sqliteClass</code> are caught by the real-error
+tests (<code>SQLITE_BUSY</code> and <code>NOTADB</code>). The two
+sentinels were enough; no third one for content was needed because the
+CLI’s file verbs wrap. <strong>Known interim misclassification, to be
+closed in X2:</strong> a library <code>ErrInvalid</code> from file
+<em>content</em> exits 2 (usage) until the file verbs wrap it as data.
+Seen: <code>kb index --check</code> on a directory holding a malformed
+record exits 2, not 65 (was 1). The probe matrix
+(<code>scratchpad/probes.sh</code>, 36 commands) against the pre-X0
+binary shows only: <code>observation add bogus</code>,
+<code>project set-status bogus</code>, <code>project add ''</code> 1 to
+2 (DR-0047); <code>document ingest</code>/<code>import</code> of a
+missing file 1 to 66; <code>init /proc/x</code> and <code>export</code>
+into a missing directory 1 to 66 (X2 makes them 73/77); and the
+<code>index --check</code> case above.</p>
+<hr />
+<h2 id="x2-the-clis-own-sites-verb-by-verb">X2 — The CLI’s own sites,
+verb by verb</h2>
+<p><strong>Change:</strong> the 171 <code>cmd/kb</code> sites, by
+constructor, in this order: (a) not found (<code>project show</code>,
+<code>concept</code>, <code>source show</code>,
+<code>record show</code>, <code>observation</code>,
+<code>--project</code> lookups) → <code>notFoundf</code>; (b)
+<code>search</code> finds nothing and <code>index --check</code> stale →
+class 1; (c) bad values on the command line (observation kind, project
+status, blank or control-character names, <code>--published</code>,
+<code>--url</code>, <code>--doi</code>,
+<code>record new --trigger</code> and <code>--kind</code>) → usage, 2,
+alongside the <code>--set</code>, <code>--accept</code>,
+<code>--confidence</code> and <code>--since</code> checks that are 2
+already; content the file verbs read (<code>ingest</code>,
+<code>document ingest</code>, <code>import</code>, <code>merge</code>,
+<code>index</code>) → <code>dataErrorf</code>, 65; (d) missing inputs
+(<code>ingest</code>, <code>document ingest</code>, <code>merge</code>
+inputs, no workspace) → <code>noInputf</code>; (e) <code>-out</code>
+exists, <code>init</code> mkdir, a record file exists →
+<code>cantCreatef</code>. <code>project</code>, <code>concept</code> and
+<code>observation</code> are done first: they have the most callers.</p>
+<p><strong>Red tests first:</strong> extend
+<code>usageexit_test.go</code> into a per-class table: one provoked
+failure per class per verb that can produce it, asserting the code and
+the JSON <code>class</code>. DR-0043’s case does not change:
+<code>record list --status acepted</code> and
+<code>--project clasn</code> stay 1, and the existing test that pins
+“not a usage error” stays. What does change, and is pinned deliberately:
+<code>observation add bogus</code>,
+<code>project set-status bogus</code> and a blank name move from 1 to
+2.</p>
+<p><strong>Done when:</strong> the table passes and no provoked failure
+yields 70.</p>
+<p><strong>DONE 2026-09-25</strong> (uncommitted).
+<code>cmd/kb/exitcodes_verbs_test.go</code> provokes one failure per
+class per verb (about 70 cases) and asserts the exit code, the JSON
+<code>class</code>, and that nothing is 70;
+<code>unclassifiedFallback</code> is now <code>classInternal</code>.
+Sites classified: not found (project, concept, observation, source,
+record, document, link targets), <code>search</code> and
+<code>index --check</code> negative results, refusals the state forces
+(<code>concept delete</code> and <code>source remove</code> while
+linked, rename onto an existing name), bad command-line values (usage),
+missing inputs (66), outputs that cannot be created
+(<code>asCreate</code>: 73, but permission stays 77 and a write that
+fails part way stays 74), content errors (<code>asContent</code>: a
+library <code>ErrInvalid</code> from a file, plus JSON decode errors,
+65), and <code>mainRun</code>’s own failures (<code>failWith</code>: no
+workspace 66, open errors by cause; they now honour
+<code>--json</code>). Deviations from DR-0047’s wording, all small: a
+third library sentinel <code>ErrInUse</code> (a source still linked)
+because the library needs to mark a refusal the way
+<code>ConceptInUseError</code> does; <code>record new</code>’s
+vocabulary check is wrapped as usage while <code>record list</code>’s
+stays a lookup; a zero-byte merge input is 65 (content that is not a
+knowledge base) and a directory 66.</p>
+<p><strong>Bugs found by the classification pass, fixed with
+tests:</strong> <code>source retract 99</code> and
+<code>source remove 99</code> on a missing id exited 0 (zero rows
+updated or deleted); <code>source link 99 99</code> exited 74 with a raw
+foreign-key error and <code>link observation 99 C</code> likewise;
+<code>document review promote 99</code> exited 70 (a plain “no document
+section” error); <code>concept suggest --limit -1</code> was accepted.
+The library’s <code>Link*</code> functions now check the ids and return
+<code>ErrNotFound</code>; five plain “no X with id” errors became
+<code>notFoundf</code>.</p>
+<p><strong>Decided by the user 2026-09-25 (DR-0048,
+<code>proposed</code>):</strong> <code>record set-status ID bogus</code>
+is refused with exit 2 by the shared vocabulary rule (was: written, exit
+0); done, with tests (<code>recordsetstatus_test.go</code>). DR-0048
+also records X2’s other choices (<code>ErrInUse</code>, zero-byte merge
+input 65, <code>--json</code> for pre-verb failures) as amendments to
+DR-0047. The main EXIT STATUS help section and <code>kb.1.md</code> were
+rewritten at X2. <strong>Left for X3:</strong> <code>kb ingest</code>
+still exits 0 when records fail; <code>source check-retractions</code>
+network failures.</p>
+<p>Matrix (35 commands, <code>scratchpad/probes.sh</code>),
+v0.0.13-equivalent binary against this one: 14 change, every one a row
+of DR-0047’s table, none 70: no workspace 66; bad kind, bad status,
+blank name 2; missing ingest, document ingest, import, merge and index
+inputs 66; <code>--db</code> on a text file 65; <code>--db</code> in a
+directory the user cannot create 77; <code>init</code> and
+<code>export</code> cannot create 73; <code>index --check</code> over a
+malformed record 65.</p>
+<hr />
+<h2 id="x3-bulk-commands">X3 — Bulk commands</h2>
+<p><strong>Change:</strong> <code>kb ingest</code> and
+<code>kb document ingest</code> keep going after a bad file, then exit
+with the class of the first failure (65 for malformed content, 74 for a
+read failure) and print the counts;
+<code>source check-retractions</code> finishes every source, then exits
+69 if the service was unreachable for any; <code>merge</code> without
+<code>-force</code> on an identity collision exits 65.</p>
+<p><strong>Red tests first:</strong> three records, one malformed: the
+two good ones are ingested, exit is 65, and the summary says
+<code>1 failed</code>. A directory with an unreadable file: exit 74
+(skip if the test process runs as root). A stub retraction checker that
+fails: exit 69 and the other sources checked. A collision: 65 and
+nothing written.</p>
+<p><strong>Done when:</strong> the good items are written in every case
+and no bulk command exits 0 with a failure.</p>
+<hr />
+<p><strong>DONE 2026-09-25</strong> (uncommitted). Bulk commands now
+exit with the class of the first failure, in path order, after doing
+everything they can: <code>kb ingest</code> (65 for content, 77 for an
+unreadable file, 65 for an identity collision; warnings and unresolved
+references stay exit 0; the summary is still printed, in
+<code>--json</code> too, with the error on stderr;
+<code>--dry-run</code> reports the same), <code>index --all</code> (a
+failed corpus outranks a stale one; stale alone is still 1), and
+<code>source check-retractions</code> (a new
+<code>knowledge.RetractionCheckError</code> carries the count and the
+first cause; every source is tried; the command wraps checker errors as
+unavailable, so 69; the JSON result gains <code>failed</code>; a source
+that could not be looked up is no longer stamped
+<code>last_checked_at</code>, which used to make an unreachable service
+read as “checked, clear”). The merge identity collision is 65, tested.
+<code>document ingest</code> takes one file, so it was never bulk.
+Tests: <code>ingestexit_test.go</code>,
+<code>indexallexit_test.go</code>,
+<code>checkretractions_test.go</code>,
+<code>retractionfailures_test.go</code>; two old ingest tests updated to
+the new contract (the summary is still decoded, the error must now be
+data). Matrix (35 commands): the only change from X2 is
+<code>ingest recs</code> 0 to 65; the real decision records of all three
+tiers still ingest with exit 0. Docs: EXIT STATUS gained the 69 row and
+the bulk rule; <code>ingest</code> and <code>check-retractions</code>
+pages updated. <code>document tag</code>/<code>fuzzy-tag</code> stop at
+the first failure rather than continuing, which is also non-zero; not
+changed.</p>
+<h2 id="x4-enforcement">X4 — Enforcement</h2>
+<p><strong>Add:</strong> a test that runs every registered verb and
+subverb with a bogus flag and with a surplus argument and asserts 2, and
+one that asserts no provoked failure in X2 or X3 exits 70. Together they
+replace the guarantee DR-0040 admitted was only a survey.</p>
+<p><strong>Red-first check:</strong> temporarily change one verb’s
+argument check to a plain <code>fmt.Errorf</code>, confirm the test
+names that verb, and revert.</p>
+<hr />
+<p><strong>DONE 2026-09-25</strong> (uncommitted):
+<code>cmd/kb/verbcoverage_test.go</code>. The registry of command paths
+is derived from every verb’s SYNOPSIS (52 paths, subverbs included; 44
+get the trailing checks), so a newly documented command is covered with
+no edit to the test, and it is cross-checked against the
+<code>verbs</code> map (a registered verb with no documented path
+fails). Every path is run with a bogus flag straight after the path,
+with a bogus flag after a complete valid invocation, with two surplus
+words after one, and in minimal form (never 70). Paths that end in free
+text (observation body, project description, retraction note, search
+term) are exempt from the two trailing checks, per DR-0041 item 2, and
+still get the flag-first check. Parser unit-tested on ten synopsis
+shapes. Mutation checks: dropping surplus handling in
+<code>plainArgs</code> names 15 verbs; dropping flag detection names
+<code>init</code>, <code>project set-description</code> and
+<code>search</code> (plus the others that reach it). <strong>Found and
+fixed by the test:</strong> <code>kb init --bogus</code> created a
+workspace in a directory named <code>--bogus</code> and exited 0;
+<code>kb search --json foo</code> searched for the text “–json foo” and
+exited 1 “no results”, the answer a script reads as “nothing found”.
+Both now refuse a flag-shaped first argument and accept <code>--</code>
+(<code>initsearchargs_test.go</code>); the <code>search</code> page says
+so.</p>
+<h2 id="x5-old-versus-new-on-real-data">X5 — Old versus new on real
+data</h2>
+<p><strong>Run:</strong> the DR-0040 method. Build the pre-change binary
+from <code>HEAD</code>, run the same ~70 commands (every verb with
+empty, malformed, unknown and surplus input, plus one provoked failure
+per class) against a copy of the real database from a scratch working
+directory, and diff exit codes and output. Every change of code must be
+one the DR-0047 table calls for; output must differ only by the envelope
+fields.</p>
+<p><strong>Done when:</strong> each difference is explained by a row of
+DR-0047’s table. Read the real <code>agents/knowledge.db</code> only
+through the copy.</p>
+<hr />
+<p><strong>DONE 2026-09-25</strong> (fixes uncommitted). Method as
+DR-0040: the v0.0.13 tree (<code>4c6fc3e</code>) built as the baseline
+and the current tree, 387 commands in plain and <code>--json</code>
+mode, each on a fresh copy of a template workspace (the real
+<code>knowledge.db</code>, copies of the real decision records of all
+three tiers, the real document, a copy of <code>knowledge.jsonl</code>,
+and a few bad inputs), run from a scratch directory named
+<code>Laboratory</code> (the workspace name is the root directory’s
+name, and the real records were ingested under it). Groups:
+synopsis-derived (path only, bogus flag first and last, minimal,
+surplus), 55 read-only commands on real data, writes on real data, and
+about 80 provoked failures (one or more per class, with real names). The
+real database and all three repositories were verified unchanged
+afterwards. Result: 331 of 387 identical; 49 exit codes changed, each a
+row of DR-0047 or DR-0048; the ~55 read-only commands on real data are
+byte-identical; stdout differs only in the version and hash lines;
+stderr only where a message improved (raw
+<code>FOREIGN KEY constraint failed</code> became “no source with id
+99”); the <code>--json</code> output differs only by the added
+<code>failed</code> field of <code>source check-retractions</code>.
+Transitions: 0 to 1 (2: <code>source remove</code>/<code>retract</code>
+on a missing id), 0 to 2 (11: bad status, trigger, source date or doi,
+blank source title, negative limit, flag-shaped init and search), 0 to
+65 (<code>ingest</code> of malformed records), 1 to 2 (13), 1 to 65 (5),
+1 to 66 (11), 1 to 73 (4), 1 to 74 (<code>import</code> of a directory),
+0 to 74 (<code>ingest --root nosuchroot</code>, see below).</p>
+<p><strong>Regressions X5 found in the X2 work, fixed with tests
+(uncommitted):</strong> four commands that exited 1 in v0.0.13 exited 70
+after X2, because the library raised a plain error for a refusal the
+current state forces: <code>concept rename X Y</code> when Y exists, a
+project rename blocked by the records it owns,
+<code>document review promote</code> on a section that is not drafted,
+and <code>document frontmatter --accept-keywords</code> with an unknown
+keyword (a bad value, so usage 2). New library marker
+<code>ErrConflict</code> (negative, 1) for the first three; the keyword
+error is <code>ErrInvalid</code>. Cases added to
+<code>exitcodes_verbs_test.go</code> and <code>errors_test.go</code>.
+Left as 70 on purpose: an unsupported Go value type in the frontmatter
+writer and a bad field name to <code>DistinctRecordValues</code>
+(programmer errors), and “FTS5 not compiled in”.</p>
+<p><strong>Decided (draft DR-0049, <code>proposed</code>, for the user’s
+review):</strong> <code>ingest --root nosuchroot</code> (a wrong
+workspace name, so every record hits
+<code>UNIQUE constraint failed: records.uuid</code>) went from exit 0
+with “3 failed” to 74, because DR-0047 item 4 sent any other SQLite
+error to io. Every SQLite constraint violation (primary code 19) is now
+class data, 65; busy/locked stays 75, corrupt/not-a-database 65, the
+rest 74. Also fixed: a record that failed to insert was counted as added
+AND failed (<code>2 added ... 2 failed</code>, as in v0.0.13); it is now
+a failure only. DR-0049 records <code>ErrConflict</code>, the keyword
+fix, the constraint class and the count. Rerunning X5 with the fix
+changes only that one exit code (0 to 65); no 70 anywhere.</p>
+<p><strong>Harness kept (2026-09-25, at the user’s request):</strong>
+<code>scripts/compare-exit-codes.py</code> (standard library,
+<code>uv run</code>) and <code>scripts/README.md</code>. It builds its
+own template from any workspace and discovers names from the database
+instead of hard-coding them; run against the real workspace with the
+v0.0.13 baseline it gave 362 commands, 48 changed codes, the same
+transitions as the manual run, no 70, and left the real database
+untouched. Exits 1 on a 70 or a hang, so a release can gate on it.</p>
+<h2 id="x6-documentation-scripts-and-the-workspace">X6 — Documentation,
+scripts, and the workspace</h2>
+<p><strong>Change:</strong> the EXIT STATUS section of the
+<code>kb</code> help text and <code>kb.1.md</code>, and each verb’s page
+where it documents a code; CHANGES.md and <code>TODO.md</code> (the
+exit-code item is closed by DR-0047); an upgrade note for scripts
+listing the table; the three skill scripts that read <code>kb</code>’s
+exit status, so that <code>project show</code>’s “not found” branch
+tests for 1 and reports anything else as an error.</p>
+<p><strong>DONE 2026-09-25, on acceptance:</strong> the exit-code
+paragraph of the root <code>CLAUDE.md</code> was rewritten (draft
+<code>exit-codes-CLAUDE-md-draft.md</code>, applied). What follows is
+what was proposed: the exit-code paragraph of the root
+<code>CLAUDE.md</code> to state the convention for both the Go and the
+Deno tools, in place of “1 when a search-style tool finds nothing, 2 on
+a usage or I/O error”. The Deno guidance also needs a note that
+<code>Deno.exit</code> takes the same numbers and that a Deno tool
+documents its subset. This is RSDOIEL’s guidance file; the edit is
+proposed here, not made.</p>
+<p><strong>DONE 2026-09-25, on acceptance of DR-0047:</strong> the
+supersession of DR-0040 is recorded and both indexes are current.</p>
+<hr />
+<p><strong>DONE 2026-09-25</strong> (uncommitted). (1) The main EXIT
+STATUS help section and <code>kb.1.md</code> (X2, X3), and the verb
+pages where a status is notable: <code>index</code> (1 for drift, the
+failure’s class otherwise, <code>--all</code> ranking),
+<code>merge</code> (66, 65, 2, 73, 65), <code>record</code> (lookup 1
+versus write 2, ambiguous id 2), <code>concept delete</code> (1),
+<code>source remove</code> (1, including a missing id),
+<code>export</code> (73, 77, 74, 1) and <code>import</code> (65, 66, 77,
+74); their man page sources regenerated. (2) <code>CHANGES.md</code>
+gains an <code>## Unreleased</code> section with Added, Changed, Fixed
+and Upgrade notes (a table of every changed status, v0.0.13 against now,
+then the script and library notes); it has no date or version, which
+release prep sets, and the four <code>codemeta.json</code> fields are
+still the user’s release-prep check. (3) The three skills in
+<code>agents/skills/</code> (root copies only):
+<code>review-knowledge-base</code>’s bash and PowerShell scripts now
+branch on the codes (project show 1 is “not found”, anything else is
+passed on; search 1 is “no results”, 2 or more is a failure; the index
+check reports a failure that is not drift), tested with
+<code>pwsh</code> and bash against both the new and the v0.0.13
+<code>kb</code>; all three <code>SKILL.md</code> gained an Exit codes
+table and a row per condition; skill versions bumped
+(<code>kb_version</code> unchanged, the codes ship with an unreleased
+<code>kb</code>). The update and setup scripts run under
+<code>set -e</code> and pass <code>kb</code>’s status straight through,
+so they needed no logic change. <strong>Found on the way:</strong> the
+review script passed <code>--db</code> to <code>kb index</code>, which
+has refused it since v0.0.13, and its <code>|| true</code> had hidden
+the failure, so the index check never ran; fixed in both scripts and the
+SKILL.md example. <code>harvey/agents/skills/</code> holds older,
+different copies (every file differs); not touched, left to the
+skills-in-repo TODO.</p>
+<h2 id="order-and-risk">Order and risk</h2>
+<p>X0 → X1 → X2 → X3 → X4 → X5 → X6. X0 and X1 change no observable exit
+code: they add the machinery, so the suite stays green and can be
+committed alone. The risk is X2’s breadth: 171 sites, and a missed one
+falls to 70 rather than 1, which is visible in the X4 tests but only for
+paths a test provokes. Mitigate by working verb by verb and running X5
+after each verb group, not only at the end.</p>
+<p>Out of scope: harvey (uses the library and reads errors, not codes),
+the Deno tools (they adopt DR-0003 as they are next changed), a
+<code>78</code> path for <code>kb</code> (no configuration file).</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
