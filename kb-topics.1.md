@@ -40,6 +40,10 @@ search
 merge
 : reconcile two knowledge.db files that drifted independently
 
+check-db
+: compare the database with its JSONL dump by content and recommend import,
+  export or both
+
 export
 : write a portable JSON-L snapshot. import shares this page
 

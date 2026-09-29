@@ -1,0 +1,8 @@
+out:
+err:2 name/uuid collision(s) found:
+  projects   shared                         UUID vs UUID
+  records    DR-0001                        UUID vs UUID
+1 content divergence(s) found — same record, different text; a's copy is kept:
+  records    DR-0001                        ck-a vs ck-b
+reconcile the differing decision record files yourself; the merge does not choose between them.
+aborting: resolve collisions or pass -force to reconcile b's identity to a's for each one

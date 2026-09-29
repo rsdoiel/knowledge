@@ -55,7 +55,11 @@ knows which Markdown files to reconcile by hand. With --json, divergences
 appear as content_divergences alongside collisions_reconciled and the
 per-table tables summary, instead of the plain-text report.
 
+To find out whether a database and the JSONL dump beside it have drifted, before
+deciding whether to merge, import or export, use kb-check-db(1). It is
+read-only and shares merge's rules for what counts as the same row.
+
 # SEE ALSO
 
-kb(1), kb-export(1), kb-import(1)
+kb(1), kb-check-db(1), kb-export(1), kb-import(1)
 

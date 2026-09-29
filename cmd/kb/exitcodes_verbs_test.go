@@ -165,6 +165,8 @@ func TestVerbs_UsageIsExit2(t *testing.T) {
 		{name: "record fuzzy-tag surplus argument", setup: seedProject(), args: []string{"record", "fuzzy-tag", "--project", "P", "extra"}},
 		{name: "record fuzzy-tag bad flag", args: []string{"record", "fuzzy-tag", "--project", "P", "--bogus"}},
 		{name: "record list refuses --write", args: []string{"record", "list", "--write"}},
+		{name: "check-db surplus argument", setup: seedProject(), args: []string{"check-db", "extra"}},
+		{name: "check-db bad flag", setup: seedProject(), args: []string{"check-db", "--bogus"}},
 		{name: "concept show without a name", args: []string{"concept", "show"}},
 		{name: "concept show surplus argument", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "extra"}},
 		{name: "concept show negative limit", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "--limit", "-1"}},
@@ -182,6 +184,7 @@ func TestVerbs_UsageIsExit2(t *testing.T) {
 func TestVerbs_DataIsExit65(t *testing.T) {
 	for _, tc := range []verbCase{
 		{name: "database file is not a database", files: map[string]string{"kb.db": "this is text, not a database, but long enough to be read as a header..\n"}, args: []string{"project", "list"}},
+		{name: "check-db against a malformed dump", setup: seedProject(), files: map[string]string{"kb.jsonl": "{\"type\": \n"}, args: []string{"check-db"}},
 		{name: "import of malformed JSONL", files: map[string]string{"in.jsonl": "{\"type\": \n"}, args: []string{"import", "-in", "in.jsonl"}},
 		{name: "merge input is zero bytes", setup: seedProject(), files: map[string]string{"z.db": ""}, args: []string{"merge", "-a", "z.db", "-b", "kb.db", "-out", "o.db"}},
 		{name: "index over a malformed record", files: map[string]string{"recs/0001-bad.md": "---\nid: \"0001\"\ntitle: \"\"\n---\nx\n"}, args: []string{"index", "recs"}},
@@ -202,6 +205,8 @@ func TestVerbs_NoInputIsExit66(t *testing.T) {
 		{name: "merge input is a directory", setup: seedProject(), files: map[string]string{"d/x": "x"}, args: []string{"merge", "-a", "d", "-b", "kb.db", "-out", "o.db"}},
 		{name: "index of a missing directory", args: []string{"index", "/nonexistent"}},
 		{name: "index of a file", files: map[string]string{"f.txt": "x"}, args: []string{"index", "f.txt"}},
+		{name: "check-db with no dump", setup: seedProject(), args: []string{"check-db"}},
+		{name: "check-db with --jsonl naming a missing file", setup: seedProject(), args: []string{"check-db", "--jsonl", "/nonexistent.jsonl"}},
 		{name: "no workspace here", noDB: true, args: []string{"project", "list"}},
 	} {
 		tc.want = classNoInput

@@ -1,0 +1,25 @@
+2 name/uuid collision(s) found:
+  projects   shared                         UUID vs UUID
+  records    DR-0001                        UUID vs UUID
+-force set: reconciled 2 collision(s) — b's rows now share a's identity, so their observations/links merge normally instead of being dropped
+1 content divergence(s) found — same record, different text; a's copy is kept:
+  records    DR-0001                        ck-a vs ck-b
+reconcile the differing decision record files yourself; the merge does not choose between them.
+table                    from_a from_b merged
+projects                      1      1      1
+concepts                      0      0      0
+sources                       0      0      0
+observations                  1      1      2
+records                       1      1      1
+observation_concepts          0      0      0
+project_concepts              0      0      0
+observation_sources           0      0      0
+observation_relations         0      0      0
+record_relations              0      0      0
+record_concepts               0      0      0
+documents                     0      0      0
+document_sections             0      0      0
+document_section_concepts      0      0      0
+
+merged knowledge base written to DIR/m.db
+review it, then copy it into place over each machine's agents/knowledge.db yourself.

@@ -1,0 +1,97 @@
+{
+  "collisions_reconciled": 2,
+  "content_divergences": [
+    {
+      "Table": "records",
+      "Label": "DR-0001",
+      "ChecksumA": "ck-a",
+      "ChecksumB": "ck-b"
+    }
+  ],
+  "tables": [
+    {
+      "Table": "projects",
+      "FromA": 1,
+      "FromB": 1,
+      "Merged": 1
+    },
+    {
+      "Table": "concepts",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "sources",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "observations",
+      "FromA": 1,
+      "FromB": 1,
+      "Merged": 2
+    },
+    {
+      "Table": "records",
+      "FromA": 1,
+      "FromB": 1,
+      "Merged": 1
+    },
+    {
+      "Table": "observation_concepts",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "project_concepts",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "observation_sources",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "observation_relations",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "record_relations",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "record_concepts",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "documents",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "document_sections",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "document_section_concepts",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    }
+  ]
+}

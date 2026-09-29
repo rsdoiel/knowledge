@@ -99,6 +99,10 @@ merge
 : reconcile two knowledge.db files that drifted independently (e.g. across
   machines) into a fresh, deduped output — see kb-merge(1)
 
+check-db
+: compare the database with the JSONL dump beside it by full content, and say
+  whether to import, export or both — see kb-check-db(1)
+
 export, import
 : write/read a portable JSON-L snapshot of the database — the no-file-access
   alternative to merge, for syncing over a channel that can only move plain

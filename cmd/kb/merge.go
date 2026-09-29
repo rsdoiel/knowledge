@@ -1,12 +1,10 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	knowledge "github.com/rsdoiel/knowledge"
@@ -86,43 +84,20 @@ func formatDivergences(w io.Writer, divergences []knowledge.ContentDivergence) {
 // envelope (see printError), so this is the one place collision detail
 // can go that works correctly in both output modes.
 func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Writer) (summary []knowledge.MergeTableSummary, reconciled int, divergences []knowledge.ContentDivergence, err error) {
-	scratch, err := os.MkdirTemp("", "kbmerge-")
+	scratch, err := knowledge.PrepareMergeScratch(aPath, bPath)
 	if err != nil {
 		return nil, 0, nil, err
 	}
-	defer os.RemoveAll(scratch)
+	defer scratch.Close()
+	scratchB := scratch.B
 
-	scratchA := filepath.Join(scratch, "a.db")
-	scratchB := filepath.Join(scratch, "b.db")
-	if err := checkpointAndCopy(aPath, scratchA); err != nil {
-		return nil, 0, nil, fmt.Errorf("checkpoint+copy %s: %w", aPath, err)
-	}
-	if err := checkpointAndCopy(bPath, scratchB); err != nil {
-		return nil, 0, nil, fmt.Errorf("checkpoint+copy %s: %w", bPath, err)
-	}
-
-	// Bring both copies up to the current schema before anything ATTACHes
-	// them, so a machine whose database predates a table can still be merged.
-	// The workspace name comes from the original path, not the copy's -- the
-	// copy is under a temp directory and deriving from it would relabel every
-	// record that predates the workspace column (DR-0014).
-	if err := knowledge.NormalizeForMerge(scratchA, aPath); err != nil {
-		return nil, 0, nil, err
-	}
-	if err := knowledge.NormalizeForMerge(scratchB, bPath); err != nil {
-		return nil, 0, nil, err
-	}
-
-	collisions, err := knowledge.CollisionReport(scratchA, scratchB)
+	// Detection is read-only and shared with check-db (DR-0053). Divergences
+	// are read before any reconciliation, but the order does not matter:
+	// reconciling rewrites uuids, and a divergence is about identity and
+	// checksum, neither of which it touches.
+	collisions, divergences, err := knowledge.DetectIdentityIssues(scratch.A, scratch.B)
 	if err != nil {
-		return nil, 0, nil, fmt.Errorf("collision report: %w", err)
-	}
-	// Divergences are read before any reconciliation, but the order does not
-	// matter: reconciling rewrites uuids, and a divergence is about identity
-	// and checksum, neither of which it touches.
-	divergences, err = knowledge.DivergenceReport(scratchA, scratchB)
-	if err != nil {
-		return nil, 0, nil, fmt.Errorf("divergence report: %w", err)
+		return nil, 0, nil, err
 	}
 	if len(divergences) > 0 {
 		dl.Log("merge_divergence", map[string]any{"a": aPath, "b": bPath, "count": len(divergences)})
@@ -154,7 +129,7 @@ func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Wri
 	// than gating anything.
 	formatDivergences(out, divergences)
 
-	summary, err = knowledge.MergeKnowledgeBases(scratchA, scratchB, outPath)
+	summary, err = knowledge.MergeKnowledgeBases(scratch.A, scratch.B, outPath)
 	if err != nil {
 		return nil, reconciled, divergences, fmt.Errorf("merge: %w", err)
 	}
@@ -167,48 +142,6 @@ func runMerge(dl *DebugLog, aPath, bPath, outPath string, force bool, out io.Wri
 	fmt.Fprintf(out, "\nmerged knowledge base written to %s\n", outPath)
 	fmt.Fprintln(out, "review it, then copy it into place over each machine's agents/knowledge.db yourself.")
 	return summary, reconciled, divergences, nil
-}
-
-// checkpointAndCopy checkpoints srcPath's WAL (so all committed data is in
-// the main file) and copies it — plus any -wal/-shm sidecars if still
-// present — to dstPath.
-func checkpointAndCopy(srcPath, dstPath string) error {
-	db, err := sql.Open("sqlite", srcPath)
-	if err != nil {
-		return err
-	}
-	if _, err := db.Exec(`PRAGMA wal_checkpoint(FULL)`); err != nil {
-		db.Close()
-		return err
-	}
-	if err := db.Close(); err != nil {
-		return err
-	}
-
-	if err := copyFile(srcPath, dstPath); err != nil {
-		return err
-	}
-	for _, suffix := range []string{"-wal", "-shm"} {
-		if err := copyFile(srcPath+suffix, dstPath+suffix); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
-func copyFile(srcPath, dstPath string) error {
-	src, err := os.Open(srcPath)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-	_, err = io.Copy(dst, src)
-	return err
 }
 
 /** checkMergeInput refuses a merge input that is not an existing, non-empty

@@ -441,3 +441,13 @@ func TestMerge_ContentDivergenceInJSONOutput(t *testing.T) {
 		t.Error("expected two differing checksums in the JSON output")
 	}
 }
+
+// copyFile copies a file byte for byte; merge itself now copies through
+// knowledge.CheckpointAndCopy, so only tests need this.
+func copyFile(srcPath, dstPath string) error {
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dstPath, data, 0o644)
+}
