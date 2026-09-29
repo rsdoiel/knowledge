@@ -225,7 +225,7 @@ func TestRecordFuzzyTag_UnsupportedTagsFormFailsBeforeAnyWrite(t *testing.T) {
 	kb, root := fuzzyTagFixture(t, proposed("0013"), proposed("0012"))
 	path := filepath.Join(root, "cold", "decisions", "0012-fixture.md")
 	raw, _ := os.ReadFile(path)
-	bad := strings.Replace(string(raw), "tags: []", "tags: plain-scalar", 1)
+	bad := strings.Replace(string(raw), "tags: []", "tags: [a,\n  b]", 1)
 	os.WriteFile(path, []byte(bad), 0o644)
 	before := readFixture(t, root, "cold", "0013")
 	_, err := runFuzzyTag(t, kb, false, "--project", "cold", "--concept", "toast", "--write")
@@ -273,5 +273,60 @@ func TestRecord_OtherSubverbsRefuseFuzzyTagFlags(t *testing.T) {
 		if err == nil || !isUsageError(err) {
 			t.Errorf("record %v: err = %v, want a usage error", args, err)
 		}
+	}
+}
+
+// One failure of each other class the verb can produce (workspace DR-0003).
+
+func recordPath(root, id string) string {
+	return filepath.Join(root, "cold", "decisions", id+"-fixture.md")
+}
+
+func TestRecordFuzzyTag_MissingRecordFileIsNoInput(t *testing.T) {
+	kb, root := fuzzyTagFixture(t, proposed("0013"))
+	os.Remove(recordPath(root, "0013"))
+	_, err := runFuzzyTag(t, kb, false, "--project", "cold", "--concept", "toast")
+	if err == nil || exitCodeFor(err) != classNoInput {
+		t.Errorf("err = %v, class %v, want no_input (66)", err, exitCodeFor(err))
+	}
+}
+
+func TestRecordFuzzyTag_MalformedRecordFileIsData(t *testing.T) {
+	kb, root := fuzzyTagFixture(t, proposed("0013"))
+	os.WriteFile(recordPath(root, "0013"), []byte("no frontmatter here\n"), 0o644)
+	_, err := runFuzzyTag(t, kb, false, "--project", "cold", "--concept", "toast")
+	if err == nil || exitCodeFor(err) != classData {
+		t.Errorf("err = %v, class %v, want data (65)", err, exitCodeFor(err))
+	}
+}
+
+func TestRecordFuzzyTag_UnsupportedTagsFormIsData(t *testing.T) {
+	kb, root := fuzzyTagFixture(t, proposed("0013"))
+	path := recordPath(root, "0013")
+	raw, _ := os.ReadFile(path)
+	os.WriteFile(path, []byte(strings.Replace(string(raw), "tags: []", "tags: [a,\n  b]", 1)), 0o644)
+	_, err := runFuzzyTag(t, kb, false, "--project", "cold", "--concept", "toast", "--write")
+	if err == nil || exitCodeFor(err) != classData {
+		t.Errorf("err = %v, class %v, want data (65): the file's content is what is wrong", err, exitCodeFor(err))
+	}
+}
+
+func TestRecordFuzzyTag_WriteFailureIsIOAndRollsBack(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	kb, root := fuzzyTagFixture(t, proposed("0013"), proposed("0012"))
+	// 0012 sorts first and is written first; 0013 is made unwritable, so the
+	// run fails part way and must undo the write it already made.
+	before12 := readFixture(t, root, "cold", "0012")
+	if err := os.Chmod(recordPath(root, "0013"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	_, err := runFuzzyTag(t, kb, false, "--project", "cold", "--concept", "toast", "--write")
+	if err == nil || exitCodeFor(err) != classIO {
+		t.Fatalf("err = %v, class %v, want io (74)", err, exitCodeFor(err))
+	}
+	if readFixture(t, root, "cold", "0012") != before12 {
+		t.Error("the write to 0012 was not rolled back")
 	}
 }

@@ -120,7 +120,7 @@ func recordFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, ou
 				res.Action = "skipped-" + rec.Status
 				skipped[rec.Status]++
 			case editErr != nil:
-				return fmt.Errorf("DR-%s (%s): %w", rec.RecordID, rec.Path, editErr)
+				return classedAs(classData, fmt.Errorf("DR-%s (%s): %w", rec.RecordID, rec.Path, editErr))
 			case f.dryRun:
 				res.Action = "would-tag"
 			default:

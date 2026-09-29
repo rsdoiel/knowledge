@@ -128,6 +128,16 @@ new, set-status, supersede, fmt and fuzzy-tag --write are the only commands that
 write a record file; ingest never does. A record is written proposed and stays proposed: a
 model may write a record, but only the author accepts one.
 
+# EXIT STATUS
+
+The workspace convention, as described in kb(1). For record fuzzy-tag:
+0 the report was produced, or the tags were written, including "nothing found";
+1 no such project or concept; 2 a bad flag, a missing --project, or a surplus
+argument, and on any record verb a --concept or --write it does not take; 65 a
+record file that is malformed or whose tags: is in a form the edit will not
+change (nothing is written); 66 a record's file is missing, or there is no
+workspace here; 74 a write failed part way (writes already made are undone).
+
 # VOCABULARIES
 
 These are the documented values. They are reported against, not enforced: an

@@ -114,7 +114,8 @@ ingest
 
 record
 : read and maintain decision records — list, show, new, set-status,
-  supersede, fmt — see kb-record(1)
+  supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
+  kb-record(1)
 
 document
 : ingest, draft, review and tag narrative documents (Markdown, Fountain,

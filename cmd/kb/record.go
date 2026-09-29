@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -569,6 +570,11 @@ func loadRecordFile(root string, rec *knowledge.Record) (*knowledge.RecordFile, 
 	}
 	rf, err := knowledge.ParseRecord(raw, rec.Path)
 	if err != nil {
+		// The file's content is what is wrong, so it is data (65), not the
+		// usage error the library's invalid-value error means for an argument.
+		if errors.Is(err, knowledge.ErrInvalid) {
+			return nil, nil, classedAs(classData, err)
+		}
 		return nil, nil, err
 	}
 	return rf, raw, nil

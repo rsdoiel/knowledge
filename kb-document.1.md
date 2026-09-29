@@ -110,7 +110,11 @@ fuzzy-tag
   that threshold for exactly the names given, each already a known
   concept, checked before any file is touched. A concept already
   footnoted (or wikilinked) anywhere in a file is left alone, so a second
-  run is a no-op. --dry-run reports without writing.
+  run is a no-op. --dry-run reports without writing. Decision records have
+  their own verb, kb-record(1)'s fuzzy-tag: it adds the concept to
+  the record's tags: instead of a footnote, never edits an accepted record,
+  and skips a concept only when the record already links it, not when its
+  plain name appears in the prose.
 
 frontmatter
 : propose-then-accept `title`/`author`/`dateCreated`/

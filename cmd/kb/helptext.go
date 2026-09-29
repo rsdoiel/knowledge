@@ -118,7 +118,8 @@ ingest
 
 record
 : read and maintain decision records — list, show, new, set-status,
-  supersede, fmt — see {app_name}-record(1)
+  supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
+  {app_name}-record(1)
 
 document
 : ingest, draft, review and tag narrative documents (Markdown, Fountain,
@@ -342,7 +343,11 @@ fuzzy-tag
   that threshold for exactly the names given, each already a known
   concept, checked before any file is touched. A concept already
   footnoted (or wikilinked) anywhere in a file is left alone, so a second
-  run is a no-op. --dry-run reports without writing.
+  run is a no-op. --dry-run reports without writing. Decision records have
+  their own verb, {app_name}-record(1)'s fuzzy-tag: it adds the concept to
+  the record's tags: instead of a footnote, never edits an accepted record,
+  and skips a concept only when the record already links it, not when its
+  plain name appears in the prose.
 
 frontmatter
 : propose-then-accept ` + "`title`" + `/` + "`author`" + `/` + "`dateCreated`" + `/
@@ -1359,6 +1364,16 @@ delete
 new, set-status, supersede, fmt and fuzzy-tag --write are the only commands that
 write a record file; ingest never does. A record is written proposed and stays proposed: a
 model may write a record, but only the author accepts one.
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1). For record fuzzy-tag:
+0 the report was produced, or the tags were written, including "nothing found";
+1 no such project or concept; 2 a bad flag, a missing --project, or a surplus
+argument, and on any record verb a --concept or --write it does not take; 65 a
+record file that is malformed or whose tags: is in a form the edit will not
+change (nothing is written); 66 a record's file is missing, or there is no
+workspace here; 74 a write failed part way (writes already made are undone).
 
 # VOCABULARIES
 
