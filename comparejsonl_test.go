@@ -160,6 +160,10 @@ func TestCompareToJSONL_LeavesTheRealDatabaseByteIdenticalAndCleansUp(t *testing
 	dump := dumpOf(t, kb)
 	p, _ := kb.ProjectByName("alpha")
 	kb.AddObservation(p.ID, "note", "drift, so the comparison has real work to do")
+	// A private temp directory, so "no scratch left behind" is not a count of
+	// the shared /tmp, which other processes and packages write to at the same time.
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
 	// The database is open and has a live -wal beside it: hash both, and the
 	// directory listing, before and after. -shm is left out on purpose: it is
 	// SQLite's shared-memory index, rewritten by any read, and holds no data.
@@ -185,7 +189,6 @@ func TestCompareToJSONL_LeavesTheRealDatabaseByteIdenticalAndCleansUp(t *testing
 		return strings.Join(names, ",")
 	}
 	before, listBefore, rowsBefore := hashAll(), list(), diffRowsOf(t, kb)
-	tmpBefore, _ := filepath.Glob(filepath.Join(os.TempDir(), "kbcheck-*"))
 	if _, err := kb.CompareToJSONL(strings.NewReader(dump)); err != nil {
 		t.Fatal(err)
 	}
@@ -198,8 +201,8 @@ func TestCompareToJSONL_LeavesTheRealDatabaseByteIdenticalAndCleansUp(t *testing
 	if got := diffRowsOf(t, kb); got != rowsBefore {
 		t.Errorf("rows changed: %q -> %q", rowsBefore, got)
 	}
-	if tmpAfter, _ := filepath.Glob(filepath.Join(os.TempDir(), "kbcheck-*")); len(tmpAfter) != len(tmpBefore) {
-		t.Errorf("scratch directories left behind: %v -> %v", tmpBefore, tmpAfter)
+	if left, _ := os.ReadDir(tmp); len(left) != 0 {
+		t.Errorf("scratch left behind in the private temp directory: %v", left)
 	}
 }
 

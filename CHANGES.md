@@ -3,6 +3,75 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.15 — 2026-09-29
+
+Everything below is written and tested red first. The decisions are knowledge DR-0051 (concept
+show and recall), DR-0052 (record fuzzy-tag) and DR-0053 (check-db). DR-0052 was amended twice
+and DR-0051 once after acceptance, each with a dated note. The release was checked by running
+the v0.0.14 build beside the new one on a copy of the real workspace, 415 commands in plain and
+`--json` mode: the only changed exit codes are the two new verbs' own (2 to 1, from "unknown
+subverb" to "not found"), and nothing exits 70.
+
+### Added
+
+- **`kb concept show NAME [--limit N]`** (DR-0051): a concept's description and identifier, and per
+  kind (projects, observations, records, document sections) the full count and up to N items, newest
+  first. Default 10; `--limit 0` gives counts only. The name matches exactly, as `concept delete`
+  does, and a miss (exit 1) offers a case variant. `--` passes a name that looks like a flag; `--json`
+  gives one object.
+- **`kb concept recall [TEXT... | -] [--concept NAME,...] [--project NAME] [--limit N]`** (DR-0051):
+  finds the concepts named in the text (arguments, or stdin with `-`) and lists the observations,
+  records and document sections linked to them, ranked by matched concepts then recency, each with
+  the concepts it matched and an excerpt. `--concept` names concepts directly and is unioned with
+  any found in the text. Text that matches no concept, or an unknown project, is exit 1; nothing to
+  recall from is exit 2. Nothing is written and no concept is created.
+- **`kb record fuzzy-tag --project NAME [--concept NAME,...] [--write] [--dry-run] [--root DIR]`**
+  (DR-0052): reports near-miss spellings of known concepts in decision records, with the variants, the
+  count, the plain exact mentions that link nothing, and the `tags:` line that would link the concept.
+  Only the body is searched; a concept is skipped for a record only when the record already links it
+  (in `tags:` or as a `[[wikilink]]`). By default nothing is written. `--write` adds the concept to the
+  `tags:` of `proposed` records, changes nothing else in the file (a one-line flow list, a block list, or
+  a new line), never touches an accepted record, and is both-or-neither across the run; `kb ingest`
+  then links the new tags. Without `--concept` the length and distance rules of `document fuzzy-tag`
+  apply. A named concept is widened to tokens that contain its name (`detoast`, `toasting`) plus what
+  those rules already admit; DR-0052's first amendment reused the document bypass unchanged, and a
+  smoke test on real records showed it flags every short word within distance 3 of a short concept
+  (`to`, `that`, `has` for `toast`), so the second amendment narrows it for records only.
+- **`kb check-db [--jsonl FILE]`** (DR-0053): compares the database with the JSONL dump beside it (the
+  database path with `.jsonl` for `.db`; the resolved paths are printed) by full content, never by file
+  time, and recommends `kb import`, `kb export`, or both. The report has per-table counts, rows only
+  in the JSONL, rows only in the database, and rows in both that differ. File times appear as a hint
+  only. Exit 0 in sync, 1 not in sync (the report is still printed), 66 no dump, 65 malformed dump.
+  There are no tombstones: rows only in the JSONL are labelled "never received, or deleted here", and
+  the import recommendation warns that it brings back anything deleted on purpose.
+- Library: `ConceptDetail`, `RecallByText` and `RecallByNames` (with `TextRecall` and `TextRecallHit`),
+  `RecordFuzzyReport` and `AddRecordTags`, `CompareToJSONL` (with `DBComparison`, `TableDiff` and
+  `RowDifference`), `DiffDatabases`, `PrepareMergeScratch` (with `MergeScratch`),
+  `DetectIdentityIssues` and `CheckpointAndCopy`. `RecallByConceptNames` is unchanged and ranks the
+  same way; `RecallByText` adds a project filter, the project and matched concepts on every hit, and
+  the list of linked projects.
+
+### Changed
+
+- The detection half of `kb merge` (copy, normalise, collision and divergence reports) is now a
+  read-only library pipeline, `PrepareMergeScratch` and `DetectIdentityIssues`, shared with
+  `check-db`. `merge`'s output is unchanged, guarded by golden tests captured before the move.
+- Harvey's `recallKB` calls `RecallByText`, the same call `kb concept recall` makes.
+
+### Fixed
+
+- A record file that does not parse is now exit 65 (wrong content) from `kb record set-status`,
+  `kb record supersede`, `kb project rename` and `kb record fuzzy-tag`, where the first three exited 2.
+  The file's content is what is wrong, not the command line.
+
+### Upgrade notes
+
+- Nothing that worked changes, apart from the malformed record file exit above. A script that treated
+  2 from `record set-status` or `supersede` as "bad command line" will now also see 65 for a record
+  file it cannot parse.
+- `kb concept show`, `kb concept recall`, `kb record fuzzy-tag` and `kb check-db` did not exist before,
+  so a script that called them got exit 2 (unknown verb) and now gets a real answer.
+
 ## v0.0.14 — 2026-09-25
 
 Everything below is written and tested red first. The decisions are workspace DR-0003 and
