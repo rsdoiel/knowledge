@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-check-db — compare the database with its JSONL dump</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb check-db [–jsonl FILE]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>agents/knowledge.jsonl is the authoritative copy and the agents tree
+is kept in git across machines, so the database and the dump drift.
+check-db says which way, without changing either. It is read-only.</p>
+<p>The dump defaults to the database’s path with .jsonl in place of .db;
+–jsonl FILE names another. The resolved paths are printed at the top of
+the report. Nothing else is searched for, because agents/ can hold
+several dumps and a wrong guess gives a confident wrong verdict.</p>
+<p>It decides by a full content diff, never by file time. The dump is
+read into a scratch database and compared with a copy of this one, table
+by table, using the same idea of “the same row” as kb-merge(1): name for
+projects and concepts, uuid for observations, sources, documents and
+sections, workspace, project, scope and record id for decision records,
+and the pair of parents for links. The report lists rows only in the
+JSONL, rows only in this database, and rows on both sides that differ (a
+project’s description or status, a concept’s description or identifier,
+an observation’s kind or body, a record’s checksum, and so on), with
+per-table counts.</p>
+<p>The recommendation is one of: in sync; kb import (the JSONL is
+ahead); kb export (the database is ahead); or diverged (import, then
+export). File modification times are printed as a hint and never change
+the verdict: a git pull refreshes a file’s time without changing its
+content.</p>
+<p>Rows only in the JSONL are labelled “never received, or deleted
+here”. There are no tombstones, so a deletion made here looks exactly
+like a row never received, and the import recommendation warns that it
+brings back anything deleted on purpose. See DR-0053
+(knowledge/decisions/).</p>
+<p>With –json the report is one object: in_sync, recommendation,
+database, jsonl, tables (each with database and jsonl counts,
+only_in_database, only_in_jsonl and different), collisions and
+file_times.</p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<dl>
+<dt>0</dt>
+<dd>
+in sync
+</dd>
+<dt>1</dt>
+<dd>
+not in sync (a check that reports drift); the report is still printed on
+stdout
+</dd>
+<dt>2</dt>
+<dd>
+a bad flag, a missing value for –jsonl, or a surplus argument
+</dd>
+<dt>65</dt>
+<dd>
+the dump is malformed
+</dd>
+<dt>66</dt>
+<dd>
+there is no dump at the path
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1), kb-merge(1), kb-export(1), kb-import(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
