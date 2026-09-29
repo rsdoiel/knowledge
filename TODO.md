@@ -15,7 +15,7 @@
 
 ## Requested features
 
-- [ ] `kb check-db` this would check the knowledge's SQLite3 database against the JSONL dump file agenct to it if it exists (example knowledge.db and knowledge.jsonl). It would determine if the knowlege.jsonl file was newer and should be loaded if a merge is neccessary and give a recommendation. This would help keep knolwedge bases better syncronized across machines where I use git version control for the agents directory tree in a workspace.
+- [x] **DONE 2026-09-29 (DR-0053, v0.0.15).** *Original request:* `kb check-db` this would check the knowledge's SQLite3 database against the JSONL dump file agenct to it if it exists (example knowledge.db and knowledge.jsonl). It would determine if the knowlege.jsonl file was newer and should be loaded if a merge is neccessary and give a recommendation. This would help keep knolwedge bases better syncronized across machines where I use git version control for the agents directory tree in a workspace.
 - [x] `[[double-bracket]]` inline concept tagging when ingesting Markdown
   record bodies, beyond formal frontmatter. Filed as
   `wikilink-tagging-feature-request.md` (2026-09-08) — inspired by
@@ -467,14 +467,14 @@ trip was also checked and is clean: 14 tables' row counts identical.
   `CHANGES.md`'s `## Unreleased` section needs its heading, date and version at release prep. **The four
   `codemeta.json` fields are the release-prep check, and there is no release before the user runs it.**
 
-- [ ] **Two traps that are not exit-code questions** (noted in DR-0048). `kb project add
-  NAME description --status paused` stores "description --status paused" as the
-  description, because DR-0041 treats words after the fixed arguments as free text;
-  the flag has to come before the name. And `kb project add` on an existing name says
-  "added" though nothing was added. Both want a decision on whether a flag-looking
-  trailing word should be refused, and on the wording.
+- [x] **FIXED 2026-09-29 (DR-0055, accepted; v0.0.15).** *Original request:* **Two traps that are not exit-code
+  questions** (noted in DR-0048). `kb project add NAME description --status paused` stored "description
+  --status paused" as the description, and `kb project add` on an existing name said "added" though nothing
+  was added. *Fix as landed:* an existing name is exit 1 "already exists" (as `project rename`), nothing
+  written; a trailing `--status`/`-status` is a usage error naming where it goes; `--` keeps it as text.
+  Tests: `cmd/kb/projectadd_test.go`. Not decided: `concept add` and `source add` keep their behaviour.
 
-- [ ] **DECIDED and ACCEPTED 2026-09-25, in progress: split the exit codes** (workspace
+- [x] **DONE 2026-09-25 (X0 to X6), DECIDED and ACCEPTED 2026-09-25: split the exit codes** (workspace
   DR-0003 for the convention, knowledge DR-0047 for `kb`, both `accepted`, DR-0040
   superseded, root `CLAUDE.md` updated; plan in
   `exit-codes-plan.md`, X0-X6). RSDOIEL chose to split now and follow POSIX where

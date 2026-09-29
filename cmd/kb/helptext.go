@@ -172,8 +172,8 @@ the error on stderr carries the class name beside the number, for example
   is no such project, concept, observation, source, record or document; a
   record list filter value that nothing carries; an index that is stale; or the
   current state forbids the operation (a concept or source still linked, a
-  rename onto a name that already exists, a project that still owns records, a
-  document section not yet drafted)
+  rename or add onto a name that already exists, a project that still owns
+  records, a document section not yet drafted)
 
 2
 : usage error: the command line itself is wrong and nothing was attempted. An
@@ -433,13 +433,15 @@ const ProjectHelpText = `%{app_name}-project(1) user manual | version {version} 
 # DESCRIPTION
 
 A project is the top-level container observations and concepts attach to.
-Names are unique; adding a project with an existing name is a no-op that
-returns the existing project's id (its status and description are left
-unchanged) -- use set-status and set-description to change either.
+Names are unique; adding a project whose name exists is refused (exit 1,
+"already exists", naming its id) and changes nothing -- use set-status and
+set-description to change either.
 
 add
-: create a project, or return the id of the existing one with that name.
-  --status sets the initial status (default: active).
+: create a project. --status sets the initial status (default: active) and
+  goes before NAME: a --status typed after NAME is a usage error (exit 2)
+  rather than description text. Put -- before NAME to keep a flag-looking
+  word in the description.
 
 list
 : list every project (bare rows — see {app_name}-format(1) for an

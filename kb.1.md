@@ -168,8 +168,8 @@ the error on stderr carries the class name beside the number, for example
   is no such project, concept, observation, source, record or document; a
   record list filter value that nothing carries; an index that is stale; or the
   current state forbids the operation (a concept or source still linked, a
-  rename onto a name that already exists, a project that still owns records, a
-  document section not yet drafted)
+  rename or add onto a name that already exists, a project that still owns
+  records, a document section not yet drafted)
 
 2
 : usage error: the command line itself is wrong and nothing was attempted. An

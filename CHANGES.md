@@ -6,11 +6,13 @@ release notes; maintained going forward.
 ## v0.0.15 — 2026-09-29
 
 Everything below is written and tested red first. The decisions are knowledge DR-0051 (concept
-show and recall), DR-0052 (record fuzzy-tag) and DR-0053 (check-db). DR-0052 was amended twice
+show and recall), DR-0052 (record fuzzy-tag), DR-0053 (check-db), DR-0054 (import keeps an unknown
+observation kind) and DR-0055 (project add). DR-0052 was amended twice
 and DR-0051 once after acceptance, each with a dated note. The release was checked by running
 the v0.0.14 build beside the new one on a copy of the real workspace, 415 commands in plain and
 `--json` mode: the only changed exit codes are the two new verbs' own (2 to 1, from "unknown
-subverb" to "not found"), and nothing exits 70.
+subverb" to "not found"), and nothing exits 70. That comparison was made before the `kb import` and
+`kb project add` fixes below, and `project add` on an existing name changes from exit 0 to 1.
 
 ### Added
 
@@ -53,6 +55,12 @@ subverb" to "not found"), and nothing exits 70.
 
 ### Changed
 
+- **`kb project add` refuses a name that already exists** (DR-0055): exit 1, `project "NAME" already
+  exists (id=N)`, and nothing is written. It used to print "added", exit 0, drop the requested status
+  and description, and move `updated_at`. **A script that re-ran `kb project add` and relied on exit 0
+  now gets 1.** The library's `AddProject` is unchanged.
+- **`kb project add NAME DESC --status X` is a usage error** (exit 2, "must come before NAME") instead
+  of storing `DESC --status X` as the description. `--` before NAME keeps a flag-looking word as text.
 - The detection half of `kb merge` (copy, normalise, collision and divergence reports) is now a
   read-only library pipeline, `PrepareMergeScratch` and `DetectIdentityIssues`, shared with
   `check-db`. `merge`'s output is unchanged, guarded by golden tests captured before the move.

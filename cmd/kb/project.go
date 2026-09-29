@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -58,7 +59,21 @@ func cmdProjectAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	if err != nil {
 		return err
 	}
+	if !slices.Contains(args, "--") {
+		for _, w := range rest[1:] {
+			if isFlagNamed(w, "status") {
+				return usageErrorf("project add: %s must come before NAME (kb project add %s VALUE NAME [DESCRIPTION]); put -- before NAME to keep it as description text", w, strings.SplitN(w, "=", 2)[0])
+			}
+		}
+	}
 	desc := strings.Join(rest[1:], " ")
+	existing, err := kb.ProjectByName(name)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return negativef("project %q already exists (id=%d)", name, existing.ID)
+	}
 	var id int64
 	if *status != "" {
 		id, err = logKBCall(dl, "AddProjectWithStatus", map[string]any{"name": name, "description": desc, "status": *status}, func() (int64, error) {
@@ -80,6 +95,17 @@ func cmdProjectAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	}
 	fmt.Fprintf(out, "project %q added (id=%d)\n", name, id)
 	return nil
+}
+
+// isFlagNamed reports whether word is the flag name spelled -name or --name,
+// with or without an =value.
+func isFlagNamed(word, name string) bool {
+	w := strings.TrimPrefix(strings.TrimPrefix(word, "-"), "-")
+	if w == word {
+		return false
+	}
+	w, _, _ = strings.Cut(w, "=")
+	return w == name
 }
 
 func cmdProjectSetStatus(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
