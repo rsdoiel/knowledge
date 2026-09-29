@@ -100,7 +100,8 @@ manage observations — see kb-observation(1)
 </dd>
 <dt>concept</dt>
 <dd>
-manage concepts — see kb-concept(1)
+manage concepts, show one with what links to it, recall by text — see
+kb-concept(1)
 </dd>
 <dt>link, unlink</dt>
 <dd>
@@ -120,6 +121,11 @@ full-text search and formatted views — see kb-search(1)
 reconcile two knowledge.db files that drifted independently (e.g. across
 machines) into a fresh, deduped output — see kb-merge(1)
 </dd>
+<dt>check-db</dt>
+<dd>
+compare the database with the JSONL dump beside it by full content, and
+say whether to import, export or both — see kb-check-db(1)
+</dd>
 <dt>export, import</dt>
 <dd>
 write/read a portable JSON-L snapshot of the database — the
@@ -135,7 +141,8 @@ kb-ingest(1)
 <dt>record</dt>
 <dd>
 read and maintain decision records — list, show, new, set-status,
-supersede, fmt — see kb-record(1)
+supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
+kb-record(1)
 </dd>
 <dt>document</dt>
 <dd>
@@ -192,8 +199,8 @@ the command ran correctly and the answer is no: search found nothing;
 there is no such project, concept, observation, source, record or
 document; a record list filter value that nothing carries; an index that
 is stale; or the current state forbids the operation (a concept or
-source still linked, a rename onto a name that already exists, a project
-that still owns records, a document section not yet drafted)
+source still linked, a rename or add onto a name that already exists, a
+project that still owns records, a document section not yet drafted)
 </dd>
 <dt>2</dt>
 <dd>

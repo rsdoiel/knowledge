@@ -19,64 +19,80 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.14">knowledge 0.0.14</h2>
-<p><code>kb</code> now says what kind of failure it was from the exit
-number alone, and a batch of inputs it used to accept without a word are
-refused. Read the upgrading notes below before updating a script. The
-exit codes follow one convention for every command-line tool in the
-workspace (workspace DR-0003); the decisions for <code>kb</code> are
-DR-0045 to DR-0050. The whole change was checked by running the v0.0.13
-build beside the new one, on a copy of the real database, over 362
-commands in plain and <code>--json</code> mode.</p>
-<p>Exit 1 is now the normal “no” (not found, no results, a stale index,
-an operation the current state forbids), as it is for <code>grep</code>
-and <code>diff</code>; 2 is a usage error; and the
-<code>sysexits(3)</code> numbers above that say what went wrong: 65
-wrong content (a malformed record or JSONL, a file that is not a
-knowledge base, a merge collision), 66 a missing input or workspace, 69
-an unreachable service, 70 an internal error, 73 an output that cannot
-be created, 74 an I/O error, 75 a locked database, 77 permission denied.
-An error nothing classified is 70, never 1. The <code>--json</code>
-error object carries the class and the number.</p>
-<p>Commands that work through many items do all they can and then exit
-with the class of the first failure, instead of 0:
-<code>kb ingest</code> (a record that does not parse, two files claiming
-one identity), <code>index --all</code>, and
-<code>source check-retractions</code> (69; it also no longer marks an
-unreachable source as checked).</p>
-<p>Mistakes that used to succeed are refused:
-<code>source retract</code> or <code>remove</code> on an id that does
-not exist; <code>source add</code> with a blank title, a bad
-<code>--published</code>, <code>--url</code> or <code>--doi</code> (a
-mistyped DOI read as “not retracted”); <code>record new</code> or
-<code>record set-status</code> with a trigger, kind or status outside
-the vocabulary that no record carries; <code>kb init --bogus</code>,
-which created a directory named <code>--bogus</code>;
-<code>kb search --json foo</code>, which searched for that text; a
-negative <code>concept suggest --limit</code>.</p>
-<p>Project and concept names are one line: interior whitespace collapses
-and control characters are refused, so a hard-wrapped
-<code>[[wikilink]]</code> is the ordinary concept instead of a second
-one with a newline in its name (DR-0046). <code>--</code> now works on
-every verb that takes a name, title or path, and <code>kb merge</code>
-refuses a zero-byte input even beside a <code>-wal</code>.</p>
-<p>New commands remove what could only be removed with raw SQL, which
-skips the search index (DR-0050): <code>kb project delete</code> (a
-stray empty project; it never cascades into content),
-<code>kb observation delete</code>, <code>kb document delete</code>
-(refused while a reviewed summary would be lost) and
-<code>kb record delete</code> (only once the record’s file is gone), and
-<code>kb unlink</code> removes one project-concept, observation-concept
-or observation-source link. Each refuses while something depends on it,
-says what and how many, takes <code>--force</code> where that makes
-sense and <code>--dry-run</code> to preview. A delete is local to one
-database: <code>kb merge</code> and <code>kb import</code> from a
-database that still has the row bring it back.</p>
-<p>Upgrading: a script that treated any non-zero as failure is
-unaffected. One that treated 1 as “the command failed” must also handle
-2 and the numbers above it; the table in CHANGES.md lists every changed
-status. The three knowledge skills in <code>agents/skills</code> branch
-on the new codes.</p>
+<h2 id="knowledge-0.0.15">knowledge 0.0.15</h2>
+<p>Three new ways to see what the knowledge base holds, and one to check
+that it agrees with its JSONL dump. The decisions are DR-0051 to
+DR-0055. Everything was written and tested red first. The new verbs were
+checked by running the v0.0.14 build beside the new one, on a copy of
+the real workspace, over 415 commands in plain and <code>--json</code>
+mode: the only changed exit codes were the two new verbs’ own, and
+nothing exited 70. That comparison was made before the two fixes
+described last, which change behaviour on purpose.</p>
+<p><code>kb concept show NAME</code> prints one concept’s description
+and identifier, what links to it (projects, observations, records,
+document sections) with the full counts, and up to <code>--limit</code>
+items of each kind, newest first (default 10; <code>--limit 0</code>
+gives counts only). The name matches exactly, as
+<code>concept delete</code> does, and a miss offers a case variant. It
+replaces the raw <code>sqlite3</code> joins that judging a
+<code>concept suggest</code> candidate used to need.</p>
+<p><code>kb concept recall</code> finds the concepts named in some text
+(arguments, or stdin with <code>-</code>) and lists the observations,
+records and document sections linked to them, ranked by how many of
+those concepts each matches and then by recency, with the concepts each
+hit matched. <code>--concept NAME,...</code> names concepts directly,
+<code>--project</code> restricts the hits, <code>--limit</code> caps
+them. Text that matches no concept exits 1. Harvey’s memory recall uses
+the same library call.</p>
+<p><code>kb record fuzzy-tag --project NAME</code> reports near-miss
+spellings of known concepts in decision records (a <code>detoast</code>
+for the concept <code>toast</code>), which exact matching never links,
+and the <code>tags:</code> line that would link them. It writes nothing
+by default. <code>--write</code> adds the concept to the
+<code>tags:</code> of <code>proposed</code> records only, changes
+nothing else in the file, and never touches an accepted record;
+<code>kb ingest</code> then links the tags.
+<code>--concept NAME,...</code> widens the named concepts to forms that
+contain the name.</p>
+<p><code>kb check-db [--jsonl FILE]</code> compares the database with
+the JSONL dump beside it by full content, never by file time, and
+recommends <code>kb import</code>, <code>kb export</code>, or both. It
+is read-only and exits 0 in sync and 1 otherwise. There are no
+tombstones, so rows only in the dump may be rows deleted here on
+purpose, and the report says so.</p>
+<p>The detection half of <code>kb merge</code> is now a read-only
+library pipeline shared with <code>check-db</code>; <code>merge</code>’s
+output is unchanged.</p>
+<p>Two fixes. <code>kb import</code> no longer rewrites an observation
+kind outside <code>note</code>, <code>finding</code>,
+<code>decision</code>, <code>question</code> and <code>hypothesis</code>
+to <code>note</code> (DR-0054): it keeps the kind and prints a
+<code>warning:</code> line, or a <code>Warnings</code> list under
+<code>--json</code>, and still exits 0. The rewrite made
+<code>kb check-db</code> report a false divergence, and following its
+advice to import and export would have written the changed kind into the
+authoritative dump. <code>kb project add</code> (DR-0055) no longer
+prints “added” for a name that already exists: it exits 1 with
+<code>already exists</code>, as <code>project rename</code> does, and
+writes nothing (it used to move <code>updated_at</code>, which merge
+uses to pick a winner, and drop the status and description you gave it).
+A <code>--status</code> typed after NAME is a usage error that says the
+flag goes before NAME, where it used to become part of the description;
+<code>--</code> before NAME keeps a flag-looking word as text.</p>
+<p>Upgrading: two things that worked change. <code>kb project add</code>
+on an existing name now exits 1, where it exited 0, so a script that
+repeated the call must expect that; the library’s
+<code>AddProject</code> still returns the existing id. And a record file
+that does not parse now exits 65 (wrong content) from
+<code>record set-status</code>, <code>record supersede</code> and
+<code>project rename</code> (the verbs that read a record file to edit
+it) where it exited 2, since the file’s content is what is wrong, not
+the command line. Library additions: <code>ConceptDetail</code>,
+<code>RecallByText</code>, <code>RecallByNames</code>,
+<code>RecordFuzzyReport</code>, <code>AddRecordTags</code>,
+<code>CompareToJSONL</code>, <code>DiffDatabases</code>,
+<code>PrepareMergeScratch</code> and <code>DetectIdentityIssues</code>;
+<code>ImportTableSummary</code> gains a <code>Warnings</code> field.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

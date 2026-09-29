@@ -41,7 +41,7 @@ About this software
 
 ## knowledge 0.0.15
 
-Three new ways to see what the knowledge base holds, and one to check that it agrees with its JSONL dump. The decisions are DR-0051 to DR-0053. Everything was written and tested red first, and checked by running the v0.0.14 build beside the new one, on a copy of the real workspace, over 415 commands in plain and `--json` mode: the only changed exit codes are the two new verbs' own, and nothing exits 70.
+Three new ways to see what the knowledge base holds, and one to check that it agrees with its JSONL dump. The decisions are DR-0051 to DR-0055. Everything was written and tested red first. The new verbs were checked by running the v0.0.14 build beside the new one, on a copy of the real workspace, over 415 commands in plain and `--json` mode: the only changed exit codes were the two new verbs' own, and nothing exited 70. That comparison was made before the two fixes described last, which change behaviour on purpose.
 
 `kb concept show NAME` prints one concept's description and identifier, what links to it (projects, observations, records, document sections) with the full counts, and up to `--limit` items of each kind, newest first (default 10; `--limit 0` gives counts only). The name matches exactly, as `concept delete` does, and a miss offers a case variant. It replaces the raw `sqlite3` joins that judging a `concept suggest` candidate used to need.
 
@@ -53,7 +53,9 @@ Three new ways to see what the knowledge base holds, and one to check that it ag
 
 The detection half of `kb merge` is now a read-only library pipeline shared with `check-db`; `merge`'s output is unchanged.
 
-Upgrading: nothing that worked changes, with one exception. A record file that does not parse now exits 65 (wrong content) from `record set-status`, `record supersede` and `project rename` (the verbs that read a record file to edit it) where it exited 2, since the file's content is what is wrong, not the command line. Library additions: `ConceptDetail`, `RecallByText`, `RecallByNames`, `RecordFuzzyReport`, `AddRecordTags`, `CompareToJSONL`, `DiffDatabases`, `PrepareMergeScratch` and `DetectIdentityIssues`.
+Two fixes. `kb import` no longer rewrites an observation kind outside `note`, `finding`, `decision`, `question` and `hypothesis` to `note` (DR-0054): it keeps the kind and prints a `warning:` line, or a `Warnings` list under `--json`, and still exits 0. The rewrite made `kb check-db` report a false divergence, and following its advice to import and export would have written the changed kind into the authoritative dump. `kb project add` (DR-0055) no longer prints "added" for a name that already exists: it exits 1 with `already exists`, as `project rename` does, and writes nothing (it used to move `updated_at`, which merge uses to pick a winner, and drop the status and description you gave it). A `--status` typed after NAME is a usage error that says the flag goes before NAME, where it used to become part of the description; `--` before NAME keeps a flag-looking word as text.
+
+Upgrading: two things that worked change. `kb project add` on an existing name now exits 1, where it exited 0, so a script that repeated the call must expect that; the library's `AddProject` still returns the existing id. And a record file that does not parse now exits 65 (wrong content) from `record set-status`, `record supersede` and `project rename` (the verbs that read a record file to edit it) where it exited 2, since the file's content is what is wrong, not the command line. Library additions: `ConceptDetail`, `RecallByText`, `RecallByNames`, `RecordFuzzyReport`, `AddRecordTags`, `CompareToJSONL`, `DiffDatabases`, `PrepareMergeScratch` and `DetectIdentityIssues`; `ImportTableSummary` gains a `Warnings` field.
 
 ## Authors
 
