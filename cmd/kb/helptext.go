@@ -641,8 +641,9 @@ recall
   concept says so and exits 1; no text and no --concept is exit 2. A document
   section's excerpt is its summary only once reviewed. ` + "`--json`" + ` gives
   matched, hits (kind, id, project, concepts, excerpt) and projects. Nothing is
-  written and no concept is created. The library's RecallByConceptNames, which
-  Harvey has used, covers observations and records only and is unchanged.
+  written and no concept is created. It shares its ranking with the library's
+  RecallByConceptNames, which is unchanged and adds no project filter or
+  per-hit concepts.
   See DR-0051 (knowledge/decisions/).
 
 rename

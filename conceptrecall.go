@@ -51,11 +51,11 @@ type TextRecall struct {
  * returns the observations, records and document sections linked to them,
  * with the concepts each one matched, so a caller can see why it came back.
  *
- * This is the wider sibling of RecallByConceptNames: it also covers document
- * sections, can be scoped to one project, and reports per-hit concepts.
- * RecallByConceptNames covers observations and records only, is never scoped,
- * and is unchanged, so a caller that depends on its exact results keeps them.
- * The ranking rule is the same: matched concepts descending, then recency.
+ * This is the richer sibling of RecallByConceptNames, which covers the same
+ * observations, records and document sections and ranks the same way (matched
+ * concepts descending, then recency), and which is unchanged. RecallByText adds
+ * a project filter, the project name and the matched concepts on every hit,
+ * and the list of linked projects, so a caller can see why each hit came back.
  *
  * Text that matches no concept is a normal outcome, not an error: the result
  * is empty. Nothing is ever created.

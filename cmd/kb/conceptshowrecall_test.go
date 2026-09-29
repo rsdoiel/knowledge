@@ -295,3 +295,22 @@ func TestConceptRecall_Errors(t *testing.T) {
 }
 
 var _ io.Reader = recallStdin
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, fmt.Errorf("simulated read failure") }
+
+// A stdin that cannot be read is exit 74 (io), as the EXIT STATUS section says.
+func TestConceptRecall_StdinReadFailureIsIO(t *testing.T) {
+	kb := recallFixture(t)
+	old := recallStdin
+	recallStdin = failingReader{}
+	t.Cleanup(func() { recallStdin = old })
+	_, err := runConceptCmd(t, kb, false, "recall", "-")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if got := exitCodeFor(err); got != classIO {
+		t.Errorf("class = %v, want %v (%v)", got, classIO, err)
+	}
+}
