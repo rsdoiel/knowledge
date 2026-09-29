@@ -2,8 +2,12 @@ package knowledge
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -151,17 +155,52 @@ func TestCompareToJSONL_MalformedDumpIsInvalid(t *testing.T) {
 	}
 }
 
-func TestCompareToJSONL_LeavesTheRealDatabaseUntouchedAndCleansUp(t *testing.T) {
+func TestCompareToJSONL_LeavesTheRealDatabaseByteIdenticalAndCleansUp(t *testing.T) {
 	kb, path := openFixtureKB(t)
 	dump := dumpOf(t, kb)
-	rowsBefore := diffRowsOf(t, kb)
+	p, _ := kb.ProjectByName("alpha")
+	kb.AddObservation(p.ID, "note", "drift, so the comparison has real work to do")
+	// The database is open and has a live -wal beside it: hash both, and the
+	// directory listing, before and after. -shm is left out on purpose: it is
+	// SQLite's shared-memory index, rewritten by any read, and holds no data.
+	files := []string{path, path + "-wal"}
+	hashAll := func() map[string]string {
+		out := map[string]string{}
+		for _, f := range files {
+			b, err := os.ReadFile(f)
+			if err != nil {
+				out[f] = "absent"
+				continue
+			}
+			out[f] = fmt.Sprintf("%x", sha256.Sum256(b))
+		}
+		return out
+	}
+	list := func() string {
+		es, _ := os.ReadDir(filepath.Dir(path))
+		var names []string
+		for _, e := range es {
+			names = append(names, e.Name())
+		}
+		return strings.Join(names, ",")
+	}
+	before, listBefore, rowsBefore := hashAll(), list(), diffRowsOf(t, kb)
+	tmpBefore, _ := filepath.Glob(filepath.Join(os.TempDir(), "kbcheck-*"))
 	if _, err := kb.CompareToJSONL(strings.NewReader(dump)); err != nil {
 		t.Fatal(err)
+	}
+	if after := hashAll(); !reflect.DeepEqual(before, after) {
+		t.Errorf("database files changed:\n%v\n%v", before, after)
+	}
+	if list() != listBefore {
+		t.Errorf("directory listing changed: %s -> %s", listBefore, list())
 	}
 	if got := diffRowsOf(t, kb); got != rowsBefore {
 		t.Errorf("rows changed: %q -> %q", rowsBefore, got)
 	}
-	_ = path
+	if tmpAfter, _ := filepath.Glob(filepath.Join(os.TempDir(), "kbcheck-*")); len(tmpAfter) != len(tmpBefore) {
+		t.Errorf("scratch directories left behind: %v -> %v", tmpBefore, tmpAfter)
+	}
 }
 
 func diffRowsOf(t *testing.T, kb *KnowledgeBase) string {

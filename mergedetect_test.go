@@ -193,6 +193,33 @@ func TestDiffDatabases_RowAddedOnOneSideIsReportedOnceOnThatSide(t *testing.T) {
 	}
 }
 
+// There are no tombstones, so a row deleted on one side is indistinguishable
+// from a row added on the other: it is reported as only on the other side.
+func TestDiffDatabases_LocalDeletionIsReportedAsOnlyInTheOther(t *testing.T) {
+	a := diffFixture(t, "a")
+	b := twin(t, a)
+	mutate(t, b, func(kb *KnowledgeBase) {
+		if _, err := kb.DeleteObservation(2, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	d := diffByTable(t, a, b)["observations"]
+	if len(d.OnlyA) != 1 || len(d.OnlyB) != 0 || len(d.Different) != 0 {
+		t.Errorf("observation deleted from b: %+v, want it only in a", d)
+	}
+	if d.CountA != 2 || d.CountB != 1 {
+		t.Errorf("counts a=%d b=%d", d.CountA, d.CountB)
+	}
+	// Its links go with it, and are reported the same way.
+	if r := diffByTable(t, a, b)["observation_relations"]; len(r.OnlyA) != 1 {
+		t.Errorf("relation of the deleted observation: %+v", r)
+	}
+	// Seen from the other side the same fact reads as an addition.
+	if s := diffByTable(t, b, a)["observations"]; len(s.OnlyB) != 1 || len(s.OnlyA) != 0 {
+		t.Errorf("swapped: %+v", s)
+	}
+}
+
 func TestDiffDatabases_EditedRowIsDifferentNotOneSided(t *testing.T) {
 	for _, tc := range []struct {
 		table string
