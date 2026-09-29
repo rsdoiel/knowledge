@@ -4,7 +4,7 @@
 ## Bugs
 
 - [x] **`kb import` silently rewrote an observation `kind` outside the vocabulary to `note`, which
-  made `kb check-db` report a false "diverged".** Fixed 2026-09-29 (DR-0054, proposed): import keeps
+  made `kb check-db` report a false "diverged".** Fixed 2026-09-29 (DR-0054, accepted): import keeps
   the kind and reports a warning, exit 0. Tests: `importkind_test.go` (library and `cmd/kb`).
 
   Still open, and not a code question: the five `kind = release` rows on `clasm` and `CMTools` in the
