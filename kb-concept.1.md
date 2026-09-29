@@ -12,6 +12,10 @@ kb concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]
 
 kb concept list
 
+kb concept show NAME [--limit N]
+
+kb concept recall [TEXT... | -] [--concept NAME,...] [--project NAME] [--limit N]
+
 kb concept rename OLD NEW
 
 kb concept delete NAME [--force] [--dry-run]
@@ -33,6 +37,37 @@ for --identifier-type and --identifier-value.
 A concept may also represent a scholarly entity — a paper, person,
 institution, or funder — by setting --identifier-type (e.g. doi, orcid,
 ror, fundref) and --identifier-value (the normalized identifier).
+
+show
+: read-only: one concept's description, identifier if set, and what links to
+  it. Per kind (projects, observations, records, document sections) it prints
+  the full count and up to --limit items, newest first (default 10; --limit 0
+  prints counts only). NAME must match exactly, including case, as delete
+  does; a miss is exit 1, and when a name differing only in case exists it is
+  offered ("did you mean"). A NAME that looks like a flag is passed after --.
+  `--json` gives one object: name, description, identifier_type,
+  identifier_value, counts, and a list per kind. This is how to judge whether
+  a kb concept suggest candidate is already covered, without raw SQL.
+  See DR-0051 (knowledge/decisions/).
+
+recall
+: read-only: find the concepts named in some text, then list the
+  observations, records and document sections linked to them. Text comes from
+  the arguments, or from stdin when the argument is -. --concept NAME,... names
+  concepts directly (case-insensitive; an unknown name is skipped); given with
+  text, the two are unioned. --project NAME restricts hits to one project
+  (workspace-tier records are then excluded; an unknown project is exit 1).
+  --limit N caps the hits (default 10). Output starts with a
+  `matched concepts:` line, then one line per hit: kind, id, project, the
+  matched concepts it links to, and an excerpt. Ranking is the number of matched
+  concepts descending, then recency. Projects linked to a matched concept are
+  listed on a `projects:` line, apart from the hits. Text that matches no
+  concept says so and exits 1; no text and no --concept is exit 2. A document
+  section's excerpt is its summary only once reviewed. `--json` gives
+  matched, hits (kind, id, project, concepts, excerpt) and projects. Nothing is
+  written and no concept is created. The library's RecallByConceptNames, which
+  Harvey has used, covers observations and records only and is unchanged.
+  See DR-0051 (knowledge/decisions/).
 
 rename
 : rename a concept and reindex it for search. Refuses only if NEW already
@@ -105,6 +140,14 @@ the other side still has as new and add it back. Under the authoritative
 agents/knowledge.jsonl flow (each machine rebuilds its database from the
 committed export) a deletion travels with the next export, provided every
 machine rebuilds before it exports.
+
+# EXIT STATUS
+
+The workspace convention, as described in kb(1). For concept show and
+concept recall: 0 success; 1 no such concept (show), or no concept matched or no
+such project (recall); 2 a missing, surplus or malformed argument, an unknown
+flag, a negative or non-numeric --limit, or no text and no --concept; 66 no
+workspace here; 74 stdin could not be read.
 
 # SEE ALSO
 

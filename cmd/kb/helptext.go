@@ -87,7 +87,7 @@ observation
 : manage observations — see {app_name}-observation(1)
 
 concept
-: manage concepts — see {app_name}-concept(1)
+: manage concepts, show one with what links to it, recall by text — see {app_name}-concept(1)
 
 link, unlink
 : link projects/observations to concepts, and remove those links — see
@@ -584,6 +584,10 @@ const ConceptHelpText = `%{app_name}-concept(1) user manual | version {version} 
 
 {app_name} concept list
 
+{app_name} concept show NAME [--limit N]
+
+{app_name} concept recall [TEXT... | -] [--concept NAME,...] [--project NAME] [--limit N]
+
 {app_name} concept rename OLD NEW
 
 {app_name} concept delete NAME [--force] [--dry-run]
@@ -605,6 +609,37 @@ for --identifier-type and --identifier-value.
 A concept may also represent a scholarly entity — a paper, person,
 institution, or funder — by setting --identifier-type (e.g. doi, orcid,
 ror, fundref) and --identifier-value (the normalized identifier).
+
+show
+: read-only: one concept's description, identifier if set, and what links to
+  it. Per kind (projects, observations, records, document sections) it prints
+  the full count and up to --limit items, newest first (default 10; --limit 0
+  prints counts only). NAME must match exactly, including case, as delete
+  does; a miss is exit 1, and when a name differing only in case exists it is
+  offered ("did you mean"). A NAME that looks like a flag is passed after --.
+  ` + "`--json`" + ` gives one object: name, description, identifier_type,
+  identifier_value, counts, and a list per kind. This is how to judge whether
+  a {app_name} concept suggest candidate is already covered, without raw SQL.
+  See DR-0051 (knowledge/decisions/).
+
+recall
+: read-only: find the concepts named in some text, then list the
+  observations, records and document sections linked to them. Text comes from
+  the arguments, or from stdin when the argument is -. --concept NAME,... names
+  concepts directly (case-insensitive; an unknown name is skipped); given with
+  text, the two are unioned. --project NAME restricts hits to one project
+  (workspace-tier records are then excluded; an unknown project is exit 1).
+  --limit N caps the hits (default 10). Output starts with a
+  ` + "`matched concepts:`" + ` line, then one line per hit: kind, id, project, the
+  matched concepts it links to, and an excerpt. Ranking is the number of matched
+  concepts descending, then recency. Projects linked to a matched concept are
+  listed on a ` + "`projects:`" + ` line, apart from the hits. Text that matches no
+  concept says so and exits 1; no text and no --concept is exit 2. A document
+  section's excerpt is its summary only once reviewed. ` + "`--json`" + ` gives
+  matched, hits (kind, id, project, concepts, excerpt) and projects. Nothing is
+  written and no concept is created. The library's RecallByConceptNames, which
+  Harvey has used, covers observations and records only and is unchanged.
+  See DR-0051 (knowledge/decisions/).
 
 rename
 : rename a concept and reindex it for search. Refuses only if NEW already
@@ -677,6 +712,14 @@ the other side still has as new and add it back. Under the authoritative
 agents/knowledge.jsonl flow (each machine rebuilds its database from the
 committed export) a deletion travels with the next export, provided every
 machine rebuilds before it exports.
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1). For concept show and
+concept recall: 0 success; 1 no such concept (show), or no concept matched or no
+such project (recall); 2 a missing, surplus or malformed argument, an unknown
+flag, a negative or non-numeric --limit, or no text and no --concept; 66 no
+workspace here; 74 stdin could not be read.
 
 # SEE ALSO
 
@@ -1129,6 +1172,8 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record concepts RECORD_ID [--project P] [--workspace]
 
+{app_name} record fuzzy-tag --project P [--concept NAME,...] [--write] [--dry-run] [--root DIR]
+
 {app_name} record delete RECORD_ID [--project P] [--workspace] [--root DIR] [--dry-run]
 
 # DESCRIPTION
@@ -1199,6 +1244,27 @@ concepts
 : list the concepts ingest linked to a record, from [[Name]] wikilinks in its
   body and its frontmatter tags list
 
+fuzzy-tag
+: report near-miss spellings of known concepts in a project's records (a
+  detoast for the concept toast), which exact matching never links. Per
+  record it lists the concept, the variants found, how many times, the plain
+  exact mentions that link nothing (reported as "exact mention, not linked")
+  and the tags: line that would link the concept. Only the body is searched,
+  never the frontmatter. A concept is skipped for a record only when the record
+  already links it, in tags: or as a [[wikilink]]. Without --concept the same
+  conservative length and distance rules as {app_name}-document(1)'s fuzzy-tag
+  apply; --concept NAME,... names concepts whose variants are reported up to the
+  matcher's ceiling (a 5-letter concept such as toast is under the default length
+  floor, so name it). By default nothing is written. --write adds the concept to
+  the tags: of records whose status is proposed and reports how many accepted
+  records it skipped; an accepted record is history and is never modified, nor is
+  any other status. Only the tags: line changes (a one-line flow list, a block
+  list, or a new line if absent); a form it will not edit is refused and nothing
+  is written, since writes are both-or-neither. --dry-run with --write says what
+  would happen and writes nothing. The database is not touched: run
+  {app_name} ingest on the records directory to link the new tags. An unknown
+  project or concept is exit 1. See DR-0052 (knowledge/decisions/).
+
 delete
 : drop the database row of a record whose file is already gone: its relations, its
   concept links and its search entry go with it. A record's file is the truth and
@@ -1208,8 +1274,8 @@ delete
   decision record from disk: delete the file yourself first, or retire the record
   with set-status cancelled. --dry-run reports and changes nothing.
 
-new, set-status, supersede and fmt are the only commands that write a record
-file; ingest never does. A record is written proposed and stays proposed: a
+new, set-status, supersede, fmt and fuzzy-tag --write are the only commands that
+write a record file; ingest never does. A record is written proposed and stays proposed: a
 model may write a record, but only the author accepts one.
 
 # VOCABULARIES

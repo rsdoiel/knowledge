@@ -83,7 +83,7 @@ observation
 : manage observations — see kb-observation(1)
 
 concept
-: manage concepts — see kb-concept(1)
+: manage concepts, show one with what links to it, recall by text — see kb-concept(1)
 
 link, unlink
 : link projects/observations to concepts, and remove those links — see

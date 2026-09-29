@@ -535,17 +535,29 @@ type FuzzyConceptMatch struct {
  *   // matches[0] == {Concept: "chunking", Text: "chunkings", Distance: 1, ...}
  */
 func (kb *KnowledgeBase) FuzzyMatchConceptNames(text string) ([]FuzzyConceptMatch, error) {
+	return kb.fuzzyMatchConceptNames(text, true)
+}
+
+// fuzzyMatchConceptNames is FuzzyMatchConceptNames with the exact-mention
+// skip optional. With skipExact false a concept whose exact name appears in
+// text is still searched for near-misses, and its exact words come back as
+// Distance-0 matches for the caller to drop or count. Decision records use it
+// (DR-0052 item 7): a plain mention in prose links nothing, so it must not
+// hide a variant of the same concept.
+func (kb *KnowledgeBase) fuzzyMatchConceptNames(text string, skipExact bool) ([]FuzzyConceptMatch, error) {
 	concepts, err := kb.Concepts()
 	if err != nil {
 		return nil, err
 	}
-	exact, err := kb.MatchConceptNames(text)
-	if err != nil {
-		return nil, err
-	}
 	exactSet := map[string]bool{}
-	for _, name := range exact {
-		exactSet[strings.ToLower(name)] = true
+	if skipExact {
+		exact, err := kb.MatchConceptNames(text)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range exact {
+			exactSet[strings.ToLower(name)] = true
+		}
 	}
 
 	var tokens []fuzzyToken

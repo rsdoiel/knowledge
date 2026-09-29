@@ -53,6 +53,8 @@ type recordFlags struct {
 	title      string
 	partial    bool
 	dryRun     bool
+	concept    string
+	write      bool
 	args       []string
 }
 
@@ -79,13 +81,16 @@ type recordFlags struct {
  */
 func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("record requires a subverb: list, show, new, set-status, supersede, fmt, concepts or delete")
+		return usageErrorf("record requires a subverb: list, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete")
 	}
 	flags, err := parseRecordFlags(args[1:])
 	if err != nil {
 		return err
 	}
 	dl.Log("record", map[string]any{"subverb": args[0], "args": flags.args})
+	if args[0] != "fuzzy-tag" && (flags.concept != "" || flags.write) {
+		return usageErrorf("--concept and --write belong to record fuzzy-tag only")
+	}
 
 	switch args[0] {
 	case "list":
@@ -104,8 +109,10 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return recordConcepts(kb, jsonOut, flags, out)
 	case "delete":
 		return recordDelete(kb, jsonOut, flags, out)
+	case "fuzzy-tag":
+		return recordFuzzyTag(kb, jsonOut, flags, out)
 	default:
-		return usageErrorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt, concepts or delete", args[0])
+		return usageErrorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete", args[0])
 	}
 }
 
@@ -117,9 +124,11 @@ func parseRecordFlags(args []string) (recordFlags, error) {
 		"--project": &f.project, "--status": &f.status, "--kind": &f.kind,
 		"--trigger": &f.trigger, "--initiative": &f.initiative,
 		"--since": &f.since, "--root": &f.root, "--dir": &f.dir, "--title": &f.title,
+		"--concept": &f.concept,
 	}
 	boolFlags := map[string]*bool{
 		"--workspace": &f.workspace, "--partial": &f.partial, "--dry-run": &f.dryRun,
+		"--write": &f.write,
 	}
 	positional, err := splitFlags(args, strFlags, boolFlags)
 	if err != nil {

@@ -16,7 +16,7 @@ func init() {
 
 func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("usage: concept <add|list|rename|delete|suggest> ...")
+		return usageErrorf("usage: concept <add|list|show|recall|rename|delete|suggest> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -24,6 +24,10 @@ func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 		return cmdConceptAdd(kb, dl, jsonOut, rest, out)
 	case "list":
 		return cmdConceptList(kb, dl, jsonOut, rest, out)
+	case "show":
+		return cmdConceptShow(kb, dl, jsonOut, rest, out)
+	case "recall":
+		return cmdConceptRecall(kb, dl, jsonOut, rest, out)
 	case "rename":
 		return cmdConceptRename(kb, dl, jsonOut, rest, out)
 	case "delete":

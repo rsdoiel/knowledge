@@ -22,6 +22,8 @@ kb record fmt PATH [--dry-run]
 
 kb record concepts RECORD_ID [--project P] [--workspace]
 
+kb record fuzzy-tag --project P [--concept NAME,...] [--write] [--dry-run] [--root DIR]
+
 kb record delete RECORD_ID [--project P] [--workspace] [--root DIR] [--dry-run]
 
 # DESCRIPTION
@@ -92,6 +94,27 @@ concepts
 : list the concepts ingest linked to a record, from [[Name]] wikilinks in its
   body and its frontmatter tags list
 
+fuzzy-tag
+: report near-miss spellings of known concepts in a project's records (a
+  detoast for the concept toast), which exact matching never links. Per
+  record it lists the concept, the variants found, how many times, the plain
+  exact mentions that link nothing (reported as "exact mention, not linked")
+  and the tags: line that would link the concept. Only the body is searched,
+  never the frontmatter. A concept is skipped for a record only when the record
+  already links it, in tags: or as a [[wikilink]]. Without --concept the same
+  conservative length and distance rules as kb-document(1)'s fuzzy-tag
+  apply; --concept NAME,... names concepts whose variants are reported up to the
+  matcher's ceiling (a 5-letter concept such as toast is under the default length
+  floor, so name it). By default nothing is written. --write adds the concept to
+  the tags: of records whose status is proposed and reports how many accepted
+  records it skipped; an accepted record is history and is never modified, nor is
+  any other status. Only the tags: line changes (a one-line flow list, a block
+  list, or a new line if absent); a form it will not edit is refused and nothing
+  is written, since writes are both-or-neither. --dry-run with --write says what
+  would happen and writes nothing. The database is not touched: run
+  kb ingest on the records directory to link the new tags. An unknown
+  project or concept is exit 1. See DR-0052 (knowledge/decisions/).
+
 delete
 : drop the database row of a record whose file is already gone: its relations, its
   concept links and its search entry go with it. A record's file is the truth and
@@ -101,8 +124,8 @@ delete
   decision record from disk: delete the file yourself first, or retire the record
   with set-status cancelled. --dry-run reports and changes nothing.
 
-new, set-status, supersede and fmt are the only commands that write a record
-file; ingest never does. A record is written proposed and stays proposed: a
+new, set-status, supersede, fmt and fuzzy-tag --write are the only commands that
+write a record file; ingest never does. A record is written proposed and stays proposed: a
 model may write a record, but only the author accepts one.
 
 # VOCABULARIES
