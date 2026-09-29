@@ -1144,6 +1144,13 @@ lines were read, newly imported, or skipped. Exit status: 65 for malformed JSON
 or a row the schema rejects, 66 when -in does not exist, 77 when it cannot be
 read, 74 for a read that fails part way.
 
+An observation whose kind is outside the current vocabulary (note, finding,
+decision, question, hypothesis) is imported with its kind unchanged and
+reported as a "warning:" line (a "Warnings" list under --json). It is never
+rewritten to note, and the run still exits 0: a value written before the
+vocabulary was enforced should stay a fixable row, not fail the import or
+change silently. check-db therefore agrees with the dump for such a row.
+
 # SEE ALSO
 
 {app_name}(1), {app_name}-export(1), {app_name}-merge(1)

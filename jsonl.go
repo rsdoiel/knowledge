@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // Record type discriminators used by the "type" field of every JSON-L line.
@@ -756,6 +757,7 @@ type ImportTableSummary struct {
 	Read     int
 	Imported int
 	Skipped  int
+	Warnings []string `json:",omitempty"`
 }
 
 /** ImportJSONL reads a stream written by ExportJSONL (or hand-built in the
@@ -1043,9 +1045,12 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 			s.Skipped++
 			continue
 		}
-		isNew, err := importObservation(kb, rec, localProjectID)
+		isNew, warning, err := importObservation(kb, rec, localProjectID)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import observation %q: %w", rec.UUID, err)
+		}
+		if warning != "" {
+			s.Warnings = append(s.Warnings, warning)
 		}
 		if isNew {
 			s.Imported++
@@ -1384,18 +1389,23 @@ func importSource(kb *KnowledgeBase, rec sourceRecord) (localID int64, isNew boo
 // importObservation resolves rec by its own uuid -- unlike
 // projects/concepts/sources, observations have no natural content key, so
 // uuid (already UNIQUE-indexed by Open's backfillUUIDs) is authoritative.
-func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID int64) (isNew bool, err error) {
+//
+// A kind outside ValidObservationKinds is stored verbatim and reported through
+// warning, never rewritten: a legacy value must survive a rebuild from the
+// dump, and rewriting it made CompareToJSONL report a false divergence.
+func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID int64) (isNew bool, warning string, err error) {
 	var existingID int64
 	err = kb.db.QueryRow(`SELECT id FROM observations WHERE uuid = ?`, rec.UUID).Scan(&existingID)
 	if err == nil {
-		return false, nil
+		return false, "", nil
 	}
 	if err != sql.ErrNoRows {
-		return false, err
+		return false, "", err
 	}
 	kind := rec.Kind
 	if !IsValidKind(kind) {
-		kind = "note"
+		warning = fmt.Sprintf("observation %s: kind %q is not one of %s; kept as is",
+			rec.UUID, kind, strings.Join(ValidObservationKinds, ", "))
 	}
 	res, err := kb.db.Exec(
 		`INSERT INTO observations (project_id, kind, body, source_doi, created_at, uuid, origin_host)
@@ -1403,11 +1413,11 @@ func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID 
 		localProjectID, kind, rec.Body, rec.SourceDOI, rec.CreatedAt, rec.UUID, rec.OriginHost,
 	)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	if kb.ftsAvailable {
 		_, _ = kb.db.Exec(
@@ -1415,7 +1425,7 @@ func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID 
 			 VALUES (?, ?, '', '', 'observation', ?, ?)`,
 			rec.Body, kind, id, localProjectID)
 	}
-	return true, nil
+	return true, warning, nil
 }
 
 // importRecord resolves rec's identity the same way AddRecord does --

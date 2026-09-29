@@ -3,68 +3,15 @@
 
 ## Bugs
 
-- [ ] **`kb import` silently rewrites an observation `kind` outside the
-  vocabulary to `note`, and that makes `kb check-db` report a false
-  "diverged".** Found 2026-09-29 while surveying both workspaces before a
-  session wrap-up.
+- [x] **`kb import` silently rewrote an observation `kind` outside the vocabulary to `note`, which
+  made `kb check-db` report a false "diverged".** Fixed 2026-09-29 (DR-0054, proposed): import keeps
+  the kind and reports a warning, exit 0. Tests: `importkind_test.go` (library and `cmd/kb`).
 
-  **The coercion.** `importObservation` accepts a `kind` it does not
-  recognise and stores `note` instead — no warning, no error, no non-zero
-  exit. Any observation carrying a legacy kind therefore loses it the moment
-  a database is rebuilt from a dump, which is the ordinary way a workspace is
-  restored on a second machine (`kb import -in agents/knowledge.jsonl`, per
-  `setup-knowledge-base`). The export side is faithful; only import is lossy.
-
-  **Why it surfaces as a false `check-db` verdict.** `check-db` reads the
-  dump into a scratch database and diffs that against the live one, so the
-  coercion happens *inside its own comparison*. It then reports rows as
-  differing when the database and the dump agree on disk. Confirmed against
-  a workspace holding five such rows — `kind = release`, a value predating
-  the enforced `note|finding|decision|question|hypothesis` vocabulary, on
-  `clasm` and `CMTools` observations created 2026-06-18 to 2026-07-24 with
-  `origin_host = unknown`:
-
-  | Source | `kind` | `uuid` |
-  |---|---|---|
-  | live database | `release` | `019fa54f-6577-7e4c-9b76-0878457786e3` |
-  | `knowledge.jsonl` | `release` | same |
-  | that dump imported into a scratch db | **`note`** | same |
-
-  **Worse than a wrong report: following it causes the loss.** The verdict
-  prints `recommendation: diverged. Run kb import, then kb export.` Running
-  it would coerce the live rows to `note` and then write that into the
-  authoritative dump — manufacturing the corruption the tool falsely
-  reported. Nothing has been run; the affected rows are intact on both
-  sides.
-
-  **`~/Laboratory` is unaffected** — no out-of-vocabulary kinds, `check-db`
-  reports in sync, verified 2026-09-29.
-
-  **The fix is a decision, not just a patch,** which is why this is filed
-  rather than fixed in passing. At least three options, uncosted:
-
-  - *Reject on import.* Consistent with `kb observation add`, which enforces
-    the vocabulary. But it makes a dump holding legacy rows unimportable,
-    which is a portability regression for exactly the old data most likely
-    to carry one.
-  - *Preserve the value and warn.* Import stores the unknown kind verbatim
-    and reports it, mirroring how a decision record's three vocabularies are
-    already "reported against, not enforced" — a typo in a file several
-    harnesses write should be a fixable row, not a failed run. This is the
-    most consistent with existing precedent.
-  - *Add `release` to the vocabulary.* Narrowest, and wrong on its own: it
-    fixes these five rows and leaves the silent coercion in place for the
-    next unknown value.
-
-  Whichever way it goes, `check-db` needs a regression test that a legacy
-  kind does not produce a divergence, since the bug is not in `check-db`'s
-  own logic but in what it inherits from import. A workspace-level question
-  worth settling alongside it: whether these five rows should be migrated to
-  a valid kind, or the vocabulary should grow to admit them.
-
-  Documented as a trap in `~/Laboratory/agents/skills/wrap-up-session/SKILL.md`
-  ("Reading check 4 correctly"), so a wrap-up does not act on the false
-  verdict in the meantime.
+  Still open, and not a code question: the five `kind = release` rows on `clasm` and `CMTools` in the
+  second workspace (created 2026-06-18 to 2026-07-24, `origin_host = unknown`) may be migrated to a
+  valid kind, or left as they are. `~/Laboratory/agents/knowledge.*` holds none. The trap note in
+  `agents/skills/wrap-up-session/SKILL.md` ("Reading check 4 correctly") can be dropped once v0.0.15
+  is what both machines run.
 
 ## Requested features
 

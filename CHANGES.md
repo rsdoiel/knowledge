@@ -60,6 +60,10 @@ subverb" to "not found"), and nothing exits 70.
 
 ### Fixed
 
+- **`kb import` no longer rewrites an observation kind outside the vocabulary to `note`** (DR-0054).
+  The kind is kept and reported as a `warning:` line (a `Warnings` list under `--json`); the run
+  exits 0. This also removes a false `kb check-db` "diverged" whose recommended fix would have
+  corrupted the dump.
 - A record file that does not parse is now exit 65 (wrong content) from `kb record set-status`,
   `kb record supersede`, `kb project rename` and `kb record fuzzy-tag`, where the first three exited 2.
   The file's content is what is wrong, not the command line.

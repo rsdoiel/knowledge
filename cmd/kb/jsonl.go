@@ -114,5 +114,10 @@ func cmdImport(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	for _, s := range summary {
 		fmt.Fprintf(out, "%-20s %6d %8d %7d\n", s.Table, s.Read, s.Imported, s.Skipped)
 	}
+	for _, s := range summary {
+		for _, w := range s.Warnings {
+			fmt.Fprintln(out, "warning:", w)
+		}
+	}
 	return nil
 }
