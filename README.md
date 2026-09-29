@@ -7,7 +7,7 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 ## Release Notes
 
 - version: 0.0.15
-- status: concept
+- status: active
 - released: 2026-09-29
 
 Three new ways to see what the knowledge base holds, and one to check that it agrees with its JSONL dump. The decisions are DR-0051 to DR-0053. Everything was written and tested red first, and checked by running the v0.0.14 build beside the new one, on a copy of the real workspace, over 415 commands in plain and `--json` mode: the only changed exit codes are the two new verbs' own, and nothing exits 70.
