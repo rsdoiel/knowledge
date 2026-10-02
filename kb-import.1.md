@@ -1,4 +1,4 @@
-%kb-import(1) user manual | version 0.0.15 2f4fb08
+%kb-import(1) user manual | version 0.0.15 4e3bea5
 % R. S. Doiel
 % 2026-09-29
 
