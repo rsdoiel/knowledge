@@ -15,6 +15,17 @@
 
 ## Requested features
 
+- [ ] **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
+  following `antennaApp/completion.go` (shipped 2026-10-05; `InstallCompletion` is the install half).
+  Specifics for kb: the verb table must not be hand-maintained a second time. `cmd/kb/help_dispatch_test.go`
+  already ties `KB_TOPICS` to the verbs, so derive completion from that source, or add a test that
+  fails when a verb is missing. Complete flags per verb, and consider completing project names from the
+  database. A bad shell name is exit 2 and a failed install write is 73/74 under the workspace
+  exit-code convention (`cmd/kb/usage.go`). Document in `kb(1)` and add `completion` to `KB_TOPICS`.
+  Tests first. Same behaviour as antenna: bash goes to the bash-completion user directory and never
+  overwrites a file kb did not write; PowerShell writes beside the profile and adds one dot-source line, once.
+
+
 - [x] **DONE 2026-09-29 (DR-0053, v0.0.15).** *Original request:* `kb check-db` this would check the knowledge's SQLite3 database against the JSONL dump file agenct to it if it exists (example knowledge.db and knowledge.jsonl). It would determine if the knowlege.jsonl file was newer and should be loaded if a merge is neccessary and give a recommendation. This would help keep knolwedge bases better syncronized across machines where I use git version control for the agents directory tree in a workspace.
 - [x] `[[double-bracket]]` inline concept tagging when ingesting Markdown
   record bodies, beyond formal frontmatter. Filed as
