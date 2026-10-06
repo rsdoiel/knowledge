@@ -19,80 +19,44 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.15">knowledge 0.0.15</h2>
-<p>Three new ways to see what the knowledge base holds, and one to check
-that it agrees with its JSONL dump. The decisions are DR-0051 to
-DR-0055. Everything was written and tested red first. The new verbs were
-checked by running the v0.0.14 build beside the new one, on a copy of
-the real workspace, over 415 commands in plain and <code>--json</code>
-mode: the only changed exit codes were the two new verbs’ own, and
-nothing exited 70. That comparison was made before the two fixes
-described last, which change behaviour on purpose.</p>
-<p><code>kb concept show NAME</code> prints one concept’s description
-and identifier, what links to it (projects, observations, records,
-document sections) with the full counts, and up to <code>--limit</code>
-items of each kind, newest first (default 10; <code>--limit 0</code>
-gives counts only). The name matches exactly, as
-<code>concept delete</code> does, and a miss offers a case variant. It
-replaces the raw <code>sqlite3</code> joins that judging a
-<code>concept suggest</code> candidate used to need.</p>
-<p><code>kb concept recall</code> finds the concepts named in some text
-(arguments, or stdin with <code>-</code>) and lists the observations,
-records and document sections linked to them, ranked by how many of
-those concepts each matches and then by recency, with the concepts each
-hit matched. <code>--concept NAME,...</code> names concepts directly,
-<code>--project</code> restricts the hits, <code>--limit</code> caps
-them. Text that matches no concept exits 1. Harvey’s memory recall uses
-the same library call.</p>
-<p><code>kb record fuzzy-tag --project NAME</code> reports near-miss
-spellings of known concepts in decision records (a <code>detoast</code>
-for the concept <code>toast</code>), which exact matching never links,
-and the <code>tags:</code> line that would link them. It writes nothing
-by default. <code>--write</code> adds the concept to the
-<code>tags:</code> of <code>proposed</code> records only, changes
-nothing else in the file, and never touches an accepted record;
-<code>kb ingest</code> then links the tags.
-<code>--concept NAME,...</code> widens the named concepts to forms that
-contain the name.</p>
-<p><code>kb check-db [--jsonl FILE]</code> compares the database with
-the JSONL dump beside it by full content, never by file time, and
-recommends <code>kb import</code>, <code>kb export</code>, or both. It
-is read-only and exits 0 in sync and 1 otherwise. There are no
-tombstones, so rows only in the dump may be rows deleted here on
-purpose, and the report says so.</p>
-<p>The detection half of <code>kb merge</code> is now a read-only
-library pipeline shared with <code>check-db</code>; <code>merge</code>’s
-output is unchanged.</p>
-<p>Two fixes. <code>kb import</code> no longer rewrites an observation
-kind outside <code>note</code>, <code>finding</code>,
-<code>decision</code>, <code>question</code> and <code>hypothesis</code>
-to <code>note</code> (DR-0054): it keeps the kind and prints a
-<code>warning:</code> line, or a <code>Warnings</code> list under
-<code>--json</code>, and still exits 0. The rewrite made
-<code>kb check-db</code> report a false divergence, and following its
-advice to import and export would have written the changed kind into the
-authoritative dump. <code>kb project add</code> (DR-0055) no longer
-prints “added” for a name that already exists: it exits 1 with
-<code>already exists</code>, as <code>project rename</code> does, and
-writes nothing (it used to move <code>updated_at</code>, which merge
-uses to pick a winner, and drop the status and description you gave it).
-A <code>--status</code> typed after NAME is a usage error that says the
-flag goes before NAME, where it used to become part of the description;
-<code>--</code> before NAME keeps a flag-looking word as text.</p>
-<p>Upgrading: two things that worked change. <code>kb project add</code>
-on an existing name now exits 1, where it exited 0, so a script that
-repeated the call must expect that; the library’s
-<code>AddProject</code> still returns the existing id. And a record file
-that does not parse now exits 65 (wrong content) from
-<code>record set-status</code>, <code>record supersede</code> and
-<code>project rename</code> (the verbs that read a record file to edit
-it) where it exited 2, since the file’s content is what is wrong, not
-the command line. Library additions: <code>ConceptDetail</code>,
-<code>RecallByText</code>, <code>RecallByNames</code>,
-<code>RecordFuzzyReport</code>, <code>AddRecordTags</code>,
-<code>CompareToJSONL</code>, <code>DiffDatabases</code>,
-<code>PrepareMergeScratch</code> and <code>DetectIdentityIssues</code>;
-<code>ImportTableSummary</code> gains a <code>Warnings</code> field.</p>
+<h2 id="knowledge-0.0.16">knowledge 0.0.16</h2>
+<p>One new verb, <code>kb completion</code>, so that tab completion
+works in bash and PowerShell. The decision is DR-0056. It was written
+and tested red first, and checked by sourcing the script in real bash
+and PowerShell against the real workspace.</p>
+<p><code>kb completion bash</code> and
+<code>kb completion powershell</code> write a completion script to
+standard output (<code>pwsh</code> is accepted for
+<code>powershell</code>). It completes the verbs, the subverbs of
+<code>project</code>, <code>observation</code>, <code>concept</code>,
+<code>source</code>, <code>link</code>, <code>record</code> and
+<code>document</code> (and <code>document review</code>), each verb’s
+flags once a dash is typed, help topics after <code>help</code>, paths
+after <code>-db</code>, <code>-in</code>, <code>-out</code>,
+<code>-a</code>, <code>-b</code>, <code>-jsonl</code>,
+<code>-root</code> and <code>-dir</code>, and project names after
+<code>--project</code> and after <code>project show</code>,
+<code>concepts</code>, <code>set-status</code>,
+<code>set-description</code>, <code>rename</code> and
+<code>delete</code>. Project names come from
+<code>kb project list</code> in the current directory and honour a
+<code>-db</code> typed earlier on the line.</p>
+<p><code>kb completion SHELL -install</code> installs it instead. With
+bash the script goes to
+<code>$XDG_DATA_HOME/bash-completion/completions/kb</code>, or the same
+path under <code>~/.local/share</code>, and a file that <code>kb</code>
+did not write is never overwritten (exit 73). With PowerShell it writes
+<code>kb-completion.ps1</code> beside the profile and adds one line that
+dot-sources it, once. Windows PowerShell 5.1 is not covered.</p>
+<p>The verb list is read from the verbs <code>kb</code> registers, so a
+new verb is completed without anyone naming it. The subverbs and flags
+are tables, and the tests fail when a table disagrees with the code, so
+a new flag or subverb must be added to them. The verb opens no database
+and refuses <code>-db</code>. A bad or missing shell name, a surplus
+argument and an unknown flag exit 2.</p>
+<p>Upgrading: nothing that worked changes. <code>kb completion</code>
+did not exist before, so a script that called it got exit 2 (unknown
+verb).</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

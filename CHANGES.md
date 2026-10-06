@@ -3,6 +3,33 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.16 — 2026-10-06
+
+Written and tested red first. The decision is knowledge DR-0056. It was checked by sourcing the generated
+script in real bash and PowerShell (`TabExpansion2`) against the real workspace; that run found a
+placeholder left unsubstituted in the project-name path, which the unit tests had missed, and it is fixed
+and now tested.
+
+### Added
+
+- **`kb completion bash|powershell [-install]`** (DR-0056): writes a shell completion script to standard
+  output, or with `-install` installs it. It completes verbs, subverbs, each verb's flags, help topics,
+  paths after `-db`, `-in`, `-out`, `-a`, `-b`, `-jsonl`, `-root` and `-dir`, and project names (from
+  `kb project list`, honouring an earlier `-db`) after `--project` and after the `project` subverbs that
+  take a name. Bash installs to `$XDG_DATA_HOME/bash-completion/completions/kb` or the same under
+  `~/.local/share` and never overwrites a file `kb` did not write (exit 73). PowerShell writes
+  `kb-completion.ps1` beside the profile and adds one dot-source line, once. Windows PowerShell 5.1 is not
+  covered. The verb opens no database and refuses `-db`.
+- The verbs are read from the registered `verbs`; subverbs and flags are tables that tests compare with the
+  code (each verb's own usage text, and a scan of the sources for declared flags), so a new flag or subverb
+  fails `go test` until the tables are updated. The flag check is union-wide, not per verb.
+- `kb-completion(1)`, and `completion` in `kb(1)`, `kb help topics` and the Makefile's `KB_TOPICS`.
+
+### Upgrade notes
+
+- Nothing that worked changes. `kb completion` did not exist before, so a script that called it got exit 2
+  (unknown verb) and now gets a script.
+
 ## v0.0.15 — 2026-09-29
 
 Everything below is written and tested red first. The decisions are knowledge DR-0051 (concept

@@ -1,6 +1,6 @@
-%kb(1) user manual | version 0.0.15 4e3bea5
+%kb(1) user manual | version 0.0.16 f1fbea2
 % R. S. Doiel
-% 2026-09-29
+% 2026-10-06
 
 # NAME
 
@@ -128,13 +128,18 @@ index
 init
 : create a new, empty workspace — see kb-init(1)
 
+completion
+: write a shell completion script for bash or PowerShell, or install it — see
+  kb-completion(1)
+
 # ARGUMENTS
 
 The global options -json, -db and -debug go before the verb: kb
 -json project list. After the verb they are refused, not ignored. So is any
 other flag a verb does not have, and any surplus argument.
-init, index and merge never open the ambient database, so -db is refused for
-them as well; init takes its target as kb init PATH, merge as -a, -b and -out.
+init, index, merge and completion never open the ambient database, so -db is
+refused for them as well; init takes its target as kb init PATH, merge as -a, -b
+and -out.
 
 A name that begins with a dash is given after --, as in
 kb project show -- -name, so that it is not read as a flag. Every verb
@@ -219,5 +224,6 @@ kb-project(1), kb-observation(1), kb-concept(1),
 kb-link(1), kb-source(1), kb-search(1),
 kb-merge(1), kb-export(1), kb-import(1),
 kb-ingest(1), kb-record(1), kb-document(1),
-kb-index(1), kb-init(1), kb-topics(1)
+kb-index(1), kb-init(1), kb-completion(1),
+kb-topics(1)
 

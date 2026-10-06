@@ -132,13 +132,18 @@ index
 init
 : create a new, empty workspace — see {app_name}-init(1)
 
+completion
+: write a shell completion script for bash or PowerShell, or install it — see
+  {app_name}-completion(1)
+
 # ARGUMENTS
 
 The global options -json, -db and -debug go before the verb: {app_name}
 -json project list. After the verb they are refused, not ignored. So is any
 other flag a verb does not have, and any surplus argument.
-init, index and merge never open the ambient database, so -db is refused for
-them as well; init takes its target as kb init PATH, merge as -a, -b and -out.
+init, index, merge and completion never open the ambient database, so -db is
+refused for them as well; init takes its target as kb init PATH, merge as -a, -b
+and -out.
 
 A name that begins with a dash is given after --, as in
 {app_name} project show -- -name, so that it is not read as a flag. Every verb
@@ -223,7 +228,8 @@ the error on stderr carries the class name beside the number, for example
 {app_name}-link(1), {app_name}-source(1), {app_name}-search(1),
 {app_name}-merge(1), {app_name}-export(1), {app_name}-import(1),
 {app_name}-ingest(1), {app_name}-record(1), {app_name}-document(1),
-{app_name}-index(1), {app_name}-init(1), {app_name}-topics(1)
+{app_name}-index(1), {app_name}-init(1), {app_name}-completion(1),
+{app_name}-topics(1)
 
 `
 
@@ -1624,6 +1630,86 @@ and an explicit -db is refused (exit 2) rather than ignored.
 
 `
 
+// CompletionHelpText is the kb-completion(1) man page.
+const CompletionHelpText = `%{app_name}-completion(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-completion — write or install a shell completion script
+
+# SYNOPSIS
+
+{app_name} completion bash|powershell [-install]
+
+# DESCRIPTION
+
+Writes a completion script for the named shell to standard output. The shell
+name is case-insensitive and pwsh is accepted for powershell. The script
+completes:
+
+- the verbs and, after help, the help topics;
+- the subverbs of project, observation, concept, source, link, record and
+  document (and document review);
+- each verb's flags, once a word beginning with a dash is started;
+- paths after -db, -in, -out, -a, -b, -jsonl, -root and -dir;
+- project names after --project, and after project show, concepts,
+  set-status, set-description, rename and delete. They are read by running
+  "{app_name} project list" in the current directory, honouring a -db typed
+  earlier on the line, so they work only where a workspace is found.
+
+The verb list is read from the verbs {app_name} itself registers, so a new
+verb is completed without anyone adding it. The subverbs and flags are kept
+in a table, which the tests compare with the code.
+
+Neither form opens a database, so neither needs a workspace.
+
+# OPTIONS
+
+-install
+: instead of writing the script to standard output, install it so it loads in
+  every new shell, and print where it went. With bash the script goes to
+  $XDG_DATA_HOME/bash-completion/completions/{app_name}, or the same path under
+  ~/.local/share, which bash-completion loads on demand. A file already there
+  is replaced only if {app_name} wrote it; anything else is left alone and the
+  command exits 73. With PowerShell the script is written as
+  {app_name}-completion.ps1 beside the profile (~/.config/powershell, or
+  Documents\PowerShell on Windows), and one line that dot-sources it is added
+  to Microsoft.PowerShell_profile.ps1 once. Windows PowerShell 5.1, whose
+  profile is under Documents\WindowsPowerShell, is not covered.
+
+The global -db option does not apply and is refused (exit 2).
+
+# EXAMPLES
+
+Try it in the current bash session:
+
+~~~shell
+source <({app_name} completion bash)
+~~~
+
+Install it for every session:
+
+~~~shell
+{app_name} completion bash -install
+{app_name} completion powershell -install
+~~~
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1). 0 success; 2 no shell
+named, a shell that is not supported, a surplus argument or an unknown flag;
+66 no home directory found for -install; 73 -install found a file that
+{app_name} did not write, or could not create the directory; 74 a write failed
+part way.
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-topics(1)
+
+`
+
 // TopicsHelpText is the topic index: kb help topics.
 //
 // Named "topics" rather than the conventional "index" because index is a verb
@@ -1696,6 +1782,9 @@ index
 
 init
 : create a new, empty workspace
+
+completion
+: write or install a shell completion script for bash or PowerShell
 
 # NOTES
 

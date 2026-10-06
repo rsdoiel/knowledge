@@ -15,7 +15,7 @@
 
 ## Requested features
 
-- [ ] **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
+- [x] **DONE 2026-10-06 (uncommitted).** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
   following `antennaApp/completion.go` (shipped 2026-10-05; `InstallCompletion` is the install half).
   Specifics for kb: the verb table must not be hand-maintained a second time. `cmd/kb/help_dispatch_test.go`
   already ties `KB_TOPICS` to the verbs, so derive completion from that source, or add a test that
