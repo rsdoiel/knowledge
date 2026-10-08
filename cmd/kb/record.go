@@ -370,70 +370,52 @@ func dashIfEmpty(s string) string {
 	return s
 }
 
-// resolveRecord finds the record a bare id names. An id alone is not an
-// identity — two projects may each have a DR-0001, and two workspaces may each
-// have one too — so an ambiguous id is reported with its candidates rather
-// than silently resolved.
+// resolveRecord finds the record a reference names (knowledge DR-0057):
+// "SCOPE/DR-NNNN", where SCOPE is a project name, "workspace", or the
+// workspace directory's basename as an alias for it; or a bare id, which
+// resolves only where it is unambiguous. The lookup itself is the library's
+// (knowledge.ResolveRef), so harvey and kb answer the same way; what is kb's
+// own is --project and --workspace, which remain as aliases for the qualified
+// form and must agree with it when both are given.
 //
 // The workspace comes from the same root the record files are read from, not
 // from where the database happens to live. ingest stamps it that way, so
 // resolving any other way makes every record verb fail whenever the database
 // sits outside the workspace it indexes — which is what a scratch database is.
-func resolveRecord(kb *knowledge.KnowledgeBase, id string, f recordFlags) (*knowledge.Record, error) {
-	workspace := filepath.Base(recordRoot(kb, f))
-	switch {
-	case f.workspace:
-		r, err := kb.RecordByIdentity(workspace, 0, "workspace", id)
-		if err != nil {
-			return nil, notFoundf("no record DR-%s in the workspace tier", id)
-		}
-		return r, nil
-	case f.project != "":
-		p, err := kb.ProjectByName(f.project)
-		if err != nil || p == nil {
+func resolveRecord(kb *knowledge.KnowledgeBase, arg string, f recordFlags) (*knowledge.Record, error) {
+	ref, err := knowledge.ParseRef(arg)
+	if err != nil {
+		return nil, wrapUsage(err)
+	}
+	var flagProject *knowledge.Project
+	if f.project != "" {
+		flagProject, err = kb.ProjectByName(f.project)
+		if err != nil || flagProject == nil {
 			return nil, notFoundf("unknown project %q", f.project)
 		}
-		r, err := kb.RecordByIdentity(workspace, p.ID, "project", id)
-		if err != nil {
-			return nil, notFoundf("no record DR-%s in project %s", id, f.project)
-		}
-		return r, nil
 	}
-
-	matches, err := kb.RecordsByRecordID(id)
+	if ref.Scope == "" {
+		switch {
+		case f.workspace:
+			ref.Scope = "workspace"
+		case flagProject != nil:
+			ref.Scope = flagProject.Name
+		}
+	}
+	rec, err := kb.ResolveRef(ref, filepath.Base(recordRoot(kb, f)))
 	if err != nil {
+		if errors.Is(err, knowledge.ErrInvalid) {
+			return nil, wrapUsage(err)
+		}
 		return nil, err
 	}
-	switch len(matches) {
-	case 0:
-		return nil, notFoundf("no record DR-%s", id)
-	case 1:
-		return &matches[0], nil
+	switch {
+	case f.workspace && rec.Scope != "workspace":
+		return nil, usageErrorf("%s names a project record, but --workspace was also given", ref)
+	case flagProject != nil && (rec.Scope != "project" || rec.ProjectID != flagProject.ID):
+		return nil, usageErrorf("%s is not in project %s, but --project %s was also given", ref, flagProject.Name, flagProject.Name)
 	}
-	names := projectNames(kb)
-	var where []string
-	for _, m := range matches {
-		if m.Scope == "workspace" {
-			where = append(where, "--workspace")
-			continue
-		}
-		where = append(where, "--project "+names[m.ProjectID])
-	}
-	return nil, usageErrorf("DR-%s is ambiguous across %s; qualify it with one of: %s",
-		id, strings.Join(projectLabels(matches, names), ", "), strings.Join(where, ", "))
-}
-
-// projectLabels names the owners of a set of records, for an ambiguity error.
-func projectLabels(records []knowledge.Record, names map[int64]string) []string {
-	var out []string
-	for _, r := range records {
-		if r.Scope == "workspace" {
-			out = append(out, "the workspace tier")
-			continue
-		}
-		out = append(out, names[r.ProjectID])
-	}
-	return out
+	return rec, nil
 }
 
 // recordShow prints one record with its relations resolved in both

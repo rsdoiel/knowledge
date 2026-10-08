@@ -582,6 +582,12 @@ func CleanName(kind, name string) (string, error) {
 			return "", invalidf("knowledge: %s name must not contain the control character %U", kind, r)
 		}
 	}
+	// "workspace" is the canonical name of the workspace tier in a record
+	// reference (workspace/DR-0003); a project of that name could never be
+	// reached by one.
+	if kind == "project" && strings.EqualFold(name, "workspace") {
+		return "", invalidf("knowledge: %q is reserved: it names the workspace tier in a record reference", name)
+	}
 	return name, nil
 }
 
