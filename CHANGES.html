@@ -140,7 +140,7 @@ concepts on every hit, and the list of linked projects.</li>
 <ul>
 <li><strong><code>kb project add</code> refuses a name that already
 exists</strong> (DR-0055): exit 1,
-<code>project "NAME" already exists (id=N)</code>, and nothing is
+<code>project "NAME" already   exists (id=N)</code>, and nothing is
 written. It used to print “added”, exit 0, drop the requested status and
 description, and move <code>updated_at</code>. <strong>A script that
 re-ran <code>kb project add</code> and relied on exit 0 now gets
@@ -207,9 +207,9 @@ has concept links, source links or supersessions; <code>--force</code>
 removes them), <code>kb document delete ID</code> (refused while any
 section’s summary is reviewed, since that is human-gated data;
 <code>--force</code> deletes anyway) and
-<code>kb record delete RECORD_ID</code> (only once the record’s file is
-gone, because <code>ingest</code> is additive and the file is the truth;
-<code>kb</code> never deletes a decision record from disk).
+<code>kb record   delete RECORD_ID</code> (only once the record’s file
+is gone, because <code>ingest</code> is additive and the file is the
+truth; <code>kb</code> never deletes a decision record from disk).
 <code>kb unlink project|observation|source</code> is the inverse of
 <code>link</code> and <code>source link</code>. Each takes
 <code>--dry-run</code>, refuses with what and how many (exit 1), and
@@ -320,14 +320,14 @@ failed” now also has to handle 2 and the numbers above it.</p>
 <col style="width: 17%" />
 </colgroup>
 <thead>
-<tr>
+<tr class="header">
 <th scope="col">What happened</th>
 <th scope="col">v0.0.13</th>
 <th scope="col">now</th>
 </tr>
 </thead>
 <tbody>
-<tr>
+<tr class="odd">
 <td>A bad value on the command line: unknown observation kind or project
 status, a blank name, a bad <code>--published</code>, <code>--url</code>
 or <code>--doi</code>, a negative <code>--limit</code>; an unknown
@@ -336,54 +336,54 @@ record status, trigger or kind given to <code>record new</code> or
 <td>1, or 0 (<code>record new</code>, <code>source add</code>)</td>
 <td>2</td>
 </tr>
-<tr>
+<tr class="even">
 <td>A named input or the workspace is missing (<code>ingest</code>,
 <code>import -in</code>, <code>merge</code>, <code>index</code>, no
 <code>agents/knowledge.db</code>)</td>
 <td>1</td>
 <td>66</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Wrong content: a malformed record, JSONL or document; a file that is
 not a knowledge base; a zero-byte merge input; a merge collision; a
 constraint violation</td>
 <td>1</td>
 <td>65</td>
 </tr>
-<tr>
+<tr class="even">
 <td><code>ingest</code> with records that could not be ingested</td>
 <td>0</td>
 <td>65, 77 or the first failure’s class</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>An output cannot be created: <code>merge -out</code> exists,
 <code>export -out</code>, <code>init</code></td>
 <td>1</td>
 <td>73</td>
 </tr>
-<tr>
+<tr class="even">
 <td>An I/O error; a locked database; permission denied</td>
 <td>1</td>
 <td>74; 75; 77</td>
 </tr>
-<tr>
+<tr class="odd">
 <td><code>check-retractions</code> with lookups that failed</td>
 <td>0</td>
 <td>69</td>
 </tr>
-<tr>
+<tr class="even">
 <td><code>source retract</code> or <code>remove</code> on an id that
 does not exist</td>
 <td>0</td>
 <td>1</td>
 </tr>
-<tr>
+<tr class="odd">
 <td>Not found, <code>search</code> finds nothing, a stale index, a
 concept or source still linked</td>
 <td>1</td>
 <td>1 (unchanged)</td>
 </tr>
-<tr>
+<tr class="even">
 <td>An internal error</td>
 <td>1</td>
 <td>70</td>
@@ -475,7 +475,7 @@ by auditing the diff.</li>
 <li><strong>Unknown flags and surplus arguments are refused</strong>
 (they were dropped; DR-0041). Of 25 verbs probed, 15 accepted a bogus
 flag and 19 ignored an extra argument; all 25 now refuse both. The
-damage was real: <code>source add T more words</code> stored the title
+damage was real: <code>source add T more   words</code> stored the title
 <code>T</code> and lost the rest,
 <code>record new --title A decision</code> kept only <code>A</code>,
 <code>source link 1 1 --relationship</code> with no value linked anyway,
@@ -537,13 +537,13 @@ that owns records</strong> (DR-0042). The command rewrites every owned
 record’s <code>project:</code> frontmatter before the library sees the
 new name, so a blank name wrote <code>project: ""</code> into each file,
 renamed the row to an empty string, and the next ingest hit
-<code>UNIQUE constraint failed: records.uuid</code>, the deadlock
+<code>UNIQUE   constraint failed: records.uuid</code>, the deadlock
 DR-0026 exists to prevent. The name is now cleaned before any file is
 staged, so the files and the row cannot disagree about it, and
 <code>--dry-run</code> refuses too. Found while verifying the name fix
 on a real scratch corpus.</li>
 <li><strong><code>kb merge</code> succeeded on inputs that do not
-exist</strong> (DR-0044). <code>kb merge -a x -b y -out z</code> with
+exist</strong> (DR-0044). <code>kb merge -a x   -b y -out z</code> with
 neither present exited 0, created zero-byte <code>x</code> and
 <code>y</code>, and wrote a schema-only <code>z</code>, so a mistyped
 <code>-a</code> merged an empty database and reported success. Cause:
@@ -563,10 +563,10 @@ identical merged content (518 rows compared).</li>
 <li><strong><code>kb VERB SUBVERB -help</code> did something different
 for every verb</strong> (DR-0041). <code>project add -help</code>
 printed <code>kb: flag: help requested</code> and exited 1,
-<code>project show -help</code> looked up a project named
+<code>project   show -help</code> looked up a project named
 <code>-help</code>, <code>document frontmatter -help</code> tried to
 open a file called <code>-help</code>, and
-<code>record list -help</code> said <code>unknown flag</code>. It now
+<code>record list -help</code> said <code>unknown   flag</code>. It now
 prints the verb’s page and exits 0, before any database is opened, so it
 works outside a workspace and creates nothing. A help flag after other
 flags (<code>project add --status active -help</code>) is answered too.
@@ -648,7 +648,7 @@ against the new one, byte for byte.</p>
 <h3 id="added-4">Added</h3>
 <ul>
 <li><strong>The workflow logic is now library API</strong> (DR-0035).
-<code>cmd/kb</code> is <code>package main</code>, so everything
+<code>cmd/kb</code> is <code>package   main</code>, so everything
 implemented there was reachable from exactly one caller, the
 <code>kb</code> binary. It moved into the root package as exported
 functions that take text or bytes and return results, never touching
@@ -800,7 +800,7 @@ real corruption bug before release — two near-misses in the same section
 spliced a later footnote marker <em>inside</em> an earlier one’s own
 definition text, from a single running byte-offset delta that
 overcorrected.</li>
-<li><code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]</code>
+<li><code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords   NAME,...] [--set FIELD=VALUE] [--dry-run]</code>
 (DR-0033): propose-then- accept
 <code>title</code>/<code>author</code>/<code>dateCreated</code>/<code>dateModified</code>/<code>keywords</code>
 for one document, deriving signals from the document’s own prose and
@@ -810,7 +810,7 @@ git/filesystem provenance — this module’s first
 absent-only, never overwritten once present; <code>dateModified</code>
 is the one exception, always refreshed on an accepted run.
 <code>author</code> is a layered signal (a byline in the prose, then
-git’s earliest-commit author, then <code>git config user.name</code>),
+git’s earliest-commit author, then <code>git config   user.name</code>),
 shown together when they disagree rather than collapsed to one guess.
 <code>keywords</code> diffs the current list against known-concept
 mentions and new candidate terms distinctive to the document itself,
@@ -1102,7 +1102,7 @@ field, into concepts linked via a new <code>record_concepts</code> table
 separate from <code>AddConcept</code>/<code>kb concept add</code>, which
 stays exact-match, since a human typing a concept name at the CLI is a
 deliberate act, unlike capitalization in prose).
-<code>kb record concepts RECORD_ID</code> shows the result.</li>
+<code>kb record concepts   RECORD_ID</code> shows the result.</li>
 <li>New <code>retrieval.go</code>: <code>MatchConceptNames</code> finds
 known concepts mentioned (whole-word, case-insensitive) in arbitrary
 text, and <code>RecallByConceptNames</code> returns observations,
@@ -1208,8 +1208,8 @@ given) now fails with a message pointing at <code>kb init</code> or
 doesn’t already exist, instead of silently creating one — fixes
 <code>kb record new</code>/<code>kb observation add</code>, run from
 inside a project directory, building a stray nested workspace. An
-explicit <code>--db PATH</code> and <code>kb import</code> keep today’s
-open-or-create behavior unchanged.</li>
+explicit <code>--db   PATH</code> and <code>kb import</code> keep
+today’s open-or-create behavior unchanged.</li>
 </ul>
 <h3 id="notes">Notes</h3>
 <ul>

@@ -98,7 +98,7 @@ DR-0013’s boundary.</li>
 <li><strong><code>kb_fts</code></strong> has four writers today
 (<code>observation</code>, <code>project</code>, <code>concept</code>,
 <code>record</code>), each a flat
-<code>(body, kind, label, descr, source_type, source_id, project_id)</code>
+<code>(body, kind, label, descr, source_type, source_id,   project_id)</code>
 row, delete-then-reinsert on every write, with a matching block required
 in <code>rebuildFTSIfNeeded</code> and in <code>Search</code>’s display-
 reconstruction <code>CASE</code> (see
