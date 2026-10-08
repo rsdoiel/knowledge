@@ -439,3 +439,27 @@ func quietRequested() bool {
 	}
 	return true
 }
+
+// adviceOut is where advisory notes go: the standard error of the command being
+// run. dispatch points it at the real errOut for the length of a verb, so a verb
+// that has only an out writer can still speak on standard error; outside a
+// dispatch it discards, so a test that calls a verb directly sees no stray text.
+var adviceOut io.Writer = io.Discard
+
+/** advise writes one advisory line, prefixed "kb: ", to standard error unless
+ * KB_QUIET asks for none. An advisory note is never an error and never changes
+ * the exit status; it goes to standard error so --json output stays parseable.
+ *
+ * Parameters:
+ *   format (string) — the fmt format of the message, without the prefix.
+ *   a      (...any) — its arguments.
+ *
+ * Example:
+ *   advise("--project %s is deprecated; use the qualified form", "harvey")
+ */
+func advise(format string, a ...any) {
+	if quietRequested() {
+		return
+	}
+	fmt.Fprintf(adviceOut, "kb: "+format+"\n", a...)
+}

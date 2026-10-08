@@ -30,6 +30,9 @@ func dispatch(verbs map[string]verbFunc, kb *knowledge.KnowledgeBase, dl *DebugL
 		printHelp(errOut, "")
 		return 2
 	}
+	previous := adviceOut
+	adviceOut = errOut
+	defer func() { adviceOut = previous }()
 	if err := fn(kb, dl, jsonOut, args[1:], out); err != nil {
 		// A help flag that follows other flags (`project add --status active
 		// -help`) is not caught before the verb runs; the subverb's FlagSet

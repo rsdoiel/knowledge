@@ -91,6 +91,7 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return err
 	}
 	dl.Log("record", map[string]any{"subverb": args[0], "args": flags.args})
+	adviseDeprecatedScopeFlags(args[0], flags)
 	if args[0] != "fuzzy-tag" && (flags.concept != "" || flags.write) {
 		return usageErrorf("--concept and --write belong to record fuzzy-tag only")
 	}
@@ -865,4 +866,36 @@ func joinRefs(refs []knowledge.Ref) string {
 		parts = append(parts, r.String())
 	}
 	return strings.Join(parts, ", ")
+}
+
+// deprecatedScopeFlag lists the record subverbs on which --project and
+// --workspace are only aliases for a form that says the same thing without
+// them: a scope argument for the listings, a qualified reference for the rest.
+// new and fuzzy-tag are not here: the flag is the way to name the scope.
+var deprecatedScopeFlag = map[string]string{
+	"list": "list", "pending": "list",
+	"show": "ref", "concepts": "ref", "set-status": "ref", "supersede": "ref", "delete": "ref",
+}
+
+// adviseDeprecatedScopeFlags says on standard error that --project or
+// --workspace has a better spelling (knowledge DR-0057). The flag still works.
+func adviseDeprecatedScopeFlags(subverb string, f recordFlags) {
+	form, ok := deprecatedScopeFlag[subverb]
+	if !ok {
+		return
+	}
+	if f.project != "" {
+		if form == "list" {
+			advise("--project %s is deprecated; give the scope as an argument: kb record %s %s", f.project, subverb, f.project)
+		} else {
+			advise("--project %s is deprecated; qualify the record instead: %s/DR-NNNN", f.project, f.project)
+		}
+	}
+	if f.workspace {
+		if form == "list" {
+			advise("--workspace is deprecated; give the scope as an argument: kb record %s workspace", subverb)
+		} else {
+			advise("--workspace is deprecated; qualify the record instead: workspace/DR-NNNN")
+		}
+	}
 }
