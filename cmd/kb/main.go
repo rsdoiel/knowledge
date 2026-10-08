@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -65,6 +66,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 		if err != nil {
 			return failWith(errOut, jsonOut, err)
 		}
+		noteWorkspaceAbove(errOut, dbPath, resolvedPath)
 		kb, err := knowledge.Open(resolvedPath)
 		if err != nil {
 			return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
@@ -126,6 +128,13 @@ func mainRun(args []string, out, errOut io.Writer) int {
 		return dispatch(verbs, nil, dl, jsonOut, rest, out, errOut)
 	}
 
+	// KB_DB is an explicit location, like --db, which wins over it. It is read
+	// only here, after the verbs that refuse --db, so a KB_DB left in the
+	// environment cannot trip them.
+	if dbPath == "" {
+		dbPath = os.Getenv("KB_DB")
+	}
+	located := dbPath // "" only when the workspace is found by discovery
 	resolvedPath, err := resolveDBPath(dbPath)
 	if err != nil {
 		return failWith(errOut, jsonOut, err)
@@ -143,10 +152,17 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// -in agents/knowledge.jsonl) relies on.
 	if dbPath == "" && rest[0] != "import" {
 		if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+			// A fresh clone has the tracked export but not the gitignored
+			// database. Say how to rebuild it; kb init would start an empty
+			// history beside the real one.
+			if jsonl := filepath.Join(filepath.Dir(resolvedPath), knowledge.MarkerJSONL); fileExists(jsonl) {
+				return failWith(errOut, jsonOut, noInputf("no %s yet, but %s exists; rebuild it with \"kb import -in %s\"", resolvedPath, jsonl, jsonl))
+			}
 			return failWith(errOut, jsonOut, noInputf("no %s here; run \"kb init\" to start a new workspace, or \"kb import -in FILE\" to rebuild one from an export", resolvedPath))
 		}
 	}
 
+	noteWorkspaceAbove(errOut, located, resolvedPath)
 	kb, err := knowledge.Open(resolvedPath)
 	if err != nil {
 		return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
@@ -344,12 +360,18 @@ func parseGlobalFlags(args []string) (globalOptions, []string, error) {
 
 // resolveDBPath returns the absolute database path: dbPath itself if
 // absolute, dbPath joined onto the current directory if relative and
-// non-empty, or knowledge.DefaultPath(cwd) if dbPath is "".
+// non-empty. If dbPath is "", the workspace is found by walking up from the
+// current directory (knowledge.FindWorkspace, DR-0058), and the answer is
+// that workspace's knowledge.DefaultPath; with no workspace above, it is
+// knowledge.DefaultPath(cwd).
 func resolveDBPath(dbPath string) (string, error) {
 	if dbPath == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return "", err
+		}
+		if root, _, ok := knowledge.FindWorkspace(cwd); ok {
+			return knowledge.DefaultPath(root), nil
 		}
 		return knowledge.DefaultPath(cwd), nil
 	}
@@ -361,4 +383,59 @@ func resolveDBPath(dbPath string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(cwd, dbPath), nil
+}
+
+// fileExists reports whether path names a regular file.
+func fileExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Mode().IsRegular()
+}
+
+/** noteWorkspaceAbove tells the user, on standard error, when discovery chose a
+ * workspace other than the working directory (DR-0058). Walking up means a
+ * verb run in a scratch directory inside a real workspace acts on that
+ * workspace; the note makes that visible before anything is written. It says
+ * nothing when the location was given explicitly (--db or KB_DB), when the
+ * workspace is the working directory, or when the working directory cannot be
+ * read, or when KB_QUIET asks for no advisory notes.
+ *
+ * Parameters:
+ *   errOut       (io.Writer) — where the note goes.
+ *   explicit     (string)    — the --db or KB_DB value, "" when discovery chose.
+ *   resolvedPath (string)    — the database path resolveDBPath returned.
+ *
+ * Example:
+ *   noteWorkspaceAbove(os.Stderr, "", "/home/me/Laboratory/agents/knowledge.db")
+ *   // kb: using the workspace at /home/me/Laboratory (found above the current directory)
+ */
+func noteWorkspaceAbove(errOut io.Writer, explicit, resolvedPath string) {
+	if explicit != "" || quietRequested() {
+		return
+	}
+	cwd, err := os.Getwd()
+	if err != nil || resolvedPath == knowledge.DefaultPath(cwd) {
+		return
+	}
+	fmt.Fprintf(errOut, "kb: using the workspace at %s (found above the current directory)\n",
+		filepath.Dir(filepath.Dir(resolvedPath)))
+}
+
+/** quietRequested reports whether KB_QUIET asks for advisory notes to be left
+ * out. Any value except empty, "0" and "false" (any case) turns it on. It
+ * never silences an error; it exists for tests and scripts that run in a
+ * nested directory on purpose.
+ *
+ * Returns:
+ *   bool — true when KB_QUIET is set to a "on" value.
+ *
+ * Example:
+ *   os.Setenv("KB_QUIET", "1")
+ *   quietRequested() // true
+ */
+func quietRequested() bool {
+	switch strings.ToLower(os.Getenv("KB_QUIET")) {
+	case "", "0", "false":
+		return false
+	}
+	return true
 }

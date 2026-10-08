@@ -483,18 +483,15 @@ func corpusDirs(t *testing.T) []string {
 		candidates = append(candidates, "decisions")
 	}
 
-	home, err := os.UserHomeDir()
-	if err == nil {
-		for _, root := range []string{
-			filepath.Join(home, "WorkLab"),
-			filepath.Join(home, "Laboratory"),
-		} {
-			candidates = append(candidates, discoverCorpora(t, root)...)
-		}
+	// Only the workspace this checkout lives in. Each knowledge base is
+	// independent (DR-0058): a test must never read another workspace's
+	// records, so ~/WorkLab is not swept from ~/Laboratory or the reverse.
+	if root, _, ok := FindWorkspace("."); ok {
+		candidates = append(candidates, discoverCorpora(t, root)...)
 	}
 
 	// The in-tree corpus is normally reached twice — once as the anchor,
-	// once by the walk of ~/Laboratory — and counting its records twice
+	// once by the walk of the workspace — and counting its records twice
 	// would be a silent inflation of the very total this test checks.
 	seen := map[string]bool{}
 	var out []string
