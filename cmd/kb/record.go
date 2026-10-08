@@ -84,7 +84,7 @@ type recordFlags struct {
  */
 func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("record requires a subverb: list, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete")
+		return usageErrorf("record requires a subverb: list, pending, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete")
 	}
 	flags, err := parseRecordFlags(args[1:])
 	if err != nil {
@@ -98,6 +98,8 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	switch args[0] {
 	case "list":
 		return recordList(kb, jsonOut, flags, out)
+	case "pending":
+		return recordPending(kb, jsonOut, flags, out)
 	case "show":
 		return recordShow(kb, jsonOut, flags, out)
 	case "set-status":
@@ -115,7 +117,7 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	case "fuzzy-tag":
 		return recordFuzzyTag(kb, jsonOut, flags, out)
 	default:
-		return usageErrorf("unknown record subverb %q; want list, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete", args[0])
+		return usageErrorf("unknown record subverb %q; want list, pending, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete", args[0])
 	}
 }
 
@@ -173,6 +175,37 @@ func toEntry(r knowledge.Record, names map[int64]string) recordListEntry {
 
 // recordList prints the records matching the filter flags.
 func recordList(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
+	return recordListWith(kb, jsonOut, f, out, "no matching records")
+}
+
+/** recordPending implements `kb record pending`: the records waiting for a
+ * decision, which is every record whose status is proposed, in the scope the
+ * list verb would use (arguments, the working directory, KB_PROJECT, --all)
+ * and oldest first. The other list filters still apply; --status does not,
+ * since the status is what "pending" means.
+ *
+ * Parameters:
+ *   kb      (*knowledge.KnowledgeBase) — the open knowledge base.
+ *   jsonOut (bool)                     — print the entries as a JSON array.
+ *   f       (recordFlags)              — the parsed flags.
+ *   out     (io.Writer)                — where the listing goes.
+ *
+ * Returns:
+ *   error — a usage error for --status, otherwise as record list.
+ *
+ * Example:
+ *   err := recordPending(kb, false, recordFlags{args: []string{"harvey"}}, os.Stdout)
+ */
+func recordPending(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
+	if f.status != "" {
+		return usageErrorf("record pending lists records whose status is proposed; --status cannot change that (use record list --status)")
+	}
+	f.status = "proposed"
+	return recordListWith(kb, jsonOut, f, out, "no pending records")
+}
+
+// recordListWith is record list with the line printed when nothing matches.
+func recordListWith(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer, emptyMessage string) error {
 	if err := validateRecordFilters(kb, f); err != nil {
 		return err
 	}
@@ -208,7 +241,7 @@ func recordList(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io
 			width, e.Ref, e.Date, e.Status, e.Kind, dashIfEmpty(e.Trigger), e.Title)
 	}
 	if len(entries) == 0 {
-		fmt.Fprintln(out, "no matching records")
+		fmt.Fprintln(out, emptyMessage)
 	}
 	return nil
 }

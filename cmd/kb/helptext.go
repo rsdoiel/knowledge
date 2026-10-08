@@ -1260,6 +1260,8 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 # SYNOPSIS
 
+{app_name} record pending [SCOPE...] [--all] [--kind K] [--trigger T] [--initiative I] [--since DATE]
+
 {app_name} record list [SCOPE...] [--all] [--status S] [--kind K] [--trigger T] [--initiative I] [--since DATE]
 
 {app_name} record show RECORD_REF [--project P] [--workspace]

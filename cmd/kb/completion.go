@@ -29,7 +29,7 @@ var completionSubverbs = map[string][]string{
 	"concept":         {"add", "list", "show", "recall", "rename", "delete", "suggest"},
 	"source":          {"add", "list", "show", "remove", "retract", "link", "check-retractions"},
 	"link":            {"project", "observation"},
-	"record":          {"list", "show", "set-status", "supersede", "fmt", "new", "concepts", "delete", "fuzzy-tag"},
+	"record":          {"list", "pending", "show", "set-status", "supersede", "fmt", "new", "concepts", "delete", "fuzzy-tag"},
 	"document":        {"ingest", "draft", "review", "list", "show", "tag", "fuzzy-tag", "frontmatter", "delete"},
 	"document review": {"list", "promote"},
 }
@@ -53,7 +53,7 @@ var completionVerbFlags = map[string][]string{
 	"concept":     {"--identifier-type", "--identifier-value", "--project", "--limit", "--force", "--dry-run"},
 	"source":      {"--doi", "--url", "--authors", "--published", "--publisher", "--rights", "--version", "--relationship"},
 	"record": {"--project", "--status", "--kind", "--trigger", "--initiative", "--since", "--root", "--dir",
-		"--title", "--concept", "--workspace", "--partial", "--dry-run", "--write"},
+		"--title", "--concept", "--workspace", "--partial", "--dry-run", "--write", "--all"},
 	"document": {"--project", "--concept", "--dry-run", "--accept", "--accept-keywords", "--set", "--by",
 		"--confidence", "--status", "--title", "--format"},
 	"ingest":     {"--root", "--dry-run"},
