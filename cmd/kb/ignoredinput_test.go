@@ -94,7 +94,6 @@ func TestMainRun_SurplusArgumentIsAUsageError(t *testing.T) {
 		{"source", "add", "T2", "more", "words"},
 		{"source", "link", "1", "1", "stray"},
 		{"source", "check-retractions", "extra"},
-		{"record", "list", "extra"},
 		{"record", "show", "1", "extra"},
 		{"record", "concepts", "1", "extra"},
 		{"record", "set-status", "1", "accepted", "extra"},

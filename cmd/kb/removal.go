@@ -331,7 +331,7 @@ func recordDelete(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out 
 	if len(f.args) != 1 {
 		return usageErrorf("%s", usage)
 	}
-	rec, err := resolveRecord(kb, f.args[0], f)
+	rec, err := resolveRecordForWrite(kb, f.args[0], f)
 	if err != nil {
 		return err
 	}

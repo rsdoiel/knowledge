@@ -235,3 +235,60 @@ func TestProjectNamedWorkspaceIsRefused(t *testing.T) {
 		t.Errorf("a name that merely starts with workspace is fine: %v", err)
 	}
 }
+
+// ProjectForDir (DR-0058): the project a directory belongs to, from its place
+// under agents/projects/<name>/, or under a repository directory of that name
+// at the workspace root.
+
+func projectDirFixture(t *testing.T) (*KnowledgeBase, string) {
+	t.Helper()
+	kb := refKB(t, "harvey", "clasm")
+	root := filepath.Dir(filepath.Dir(kb.Path()))
+	for _, d := range []string{
+		"agents/projects/harvey/decisions", "agents/projects/clasm", "agents/projects/ghost",
+		"harvey/cmd/x", "clasm", "ghost", "tmp/scratch", "agents/decisions",
+	} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return kb, root
+}
+
+func TestProjectForDir(t *testing.T) {
+	kb, root := projectDirFixture(t)
+	cases := []struct{ dir, want string }{
+		{"agents/projects/harvey", "harvey"},
+		{"agents/projects/harvey/decisions", "harvey"},
+		{"harvey", "harvey"},
+		{"harvey/cmd/x", "harvey"},
+		{"clasm", "clasm"},
+		{"agents/projects/ghost", ""}, // a directory without a project row
+		{"ghost", ""},
+		{"tmp/scratch", ""},
+		{"agents/decisions", ""},
+		{"agents", ""},
+		{".", ""},
+	}
+	for _, c := range cases {
+		got, err := kb.ProjectForDir(root, filepath.Join(root, c.dir))
+		if err != nil {
+			t.Errorf("ProjectForDir(%q): %v", c.dir, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("ProjectForDir(%q) = %q, want %q", c.dir, got, c.want)
+		}
+	}
+}
+
+func TestProjectForDir_OutsideTheRootIsNone(t *testing.T) {
+	kb, root := projectDirFixture(t)
+	got, err := kb.ProjectForDir(root, t.TempDir())
+	if err != nil || got != "" {
+		t.Errorf("ProjectForDir(outside) = %q, %v; want none", got, err)
+	}
+	if got, _ := kb.ProjectForDir(root, filepath.Dir(root)); got != "" {
+		t.Errorf("ProjectForDir(parent of root) = %q, want none", got)
+	}
+}

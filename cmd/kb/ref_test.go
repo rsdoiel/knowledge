@@ -213,3 +213,242 @@ func TestMainRun_ProjectNamedWorkspaceIsAUsageError(t *testing.T) {
 		}
 	}
 }
+
+// ─── scope (DR-0058) ──────────────────────────────────────────────────────────
+
+// scopeFixture builds a workspace "Laboratory" with DR-0001 in harvey, clasm
+// and the workspace tier, and DR-0002 in harvey, with the directories a
+// working directory can sit in.
+func scopeFixture(t *testing.T) (*knowledge.KnowledgeBase, string) {
+	t.Helper()
+	kb, root := namedWorkspaceKB(t, "Laboratory")
+	seedTiers(t, kb, root, "harvey", "clasm")
+	for _, d := range []string{"harvey/cmd", "clasm", "tmp/scratch"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("KB_PROJECT", "")
+	return kb, root
+}
+
+func listTitles(t *testing.T, kb *knowledge.KnowledgeBase, args ...string) []string {
+	t.Helper()
+	var entries []recordListEntry
+	runRecordJSON(t, kb, &entries, append([]string{"list"}, args...)...)
+	var out []string
+	for _, e := range entries {
+		out = append(out, e.Title)
+	}
+	return out
+}
+
+func sameSet(got []string, want ...string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	seen := map[string]int{}
+	for _, g := range got {
+		seen[g]++
+	}
+	for _, w := range want {
+		seen[w]--
+	}
+	for _, n := range seen {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func TestRecordList_FromTheRootIsTheWholeWorkspace(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(root)
+	got := listTitles(t, kb)
+	if !sameSet(got, "harvey one", "harvey two", "clasm one", "workspace one") {
+		t.Errorf("list = %v, want every record", got)
+	}
+}
+
+func TestRecordList_PositionalScopes(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(root)
+	for _, c := range []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"harvey"}, []string{"harvey one", "harvey two"}},
+		{[]string{"clasm"}, []string{"clasm one"}},
+		{[]string{"harvey", "clasm"}, []string{"harvey one", "harvey two", "clasm one"}},
+		{[]string{"workspace"}, []string{"workspace one"}},
+		{[]string{"laboratory"}, []string{"workspace one"}},
+		{[]string{"harvey", "workspace"}, []string{"harvey one", "harvey two", "workspace one"}},
+		{[]string{"harvey", "harvey"}, []string{"harvey one", "harvey two"}},
+	} {
+		if got := listTitles(t, kb, c.args...); !sameSet(got, c.want...) {
+			t.Errorf("list %v = %v, want %v", c.args, got, c.want)
+		}
+	}
+}
+
+func TestRecordList_StaysOldestFirstAcrossScopes(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(root)
+	var entries []recordListEntry
+	runRecordJSON(t, kb, &entries, "list", "clasm", "harvey")
+	for i := 1; i < len(entries); i++ {
+		a, b := entries[i-1], entries[i]
+		if a.Date > b.Date || (a.Date == b.Date && a.RecordID > b.RecordID) {
+			t.Errorf("entries out of order: %s %s before %s %s", a.Date, a.RecordID, b.Date, b.RecordID)
+		}
+	}
+}
+
+func TestRecordList_UnknownScopeIsNotFound(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(root)
+	var out bytes.Buffer
+	err := cmdRecord(kb, nil, false, []string{"list", "harvey", "nosuch"}, &out)
+	if err == nil || exitCodeFor(err).Code != 1 || !strings.Contains(err.Error(), "nosuch") {
+		t.Errorf("error = %v, want not found (exit 1) naming nosuch", err)
+	}
+}
+
+func TestRecordList_ConflictingScopeSourcesAreUsageErrors(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(root)
+	for _, args := range [][]string{
+		{"list", "harvey", "--project", "clasm"},
+		{"list", "harvey", "--workspace"},
+		{"list", "harvey", "--all"},
+		{"list", "--all", "--project", "harvey"},
+		{"list", "--all", "--workspace"},
+	} {
+		var out bytes.Buffer
+		err := cmdRecord(kb, nil, false, args, &out)
+		if err == nil || !isUsageError(err) {
+			t.Errorf("record %v: error = %v, want a usage error", args, err)
+		}
+	}
+}
+
+func TestRecordList_InferredFromTheWorkingDirectory(t *testing.T) {
+	kb, root := scopeFixture(t)
+	for _, dir := range []string{"agents/projects/harvey", "agents/projects/harvey/decisions", "harvey", "harvey/cmd"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(filepath.Join(root, dir))
+		if got := listTitles(t, kb); !sameSet(got, "harvey one", "harvey two") {
+			t.Errorf("list from %s = %v, want harvey's records", dir, got)
+		}
+	}
+}
+
+func TestRecordList_AllWidensAProjectDirectory(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "harvey", "cmd"))
+	if got := listTitles(t, kb, "--all"); len(got) != 4 {
+		t.Errorf("list --all = %v, want every record", got)
+	}
+}
+
+func TestRecordList_ExplicitScopeBeatsTheDirectory(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "harvey", "cmd"))
+	if got := listTitles(t, kb, "clasm"); !sameSet(got, "clasm one") {
+		t.Errorf("list clasm from harvey/ = %v, want clasm's", got)
+	}
+}
+
+func TestRecordList_DirectoryWithoutAProjectIsTheWholeWorkspace(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "tmp", "scratch"))
+	if got := listTitles(t, kb); len(got) != 4 {
+		t.Errorf("list from a non-project directory = %v, want every record", got)
+	}
+}
+
+func TestRecordList_KBProjectIsTheFallback(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "tmp", "scratch"))
+	t.Setenv("KB_PROJECT", "clasm")
+	if got := listTitles(t, kb); !sameSet(got, "clasm one") {
+		t.Errorf("list with KB_PROJECT=clasm = %v, want clasm's", got)
+	}
+	// The directory is the closer evidence, so it beats the environment.
+	t.Chdir(filepath.Join(root, "harvey"))
+	if got := listTitles(t, kb); !sameSet(got, "harvey one", "harvey two") {
+		t.Errorf("list from harvey/ with KB_PROJECT=clasm = %v, want harvey's", got)
+	}
+	// --all and an explicit scope beat both.
+	if got := listTitles(t, kb, "--all"); len(got) != 4 {
+		t.Errorf("list --all = %v, want every record", got)
+	}
+}
+
+func TestRecordList_UnknownKBProjectIsNotFound(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "tmp", "scratch"))
+	t.Setenv("KB_PROJECT", "nosuch")
+	var out bytes.Buffer
+	err := cmdRecord(kb, nil, false, []string{"list"}, &out)
+	if err == nil || exitCodeFor(err).Code != 1 || !strings.Contains(err.Error(), "KB_PROJECT") {
+		t.Errorf("error = %v, want not found (exit 1) naming KB_PROJECT", err)
+	}
+}
+
+func TestRecordList_FlagsStillWorkAsAliases(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(root)
+	if got := listTitles(t, kb, "--project", "clasm"); !sameSet(got, "clasm one") {
+		t.Errorf("list --project clasm = %v", got)
+	}
+	if got := listTitles(t, kb, "--workspace"); !sameSet(got, "workspace one") {
+		t.Errorf("list --workspace = %v", got)
+	}
+}
+
+func TestResolveRecord_BareIdUsesTheInferredProject(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "harvey", "cmd"))
+	rec, err := resolveRecord(kb, "0001", recordFlags{})
+	if err != nil || rec.Title != "harvey one" {
+		t.Errorf("bare 0001 from harvey/ = %+v, %v; want harvey's, though 0001 is ambiguous workspace-wide", rec, err)
+	}
+	// An id the project lacks is not found there; it does not fall through.
+	_, err = resolveRecord(kb, "0099", recordFlags{})
+	if err == nil || exitCodeFor(err).Code != 1 {
+		t.Errorf("bare 0099 error = %v, want not found", err)
+	}
+}
+
+func TestResolveRecord_QualifiedRefIgnoresTheDirectory(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "harvey", "cmd"))
+	rec, err := resolveRecord(kb, "clasm/0001", recordFlags{})
+	if err != nil || rec.Title != "clasm one" {
+		t.Errorf("clasm/0001 from harvey/ = %+v, %v", rec, err)
+	}
+}
+
+func TestResolveRecord_WritesNeedAScope(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(root)
+	// Unambiguous, but a write never runs on a bare id with no scope.
+	_, err := resolveRecordForWrite(kb, "0002", recordFlags{})
+	if err == nil || !isUsageError(err) || !strings.Contains(err.Error(), "harvey/DR-0002") {
+		t.Errorf("error = %v, want a usage error offering harvey/DR-0002", err)
+	}
+	if rec, err := resolveRecordForWrite(kb, "harvey/0002", recordFlags{}); err != nil || rec.Title != "harvey two" {
+		t.Errorf("qualified write = %+v, %v", rec, err)
+	}
+	if rec, err := resolveRecordForWrite(kb, "0002", recordFlags{project: "harvey"}); err != nil || rec.Title != "harvey two" {
+		t.Errorf("write with --project = %+v, %v", rec, err)
+	}
+	t.Chdir(filepath.Join(root, "harvey", "cmd"))
+	if rec, err := resolveRecordForWrite(kb, "0002", recordFlags{}); err != nil || rec.Title != "harvey two" {
+		t.Errorf("bare write inside the project = %+v, %v", rec, err)
+	}
+}

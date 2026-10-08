@@ -56,6 +56,7 @@ type recordFlags struct {
 	dryRun     bool
 	concept    string
 	write      bool
+	all        bool
 	args       []string
 }
 
@@ -129,7 +130,7 @@ func parseRecordFlags(args []string) (recordFlags, error) {
 	}
 	boolFlags := map[string]*bool{
 		"--workspace": &f.workspace, "--partial": &f.partial, "--dry-run": &f.dryRun,
-		"--write": &f.write,
+		"--write": &f.write, "--all": &f.all,
 	}
 	positional, err := splitFlags(args, strFlags, boolFlags)
 	if err != nil {
@@ -170,23 +171,18 @@ func toEntry(r knowledge.Record, names map[int64]string) recordListEntry {
 
 // recordList prints the records matching the filter flags.
 func recordList(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
-	if len(f.args) != 0 {
-		return usageErrorf("usage: record list [--project P] [--status S] ... (takes no positional argument, got %q)", f.args[0])
-	}
 	if err := validateRecordFilters(kb, f); err != nil {
 		return err
 	}
-	filter := knowledge.RecordFilter{
-		Project: f.project, Status: f.status, Kind: f.kind,
+	scopes, err := recordScopes(kb, f)
+	if err != nil {
+		return err
+	}
+	base := knowledge.RecordFilter{
+		Status: f.status, Kind: f.kind,
 		Trigger: f.trigger, Initiative: f.initiative, Since: f.since,
 	}
-	if f.workspace {
-		filter.Scope = "workspace"
-	} else if f.project != "" {
-		filter.Scope = "project"
-	}
-
-	records, err := kb.ListRecords(filter)
+	records, err := listRecordsIn(kb, base, scopes)
 	if err != nil {
 		return err
 	}
@@ -383,6 +379,19 @@ func dashIfEmpty(s string) string {
 // resolving any other way makes every record verb fail whenever the database
 // sits outside the workspace it indexes — which is what a scratch database is.
 func resolveRecord(kb *knowledge.KnowledgeBase, arg string, f recordFlags) (*knowledge.Record, error) {
+	return resolveRecordScoped(kb, arg, f, false)
+}
+
+// resolveRecordForWrite is resolveRecord for a verb that changes a record. A
+// write never runs on a bare id with no scope (DR-0058): it needs a qualified
+// reference, --project or --workspace, or a project inferred from the working
+// directory or KB_PROJECT, so the record changed is the record meant. With no
+// scope the error offers the qualified form of each record the id could be.
+func resolveRecordForWrite(kb *knowledge.KnowledgeBase, arg string, f recordFlags) (*knowledge.Record, error) {
+	return resolveRecordScoped(kb, arg, f, true)
+}
+
+func resolveRecordScoped(kb *knowledge.KnowledgeBase, arg string, f recordFlags, write bool) (*knowledge.Record, error) {
 	ref, err := knowledge.ParseRef(arg)
 	if err != nil {
 		return nil, wrapUsage(err)
@@ -400,7 +409,16 @@ func resolveRecord(kb *knowledge.KnowledgeBase, arg string, f recordFlags) (*kno
 			ref.Scope = "workspace"
 		case flagProject != nil:
 			ref.Scope = flagProject.Name
+		default:
+			inferred, err := inferredProject(kb, f)
+			if err != nil {
+				return nil, err
+			}
+			ref.Scope = inferred
 		}
+	}
+	if write && ref.Scope == "" {
+		return nil, writeNeedsScope(kb, ref, f)
 	}
 	rec, err := kb.ResolveRef(ref, filepath.Base(recordRoot(kb, f)))
 	if err != nil {
@@ -634,7 +652,7 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if err := checkRecordVocabulary(kb, "status", "statuses", status, knowledge.RecordStatuses); err != nil {
 		return wrapUsage(err)
 	}
-	rec, err := resolveRecord(kb, id, f)
+	rec, err := resolveRecordForWrite(kb, id, f)
 	if err != nil {
 		return err
 	}
@@ -680,11 +698,11 @@ func recordSupersede(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if len(f.args) != 2 {
 		return usageErrorf("usage: record supersede NEW OLD")
 	}
-	newer, err := resolveRecord(kb, f.args[0], f)
+	newer, err := resolveRecordForWrite(kb, f.args[0], f)
 	if err != nil {
 		return err
 	}
-	older, err := resolveRecord(kb, f.args[1], f)
+	older, err := resolveRecordForWrite(kb, f.args[1], f)
 	if err != nil {
 		return err
 	}
@@ -775,4 +793,28 @@ func appendUnique(list []string, value string) []string {
 		}
 	}
 	return append(list, value)
+}
+
+// writeNeedsScope explains why a write was refused for want of a scope, and
+// offers the qualified form of every record the bare id could mean.
+func writeNeedsScope(kb *knowledge.KnowledgeBase, ref knowledge.Ref, f recordFlags) error {
+	_, err := kb.ResolveRef(ref, filepath.Base(recordRoot(kb, f)))
+	var amb *knowledge.AmbiguousRefError
+	if errors.As(err, &amb) {
+		return usageErrorf("%s needs a scope to be changed; say which: %s", ref, joinRefs(amb.Candidates))
+	}
+	if rec, rerr := kb.ResolveRef(ref, filepath.Base(recordRoot(kb, f))); rerr == nil {
+		names := projectNames(kb)
+		return usageErrorf("%s needs a scope to be changed; say which: %s", ref,
+			knowledge.Ref{Scope: qualify(*rec, names), ID: rec.RecordID})
+	}
+	return err
+}
+
+func joinRefs(refs []knowledge.Ref) string {
+	var parts []string
+	for _, r := range refs {
+		parts = append(parts, r.String())
+	}
+	return strings.Join(parts, ", ")
 }

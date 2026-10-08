@@ -238,7 +238,7 @@ func TestCmdRecord_ShowUnknownRecord(t *testing.T) {
 func TestCmdRecord_SetStatusWritesFileAndDatabase(t *testing.T) {
 	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Status: "proposed"})
 
-	runRecord(t, kb, "set-status", "0001", "accepted")
+	runRecord(t, kb, "set-status", "clasm/0001", "accepted")
 
 	if got := frontmatterLine(t, readFixture(t, root, "clasm", "0001"), "status"); got != "status: accepted" {
 		t.Errorf("file line = %q, want %q", got, "status: accepted")
@@ -258,7 +258,7 @@ func TestCmdRecord_SetStatusLeavesEveryOtherLineUntouched(t *testing.T) {
 		testRecord{ID: "0001", Status: "proposed", Title: "Keep me exactly", Trigger: "design"})
 	before := readFixture(t, root, "clasm", "0001")
 
-	runRecord(t, kb, "set-status", "0001", "accepted")
+	runRecord(t, kb, "set-status", "clasm/0001", "accepted")
 	after := readFixture(t, root, "clasm", "0001")
 
 	beforeLines := strings.Split(before, "\n")
@@ -302,7 +302,7 @@ func TestCmdRecord_SetStatusRegeneratesExistingIndex(t *testing.T) {
 		t.Fatalf("seeding index: %v", err)
 	}
 
-	runRecord(t, kb, "set-status", "0001", "accepted")
+	runRecord(t, kb, "set-status", "clasm/0001", "accepted")
 
 	got, err := os.ReadFile(filepath.Join(dir, "index.md"))
 	if err != nil {
@@ -317,7 +317,7 @@ func TestCmdRecord_SetStatusDoesNotCreateIndexWhenAbsent(t *testing.T) {
 	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Status: "proposed"})
 	dir := filepath.Join(root, "clasm", "decisions")
 
-	runRecord(t, kb, "set-status", "0001", "accepted")
+	runRecord(t, kb, "set-status", "clasm/0001", "accepted")
 
 	if _, err := os.Stat(filepath.Join(dir, "index.md")); !os.IsNotExist(err) {
 		t.Error("set-status must not create index.md in a corpus that never had one")
@@ -340,7 +340,7 @@ func TestCmdRecord_SupersedeWritesBothSides(t *testing.T) {
 		testRecord{ID: "0149", Status: "accepted"},
 	)
 
-	runRecord(t, kb, "supersede", "0149", "0148")
+	runRecord(t, kb, "supersede", "clasm/0149", "clasm/0148")
 
 	newer := readFixture(t, root, "clasm", "0149")
 	if got := frontmatterLine(t, newer, "supersedes"); got != `supersedes: ["0148"]` {
@@ -379,7 +379,7 @@ func TestCmdRecord_SupersedeRegeneratesExistingIndex(t *testing.T) {
 		t.Fatalf("seeding index: %v", err)
 	}
 
-	runRecord(t, kb, "supersede", "0149", "0148")
+	runRecord(t, kb, "supersede", "clasm/0149", "clasm/0148")
 
 	got, err := os.ReadFile(filepath.Join(dir, "index.md"))
 	if err != nil {
@@ -397,7 +397,7 @@ func TestCmdRecord_SupersedeDoesNotCreateIndexWhenAbsent(t *testing.T) {
 	)
 	dir := filepath.Join(root, "clasm", "decisions")
 
-	runRecord(t, kb, "supersede", "0149", "0148")
+	runRecord(t, kb, "supersede", "clasm/0149", "clasm/0148")
 
 	if _, err := os.Stat(filepath.Join(dir, "index.md")); !os.IsNotExist(err) {
 		t.Error("supersede must not create index.md in a corpus that never had one")
@@ -413,7 +413,7 @@ func TestCmdRecord_SupersedePartialLeavesStatusAccepted(t *testing.T) {
 		testRecord{ID: "0160", Status: "accepted"},
 	)
 
-	runRecord(t, kb, "supersede", "0159", "0160", "--partial")
+	runRecord(t, kb, "supersede", "clasm/0159", "clasm/0160", "--partial")
 
 	older := readFixture(t, root, "clasm", "0160")
 	if got := frontmatterLine(t, older, "superseded_by"); got != `superseded_by: ["0159"]` {
@@ -462,7 +462,7 @@ func TestCmdRecord_SupersedeAcrossTiersIsRejected(t *testing.T) {
 	var out bytes.Buffer
 	// Each id is unique on its own tier, so both resolve without qualifying;
 	// the tier mismatch is what must be caught.
-	err := cmdRecord(kb, nil, false, []string{"supersede", "0001", "0160"}, &out)
+	err := cmdRecord(kb, nil, false, []string{"supersede", "workspace/0001", "clasm/0160"}, &out)
 	if err == nil {
 		t.Fatal("a cross-tier supersession was accepted, want an error")
 	}
@@ -476,10 +476,10 @@ func TestCmdRecord_SupersedeIsIdempotent(t *testing.T) {
 		testRecord{ID: "0148", Status: "accepted"},
 		testRecord{ID: "0149", Status: "accepted"},
 	)
-	runRecord(t, kb, "supersede", "0149", "0148")
+	runRecord(t, kb, "supersede", "clasm/0149", "clasm/0148")
 	first := readFixture(t, root, "clasm", "0149")
 
-	runRecord(t, kb, "supersede", "0149", "0148")
+	runRecord(t, kb, "supersede", "clasm/0149", "clasm/0148")
 	if got := readFixture(t, root, "clasm", "0149"); got != first {
 		t.Errorf("a repeated supersede changed the file again:\n%s", got)
 	}
@@ -598,7 +598,7 @@ origin_host: "test"
 	}
 
 	var out bytes.Buffer
-	err = cmdRecord(kb, nil, false, []string{"set-status", "0001", "accepted", "--project", "clasm"}, &out)
+	err = cmdRecord(kb, nil, false, []string{"set-status", "clasm/0001", "accepted", "--project", "clasm"}, &out)
 	if err == nil {
 		t.Error("set-status accepted a path outside the workspace root")
 	}
@@ -634,7 +634,7 @@ func TestCmdRecord_ResolvesByRootNotDatabaseLocation(t *testing.T) {
 
 	out.Reset()
 	if err := cmdRecord(kb, nil, false,
-		[]string{"set-status", "0001", "accepted", "--project", "clasm", "--root", workspace}, &out); err != nil {
+		[]string{"set-status", "clasm/0001", "accepted", "--project", "clasm", "--root", workspace}, &out); err != nil {
 		t.Fatalf("set-status: %v", err)
 	}
 	if got := frontmatterLine(t, readFixture(t, workspace, "clasm", "0001"), "status"); got != "status: accepted" {
@@ -706,7 +706,7 @@ func TestRecordConcepts_UnknownRecordIDErrors(t *testing.T) {
 func TestCmdRecord_SetStatusCancelledWritesFileAndDatabaseWithoutAWarning(t *testing.T) {
 	kb, root := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Status: "accepted"})
 
-	out := runRecord(t, kb, "set-status", "0001", "cancelled")
+	out := runRecord(t, kb, "set-status", "clasm/0001", "cancelled")
 
 	if got := frontmatterLine(t, readFixture(t, root, "clasm", "0001"), "status"); got != "status: cancelled" {
 		t.Errorf("file line = %q, want %q", got, "status: cancelled")

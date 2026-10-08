@@ -1260,23 +1260,23 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 # SYNOPSIS
 
-{app_name} record list [--project P] [--workspace] [--status S] [--kind K] [--trigger T] [--initiative I] [--since DATE]
+{app_name} record list [SCOPE...] [--all] [--status S] [--kind K] [--trigger T] [--initiative I] [--since DATE]
 
-{app_name} record show RECORD_ID [--project P] [--workspace]
+{app_name} record show RECORD_REF [--project P] [--workspace]
 
-{app_name} record set-status RECORD_ID STATUS [--project P] [--workspace] [--root DIR]
+{app_name} record set-status RECORD_REF STATUS [--project P] [--workspace] [--root DIR]
 
-{app_name} record supersede NEW OLD [--partial] [--project P] [--workspace] [--root DIR]
+{app_name} record supersede NEW_REF OLD_REF [--partial] [--project P] [--workspace] [--root DIR]
 
 {app_name} record new --title T --trigger G (--project P | --workspace) [--kind K] [--dir DIR] [--root DIR]
 
 {app_name} record fmt PATH [--dry-run]
 
-{app_name} record concepts RECORD_ID [--project P] [--workspace]
+{app_name} record concepts RECORD_REF [--project P] [--workspace]
 
 {app_name} record fuzzy-tag --project P [--concept NAME,...] [--write] [--dry-run] [--root DIR]
 
-{app_name} record delete RECORD_ID [--project P] [--workspace] [--root DIR] [--dry-run]
+{app_name} record delete RECORD_REF [--project P] [--workspace] [--root DIR] [--dry-run]
 
 # DESCRIPTION
 
@@ -1288,8 +1288,20 @@ are identity, not chronology: a correction can carry a lower id than the
 record it supersedes.
 
 A record id is not by itself an identity, since two projects may each have a
-DR-0001. Where a bare id is ambiguous, the command reports the candidates and
-asks for --project or --workspace rather than choosing one.
+DR-0001. A record is named by SCOPE/DR-NNNN, where SCOPE is a project name or
+workspace (the workspace directory's own name is accepted as an alias for it,
+and a project of that name wins): harvey/DR-0004, workspace/DR-0003. A bare id
+resolves only where one record has it; otherwise the command lists the
+qualified candidates rather than choosing one. A command that changes a record
+(set-status, supersede, delete) never acts on a bare id with no scope: say
+harvey/DR-0004, run it from inside the project, or set KB_PROJECT.
+
+Scope. list takes scopes as arguments: kb record list harvey clasm workspace.
+With none it uses the project the working directory belongs to (under
+agents/projects/NAME/, or in a repository directory NAME/ beside it), else
+the project KB_PROJECT names, else the whole workspace; --all widens it to the
+whole workspace. An unknown scope is exit 1. --project and --workspace remain
+as aliases for one scope and cannot be mixed with scope arguments or --all.
 
 list
 : print matching records, one per line. --status, --kind, --trigger and
