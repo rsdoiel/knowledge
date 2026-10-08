@@ -37,11 +37,26 @@ Run `kb` with no verb to launch the interactive TUI, or `kb help` / `kb -h` to s
 
 ### Global flags
 
-- `--db PATH` — path to `knowledge.db` (default `./agents/knowledge.db`)
+- `--db PATH` — path to `knowledge.db`. Without it, `kb` walks up from the current directory to the nearest `agents/knowledge.db` (or `agents/knowledge.jsonl`, in a fresh clone), so it works from any subdirectory of a workspace
 - `--json` — machine-readable output on stdout; errors always go to stderr in both modes, so scripts and other language-model harnesses can drive `kb` directly
 - `--debug` — write a JSONL trace of every knowledge-base call (and, in the TUI, every input event and view change) to `./kb-debug-<timestamp>.jsonl`
 
-Full detail on all three: [kb(1)](kb.1.md), § GLOBAL FLAGS.
+Full detail on all three: [kb(1)](kb.1.md), § GLOBAL OPTIONS.
+
+### Workspace and environment
+
+`kb` finds its workspace by walking up, never sideways: another workspace on the same machine is never reached. These variables are read, and an option on the command line wins over each:
+
+- `KB_DB` — the database path, as `--db`
+- `KB_PROJECT` — the project to act on when none is given and the current directory belongs to none
+- `KB_CEILING_DIRECTORIES` — directories the walk up never enters or passes (like git's `GIT_CEILING_DIRECTORIES`); set it to a scratch directory that sits inside a real workspace
+- `KB_QUIET` — silence advisory notes on standard error; never an error
+
+See [kb(1)](kb.1.md), § WORKSPACE AND ENVIRONMENT.
+
+### Naming records
+
+A decision record is `SCOPE/DR-NNNN`, where SCOPE is a project name or `workspace`: `harvey/DR-0004`, `workspace/DR-0003`. Listings print that form, and a change to a record (`set-status`, `supersede`, `delete`) needs it, or a project inferred from the working directory. `kb record list harvey clasm` takes scopes as arguments, `kb record pending` lists what is waiting for a decision, and `--all` widens a project directory to the whole workspace. See [kb-record(1)](kb-record.1.md).
 
 ### Interactive TUI
 

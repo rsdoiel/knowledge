@@ -6,19 +6,19 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 
 ## Release Notes
 
-- version: 0.0.16
+- version: 0.0.17
 - status: active
-- released: 2026-10-06
+- released: 2026-10-08
 
-One new verb, `kb completion`, so that tab completion works in bash and PowerShell. The decision is DR-0056. It was written and tested red first, and checked by sourcing the script in real bash and PowerShell against the real workspace.
+Records are named by scope, and the workspace is found from anywhere inside it. The decisions are DR-0057 (qualified record references) and DR-0058 (scope). It was written and tested red first, the race detector passed on darwin/arm64, and the new commands were checked read-only against two real workspaces, one with 277 records in 23 projects where `DR-0001` appears ten times.
 
-`kb completion bash` and `kb completion powershell` write a completion script to standard output (`pwsh` is accepted for `powershell`). It completes the verbs, the subverbs of `project`, `observation`, `concept`, `source`, `link`, `record` and `document` (and `document review`), each verb's flags once a dash is typed, help topics after `help`, paths after `-db`, `-in`, `-out`, `-a`, `-b`, `-jsonl`, `-root` and `-dir`, and project names after `--project` and after `project show`, `concepts`, `set-status`, `set-description`, `rename` and `delete`. Project names come from `kb project list` in the current directory and honour a `-db` typed earlier on the line.
+A record is `SCOPE/DR-NNNN`, where SCOPE is a project name or `workspace` (the workspace directory's own name is accepted for it). `kb record list` prints that reference first on every line, `--json` gains `ref`, and `show`, `set-status`, `supersede`, `delete`, `new` and `fuzzy-tag` confirm with it, so "DR-0047 needs accepting" says which project. A bare id still works where only one record has it, and otherwise lists the qualified forms. A change (`set-status`, `supersede`, `delete`) will not act on a bare id with no scope.
 
-`kb completion SHELL -install` installs it instead. With bash the script goes to `$XDG_DATA_HOME/bash-completion/completions/kb`, or the same path under `~/.local/share`, and a file that `kb` did not write is never overwritten (exit 73). With PowerShell it writes `kb-completion.ps1` beside the profile and adds one line that dot-sources it, once. Windows PowerShell 5.1 is not covered.
+`kb record list harvey clasm workspace` takes scopes as arguments. With none it uses the project the working directory belongs to, then `KB_PROJECT`, then the whole workspace; `--all` widens it; `record new` does the same. `kb record pending` lists the proposed records in scope. `--project` and `--workspace` still work on those verbs and say on standard error that they are deprecated. A project can no longer be named `workspace`.
 
-The verb list is read from the verbs `kb` registers, so a new verb is completed without anyone naming it. The subverbs and flags are tables, and the tests fail when a table disagrees with the code, so a new flag or subverb must be added to them. The verb opens no database and refuses `-db`. A bad or missing shell name, a surplus argument and an unknown flag exit 2.
+`kb` walks up from the current directory to the nearest `agents/knowledge.db` or `agents/knowledge.jsonl`, so it works from any subdirectory; a fresh clone with only the JSONL file is told to `kb import -in agents/knowledge.jsonl`. `KB_DB`, `KB_PROJECT`, `KB_CEILING_DIRECTORIES` and `KB_QUIET` are read; a note on standard error says when the workspace is not the current directory. The library exports `FindWorkspace`, `Ref`, `ParseRef`, `ResolveRef` and `ProjectForDir`, for harvey.
 
-Upgrading: nothing that worked changes. `kb completion` did not exist before, so a script that called it got exit 2 (unknown verb).
+Upgrading: a script that reads `record list` by column breaks; use `--json`. Skills that quote the old forms need `kb >= 0.0.17`. A scratch directory inside a real workspace now reaches it unless `KB_CEILING_DIRECTORIES` names the scratch directory.
 
 
 ### Authors

@@ -3,6 +3,70 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.17 — 2026-10-08
+
+Everything below is written and tested red first. The decisions are knowledge DR-0057 (qualified record
+references) and DR-0058 (scope), accepted 2026-10-08, from the design brief
+`agents/projects/knowledge/design/scoped-refs-and-tui-parity-design.md`. DR-0059 to DR-0062 (a verb table,
+review-then-decide, the terminal requirement for `accepted`, a read/write TUI) are accepted but are not in this
+release. The race detector was run on darwin/arm64 at the last code commit and the suite passed; the new
+commands were checked read-only, with a scratch build, against both the Laboratory and the WorkLab workspaces
+(277 records, 23 projects in the second, with `DR-0001` repeated ten times).
+
+### Added
+
+- **A workspace is found by walking up** (DR-0058): from the current directory to the nearest ancestor with
+  `agents/knowledge.db` or `agents/knowledge.jsonl`, as git finds `.git`, so every verb works from any
+  subdirectory. `-db` still wins. A fresh clone that has only the JSONL file is told to run
+  `kb import -in agents/knowledge.jsonl`, not `kb init`, and `kb import` builds the database in the workspace
+  and not in the current directory. Library: `knowledge.FindWorkspace`, `MarkerDB`, `MarkerJSONL`.
+- **Environment:** `KB_DB` (the database, as `-db`), `KB_PROJECT` (the project to act on when the directory
+  gives none), `KB_CEILING_DIRECTORIES` (directories the walk never enters or passes, as git's
+  `GIT_CEILING_DIRECTORIES`), `KB_QUIET` (silences advisory notes, never an error). When the workspace found is
+  not the current directory, a note on standard error says so; standard output is untouched.
+- **Qualified record references** `SCOPE/DR-NNNN` (DR-0057), where SCOPE is a project name or `workspace`. The
+  workspace directory's own name, in any case, is accepted for `workspace`, and a project of that name wins. A
+  short id is padded (`harvey/4` is `harvey/DR-0004`). Library: `Ref`, `ParseRef`, `(*KnowledgeBase).ResolveRef`
+  and `*AmbiguousRefError`, so harvey shares the syntax and the lookup.
+- **Scope on the record verbs** (DR-0058): `kb record list harvey clasm workspace`; with no scope, the project the
+  working directory belongs to (under `agents/projects/NAME/`, or a repository directory `NAME/` beside it), then
+  `KB_PROJECT`, then the whole workspace; `--all` widens it. `record new` takes its project the same way.
+  Library: `(*KnowledgeBase).ProjectForDir`.
+- **`kb record pending [SCOPE...] [--all]`**: every `proposed` record in scope, oldest first, with the other
+  `list` filters. `--status` is a usage error.
+
+### Changed
+
+- **Listings name records by reference.** `record list` starts each line with `harvey/DR-0004` (columns
+  aligned) in place of the bare id and the `-` project column; `--json` gains `ref` beside the unchanged
+  `record_id`, `project` and `scope`. `record show` heads with the reference and qualifies every relation.
+  `set-status`, `supersede`, `delete`, `new` and `fuzzy-tag` confirm with references, and their `--json` gains
+  `ref` (`new_ref` and `old_ref` for `supersede`).
+- **A change needs a scope.** `set-status`, `supersede` and `delete` refuse a bare id with no scope, even when
+  it is unique (exit 2, offering the qualified form). Say `harvey/DR-0004`, run it inside the project, or set
+  `KB_PROJECT`. Reading verbs resolve a bare id inside the inferred project.
+- **A bare id is looked up in this workspace's records only**, where it used to count every workspace's.
+- **`record list` takes scope arguments**, so a trailing word is no longer a surplus argument (exit 2); an
+  unknown scope is exit 1, as an unknown `--project` always was.
+- **`--project` and `--workspace` are deprecated** on `list`, `pending`, `show`, `concepts`, `set-status`,
+  `supersede` and `delete`. They still work, must agree with a qualified reference, and print one line on
+  standard error naming the better spelling. `record new`, `record fuzzy-tag` and other verbs' `--project`
+  are unchanged.
+- **A project cannot be named `workspace`** (any case): `project add` and `project rename` refuse it, exit 2.
+  It names the workspace tier in a reference, so such a project could never be reached.
+- The tests set `KB_CEILING_DIRECTORIES`, `KB_DB` and `KB_QUIET` themselves, so a developer's shell cannot
+  change them, and the record round-trip test reads only the workspace it sits in.
+
+### Upgrade notes
+
+- A script that reads `record list` output by column breaks: the first column is now the reference and its
+  width varies. Use `--json`; `record_id` is unchanged and `ref` is new.
+- A script or skill that changes a record with a bare id (`record set-status 0004 accepted --project X` still
+  works, with a note) should use `X/DR-0004`. Skills that quote the old forms need `kb >= 0.0.17`.
+- `kb` run from a subdirectory of a workspace used to fail with exit 66; it now finds the workspace. A scratch
+  directory inside a real workspace therefore reaches it: set `KB_CEILING_DIRECTORIES` to the scratch directory
+  to prevent that.
+
 ## v0.0.16 — 2026-10-06
 
 Written and tested red first. The decision is knowledge DR-0056. It was checked by sourcing the generated

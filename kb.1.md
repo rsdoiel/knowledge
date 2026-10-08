@@ -1,6 +1,6 @@
-%kb(1) user manual | version 0.0.16 cbb22c1
+%kb(1) user manual | version 0.0.17 46c080a
 % R. S. Doiel
-% 2026-10-06
+% 2026-10-08
 
 # NAME
 
@@ -53,8 +53,8 @@ a difference of opinion.
 # GLOBAL OPTIONS
 
 -db PATH
-: path to knowledge.db (default: ./agents/knowledge.db, relative to the
-  current directory)
+: path to knowledge.db. Without it the workspace is found by walking up from
+  the current directory — see WORKSPACE AND ENVIRONMENT
 
 -json
 : machine-readable JSON output instead of human-readable text. Applies to
@@ -73,6 +73,48 @@ untouched: in "kb -json ingest DIR --dry-run", -json is global and
   the current directory. The path is printed to stderr once at startup.
   Applies to every verb and the TUI. Omitting --debug costs nothing —
   no file is written and behavior is unchanged.
+
+# WORKSPACE AND ENVIRONMENT
+
+A workspace is a directory with an agents/ directory holding knowledge.db, the
+working copy, or knowledge.jsonl, the export that is tracked in git. Without
+-db, kb walks up from the current directory to the nearest ancestor that
+has either file, as git finds .git, so every verb works from any subdirectory
+of a workspace. Where one directory has both, the database is used. A directory
+elsewhere on the machine is a different workspace and is never reached: each
+knowledge base is independent of the others.
+
+A fresh clone has knowledge.jsonl but no knowledge.db, because databases are not
+tracked. kb then says so and names the remedy,
+"kb import -in agents/knowledge.jsonl", which builds the database in the
+workspace rather than in the current directory. It does not suggest init, which
+would start an empty history beside the real one.
+
+When the workspace found is not the current directory, kb says which on
+standard error, once per command: "kb: using the workspace at DIR (found above
+the current directory)". Standard output is untouched, so -json stays parseable.
+
+These environment variables are read, and an option on the command line wins
+over each:
+
+KB_DB
+: the path to the database, as -db. Not read by init, index, merge or
+  completion, which refuse -db
+
+KB_PROJECT
+: the project to act on when none is given and the current directory belongs to
+  no project (record verbs; see kb-record(1)). The directory is closer
+  evidence, so it wins over this
+
+KB_CEILING_DIRECTORIES
+: directories, separated as PATH is, that the walk up never enters or passes, as
+  git's GIT_CEILING_DIRECTORIES. It keeps a scratch directory inside a real
+  workspace from reaching that workspace, and is set to the temporary directory
+  by the tests
+
+KB_QUIET
+: any value but empty, 0 or false silences advisory notes on standard error (the
+  workspace note, and a deprecated flag's). It never silences an error
 
 # VERBS
 
@@ -113,7 +155,7 @@ ingest
   kb-ingest(1)
 
 record
-: read and maintain decision records — list, show, new, set-status,
+: read and maintain decision records — list, pending, show, new, set-status,
   supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
   kb-record(1)
 
@@ -174,7 +216,8 @@ the error on stderr carries the class name beside the number, for example
   record list filter value that nothing carries; an index that is stale; or the
   current state forbids the operation (a concept or source still linked, a
   rename or add onto a name that already exists, a project that still owns
-  records, a document section not yet drafted)
+  records, a document section not yet drafted); a record scope that is neither
+  a project nor the workspace
 
 2
 : usage error: the command line itself is wrong and nothing was attempted. An
@@ -195,7 +238,8 @@ the error on stderr carries the class name beside the number, for example
 
 66
 : a named input or the workspace is missing: no such file or directory, a
-  directory where a file is needed, or no agents/knowledge.db here
+  directory where a file is needed, or no workspace above the current directory
+  (or one with only knowledge.jsonl, which is to be imported)
 
 69
 : a network service could not be reached: source check-retractions, after it has

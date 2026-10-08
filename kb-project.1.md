@@ -1,6 +1,6 @@
-%kb-project(1) user manual | version 0.0.16 cbb22c1
+%kb-project(1) user manual | version 0.0.17 46c080a
 % R. S. Doiel
-% 2026-10-06
+% 2026-10-08
 
 # NAME
 
@@ -29,7 +29,9 @@ kb project delete NAME [--force] [--dry-run]
 A project is the top-level container observations and concepts attach to.
 Names are unique; adding a project whose name exists is refused (exit 1,
 "already exists", naming its id) and changes nothing -- use set-status and
-set-description to change either.
+set-description to change either. The name workspace, in any case, is reserved
+(exit 2) for add and rename: it names the workspace tier in a record reference
+such as workspace/DR-0003, so a project of that name could never be reached.
 
 add
 : create a project. --status sets the initial status (default: active) and

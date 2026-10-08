@@ -57,8 +57,8 @@ a difference of opinion.
 # GLOBAL OPTIONS
 
 -db PATH
-: path to knowledge.db (default: ./agents/knowledge.db, relative to the
-  current directory)
+: path to knowledge.db. Without it the workspace is found by walking up from
+  the current directory — see WORKSPACE AND ENVIRONMENT
 
 -json
 : machine-readable JSON output instead of human-readable text. Applies to
@@ -77,6 +77,48 @@ untouched: in "{app_name} -json ingest DIR --dry-run", -json is global and
   the current directory. The path is printed to stderr once at startup.
   Applies to every verb and the TUI. Omitting --debug costs nothing —
   no file is written and behavior is unchanged.
+
+# WORKSPACE AND ENVIRONMENT
+
+A workspace is a directory with an agents/ directory holding knowledge.db, the
+working copy, or knowledge.jsonl, the export that is tracked in git. Without
+-db, {app_name} walks up from the current directory to the nearest ancestor that
+has either file, as git finds .git, so every verb works from any subdirectory
+of a workspace. Where one directory has both, the database is used. A directory
+elsewhere on the machine is a different workspace and is never reached: each
+knowledge base is independent of the others.
+
+A fresh clone has knowledge.jsonl but no knowledge.db, because databases are not
+tracked. {app_name} then says so and names the remedy,
+"{app_name} import -in agents/knowledge.jsonl", which builds the database in the
+workspace rather than in the current directory. It does not suggest init, which
+would start an empty history beside the real one.
+
+When the workspace found is not the current directory, {app_name} says which on
+standard error, once per command: "kb: using the workspace at DIR (found above
+the current directory)". Standard output is untouched, so -json stays parseable.
+
+These environment variables are read, and an option on the command line wins
+over each:
+
+KB_DB
+: the path to the database, as -db. Not read by init, index, merge or
+  completion, which refuse -db
+
+KB_PROJECT
+: the project to act on when none is given and the current directory belongs to
+  no project (record verbs; see {app_name}-record(1)). The directory is closer
+  evidence, so it wins over this
+
+KB_CEILING_DIRECTORIES
+: directories, separated as PATH is, that the walk up never enters or passes, as
+  git's GIT_CEILING_DIRECTORIES. It keeps a scratch directory inside a real
+  workspace from reaching that workspace, and is set to the temporary directory
+  by the tests
+
+KB_QUIET
+: any value but empty, 0 or false silences advisory notes on standard error (the
+  workspace note, and a deprecated flag's). It never silences an error
 
 # VERBS
 
@@ -117,7 +159,7 @@ ingest
   {app_name}-ingest(1)
 
 record
-: read and maintain decision records — list, show, new, set-status,
+: read and maintain decision records — list, pending, show, new, set-status,
   supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
   {app_name}-record(1)
 
@@ -178,7 +220,8 @@ the error on stderr carries the class name beside the number, for example
   record list filter value that nothing carries; an index that is stale; or the
   current state forbids the operation (a concept or source still linked, a
   rename or add onto a name that already exists, a project that still owns
-  records, a document section not yet drafted)
+  records, a document section not yet drafted); a record scope that is neither
+  a project nor the workspace
 
 2
 : usage error: the command line itself is wrong and nothing was attempted. An
@@ -199,7 +242,8 @@ the error on stderr carries the class name beside the number, for example
 
 66
 : a named input or the workspace is missing: no such file or directory, a
-  directory where a file is needed, or no agents/knowledge.db here
+  directory where a file is needed, or no workspace above the current directory
+  (or one with only knowledge.jsonl, which is to be imported)
 
 69
 : a network service could not be reached: source check-retractions, after it has
@@ -441,7 +485,9 @@ const ProjectHelpText = `%{app_name}-project(1) user manual | version {version} 
 A project is the top-level container observations and concepts attach to.
 Names are unique; adding a project whose name exists is refused (exit 1,
 "already exists", naming its id) and changes nothing -- use set-status and
-set-description to change either.
+set-description to change either. The name workspace, in any case, is reserved
+(exit 2) for add and rename: it names the workspace tier in a record reference
+such as workspace/DR-0003, so a project of that name could never be reached.
 
 add
 : create a project. --status sets the initial status (default: active) and
@@ -1125,7 +1171,11 @@ const ImportHelpText = `%{app_name}-import(1) user manual | version {version} {r
 # DESCRIPTION
 
 import reads a JSON-L stream produced by export — from -in, or stdin when
--in is omitted — and applies it to the already-open --db database.
+-in is omitted — and applies it to the already-open --db database, or, without
+-db, to the database of the workspace found by walking up from the current
+directory. In a fresh clone that has only agents/knowledge.jsonl, run
+"{app_name} import -in agents/knowledge.jsonl" from anywhere inside the
+workspace to build agents/knowledge.db there.
 Projects and concepts are matched by uuid first (DR-0026): a match
 reconciles name/description/status by whichever side's updated_at is
 later, the same last-writer-wins rule merge uses. A uuid miss falls back
@@ -1290,7 +1340,7 @@ are identity, not chronology: a correction can carry a lower id than the
 record it supersedes.
 
 A record id is not by itself an identity, since two projects may each have a
-DR-0001. A record is named by SCOPE/DR-NNNN, where SCOPE is a project name or
+DR-0001, and listings print the qualified form for that reason. A record is named by SCOPE/DR-NNNN, where SCOPE is a project name or
 workspace (the workspace directory's own name is accepted as an alias for it,
 and a project of that name wins): harvey/DR-0004, workspace/DR-0003. A bare id
 resolves only where one record has it; otherwise the command lists the
@@ -1306,21 +1356,29 @@ whole workspace. An unknown scope is exit 1. --project and --workspace remain
 as aliases for one scope and cannot be mixed with scope arguments or --all.
 
 list
-: print matching records, one per line. --status, --kind, --trigger and
+: print matching records, one per line, each starting with its SCOPE/DR-NNNN
+  reference. --status, --kind, --trigger and
   --initiative filter on those fields and --since DATE (YYYY, YYYY-MM or
   YYYY-MM-DD) keeps records dated on or after it; filters combine.
   "no matching records" means a real filter matched nothing. A value that
   no record carries and the vocabularies below do not list is a typo, and
   is an error that names what is known (exit 1, a lookup that found nothing;
   record new and set-status, which write a value, exit 2 for the same thing).
-  A record ID that exists in more than one tier is ambiguous and exits 2:
-  qualify it with --project or --workspace. A value outside the vocabularies
+  A bare record id that exists in more than one tier is ambiguous and exits 2,
+  listing the qualified forms. A value outside the vocabularies
   that some record does carry still filters. --workspace and --project
   cannot be combined, since workspace-tier records have no project
 
+pending
+: list the records waiting for a decision: every record whose status is
+  proposed, oldest first, in the scope list would use. The other list filters
+  apply; --status does not (exit 2), since the status is what pending means.
+  Nothing pending is success
+
 show
 : print one record with its body and its relations resolved in both
-  directions. Only supersedes is stored; superseded_by is its inverse
+  directions, every one named SCOPE/DR-NNNN. Only supersedes is stored;
+  superseded_by is its inverse
 
 set-status
 : set a record's status in both its file and the database. The promotion path
@@ -1396,7 +1454,10 @@ model may write a record, but only the author accepts one.
 
 # EXIT STATUS
 
-The workspace convention, as described in {app_name}(1). For record fuzzy-tag:
+The workspace convention, as described in {app_name}(1). A scope that is neither a
+project nor the workspace is 1; a malformed reference, a bare id that is
+ambiguous, a change (set-status, supersede, delete) given a bare id with no
+scope, and record new with no scope anywhere are 2. For record fuzzy-tag:
 0 the report was produced, or the tags were written, including "nothing found";
 1 no such project or concept; 2 a bad flag, a missing --project, or a surplus
 argument, and on any record verb a --concept or --write it does not take; 65 a
@@ -1430,11 +1491,20 @@ trigger
 
 # OPTIONS
 
+--all
+: on list and pending, every project and the workspace tier, whatever the current
+  directory is
+
 --project P
-: restrict to, or resolve within, project P
+: restrict to, or resolve within, project P. On new and fuzzy-tag it is how the
+  project is named. Elsewhere it is deprecated: give the scope as an argument to
+  list and pending, or qualify the record as P/DR-NNNN. It still works and says
+  so on standard error
 
 --workspace
-: restrict to, or resolve within, the workspace tier
+: restrict to, or resolve within, the workspace tier. On new it names the tier.
+  Elsewhere it is deprecated in the same way: use workspace as the scope or
+  workspace/DR-NNNN
 
 --partial
 : on supersede, leave OLD accepted instead of marking it superseded. Use when
@@ -1463,25 +1533,43 @@ trigger
 
 # EXAMPLES
 
-Every correction in one project, and everything since a date:
+Every correction in one project, and everything since a date, then two scopes
+at once and the workspace tier:
 
 ~~~shell
-{app_name} record list --project clasm --kind correction
-{app_name} record list --project clasm --since 2026-08-01
+{app_name} record list clasm --kind correction
+{app_name} record list clasm --since 2026-08-01
+{app_name} record list clasm cold workspace
 ~~~
 
-Promote a proposed record, then wholly and partially supersede:
+What is waiting for a decision, in every project or in one:
 
 ~~~shell
-{app_name} record set-status 0004 accepted --project knowledge
-{app_name} record supersede 0149 0148 --project clasm
-{app_name} record supersede 0159 0160 --project clasm --partial
+{app_name} record pending --all
+{app_name} record pending knowledge
+~~~
+
+Inside a project directory the project is the scope, and --all widens it:
+
+~~~shell
+cd ~/Laboratory/harvey && {app_name} record list
+cd ~/Laboratory/harvey && {app_name} record list --all
+~~~
+
+Promote a proposed record, then wholly and partially supersede. A change names
+the record by its qualified reference, since a bare id is not enough to act on:
+
+~~~shell
+{app_name} record set-status knowledge/DR-0004 accepted
+{app_name} record supersede clasm/DR-0149 clasm/DR-0148
+{app_name} record supersede clasm/DR-0159 clasm/DR-0160 --partial
 ~~~
 
 Start a new record, and bring a corpus into canonical form:
 
 ~~~shell
 {app_name} record new --project clasm --title "Retry the profile attach" --trigger live-test
+{app_name} record new --title "Run from inside the project" --trigger design
 {app_name} record new --project clasm --title "Filed under the old layout" --trigger request --dir clasm/decisions
 {app_name} record fmt clasm/decisions --dry-run
 ~~~

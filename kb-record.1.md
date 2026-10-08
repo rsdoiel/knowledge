@@ -1,6 +1,6 @@
-%kb-record(1) user manual | version 0.0.16 cbb22c1
+%kb-record(1) user manual | version 0.0.17 46c080a
 % R. S. Doiel
-% 2026-10-06
+% 2026-10-08
 
 # NAME
 
@@ -8,23 +8,25 @@ kb-record — read and maintain decision records
 
 # SYNOPSIS
 
-kb record list [--project P] [--workspace] [--status S] [--kind K] [--trigger T] [--initiative I] [--since DATE]
+kb record pending [SCOPE...] [--all] [--kind K] [--trigger T] [--initiative I] [--since DATE]
 
-kb record show RECORD_ID [--project P] [--workspace]
+kb record list [SCOPE...] [--all] [--status S] [--kind K] [--trigger T] [--initiative I] [--since DATE]
 
-kb record set-status RECORD_ID STATUS [--project P] [--workspace] [--root DIR]
+kb record show RECORD_REF [--project P] [--workspace]
 
-kb record supersede NEW OLD [--partial] [--project P] [--workspace] [--root DIR]
+kb record set-status RECORD_REF STATUS [--project P] [--workspace] [--root DIR]
 
-kb record new --title T --trigger G (--project P | --workspace) [--kind K] [--dir DIR] [--root DIR]
+kb record supersede NEW_REF OLD_REF [--partial] [--project P] [--workspace] [--root DIR]
+
+kb record new --title T --trigger G [--project P | --workspace] [--kind K] [--dir DIR] [--root DIR]
 
 kb record fmt PATH [--dry-run]
 
-kb record concepts RECORD_ID [--project P] [--workspace]
+kb record concepts RECORD_REF [--project P] [--workspace]
 
 kb record fuzzy-tag --project P [--concept NAME,...] [--write] [--dry-run] [--root DIR]
 
-kb record delete RECORD_ID [--project P] [--workspace] [--root DIR] [--dry-run]
+kb record delete RECORD_REF [--project P] [--workspace] [--root DIR] [--dry-run]
 
 # DESCRIPTION
 
@@ -36,25 +38,45 @@ are identity, not chronology: a correction can carry a lower id than the
 record it supersedes.
 
 A record id is not by itself an identity, since two projects may each have a
-DR-0001. Where a bare id is ambiguous, the command reports the candidates and
-asks for --project or --workspace rather than choosing one.
+DR-0001, and listings print the qualified form for that reason. A record is named by SCOPE/DR-NNNN, where SCOPE is a project name or
+workspace (the workspace directory's own name is accepted as an alias for it,
+and a project of that name wins): harvey/DR-0004, workspace/DR-0003. A bare id
+resolves only where one record has it; otherwise the command lists the
+qualified candidates rather than choosing one. A command that changes a record
+(set-status, supersede, delete) never acts on a bare id with no scope: say
+harvey/DR-0004, run it from inside the project, or set KB_PROJECT.
+
+Scope. list takes scopes as arguments: kb record list harvey clasm workspace.
+With none it uses the project the working directory belongs to (under
+agents/projects/NAME/, or in a repository directory NAME/ beside it), else
+the project KB_PROJECT names, else the whole workspace; --all widens it to the
+whole workspace. An unknown scope is exit 1. --project and --workspace remain
+as aliases for one scope and cannot be mixed with scope arguments or --all.
 
 list
-: print matching records, one per line. --status, --kind, --trigger and
+: print matching records, one per line, each starting with its SCOPE/DR-NNNN
+  reference. --status, --kind, --trigger and
   --initiative filter on those fields and --since DATE (YYYY, YYYY-MM or
   YYYY-MM-DD) keeps records dated on or after it; filters combine.
   "no matching records" means a real filter matched nothing. A value that
   no record carries and the vocabularies below do not list is a typo, and
   is an error that names what is known (exit 1, a lookup that found nothing;
   record new and set-status, which write a value, exit 2 for the same thing).
-  A record ID that exists in more than one tier is ambiguous and exits 2:
-  qualify it with --project or --workspace. A value outside the vocabularies
+  A bare record id that exists in more than one tier is ambiguous and exits 2,
+  listing the qualified forms. A value outside the vocabularies
   that some record does carry still filters. --workspace and --project
   cannot be combined, since workspace-tier records have no project
 
+pending
+: list the records waiting for a decision: every record whose status is
+  proposed, oldest first, in the scope list would use. The other list filters
+  apply; --status does not (exit 2), since the status is what pending means.
+  Nothing pending is success
+
 show
 : print one record with its body and its relations resolved in both
-  directions. Only supersedes is stored; superseded_by is its inverse
+  directions, every one named SCOPE/DR-NNNN. Only supersedes is stored;
+  superseded_by is its inverse
 
 set-status
 : set a record's status in both its file and the database. The promotion path
@@ -130,7 +152,10 @@ model may write a record, but only the author accepts one.
 
 # EXIT STATUS
 
-The workspace convention, as described in kb(1). For record fuzzy-tag:
+The workspace convention, as described in kb(1). A scope that is neither a
+project nor the workspace is 1; a malformed reference, a bare id that is
+ambiguous, a change (set-status, supersede, delete) given a bare id with no
+scope, and record new with no scope anywhere are 2. For record fuzzy-tag:
 0 the report was produced, or the tags were written, including "nothing found";
 1 no such project or concept; 2 a bad flag, a missing --project, or a surplus
 argument, and on any record verb a --concept or --write it does not take; 65 a
@@ -164,11 +189,20 @@ trigger
 
 # OPTIONS
 
+--all
+: on list and pending, every project and the workspace tier, whatever the current
+  directory is
+
 --project P
-: restrict to, or resolve within, project P
+: restrict to, or resolve within, project P. On new and fuzzy-tag it is how the
+  project is named. Elsewhere it is deprecated: give the scope as an argument to
+  list and pending, or qualify the record as P/DR-NNNN. It still works and says
+  so on standard error
 
 --workspace
-: restrict to, or resolve within, the workspace tier
+: restrict to, or resolve within, the workspace tier. On new it names the tier.
+  Elsewhere it is deprecated in the same way: use workspace as the scope or
+  workspace/DR-NNNN
 
 --partial
 : on supersede, leave OLD accepted instead of marking it superseded. Use when
@@ -197,25 +231,43 @@ trigger
 
 # EXAMPLES
 
-Every correction in one project, and everything since a date:
+Every correction in one project, and everything since a date, then two scopes
+at once and the workspace tier:
 
 ~~~shell
-kb record list --project clasm --kind correction
-kb record list --project clasm --since 2026-08-01
+kb record list clasm --kind correction
+kb record list clasm --since 2026-08-01
+kb record list clasm cold workspace
 ~~~
 
-Promote a proposed record, then wholly and partially supersede:
+What is waiting for a decision, in every project or in one:
 
 ~~~shell
-kb record set-status 0004 accepted --project knowledge
-kb record supersede 0149 0148 --project clasm
-kb record supersede 0159 0160 --project clasm --partial
+kb record pending --all
+kb record pending knowledge
+~~~
+
+Inside a project directory the project is the scope, and --all widens it:
+
+~~~shell
+cd ~/Laboratory/harvey && kb record list
+cd ~/Laboratory/harvey && kb record list --all
+~~~
+
+Promote a proposed record, then wholly and partially supersede. A change names
+the record by its qualified reference, since a bare id is not enough to act on:
+
+~~~shell
+kb record set-status knowledge/DR-0004 accepted
+kb record supersede clasm/DR-0149 clasm/DR-0148
+kb record supersede clasm/DR-0159 clasm/DR-0160 --partial
 ~~~
 
 Start a new record, and bring a corpus into canonical form:
 
 ~~~shell
 kb record new --project clasm --title "Retry the profile attach" --trigger live-test
+kb record new --title "Run from inside the project" --trigger design
 kb record new --project clasm --title "Filed under the old layout" --trigger request --dir clasm/decisions
 kb record fmt clasm/decisions --dry-run
 ~~~

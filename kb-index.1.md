@@ -1,6 +1,6 @@
-%kb-index(1) user manual | version 0.0.16 cbb22c1
+%kb-index(1) user manual | version 0.0.17 46c080a
 % R. S. Doiel
-% 2026-10-06
+% 2026-10-08
 
 # NAME
 
