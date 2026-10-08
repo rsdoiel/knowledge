@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -194,5 +195,57 @@ func TestRecordNew_ReportsTheQualifiedRef(t *testing.T) {
 	}
 	if _, err := json.Marshal(result); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// record new takes its project from the working directory or KB_PROJECT when
+// neither --project nor --workspace is given (DR-0058), the way the other
+// record verbs do.
+
+func TestRecordNew_InfersTheProjectFromTheWorkingDirectory(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "harvey", "cmd"))
+	out := runRecord(t, kb, "new", "--title", "Inferred", "--trigger", "design")
+	if !strings.HasPrefix(out, "harvey/DR-0003 written to ") {
+		t.Errorf("output = %q, want harvey/DR-0003 (harvey already has 0001 and 0002)", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "agents", "projects", "harvey", "decisions")); err != nil {
+		t.Errorf("the record was not written under harvey's decisions directory: %v", err)
+	}
+}
+
+func TestRecordNew_InfersTheProjectFromKBProject(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "tmp", "scratch"))
+	t.Setenv("KB_PROJECT", "clasm")
+	out := runRecord(t, kb, "new", "--title", "From the environment", "--trigger", "design")
+	if !strings.HasPrefix(out, "clasm/DR-0002 written to ") {
+		t.Errorf("output = %q, want clasm/DR-0002", out)
+	}
+}
+
+func TestRecordNew_ExplicitScopeBeatsTheDirectory(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "harvey", "cmd"))
+	if out := runRecord(t, kb, "new", "--project", "clasm", "--title", "Explicit", "--trigger", "design"); !strings.HasPrefix(out, "clasm/DR-0002 written to ") {
+		t.Errorf("--project: output = %q, want clasm/DR-0002", out)
+	}
+	if out := runRecord(t, kb, "new", "--workspace", "--title", "Tier", "--trigger", "design"); !strings.HasPrefix(out, "workspace/DR-0002 written to ") {
+		t.Errorf("--workspace: output = %q, want workspace/DR-0002", out)
+	}
+}
+
+func TestRecordNew_WithNoScopeAnywhereIsAUsageError(t *testing.T) {
+	kb, root := scopeFixture(t)
+	t.Chdir(filepath.Join(root, "tmp", "scratch"))
+	var out bytes.Buffer
+	err := cmdRecord(kb, nil, false, []string{"new", "--title", "Lost", "--trigger", "design"}, &out)
+	if err == nil || !isUsageError(err) {
+		t.Fatalf("error = %v, want a usage error", err)
+	}
+	for _, want := range []string{"--project", "--workspace", "KB_PROJECT"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to mention %s", err, want)
+		}
 	}
 }

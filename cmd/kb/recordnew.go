@@ -147,7 +147,16 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 		return usageErrorf("record new requires --trigger; the empty-trigger concession is for converted records only")
 	}
 	if f.project == "" && !f.workspace {
-		return usageErrorf("record new requires --project P or --workspace")
+		// The project the working directory belongs to, else KB_PROJECT
+		// (DR-0058), as every other record verb does.
+		inferred, err := inferredProject(kb, f)
+		if err != nil {
+			return err
+		}
+		if inferred == "" {
+			return usageErrorf("record new needs a scope: --project P or --workspace, or run it from inside a project (or set KB_PROJECT)")
+		}
+		f.project = inferred
 	}
 	// Values being written, not searched for: a bad one is a usage error here,
 	// where the same unknown value as a record list filter is a lookup (DR-0047).

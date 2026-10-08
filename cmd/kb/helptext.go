@@ -1268,7 +1268,7 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record supersede NEW_REF OLD_REF [--partial] [--project P] [--workspace] [--root DIR]
 
-{app_name} record new --title T --trigger G (--project P | --workspace) [--kind K] [--dir DIR] [--root DIR]
+{app_name} record new --title T --trigger G [--project P | --workspace] [--kind K] [--dir DIR] [--root DIR]
 
 {app_name} record fmt PATH [--dry-run]
 
