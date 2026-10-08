@@ -1,4 +1,4 @@
-%kb-check-db(1) user manual | version 0.0.16 362523e
+%kb-check-db(1) user manual | version 0.0.16 cbb22c1
 % R. S. Doiel
 % 2026-10-06
 
