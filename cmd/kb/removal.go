@@ -336,13 +336,14 @@ func recordDelete(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out 
 		return err
 	}
 	root := recordRoot(kb, f)
+	ref := refOf(*rec, projectNames(kb))
 	path, err := resolveWithinRoot(root, rec.Path)
 	if err != nil {
 		return err
 	}
 	if _, statErr := os.Stat(path); statErr == nil {
-		return negativef("DR-%s's file still exists (%s); nothing was deleted: delete the file first, "+
-			"or retire the record with `kb record set-status %s cancelled`", rec.RecordID, rec.Path, rec.RecordID)
+		return negativef("%s's file still exists (%s); nothing was deleted: delete the file first, "+
+			"or retire the record with `kb record set-status %s cancelled`", ref, rec.Path, ref)
 	} else if !errors.Is(statErr, fs.ErrNotExist) {
 		return statErr
 	}
@@ -357,6 +358,7 @@ func recordDelete(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out 
 	}
 	if jsonOut {
 		return printJSON(out, struct {
+			Ref     string `json:"ref"`
 			Record  string `json:"record"`
 			Path    string `json:"path"`
 			Deleted bool   `json:"deleted"`
@@ -367,7 +369,7 @@ func recordDelete(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out 
 				RelationsTo   int `json:"relations_to"`
 			} `json:"removed"`
 			Notes []string `json:"notes,omitempty"`
-		}{Record: rec.RecordID, Path: rec.Path, Deleted: !f.dryRun, DryRun: f.dryRun, Removed: struct {
+		}{Ref: ref.String(), Record: rec.RecordID, Path: rec.Path, Deleted: !f.dryRun, DryRun: f.dryRun, Removed: struct {
 			Concepts      int `json:"concepts"`
 			RelationsFrom int `json:"relations_from"`
 			RelationsTo   int `json:"relations_to"`
@@ -377,7 +379,7 @@ func recordDelete(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out 
 	if f.dryRun {
 		verb = "would delete"
 	}
-	fmt.Fprintf(out, "%s the row for DR-%s (its file %s is gone): %s, %s\n", verb, rec.RecordID, rec.Path,
+	fmt.Fprintf(out, "%s the row for %s (its file %s is gone): %s, %s\n", verb, ref, rec.Path,
 		plural(u.Concepts, "concept link(s)"), plural(u.RelationsFrom+u.RelationsTo, "relation(s)"))
 	if !f.dryRun {
 		fmt.Fprintln(out, "note:", localDeleteNote)

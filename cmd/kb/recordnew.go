@@ -217,14 +217,18 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 
+	ref := knowledge.Ref{Scope: f.project, ID: id}
+	if f.workspace {
+		ref.Scope = "workspace"
+	}
 	result := map[string]any{
-		"record_id": id, "path": filepath.Join(dir, name),
+		"ref": ref.String(), "record_id": id, "path": filepath.Join(dir, name),
 		"status": "proposed", "scope": scope,
 	}
 	if jsonOut {
 		return printJSON(out, result)
 	}
-	fmt.Fprintf(out, "DR-%s written to %s (proposed)\n", id, filepath.Join(dir, name))
+	fmt.Fprintf(out, "%s written to %s (proposed)\n", ref, filepath.Join(dir, name))
 	return nil
 }
 

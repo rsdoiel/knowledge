@@ -12,6 +12,7 @@ import (
 
 // recordFuzzyRecord is one record's outcome in `record fuzzy-tag`'s report.
 type recordFuzzyRecord struct {
+	Ref      string                         `json:"ref"`
 	RecordID string                         `json:"record_id"`
 	Status   string                         `json:"status"`
 	Path     string                         `json:"path"`
@@ -110,7 +111,7 @@ func recordFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, ou
 			names[j] = fi.Concept
 		}
 		next, editErr := knowledge.AddRecordTags(raw, names)
-		res := recordFuzzyRecord{RecordID: rec.RecordID, Status: rec.Status, Path: rec.Path, Findings: findings, Action: "report"}
+		res := recordFuzzyRecord{Ref: knowledge.Ref{Scope: f.project, ID: rec.RecordID}.String(), RecordID: rec.RecordID, Status: rec.Status, Path: rec.Path, Findings: findings, Action: "report"}
 		if editErr == nil {
 			res.TagsLine = addedLines(raw, next)
 		}
@@ -120,7 +121,7 @@ func recordFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, ou
 				res.Action = "skipped-" + rec.Status
 				skipped[rec.Status]++
 			case editErr != nil:
-				return classedAs(classData, fmt.Errorf("DR-%s (%s): %w", rec.RecordID, rec.Path, editErr))
+				return classedAs(classData, fmt.Errorf("%s/DR-%s (%s): %w", f.project, rec.RecordID, rec.Path, editErr))
 			case f.dryRun:
 				res.Action = "would-tag"
 			default:
@@ -167,7 +168,7 @@ func recordFuzzyTag(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, ou
 		return nil
 	}
 	for _, r := range results {
-		fmt.Fprintf(out, "DR-%s [%s] %s\n", r.RecordID, r.Status, r.Path)
+		fmt.Fprintf(out, "%s [%s] %s\n", r.Ref, r.Status, r.Path)
 		for _, fi := range r.Findings {
 			line := fmt.Sprintf("  %s ~ %s (%d occurrence(s))", fi.Concept, strings.Join(fi.Variants, ", "), fi.Count)
 			if fi.ExactMentions > 0 {

@@ -19,6 +19,7 @@ func init() {
 // recordListEntry is one row of `kb record list`, and the JSON shape callers
 // script against.
 type recordListEntry struct {
+	Ref      string `json:"ref"`
 	RecordID string `json:"record_id"`
 	Project  string `json:"project"`
 	Scope    string `json:"scope"`
@@ -156,6 +157,7 @@ func projectNames(kb *knowledge.KnowledgeBase) map[int64]string {
 // toEntry renders a record for listing.
 func toEntry(r knowledge.Record, names map[int64]string) recordListEntry {
 	return recordListEntry{
+		Ref:      refOf(r, names).String(),
 		RecordID: r.RecordID,
 		Project:  names[r.ProjectID],
 		Scope:    r.Scope,
@@ -195,9 +197,15 @@ func recordList(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io
 	if jsonOut {
 		return printJSON(out, entries)
 	}
+	width := 0
 	for _, e := range entries {
-		fmt.Fprintf(out, "DR-%s  %s  %-11s %-11s %-16s %s\n",
-			e.RecordID, e.Date, e.Status, e.Kind, dashIfEmpty(e.Trigger), e.Title)
+		if len(e.Ref) > width {
+			width = len(e.Ref)
+		}
+	}
+	for _, e := range entries {
+		fmt.Fprintf(out, "%-*s  %s  %-11s %-11s %-16s %s\n",
+			width, e.Ref, e.Date, e.Status, e.Kind, dashIfEmpty(e.Trigger), e.Title)
 	}
 	if len(entries) == 0 {
 		fmt.Fprintln(out, "no matching records")
@@ -458,10 +466,7 @@ func recordShow(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io
 		if err != nil {
 			continue
 		}
-		label := "DR-" + other.RecordID
-		if other.ProjectID != rec.ProjectID || other.Scope != rec.Scope {
-			label = qualify(*other, names) + ":" + label
-		}
+		label := refOf(*other, names).String()
 		switch rel.Relationship {
 		case "supersedes":
 			detail.Supersedes = append(detail.Supersedes, label)
@@ -475,7 +480,7 @@ func recordShow(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io
 	if jsonOut {
 		return printJSON(out, detail)
 	}
-	fmt.Fprintf(out, "DR-%s  %s\n", detail.RecordID, qualify(*rec, names))
+	fmt.Fprintf(out, "%s\n", detail.Ref)
 	for _, row := range [][2]string{
 		{"title", detail.Title},
 		{"date", detail.Date},
@@ -492,6 +497,12 @@ func recordShow(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io
 	}
 	fmt.Fprintf(out, "%s\n", detail.Body)
 	return nil
+}
+
+// refOf is the qualified reference of a record: its project, or workspace, and
+// its id. It is what every listing and confirmation prints (DR-0057).
+func refOf(r knowledge.Record, names map[int64]string) knowledge.Ref {
+	return knowledge.Ref{Scope: qualify(r, names), ID: r.RecordID}
 }
 
 // qualify names a record's tier: its project, or the workspace tier.
@@ -672,14 +683,15 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 		note = joinNotes(note, fmt.Sprintf("index.md could not be refreshed: %v", regenErr))
 	}
 
-	result := map[string]any{"record_id": rec.RecordID, "status": status, "path": rec.Path}
+	ref := refOf(*rec, projectNames(kb))
+	result := map[string]any{"ref": ref.String(), "record_id": rec.RecordID, "status": status, "path": rec.Path}
 	if note != "" {
 		result["note"] = note
 	}
 	if jsonOut {
 		return printJSON(out, result)
 	}
-	fmt.Fprintf(out, "DR-%s status set to %s in %s\n", rec.RecordID, status, rec.Path)
+	fmt.Fprintf(out, "%s status set to %s in %s\n", ref, status, rec.Path)
 	if note != "" {
 		fmt.Fprintln(out, note)
 	}
@@ -766,7 +778,10 @@ func recordSupersede(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 		}
 	}
 
+	names := projectNames(kb)
+	newRef, oldRef := refOf(*newer, names), refOf(*older, names)
 	result := map[string]any{
+		"new_ref": newRef.String(), "old_ref": oldRef.String(),
 		"new": newer.RecordID, "old": older.RecordID,
 		"partial": f.partial, "old_status": olderRF.Record.Status,
 	}
@@ -776,8 +791,8 @@ func recordSupersede(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if jsonOut {
 		return printJSON(out, result)
 	}
-	fmt.Fprintf(out, "DR-%s supersedes DR-%s; DR-%s is now %s\n",
-		newer.RecordID, older.RecordID, older.RecordID, olderRF.Record.Status)
+	fmt.Fprintf(out, "%s supersedes %s; %s is now %s\n",
+		newRef, oldRef, oldRef, olderRF.Record.Status)
 	for _, n := range notes {
 		fmt.Fprintln(out, n)
 	}
