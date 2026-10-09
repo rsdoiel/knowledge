@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.17
+version: 0.0.18
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,23 +33,23 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-10-08
+date_released: 2026-10-09
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.17
+## knowledge 0.0.18
 
-Records are named by scope, and the workspace is found from anywhere inside it. The decisions are DR-0057 (qualified record references) and DR-0058 (scope). It was written and tested red first, the race detector passed on darwin/arm64, and the new commands were checked read-only against two real workspaces, one with 277 records in 23 projects where `DR-0001` appears ten times.
+Accepting a record is now the author's act, and the tool enforces it. The decisions are DR-0060 (set-status reviews the record, then asks), DR-0061 (accepting needs a terminal) and DR-0063 (cancelled covers explored work), all from the review-then-decide design. Everything was written and tested red first, including the built binary on a pseudo-terminal and with redirected streams.
 
-A record is `SCOPE/DR-NNNN`, where SCOPE is a project name or `workspace` (the workspace directory's own name is accepted for it). `kb record list` prints that reference first on every line, `--json` gains `ref`, and `show`, `set-status`, `supersede`, `delete`, `new` and `fuzzy-tag` confirm with it, so "DR-0047 needs accepting" says which project. A bare id still works where only one record has it, and otherwise lists the qualified forms. A change (`set-status`, `supersede`, `delete`) will not act on a bare id with no scope.
+`kb record set-status` follows a table of allowed moves. A record that is `proposed` may become `accepted`, `rejected`, `cancelled` or `superseded`; `accepted` may become `cancelled` or `superseded`; `rejected` and `cancelled` may go back to `proposed`; `superseded` is final, and needs `superseded_by` already set (use `kb record supersede`). A move outside the table, or setting the status a record already has, exits 1 and names the moves it may make; nothing is written. A record whose status is outside the vocabulary can only become `proposed`. `cancelled` now means pursued or explored and then abandoned, and need not have been accepted; `rejected` means considered and not pursued.
 
-`kb record list harvey clasm workspace` takes scopes as arguments. With none it uses the project the working directory belongs to, then `KB_PROJECT`, then the whole workspace; `--all` widens it; `record new` does the same. `kb record pending` lists the proposed records in scope. `--project` and `--workspace` still work on those verbs and say on standard error that they are deprecated. A project can no longer be named `workspace`.
+`kb record set-status REF accepted` exits 2 unless standard input and standard output are both a terminal, with a message that a person must accept it. No flag or environment variable turns that off, and every other move works without a terminal, so a script can propose, reject, cancel and supersede but not accept. The test asks the terminal driver, so `< /dev/null` does not count. It guards the accidental path, not a determined one: a process can allocate a pseudo-terminal, and a record file can be edited by hand.
 
-`kb` walks up from the current directory to the nearest `agents/knowledge.db` or `agents/knowledge.jsonl`, so it works from any subdirectory; a fresh clone with only the JSONL file is told to `kb import -in agents/knowledge.jsonl`. `KB_DB`, `KB_PROJECT`, `KB_CEILING_DIRECTORIES` and `KB_QUIET` are read; a note on standard error says when the workspace is not the current directory. The library exports `FindWorkspace`, `Ref`, `ParseRef`, `ResolveRef` and `ProjectForDir`, for harvey.
+`kb record set-status REF` with no status is a review for a person at a terminal. It shows the record through `$KB_PAGER` (else `bat -l markdown`, else `less -R`, else prints it), prompts with the current status and the moves allowed (`harvey/DR-0004 is proposed -> [a]ccepted [r]ejected [c]ancelled [q]uit`), and asks `[y/N]` before it writes. `q`, an empty or negative answer, or end of input leaves the record unchanged and exits 1. `KB_PAGER` is new. The library exports `AllowedTransitions` and `CanTransition`, so harvey and the TUI read the same table.
 
-Upgrading: a script that reads `record list` by column breaks; use `--json`. Skills that quote the old forms need `kb >= 0.0.17`. A scratch directory inside a real workspace now reaches it unless `KB_CEILING_DIRECTORIES` names the scratch directory.
+Upgrading: a script that ran `set-status ... accepted` must hand that step to the author, and one that relied on arbitrary moves (for example `accepted` to `rejected`; use `cancelled`) now gets exit 1. Skills that tell a model to promote a record need updating; the ones in the Laboratory do not any longer. `github.com/charmbracelet/x/term` and `golang.org/x/sys` are direct requirements, both already built into kb through bubbletea. The generated `kb-*.1.md` pages are now checked against their help text, so an edit made only to a page fails the tests.
 
 ## Authors
 

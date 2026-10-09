@@ -3,9 +3,9 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## v0.0.18 — unreleased
+## v0.0.18 — 2026-10-09
 
-Review then decide, in progress. Decisions: knowledge DR-0060 and DR-0061 (accepted), DR-0063 (proposed).
+Review then decide. The decisions are knowledge DR-0060 and DR-0061 (accepted) and DR-0063 (proposed, for the author to promote), from the design brief `agents/projects/knowledge/design/scoped-refs-and-tui-parity-design.md`. Everything was written and tested red first. The race detector has not been run on this release yet.
 
 ### Changed
 
