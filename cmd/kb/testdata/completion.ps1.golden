@@ -1,0 +1,111 @@
+# PowerShell completion for kb
+# Load with:  kb completion powershell | Out-String | Invoke-Expression
+# Or install: kb completion powershell -install
+Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $verbs      = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'summary', 'unlink')
+    $globals    = @('--db', '--debug', '--help', '--json', '--license', '--version')
+    $topics     = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'summary', 'unlink', 'topics')
+    $shells     = @('bash', 'powershell')
+    $valueFlags = @('--a', '--accept', '--accept-keywords', '--authors', '--b', '--by', '--concept', '--confidence', '--db', '--dir', '--doi', '--format', '--identifier-type', '--identifier-value', '--in', '--initiative', '--jsonl', '--kind', '--limit', '--out', '--project', '--published', '--publisher', '--relationship', '--rights', '--root', '--set', '--since', '--source-doi', '--status', '--title', '--trigger', '--url', '--version')
+    $fileFlags  = @('--db', '--in', '--out', '--a', '--b', '--jsonl', '--root', '--dir')
+
+    function Get-KbProjects {
+        & kb @script:dbArgs project list 2>$null | ForEach-Object {
+            if ($_ -match '^\s*\d+\s+(\S+)') { $Matches[1] }
+        }
+    }
+    function Get-Files {
+        Get-ChildItem -Path "$wordToComplete*" -ErrorAction SilentlyContinue | ForEach-Object {
+            [System.Management.Automation.CompletionResult]::new($_.Name, $_.Name, 'ProviderItem', $_.Name)
+        }
+    }
+
+    # Words typed after the command name, not counting the word being completed.
+    $words = @($commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.ToString() })
+    if ($wordToComplete -ne '' -and $words.Count -gt 0) {
+        $words = @($words | Select-Object -SkipLast 1)
+    }
+    $prev = if ($words.Count -gt 0) { $words[-1] } else { '' }
+
+    # The words that are neither options nor option values.
+    $script:dbArgs = @()
+    $pos = @()
+    for ($i = 0; $i -lt $words.Count; $i++) {
+        $w = $words[$i]
+        if ($w -in '--db', '-db') { $script:dbArgs = @('--db', $words[$i + 1]); $i++; continue }
+        if ($w -in $valueFlags) { $i++; continue }
+        if ($w.StartsWith('-')) { continue }
+        $pos += $w
+    }
+    $n = $pos.Count
+
+    if ($prev -in $fileFlags) { return Get-Files }
+    $candidates = $null
+    if ($prev -eq '--project') {
+        $candidates = Get-KbProjects
+    } elseif ($n -eq 0) {
+        $candidates = if ($wordToComplete.StartsWith('-')) { $globals } else { $verbs }
+    } elseif ($wordToComplete.StartsWith('-')) {
+        $candidates = switch ($pos[0]) {
+            'check-db' { @('--jsonl') }
+            'completion' { @('--install') }
+            'concept' { @('--identifier-type', '--identifier-value', '--project', '--limit', '--force', '--dry-run') }
+            'document' { @('--project', '--concept', '--dry-run', '--accept', '--accept-keywords', '--set', '--by', '--confidence', '--status', '--title', '--format') }
+            'export' { @('--project', '--out') }
+            'format' { @('--project') }
+            'import' { @('--in') }
+            'index' { @('--stdout', '--check', '--all') }
+            'ingest' { @('--root', '--dry-run') }
+            'merge' { @('--a', '--b', '--out', '--force') }
+            'observation' { @('--project', '--source-doi') }
+            'project' { @('--status', '--root', '--dry-run') }
+            'record' { @('--project', '--status', '--kind', '--trigger', '--initiative', '--since', '--root', '--dir', '--title', '--concept', '--workspace', '--partial', '--dry-run', '--write', '--all') }
+            'search' { @('--project') }
+            'source' { @('--doi', '--url', '--authors', '--published', '--publisher', '--rights', '--version', '--relationship') }
+            'summary' { @('--project') }
+            default { $null }
+        }
+    } else {
+        $candidates = switch ($pos[0]) {
+            'help'       { if ($n -eq 1) { $topics } }
+            'completion' { if ($n -eq 1) { $shells } }
+            'concept' {
+                if ($n -eq 1) { @('add', 'list', 'show', 'recall', 'rename', 'delete', 'suggest') }
+                else { $null }
+            }
+            'document' {
+                if ($n -eq 1) { @('ingest', 'draft', 'review', 'list', 'show', 'tag', 'fuzzy-tag', 'frontmatter', 'delete') }
+                elseif ($n -eq 2 -and $pos[1] -eq 'review') { @('list', 'promote') }
+                else { $null }
+            }
+            'link' {
+                if ($n -eq 1) { @('project', 'observation') }
+                else { $null }
+            }
+            'observation' {
+                if ($n -eq 1) { @('add', 'list', 'show', 'update', 'sources', 'delete') }
+                else { $null }
+            }
+            'project' {
+                if ($n -eq 1) { @('add', 'list', 'show', 'concepts', 'set-status', 'set-description', 'rename', 'delete') }
+                elseif ($n -eq 2 -and $pos[1] -in 'show', 'concepts', 'set-status', 'set-description', 'rename', 'delete') { Get-KbProjects }
+                else { $null }
+            }
+            'record' {
+                if ($n -eq 1) { @('list', 'pending', 'show', 'set-status', 'supersede', 'fmt', 'new', 'concepts', 'delete', 'fuzzy-tag') }
+                else { $null }
+            }
+            'source' {
+                if ($n -eq 1) { @('add', 'list', 'show', 'remove', 'retract', 'link', 'check-retractions') }
+                else { $null }
+            }
+            default      { $null }
+        }
+    }
+
+    if ($null -eq $candidates) { return Get-Files }
+    $candidates | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
+}

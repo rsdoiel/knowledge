@@ -1,0 +1,90 @@
+# bash completion for kb
+# Load with:  source <(kb completion bash)
+# Or install: kb completion bash -install
+_kb_projects() {
+    kb "${dbarg[@]}" project list 2>/dev/null | awk '$1 ~ /^[0-9]+$/ { print $2 }'
+}
+_kb() {
+    local cur prev i w n verb
+    local -a pos=() dbarg=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    # The words before the cursor that are neither options nor option values.
+    for (( i=1; i<COMP_CWORD; i++ )); do
+        w="${COMP_WORDS[i]}"
+        case "$w" in
+            --db|-db) dbarg=(--db "${COMP_WORDS[i+1]}"); (( i++ )) ;;
+            --a|--accept|--accept-keywords|--authors|--b|--by|--concept|--confidence|--db|--dir|--doi|--format|--identifier-type|--identifier-value|--in|--initiative|--jsonl|--kind|--limit|--out|--project|--published|--publisher|--relationship|--rights|--root|--set|--since|--source-doi|--status|--title|--trigger|--url|--version) (( i++ )) ;;
+            -*) ;;
+            *) pos+=("$w") ;;
+        esac
+    done
+    case "$prev" in
+        --db|--in|--out|--a|--b|--jsonl|--root|--dir)
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return 0 ;;
+        --project)
+            COMPREPLY=( $(compgen -W "$(_kb_projects)" -- "$cur") )
+            return 0 ;;
+    esac
+    n=${#pos[@]}
+    verb="${pos[0]}"
+    if [[ -z "$verb" ]]; then
+        if [[ "$cur" == -* ]]; then
+            COMPREPLY=( $(compgen -W "--db --debug --help --json --license --version" -- "$cur") )
+        else
+            COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink" -- "$cur") )
+        fi
+        return 0
+    fi
+    if [[ "$cur" == -* ]]; then
+        case "$verb" in
+        check-db) COMPREPLY=( $(compgen -W "--jsonl" -- "$cur") ) ;;
+        completion) COMPREPLY=( $(compgen -W "--install" -- "$cur") ) ;;
+        concept) COMPREPLY=( $(compgen -W "--identifier-type --identifier-value --project --limit --force --dry-run" -- "$cur") ) ;;
+        document) COMPREPLY=( $(compgen -W "--project --concept --dry-run --accept --accept-keywords --set --by --confidence --status --title --format" -- "$cur") ) ;;
+        export) COMPREPLY=( $(compgen -W "--project --out" -- "$cur") ) ;;
+        format) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
+        import) COMPREPLY=( $(compgen -W "--in" -- "$cur") ) ;;
+        index) COMPREPLY=( $(compgen -W "--stdout --check --all" -- "$cur") ) ;;
+        ingest) COMPREPLY=( $(compgen -W "--root --dry-run" -- "$cur") ) ;;
+        merge) COMPREPLY=( $(compgen -W "--a --b --out --force" -- "$cur") ) ;;
+        observation) COMPREPLY=( $(compgen -W "--project --source-doi" -- "$cur") ) ;;
+        project) COMPREPLY=( $(compgen -W "--status --root --dry-run" -- "$cur") ) ;;
+        record) COMPREPLY=( $(compgen -W "--project --status --kind --trigger --initiative --since --root --dir --title --concept --workspace --partial --dry-run --write --all" -- "$cur") ) ;;
+        search) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
+        source) COMPREPLY=( $(compgen -W "--doi --url --authors --published --publisher --rights --version --relationship" -- "$cur") ) ;;
+        summary) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
+        esac
+        return 0
+    fi
+    case "$verb" in
+        help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink topics" -- "$cur") ) ;;
+        completion) [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "bash powershell" -- "$cur") ) ;;
+        concept)
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show recall rename delete suggest" -- "$cur") )
+            fi ;;
+        document)
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "ingest draft review list show tag fuzzy-tag frontmatter delete" -- "$cur") )
+            elif [[ $n -eq 2 && "${pos[1]}" == review ]]; then COMPREPLY=( $(compgen -W "list promote" -- "$cur") )
+            fi ;;
+        link)
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "project observation" -- "$cur") )
+            fi ;;
+        observation)
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show update sources delete" -- "$cur") )
+            fi ;;
+        project)
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show concepts set-status set-description rename delete" -- "$cur") )
+            elif [[ $n -eq 2 && "${pos[1]}" =~ ^(show|concepts|set-status|set-description|rename|delete)$ ]]; then COMPREPLY=( $(compgen -W "$(_kb_projects)" -- "$cur") )
+            fi ;;
+        record)
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "list pending show set-status supersede fmt new concepts delete fuzzy-tag" -- "$cur") )
+            fi ;;
+        source)
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show remove retract link check-retractions" -- "$cur") )
+            fi ;;
+    esac
+    return 0
+}
+complete -o default -F _kb kb

@@ -19,54 +19,25 @@ func init() {
 
 /** completionSubverbs lists, for each verb that takes a subverb, the subverbs
  * completion offers. A key of two words ("document review") is the list for
- * the subverb's own subverbs. completion_test.go compares each verb's list with
- * the usage line the verb itself reports, so a subverb added to the verb and
- * not here fails the build.
+ * the subverb's own subverbs. It is read from the verb table (verbtable.go);
+ * completion_test.go compares each verb's list with the usage line the verb
+ * itself reports, so a subverb added to the verb and not to the table fails the
+ * build.
  */
-var completionSubverbs = map[string][]string{
-	"project":         {"add", "list", "show", "concepts", "set-status", "set-description", "rename", "delete"},
-	"observation":     {"add", "list", "show", "update", "sources", "delete"},
-	"concept":         {"add", "list", "show", "recall", "rename", "delete", "suggest"},
-	"source":          {"add", "list", "show", "remove", "retract", "link", "check-retractions"},
-	"link":            {"project", "observation"},
-	"record":          {"list", "pending", "show", "set-status", "supersede", "fmt", "new", "concepts", "delete", "fuzzy-tag"},
-	"document":        {"ingest", "draft", "review", "list", "show", "tag", "fuzzy-tag", "frontmatter", "delete"},
-	"document review": {"list", "promote"},
-}
+var completionSubverbs = subverbMap()
 
 /** completionProjectArgs names the subverbs whose first argument is a project
- * name, which completion fills in from the database.
+ * name, which completion fills in from the database. Read from the verb table.
  */
-var completionProjectArgs = map[string][]string{
-	"project": {"show", "concepts", "set-status", "set-description", "rename", "delete"},
-}
+var completionProjectArgs = projectArgMap()
 
-/** completionVerbFlags lists the flags each verb accepts, subverbs included.
- * The flags are declared in several ways (flag.FlagSet, splitFlags maps, a
- * switch), so there is no single registry to read; TestCompletion_FlagsMatchTheSource
- * scans the source for declared flags and fails when this table and the code
- * disagree.
+/** completionVerbFlags lists the flags each verb accepts, subverbs included,
+ * read from the verb table. The flags are declared in several ways (flag.FlagSet,
+ * splitFlags maps, a switch), so the table cannot be generated from the code;
+ * TestCompletion_FlagsMatchTheSource scans the source for declared flags and
+ * fails when the table and the code disagree.
  */
-var completionVerbFlags = map[string][]string{
-	"project":     {"--status", "--root", "--dry-run"},
-	"observation": {"--project", "--source-doi"},
-	"concept":     {"--identifier-type", "--identifier-value", "--project", "--limit", "--force", "--dry-run"},
-	"source":      {"--doi", "--url", "--authors", "--published", "--publisher", "--rights", "--version", "--relationship"},
-	"record": {"--project", "--status", "--kind", "--trigger", "--initiative", "--since", "--root", "--dir",
-		"--title", "--concept", "--workspace", "--partial", "--dry-run", "--write", "--all"},
-	"document": {"--project", "--concept", "--dry-run", "--accept", "--accept-keywords", "--set", "--by",
-		"--confidence", "--status", "--title", "--format"},
-	"ingest":     {"--root", "--dry-run"},
-	"index":      {"--stdout", "--check", "--all"},
-	"merge":      {"--a", "--b", "--out", "--force"},
-	"export":     {"--project", "--out"},
-	"import":     {"--in"},
-	"check-db":   {"--jsonl"},
-	"search":     {"--project"},
-	"summary":    {"--project"},
-	"format":     {"--project"},
-	"completion": {"--install"},
-}
+var completionVerbFlags = flagMap()
 
 // completionGlobalFlags are the options that go before the verb.
 var completionGlobalFlags = []string{"--db", "--debug", "--help", "--json", "--license", "--version"}

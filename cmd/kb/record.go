@@ -955,10 +955,7 @@ func joinRefs(refs []knowledge.Ref) string {
 // --workspace are only aliases for a form that says the same thing without
 // them: a scope argument for the listings, a qualified reference for the rest.
 // new and fuzzy-tag are not here: the flag is the way to name the scope.
-var deprecatedScopeFlag = map[string]string{
-	"list": "list", "pending": "list",
-	"show": "ref", "concepts": "ref", "set-status": "ref", "supersede": "ref", "delete": "ref",
-}
+var deprecatedScopeFlag = recordScopeForms()
 
 // adviseDeprecatedScopeFlags says on standard error that --project or
 // --workspace has a better spelling (knowledge DR-0057). The flag still works.

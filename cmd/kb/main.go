@@ -218,13 +218,10 @@ func dbOptionRefusal(verb string) error {
 	return usageErrorf("--db does not apply to %s: it takes its databases as -a, -b and -out; see kb help %s", verb, verb)
 }
 
-// verbsWithSubverbs are the verbs whose first argument names a subverb. Their
-// manual page documents every subverb, so a help flag one level down prints
-// the same page.
-var verbsWithSubverbs = map[string]bool{
-	"project": true, "observation": true, "concept": true, "source": true,
-	"link": true, "record": true, "document": true,
-}
+// verbsWithSubverbs are the verbs whose first argument names a subverb, read
+// from the verb table. Their manual page documents every subverb, so a help
+// flag one level down prints the same page.
+var verbsWithSubverbs = verbsTakingSubverbs()
 
 /** isHelpFlag reports whether arg is one of the three spellings of a help
  * request: -h, -help or --help.
