@@ -1388,7 +1388,20 @@ set-status
   vocabularies below is refused (exit 2) unless a record already carries it, the
   rule record new applies to --trigger and --kind and record list applies to its
   filters, so a typo such as "acepted" cannot leave a record in limbo; the file and
-  database are untouched. Ingest of a hand-edited file still only warns
+  database are untouched. Ingest of a hand-edited file still only warns.
+  Only the moves in the transition table are made: proposed to accepted,
+  rejected, cancelled or superseded; accepted to cancelled or superseded; rejected or
+  cancelled back to proposed; superseded is final. superseded also needs
+  superseded_by already set, so use record supersede, which writes both sides.
+  A move outside the table, including setting the status a record already has,
+  is refused (exit 1) with the allowed moves named, and nothing is written. A
+  record whose status is outside the vocabulary can be set to proposed and
+  nothing else, so it reaches accepted in two moves.
+  Setting a record to accepted is for a person: standard input and standard
+  output must both be a terminal, or the command exits 2 with a message saying
+  so and writes nothing. No flag or environment variable turns that off, and
+  every other move works without a terminal, so a script can propose, reject,
+  cancel and supersede but not accept
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on
@@ -1455,7 +1468,9 @@ model may write a record, but only the author accepts one.
 # EXIT STATUS
 
 The workspace convention, as described in {app_name}(1). A scope that is neither a
-project nor the workspace is 1; a malformed reference, a bare id that is
+project nor the workspace is 1, and so is a set-status move the transition
+table does not allow; set-status accepted without a terminal on standard input
+and output is 2; a malformed reference, a bare id that is
 ambiguous, a change (set-status, supersede, delete) given a bare id with no
 scope, and record new with no scope anywhere are 2. For record fuzzy-tag:
 0 the report was produced, or the tags were written, including "nothing found";
@@ -1474,11 +1489,12 @@ harnesses write should be a fixable row, not a failed run.
 status
 : proposed, accepted, superseded, rejected, cancelled
 
-  rejected means the decisions were never adopted. superseded means a later
-  record replaced them. cancelled means they were adopted and then the work was
-  abandoned: its reasoning still stands and is where anyone revisiting the
-  question should start, but it is not live. Say why in the record's body, since
-  "the need was met another way" and "deprioritised" tell a later reader
+  rejected means the decisions were considered and not pursued. superseded
+  means a later record replaced them. cancelled means the work was pursued or
+  explored and then abandoned; it need not have been accepted first. Its
+  reasoning still stands and is where anyone revisiting the question should
+  start, but it is not live. Say why in the record's body, since "the need was
+  met another way" and "deprioritised" tell a later reader
   different things; there is no field for it. Use kb record set-status ID
   cancelled, without writing a replacement record.
 
