@@ -116,6 +116,12 @@ KB_QUIET
 : any value but empty, 0 or false silences advisory notes on standard error (the
   workspace note, and a deprecated flag's). It never silences an error
 
+KB_PAGER
+: the program that shows a record for review in record set-status with no
+  status, with its arguments (KB_PAGER="bat -l markdown"). Unset, kb uses bat
+  with the Markdown language if bat is installed, then less -R, and with
+  neither prints the record straight through
+
 # VERBS
 
 project

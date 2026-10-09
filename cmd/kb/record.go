@@ -682,8 +682,12 @@ func joinNotes(note, addition string) string {
 
 // recordSetStatus writes a record's status to both the file and the database.
 func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
-	if len(f.args) != 2 {
-		return usageErrorf("usage: record set-status RECORD_ID STATUS")
+	switch len(f.args) {
+	case 1:
+		return recordReviewStatus(kb, jsonOut, f, out)
+	case 2:
+	default:
+		return usageErrorf("usage: record set-status RECORD_REF [STATUS]")
 	}
 	id, status := f.args[0], f.args[1]
 	// A status is a value being written, and the promotion path at that, so a
@@ -708,6 +712,29 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if err != nil {
 		return err
 	}
+	return applyRecordStatus(kb, jsonOut, f, out, rec, status)
+}
+
+/** applyRecordStatus is the write half of record set-status: it checks the
+ * transition against the record as it is on disk now, then writes the file and
+ * the database and refreshes index.md. The direct form and the review form both
+ * end here, so they cannot disagree about what a status change is (DR-0060).
+ *
+ * Parameters:
+ *   kb (*knowledge.KnowledgeBase) — the open knowledge base
+ *   jsonOut (bool) — print the result as JSON
+ *   f (recordFlags) — the parsed flags, for the corpus root
+ *   out (io.Writer) — where the confirmation goes
+ *   rec (*knowledge.Record) — the record to change, already resolved
+ *   status (string) — the status to write
+ *
+ * Returns:
+ *   error — nil on success; a negative-class error for a move the table forbids
+ *
+ * Example:
+ *   err := applyRecordStatus(kb, false, f, os.Stdout, rec, "rejected")
+ */
+func applyRecordStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer, rec *knowledge.Record, status string) error {
 	root := recordRoot(kb, f)
 	rf, raw, err := loadRecordFile(root, rec)
 	if err != nil {

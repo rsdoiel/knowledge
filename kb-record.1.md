@@ -14,7 +14,7 @@ kb record list [SCOPE...] [--all] [--status S] [--kind K] [--trigger T] [--initi
 
 kb record show RECORD_REF [--project P] [--workspace]
 
-kb record set-status RECORD_REF STATUS [--project P] [--workspace] [--root DIR]
+kb record set-status RECORD_REF [STATUS] [--project P] [--workspace] [--root DIR]
 
 kb record supersede NEW_REF OLD_REF [--partial] [--project P] [--workspace] [--root DIR]
 
@@ -99,7 +99,18 @@ set-status
   output must both be a terminal, or the command exits 2 with a message saying
   so and writes nothing. No flag or environment variable turns that off, and
   every other move works without a terminal, so a script can propose, reject,
-  cancel and supersede but not accept
+  cancel and supersede but not accept.
+  With no STATUS it is a review, for a person at a terminal: the record is
+  shown through $KB_PAGER (else bat, else less -R, else printed), then the
+  prompt names the current status and the moves the table allows, for example
+  harvey/DR-0004 is proposed -> [a]ccepted [r]ejected [c]ancelled [q]uit. Each
+  status is chosen by its first letter or its whole name; q backs out. A
+  confirmation line follows (Set ... from proposed to accepted? [y/N]) and
+  nothing is written until it is answered y or yes. Backing out at either step,
+  an empty answer to the confirmation, or end of input leaves the record
+  unchanged and is exit 1, since the command ran and the answer is no. The
+  review without a terminal, or with --json, is exit 2; the form with a STATUS
+  is what a script uses
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on

@@ -31,6 +31,14 @@ Review then decide, in progress. Decisions: knowledge DR-0060 and DR-0061 (accep
 
 ### Added
 
+- **`kb record set-status REF` with no status is a review** (DR-0060): the record is shown through `$KB_PAGER`
+  (else `bat -l markdown`, else `less -R`, else printed), the prompt names the current status and the moves the
+  table allows (`harvey/DR-0004 is proposed -> [a]ccepted [r]ejected [c]ancelled [q]uit`), and a confirmation
+  line (`[y/N]`) comes before anything is written. Statuses are chosen by first letter or whole name; `q` backs
+  out, which is not the status `cancelled` (`c`). Backing out at either step, an empty confirmation or end of
+  input leaves the record unchanged and exits 1. The review needs a terminal and takes no `--json`, exit 2; the
+  form with a status is unchanged and is what scripts use. Both forms end in one function, so they cannot
+  disagree about what a status change is. `KB_PAGER` is new.
 - Library: `AllowedTransitions` and `CanTransition`, so the CLI, the review prompt and the TUI read one table.
 
 ## v0.0.17 — 2026-10-08

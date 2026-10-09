@@ -120,6 +120,12 @@ KB_QUIET
 : any value but empty, 0 or false silences advisory notes on standard error (the
   workspace note, and a deprecated flag's). It never silences an error
 
+KB_PAGER
+: the program that shows a record for review in record set-status with no
+  status, with its arguments (KB_PAGER="bat -l markdown"). Unset, kb uses bat
+  with the Markdown language if bat is installed, then less -R, and with
+  neither prints the record straight through
+
 # VERBS
 
 project
@@ -1316,7 +1322,7 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record show RECORD_REF [--project P] [--workspace]
 
-{app_name} record set-status RECORD_REF STATUS [--project P] [--workspace] [--root DIR]
+{app_name} record set-status RECORD_REF [STATUS] [--project P] [--workspace] [--root DIR]
 
 {app_name} record supersede NEW_REF OLD_REF [--partial] [--project P] [--workspace] [--root DIR]
 
@@ -1401,7 +1407,18 @@ set-status
   output must both be a terminal, or the command exits 2 with a message saying
   so and writes nothing. No flag or environment variable turns that off, and
   every other move works without a terminal, so a script can propose, reject,
-  cancel and supersede but not accept
+  cancel and supersede but not accept.
+  With no STATUS it is a review, for a person at a terminal: the record is
+  shown through $KB_PAGER (else bat, else less -R, else printed), then the
+  prompt names the current status and the moves the table allows, for example
+  harvey/DR-0004 is proposed -> [a]ccepted [r]ejected [c]ancelled [q]uit. Each
+  status is chosen by its first letter or its whole name; q backs out. A
+  confirmation line follows (Set ... from proposed to accepted? [y/N]) and
+  nothing is written until it is answered y or yes. Backing out at either step,
+  an empty answer to the confirmation, or end of input leaves the record
+  unchanged and is exit 1, since the command ran and the answer is no. The
+  review without a terminal, or with --json, is exit 2; the form with a STATUS
+  is what a script uses
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on

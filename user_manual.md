@@ -51,6 +51,7 @@ Full detail on all three: [kb(1)](kb.1.md), § GLOBAL OPTIONS.
 - `KB_PROJECT` — the project to act on when none is given and the current directory belongs to none
 - `KB_CEILING_DIRECTORIES` — directories the walk up never enters or passes (like git's `GIT_CEILING_DIRECTORIES`); set it to a scratch directory that sits inside a real workspace
 - `KB_QUIET` — silence advisory notes on standard error; never an error
+- `KB_PAGER` — the program that shows a record for `kb record set-status REF` (no status): `bat -l markdown`, else `less -R`, else the record is printed
 
 See [kb(1)](kb.1.md), § WORKSPACE AND ENVIRONMENT.
 
