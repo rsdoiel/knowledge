@@ -1,4 +1,4 @@
-%kb(1) user manual | version 0.0.19 c8d4b8d
+%kb(1) user manual | version 0.0.19 5483417
 % R. S. Doiel
 % 2026-10-09
 
@@ -117,6 +117,19 @@ was done and shows the command that does the same, so the interface teaches the
 command line; a move the record's file now refuses is reported and writes nothing.
 A record that is superseded has no move to make and says so before anything is
 shown. Accepting is allowed here, since the interface is a terminal.
+
+d deletes the selected thing, from the project list (a project), a project's
+observations and concepts tabs, and the Records screens and tab (a record). A
+delete is not confirmed with y: a screen shows what will be removed and what points
+at it (for a record, the records that supersede or relate to it), and asks you to
+type the thing's name, or a record's reference, or an observation's number, exactly.
+Only an exact match and Enter delete; Esc cancels. While you type, every key is text,
+q included, so a project called quokka can be confirmed. A delete that the command
+line would refuse is refused here without a gate and says why: a project that owns
+observations, records or documents, and a record whose file still exists (delete the
+file first, or retire the record with kb record set-status REF cancelled).
+When it deletes, the screen shows the command that does the same. Deleting is local:
+kb merge or kb import from a database that still has the thing brings it back.
 
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on

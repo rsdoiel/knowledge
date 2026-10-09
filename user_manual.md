@@ -66,6 +66,8 @@ Bare `kb` on a terminal opens a menu with one entry per verb group (Projects, Re
 
 On a record (the Records screens and a project's Records tab) `Enter` reads it and `s` sets its status. Both show the record file in your pager (`$KB_PAGER`, else `bat`, else `less -R`) with the interface suspended, or in a built-in viewer when there is no pager. `s` then offers the moves the record's status allows, each on one key, asks for `y`, and writes by the same function as `kb record set-status REF`. `Esc` or `q` backs out at either step with nothing written. When it writes, the screen shows the equivalent command line.
 
+`d` deletes the selected project, observation, concept or record. It is not a y/n: a screen shows what will be removed and what points at it, and you type the thing's name (a record's reference, an observation's number) exactly; only an exact match and `Enter` delete, and `Esc` cancels. While you type every key is text, `q` included. A delete the command line would refuse (a project that owns content, a record whose file still exists) is refused here too, with the reason, and the screen shows the equivalent command after a delete.
+
 A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group such as `kb record`, and `kb record show` or `kb project show` with no argument. `kb -i record pending` (or `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. See [kb(1)](kb.1.md) for the full description.
 
 ---

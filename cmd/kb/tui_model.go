@@ -30,6 +30,7 @@ const (
 	viewRecordScope // records in a scope, and the pending ones
 	viewReview      // choosing and confirming a status for the selected record
 	viewText        // a record shown in the built-in viewer, when there is no pager
+	viewRemove      // the gate for a removing verb: a plan and a typed confirmation
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -119,6 +120,9 @@ type tuiModel struct {
 	reviewRaw       []byte
 	reviewBack      viewState // the screen the review returns to
 	text            viewport.Model
+	removal         *removalPlan // the delete the gate is asking about, in viewRemove
+	removeInput     *typedConfirmModel
+	removeBack      viewState
 	textPurpose     string
 	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string // the workspace directory, for the header
@@ -241,6 +245,7 @@ var viewStateNames = map[viewState]string{
 	viewRecordScope:  "viewRecordScope",
 	viewReview:       "viewReview",
 	viewText:         "viewText",
+	viewRemove:       "viewRemove",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -312,6 +317,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// While text is being typed every printable key is text, so this is
 		// asked before any letter is bound (DR-0064, amendment).
 		if m.capturingText() {
+			if m.state == viewRemove && !m.searching {
+				return m.updateRemove(msg)
+			}
 			return m.updateSearching(msg)
 		}
 		switch m.state {
@@ -403,7 +411,7 @@ func (m *tuiModel) tabHeight() int {
 // capturingText reports whether the TUI is taking text, so a key handler treats
 // q, j, k and the rest as characters (DR-0064, amendment). Today that is the
 // search prompt; filters, forms and the command line join it later.
-func (m *tuiModel) capturingText() bool { return m.searching }
+func (m *tuiModel) capturingText() bool { return m.searching || m.state == viewRemove }
 
 // updateError handles a key while an error is on screen: q or Enter dismisses it
 // and nothing else happens. Ctrl-C is handled before this is reached.
@@ -614,6 +622,8 @@ func (m *tuiModel) updateRecordScope(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("read")
 	case "s":
 		return m.showSelected("status")
+	case "d":
+		return m.removeSelected()
 	}
 	var cmd tea.Cmd
 	m.scopeList, cmd = m.scopeList.Update(msg)
@@ -645,6 +655,8 @@ func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.startSearch()
 		return m, nil
+	case "d":
+		return m.removeSelected()
 	case "enter":
 		if item, ok := m.projectList.SelectedItem().(projectItem); ok {
 			p := item.p
@@ -682,6 +694,8 @@ func (m *tuiModel) goTo(state viewState, load func() error) (tea.Model, tea.Cmd)
 // r switch to its concepts and records.
 func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "d":
+		return m.removeSelected()
 	case "q":
 		return m.goTo(viewProjects, nil)
 	case "esc":
@@ -701,6 +715,8 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "d":
+		return m.removeSelected()
 	case "q":
 		return m.goTo(viewProjects, nil)
 	case "esc":
@@ -726,6 +742,8 @@ func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("read")
 	case "s":
 		return m.showSelected("status")
+	case "d":
+		return m.removeSelected()
 	case "q":
 		return m.goTo(viewProjects, nil)
 	case "esc":
@@ -869,6 +887,36 @@ func (m *tuiModel) runSearch(term string) error {
 // legend is the line of keys that apply on the current screen. It changes with
 // the mode: while typing, q is text and is not offered.
 func (m *tuiModel) legend() string {
+	return fitLegend(m.legendFull(), m.cols()-4)
+}
+
+/** fitLegend shortens a legend that is wider than the room it has, so the frame
+ * does not cut the last key off: it tries two spaces between the keys, then drops
+ * the movement hint, which every screen shares and a person already knows.
+ *
+ * Parameters:
+ *   legend (string) — the keys, separated by three spaces
+ *   width (int) — the room inside the frame
+ *
+ * Returns:
+ *   string — a legend no wider than width when that is possible
+ *
+ * Example:
+ *   fitLegend("↑/↓ j/k move   Enter open   q back", 20) // "Enter open  q back"
+ */
+func fitLegend(legend string, width int) string {
+	if lipgloss.Width(legend) <= width {
+		return legend
+	}
+	tight := strings.ReplaceAll(legend, "   ", "  ")
+	if lipgloss.Width(tight) <= width {
+		return tight
+	}
+	return strings.TrimPrefix(tight, "↑/↓ j/k move  ")
+}
+
+// legendFull is the legend before it is fitted to the window.
+func (m *tuiModel) legendFull() string {
 	switch {
 	case m.err != nil:
 		return "q dismiss   Ctrl-C quit"
@@ -885,19 +933,21 @@ func (m *tuiModel) legend() string {
 		}
 		return move + "   Enter open   / search   q back"
 	case viewRecordScope:
-		return move + "   Enter read   s status   " + m.scopeKey() + "   / search   q back"
+		return move + "   Enter read   s status   d delete   " + m.scopeKey() + "   / search   q back"
+	case viewRemove:
+		return "Esc cancel   Enter delete (only when the name matches)   Ctrl-C quit"
 	case viewReview:
 		return m.reviewLegend()
 	case viewText:
 		return m.textLegend()
 	case viewRecords:
-		return move + "   Enter read   s status   o c r tabs   / search   q back"
+		return move + "   Enter read   s status   d delete   o c r tabs   / search   q back"
 	case viewObservations, viewConcepts:
-		return move + "   o c r tabs   / search   q back"
+		return move + "   d delete   o c r tabs   / search   q back"
 	case viewSearch:
 		return move + "   / search   q back"
 	}
-	return move + "   Enter open   / search   q back"
+	return move + "   Enter open   d delete   / search   q back"
 }
 
 // menuRows renders a menu's rows: the cursor, the label, what it does, and for a
@@ -951,6 +1001,8 @@ func (m *tuiModel) screen() (string, []string) {
 		return m.reviewScreen()
 	case viewText:
 		return m.textScreen()
+	case viewRemove:
+		return m.removeScreen()
 	case viewObservations:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:
@@ -1055,9 +1107,15 @@ func (m *tuiModel) frame(title string, body []string, legend string) string {
 	}
 	out = append(out, lipgloss.NewStyle().Inline(true).MaxWidth(w-1).Render(top)+"┐")
 
+	// A notice can be a long sentence (a refusal says what blocked it and what to do),
+	// so it is wrapped to the window instead of cut at the edge.
 	var notice []string
 	if m.notice != "" {
-		notice = append([]string{""}, strings.Split(m.notice, "\n")...)
+		notice = []string{""}
+		wrap := lipgloss.NewStyle().Width(inner)
+		for _, l := range strings.Split(m.notice, "\n") {
+			notice = append(notice, strings.Split(wrap.Render(l), "\n")...)
+		}
 	}
 	room := m.bodyHeight()
 	if room > 0 {

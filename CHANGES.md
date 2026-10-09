@@ -3,6 +3,27 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.20 — unreleased
+
+The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026-10-09 plan,
+`agents/projects/knowledge/plans/tui-keys-and-write-flows-plan.md`, release v0.0.20). Written and tested red first.
+
+### Added
+
+- **The removing gate** (DR-0067, DR-0064 amendment; plan item U3). `d` deletes the selected project (the project
+  list), observation or concept (a project's tabs), or record (the Records screens and tab). It is not a y/n: a
+  screen shows what will be removed and what points at it, for a record the records that supersede or relate to
+  it, and asks for the thing's name, a record's qualified reference, or an observation's number, typed exactly.
+  Only an exact match and `Enter` delete; `Esc` cancels; there is no flag. While the name is typed every key is
+  text, so a project called `quokka` can be confirmed (tested on a real terminal). The delete is the library call
+  the command uses (`DeleteProject`, `DeleteObservation`, `DeleteConcept`, `DeleteRecord`), and the plan shows the
+  command's own usage summary, so the two cannot disagree. A delete the command would refuse is refused with no
+  gate and the reason: a project that owns observations, records or documents, and a record whose file still
+  exists (delete the file, or retire it with `set-status REF cancelled`). After a delete the screen shows
+  `equivalent:  kb ... delete ...` and the lists, counts and header are refreshed.
+- Long notices wrap to the window instead of being cut at the edge, and a legend that is wider than the window
+  drops its spacing, then its movement hint, instead of losing its last key.
+
 ## v0.0.19 — 2026-10-09
 
 The terminal interface can now change something, and `kb` describes its own command language in one table.

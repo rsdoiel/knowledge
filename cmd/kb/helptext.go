@@ -122,6 +122,19 @@ command line; a move the record's file now refuses is reported and writes nothin
 A record that is superseded has no move to make and says so before anything is
 shown. Accepting is allowed here, since the interface is a terminal.
 
+d deletes the selected thing, from the project list (a project), a project's
+observations and concepts tabs, and the Records screens and tab (a record). A
+delete is not confirmed with y: a screen shows what will be removed and what points
+at it (for a record, the records that supersede or relate to it), and asks you to
+type the thing's name, or a record's reference, or an observation's number, exactly.
+Only an exact match and Enter delete; Esc cancels. While you type, every key is text,
+q included, so a project called quokka can be confirmed. A delete that the command
+line would refuse is refused here without a gate and says why: a project that owns
+observations, records or documents, and a record whose file still exists (delete the
+file first, or retire the record with {app_name} record set-status REF cancelled).
+When it deletes, the screen shows the command that does the same. Deleting is local:
+{app_name} merge or {app_name} import from a database that still has the thing brings it back.
+
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
 a terminal: bare {app_name}, a bare group ({app_name} record opens the Records menu), and
