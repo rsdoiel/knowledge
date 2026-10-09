@@ -33,7 +33,7 @@ _kb() {
         if [[ "$cur" == -* ]]; then
             COMPREPLY=( $(compgen -W "--db --debug --help --json --license --version" -- "$cur") )
         else
-            COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink" -- "$cur") )
+            COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink verbs" -- "$cur") )
         fi
         return 0
     fi
@@ -59,7 +59,7 @@ _kb() {
         return 0
     fi
     case "$verb" in
-        help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink topics" -- "$cur") ) ;;
+        help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink verbs topics" -- "$cur") ) ;;
         completion) [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "bash powershell" -- "$cur") ) ;;
         concept)
             if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show recall rename delete suggest" -- "$cur") )

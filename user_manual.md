@@ -30,6 +30,7 @@ Run `kb` with no verb to launch the interactive TUI, or `kb help` / `kb -h` to s
 | `record` | [kb-record(1)](kb-record.1.md) | author and maintain decision records — new, list, show, set-status, supersede, fmt, concepts |
 | `index` | [kb-index(1)](kb-index.1.md) | generate a corpus's `decisions/index.md`; `--check` for staleness, `--all` for a whole tree |
 | `document` | [kb-document(1)](kb-document.1.md) | ingest, draft, review and tag narrative documents (Markdown, Fountain, text) at graduated abstraction levels |
+| `verbs` | [kb-verbs(1)](kb-verbs.1.md) | print the verb table — every verb, subverb, flag and what it does to the database; `kb -json verbs` for models and scripts |
 | `merge` | [kb-merge(1)](kb-merge.1.md) | reconcile two `knowledge.db` files that drifted independently (e.g. across machines) |
 | `export` | [kb-export(1)](kb-export.1.md) | write a portable JSON-L snapshot — the no-file-access alternative to `merge` |
 | `import` | [kb-import(1)](kb-import.1.md) | apply a JSON-L snapshot (from `export`) to the database |

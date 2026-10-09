@@ -19,6 +19,36 @@ const (
 	classCLIOnly                     // not offered in the TUI
 )
 
+/** String returns the class's name as `kb verbs` prints it.
+ *
+ * Returns:
+ *   string — "read", "additive", "changing", "removing", "direct", "plan_apply", "guided" or "cli_only".
+ *
+ * Example:
+ *   classChanging.String() // "changing"
+ */
+func (c writeClass) String() string {
+	switch c {
+	case classRead:
+		return "read"
+	case classAdditive:
+		return "additive"
+	case classChanging:
+		return "changing"
+	case classRemoving:
+		return "removing"
+	case classDirect:
+		return "direct"
+	case classPlanApply:
+		return "plan_apply"
+	case classGuided:
+		return "guided"
+	case classCLIOnly:
+		return "cli_only"
+	}
+	return ""
+}
+
 /** subverbSpec is one subverb of a verb in the table: its name, its class, and
  * what completion and the deprecation notes need to know about it.
  *
@@ -126,6 +156,7 @@ var verbTable = []verbSpec{
 	}, Flags: []string{"--doi", "--url", "--authors", "--published", "--publisher", "--rights", "--version", "--relationship"}},
 	{Name: "summary", Summary: "a formatted overview of every project and its most recent observations", Class: classRead,
 		Flags: []string{"--project"}},
+	{Name: "verbs", Summary: "print the verb table: every verb, subverb, flag and write class", Class: classCLIOnly},
 	{Name: "unlink", Summary: "remove a link between a project or observation and a concept, or an observation and a source", Class: classRemoving},
 }
 

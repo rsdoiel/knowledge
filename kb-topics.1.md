@@ -1,4 +1,4 @@
-%kb-topics(1) user manual | version 0.0.18 772db89
+%kb-topics(1) user manual | version 0.0.18 e72579a
 % R. S. Doiel
 % 2026-10-09
 
@@ -68,6 +68,9 @@ init
 
 completion
 : write or install a shell completion script for bash or PowerShell
+
+verbs
+: print the verb table, as text or JSON
 
 # NOTES
 

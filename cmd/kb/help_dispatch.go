@@ -63,6 +63,8 @@ func printHelp(out io.Writer, topic string) bool {
 		f(InitHelpText)
 	case "completion":
 		f(CompletionHelpText)
+	case "verbs":
+		f(VerbsHelpText)
 	default:
 		return false
 	}

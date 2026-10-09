@@ -9,6 +9,20 @@ Foundations for the TUI write flows, from the design brief
 `agents/projects/knowledge/design/tui-keys-and-write-flows-design.md` and knowledge DR-0064 to DR-0070
 (accepted 2026-10-09). Written and tested red first.
 
+### Added
+
+- **`kb verbs` prints the verb table** (DR-0059). One table in `cmd/kb/verbtable.go` now describes every verb:
+  its summary, subverbs (and `document review`'s own), flags, which subverbs take a project, which have
+  deprecated `--project`/`--workspace` aliases, and its **write class** (DR-0067: read, additive, changing,
+  removing, direct, plan_apply, guided, cli_only). `kb verbs` prints it as text, and `kb -json verbs` as JSON
+  (the global option goes before the verb), so a model or script has one description of the command
+  language. It opens no database. Completion, the subverb help flags and the deprecation notes now read the
+  table instead of hand-kept lists; the generated completion scripts are byte for byte what they were,
+  held by golden files in `cmd/kb/testdata/`. Parsing is still per-verb (flags are declared three ways);
+  the TUI menu and `:` will read the table in later items.
+- Table finding: `observation delete` and `project delete` are removing verbs too, beside the five DR-0067
+  names; the table classes them so and a test pins the full set.
+
 ### Changed
 
 - **`kb document review promote` needs a person at a terminal** (DR-0070, extending DR-0061). It exits 2,

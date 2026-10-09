@@ -3,9 +3,9 @@
 # Or install: kb completion powershell -install
 Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    $verbs      = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'summary', 'unlink')
+    $verbs      = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'summary', 'unlink', 'verbs')
     $globals    = @('--db', '--debug', '--help', '--json', '--license', '--version')
-    $topics     = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'summary', 'unlink', 'topics')
+    $topics     = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'summary', 'unlink', 'verbs', 'topics')
     $shells     = @('bash', 'powershell')
     $valueFlags = @('--a', '--accept', '--accept-keywords', '--authors', '--b', '--by', '--concept', '--confidence', '--db', '--dir', '--doi', '--format', '--identifier-type', '--identifier-value', '--in', '--initiative', '--jsonl', '--kind', '--limit', '--out', '--project', '--published', '--publisher', '--relationship', '--rights', '--root', '--set', '--since', '--source-doi', '--status', '--title', '--trigger', '--url', '--version')
     $fileFlags  = @('--db', '--in', '--out', '--a', '--b', '--jsonl', '--root', '--dir')

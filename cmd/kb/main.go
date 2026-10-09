@@ -108,7 +108,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	}
 	defer dl.Close()
 
-	// merge, index, init and completion never touch the ambient --db database: merge
+	// merge, index, init, completion and verbs never touch the ambient --db database: merge
 	// operates on explicit -a/-b/-out paths, index builds from the record
 	// files so it works in a checkout that has never been ingested (DR-0008),
 	// and init resolves and creates its own target path (DR-0021). Opening --
@@ -116,7 +116,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// them would be a pointless, surprising side effect. It is not
 	// hypothetical: kb index left a 127KB database in whatever directory it
 	// ran in.
-	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" || rest[0] == "completion" {
+	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" || rest[0] == "completion" || rest[0] == "verbs" {
 		// They do not use --db, so an explicit one is a mistake. It used to be
 		// dropped silently: `kb --db rt.db init` created ./agents/knowledge.db
 		// and never rt.db. Refuse it and say where the target really goes.
@@ -214,6 +214,8 @@ func dbOptionRefusal(verb string) error {
 		return usageErrorf("--db does not apply to index: it reads record files, not a database; see kb help index")
 	case "completion":
 		return usageErrorf("--db does not apply to completion: it opens no database; see kb help completion")
+	case "verbs":
+		return usageErrorf("--db does not apply to verbs: it opens no database; see kb help verbs")
 	}
 	return usageErrorf("--db does not apply to %s: it takes its databases as -a, -b and -out; see kb help %s", verb, verb)
 }

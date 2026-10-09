@@ -180,6 +180,10 @@ completion
 : write a shell completion script for bash or PowerShell, or install it — see
   kb-completion(1)
 
+verbs
+: print the verb table: every verb, subverb, flag and write class, as text or
+  with -json — see kb-verbs(1)
+
 # ARGUMENTS
 
 The global options -json, -db and -debug go before the verb: kb
