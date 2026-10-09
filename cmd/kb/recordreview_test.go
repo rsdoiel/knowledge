@@ -8,17 +8,21 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rsdoiel/knowledge"
 )
 
 // `record set-status REF` with no status reviews the record, then asks
-// (DR-0060): the record is shown in a pager, the person chooses among the
-// moves the transition table allows, confirms, and only then is anything
-// written. Backing out at either step writes nothing and exits 1 (workspace
-// DR-0003: the command ran correctly and the answer is no). The review needs a
-// terminal and exits 2 without one.
+// (DR-0060, DR-0065): the record is shown in a pager, the person picks one of
+// the moves the transition table allows with a single key, confirms with y, and
+// only then is anything written. Esc and q act at once, with no Enter. Backing
+// out at either step writes nothing and exits 1 (workspace DR-0003: the command
+// ran correctly and the answer is no). The review needs a terminal and exits 2
+// without one. Keys are fed here as a string; the built binary on a pseudo-terminal,
+// with real bytes, is at the end of the file.
 
 // fakePager installs a pager script that announces itself on standard output,
 // copies the record it was given to a file, and returns that file's path.
@@ -46,7 +50,7 @@ func reviewWith(t *testing.T, run func(args ...string) (string, error), input st
 func TestReview_ShowsTheRecordThenAsksThenApplies(t *testing.T) {
 	copyPath := fakePager(t)
 	root, run := transitionFixture(t)
-	out, err := reviewWith(t, run, "a\ny\n", "0001")
+	out, err := reviewWith(t, run, "ay", "0001")
 	if err != nil {
 		t.Fatalf("review = %v (%q), want it applied", err, out)
 	}
@@ -57,8 +61,8 @@ func TestReview_ShowsTheRecordThenAsksThenApplies(t *testing.T) {
 	if rerr != nil || !strings.Contains(string(shown), "title:") {
 		t.Errorf("the pager was not given the record (read err %v, got %q)", rerr, shown)
 	}
-	// The order is: pager, the choice, the confirmation, the write.
-	order := []string{"[pager]", "clasm/DR-0001", "proposed", "[a]ccepted", "[y/N]", "status set to accepted"}
+	// The order is: pager, the review (its last view says what was done), the write.
+	order := []string{"[pager]", "clasm/DR-0001", "from proposed to accepted? yes", "status set to accepted"}
 	at := 0
 	for _, want := range order {
 		i := strings.Index(out[at:], want)
@@ -69,44 +73,40 @@ func TestReview_ShowsTheRecordThenAsksThenApplies(t *testing.T) {
 	}
 }
 
-func TestReview_OffersExactlyTheAllowedMoves(t *testing.T) {
-	fakePager(t)
+// What the review offers is what the transition table allows from the record's
+// status. (The prompt itself is drawn on a pseudo-terminal in the binary test.)
+func TestReviewOptions_AreTheAllowedMoves(t *testing.T) {
 	for _, c := range []struct {
-		id      string
-		offered []string
-		absent  []string
+		from   string
+		linked bool
+		want   string
 	}{
-		{"0001", []string{"[a]ccepted", "[r]ejected", "[c]ancelled", "[q]"}, []string{"[s]uperseded", "[p]roposed"}},
-		{"0007", []string{"[s]uperseded", "[c]ancelled", "[q]"}, []string{"[a]ccepted", "[r]ejected", "[p]roposed"}},
-		{"0003", []string{"[p]roposed", "[q]"}, []string{"[a]ccepted", "[c]ancelled", "[r]ejected"}},
-		{"0008", []string{"[p]roposed", "[q]"}, []string{"[a]ccepted", "[c]ancelled", "[r]ejected", "[s]uperseded"}},
+		{"proposed", false, "accepted rejected cancelled"},
+		{"proposed", true, "accepted superseded rejected cancelled"},
+		{"accepted", false, "cancelled"},
+		{"accepted", true, "superseded cancelled"},
+		{"rejected", false, "proposed"},
+		{"cancelled", false, "proposed"},
+		{"superseded", true, ""},
+		{"legacy-status", false, "proposed"},
 	} {
-		t.Run(c.id, func(t *testing.T) {
-			_, run := transitionFixture(t)
-			out, _ := reviewWith(t, run, "q\n", c.id)
-			for _, w := range c.offered {
-				if !strings.Contains(out, w) {
-					t.Errorf("prompt lacks %q:\n%s", w, out)
-				}
-			}
-			for _, w := range c.absent {
-				if strings.Contains(out, w) {
-					t.Errorf("prompt offers %q, which the table forbids:\n%s", w, out)
-				}
-			}
-		})
+		if got := strings.Join(reviewOptions(c.from, c.linked), " "); got != c.want {
+			t.Errorf("reviewOptions(%q, %v) = %q, want %q", c.from, c.linked, got, c.want)
+		}
 	}
 }
 
 func TestReview_BackingOutWritesNothingAndExits1(t *testing.T) {
 	fakePager(t)
 	for name, input := range map[string]string{
-		"q at the choice":                  "q\n",
+		"q at the choice":                  "q",
+		"Esc at the choice":                "\x1b",
 		"end of input at the choice":       "",
-		"declined at the confirmation":     "a\nn\n",
-		"empty answer at the confirmation": "a\n\n",
-		"anything but yes":                 "a\nmaybe\n",
-		"end of input at the confirmation": "a\n",
+		"n at the confirmation":            "an",
+		"q at the confirmation":            "aq",
+		"Esc at the confirmation":          "a\x1b",
+		"Enter does not confirm":           "a\r",
+		"end of input at the confirmation": "a",
 	} {
 		t.Run(name, func(t *testing.T) {
 			root, run := transitionFixture(t)
@@ -128,12 +128,13 @@ func TestReview_BackingOutWritesNothingAndExits1(t *testing.T) {
 	}
 }
 
-func TestReview_AcceptsWordsAndAnyCase(t *testing.T) {
+func TestReview_AcceptsUpperCaseAndIgnoresKeysItDidNotOffer(t *testing.T) {
 	fakePager(t)
 	for _, c := range []struct{ input, want string }{
-		{"rejected\nyes\n", "rejected"},
-		{"R\nY\n", "rejected"},
-		{"  cancelled \ny\n", "cancelled"},
+		{"RY", "rejected"},
+		{"CY", "cancelled"},
+		{"sxry", "rejected"}, // s is not offered (no superseded_by), x is nothing: both ignored
+		{"r y", "rejected"},  // a space is nothing
 	} {
 		root, run := transitionFixture(t)
 		if out, err := reviewWith(t, run, c.input, "0001"); err != nil {
@@ -145,23 +146,10 @@ func TestReview_AcceptsWordsAndAnyCase(t *testing.T) {
 	}
 }
 
-// A choice the table does not offer is asked again, not applied and not fatal.
-func TestReview_AsksAgainOnAChoiceItDidNotOffer(t *testing.T) {
-	fakePager(t)
-	root, run := transitionFixture(t)
-	out, err := reviewWith(t, run, "s\nx\n\nr\ny\n", "0001") // s: not offered (no superseded_by); x: unknown; blank
-	if err != nil {
-		t.Fatalf("review = %v (%q)", err, out)
-	}
-	if got := readFixture(t, root, "clasm", "0001"); !strings.Contains(got, "status: rejected") {
-		t.Errorf("record file does not carry status rejected:\n%s", got)
-	}
-}
-
 func TestReview_AFinalRecordIsRefusedBeforeThePager(t *testing.T) {
 	copyPath := fakePager(t)
 	_, run := transitionFixture(t)
-	_, err := reviewWith(t, run, "a\ny\n", "0005")
+	_, err := reviewWith(t, run, "ay", "0005")
 	if err == nil {
 		t.Fatal("reviewing a superseded record succeeded")
 	}
@@ -179,7 +167,7 @@ func TestReview_NeedsATerminal(t *testing.T) {
 	root, run := transitionFixture(t)
 	before := readFixture(t, root, "clasm", "0001")
 	for _, extra := range [][]string{{}, {"--json"}} {
-		_, err := reviewWith(t, run, "r\ny\n", append([]string{"0001"}, extra...)...)
+		_, err := reviewWith(t, run, "ry", append([]string{"0001"}, extra...)...)
 		if err == nil || !isUsageError(err) {
 			t.Errorf("review without a terminal %v: err = %v, want a usage error (exit 2)", extra, err)
 		}
@@ -196,7 +184,7 @@ func TestReview_JSONIsRefused(t *testing.T) {
 	fakePager(t)
 	kb, _ := fixtureWorkspace(t, "clasm", testRecord{ID: "0001", Kind: "decision", Trigger: "design", Status: "proposed", Date: "2026-08-01"})
 	old := reviewStdin
-	reviewStdin = strings.NewReader("r\ny\n")
+	reviewStdin = strings.NewReader("ry")
 	defer func() { reviewStdin = old }()
 	var out bytes.Buffer
 	err := cmdRecord(kb, nil, true, []string{"set-status", "clasm/0001"}, &out)
@@ -220,7 +208,7 @@ func TestReview_WithoutAPagerPrintsTheRecord(t *testing.T) {
 	t.Setenv("KB_PAGER", "")
 	t.Setenv("PATH", t.TempDir())
 	root, run := transitionFixture(t)
-	out, err := reviewWith(t, run, "r\ny\n", "0001")
+	out, err := reviewWith(t, run, "ry", "0001")
 	if err != nil {
 		t.Fatalf("review = %v (%q)", err, out)
 	}
@@ -242,7 +230,7 @@ func TestReview_APagerFailureDoesNotAbort(t *testing.T) {
 	}
 	t.Setenv("KB_PAGER", script)
 	root, run := transitionFixture(t)
-	if out, err := reviewWith(t, run, "r\ny\n", "0001"); err != nil {
+	if out, err := reviewWith(t, run, "ry", "0001"); err != nil {
 		t.Fatalf("review = %v (%q)", err, out)
 	}
 	if got := readFixture(t, root, "clasm", "0001"); !strings.Contains(got, "status: rejected") {
@@ -305,26 +293,150 @@ func TestStatusKeys_AreDistinctAndLeaveQFree(t *testing.T) {
 
 // ─── the real binary on a terminal ───────────────────────────────────────────
 
-func TestBinary_ReviewFromATerminal(t *testing.T) {
+// ptyScreen collects what the program writes to a pseudo-terminal, so a test can
+// wait for the prompt before it types, as a person would.
+type ptyScreen struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func newPtyScreen(master *os.File) *ptyScreen {
+	sc := &ptyScreen{}
+	go func() {
+		b := make([]byte, 4096)
+		for {
+			n, err := master.Read(b)
+			if n > 0 {
+				sc.mu.Lock()
+				sc.buf.Write(b[:n])
+				sc.mu.Unlock()
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return sc
+}
+
+func (sc *ptyScreen) text() string {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return sc.buf.String()
+}
+
+// waitFor fails the test if text does not appear within ten seconds.
+func (sc *ptyScreen) waitFor(t *testing.T, text string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(sc.text(), text) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("%q never appeared on the terminal; it showed:\n%s", text, sc.text())
+}
+
+// reviewOnATerminal starts the built kb on a pseudo-terminal with the pager set
+// to cat and returns what the test needs to type at it and to see the result.
+func reviewOnATerminal(t *testing.T) (root string, master *os.File, screen *ptyScreen, wait func() int) {
+	t.Helper()
 	if runtime.GOOS != "linux" {
 		t.Skip("pseudo-terminal test is Linux only")
 	}
 	bin := builtKB(t)
 	master, slave := openPtyForTest(t)
-	_, root := fixtureWorkspace(t, "clasm",
+	_, root = fixtureWorkspace(t, "clasm",
 		testRecord{ID: "0001", Kind: "decision", Trigger: "design", Status: "proposed", Date: "2026-08-01"})
-	if _, err := master.WriteString("r\ny\n"); err != nil {
-		t.Fatal(err)
-	}
 	cmd := exec.Command(bin, "record", "set-status", "clasm/DR-0001")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "KB_PAGER=cat")
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
-	if code := exitCode(t, cmd.Run()); code != 0 {
-		t.Fatalf("exit = %d from a terminal, want 0", code)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start kb: %v", err)
+	}
+	screen = newPtyScreen(master)
+	return root, master, screen, func() int {
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		select {
+		case err := <-done:
+			return exitCode(t, err)
+		case <-time.After(15 * time.Second):
+			_ = cmd.Process.Kill()
+			t.Fatalf("kb did not exit; it showed:\n%s", screen.text())
+			return -1
+		}
+	}
+}
+
+func TestBinary_ReviewFromATerminal(t *testing.T) {
+	root, master, screen, wait := reviewOnATerminal(t)
+	// The prompt names the record, where it is, and the moves on offer.
+	screen.waitFor(t, "[q]uit")
+	for _, want := range []string{"clasm/DR-0001", "proposed", "[a]ccepted", "[r]ejected", "[c]ancelled"} {
+		if !strings.Contains(screen.text(), want) {
+			t.Errorf("the prompt lacks %q:\n%s", want, screen.text())
+		}
+	}
+	if strings.Contains(screen.text(), "[s]uperseded") {
+		t.Error("the prompt offers superseded, which needs a superseded_by")
+	}
+	master.WriteString("r") // no Enter
+	screen.waitFor(t, "from proposed to rejected")
+	master.WriteString("y") // no Enter
+	if code := wait(); code != 0 {
+		t.Fatalf("exit = %d from a terminal, want 0:\n%s", code, screen.text())
 	}
 	if got := readFixture(t, root, "clasm", "0001"); !strings.Contains(got, "status: rejected") {
 		t.Errorf("record file does not carry status rejected:\n%s", got)
+	}
+}
+
+// A lone Esc is a cancel by itself: no Enter after it, at either step.
+func TestBinary_ReviewEscCancelsWithNoEnter(t *testing.T) {
+	for name, keys := range map[string][]string{
+		"at the choice":         {"\x1b"},
+		"at the confirmation":   {"r", "\x1b"},
+		"q at the choice":       {"q"},
+		"n at the confirmation": {"a", "n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root, master, screen, wait := reviewOnATerminal(t)
+			before := readFixture(t, root, "clasm", "0001")
+			screen.waitFor(t, "[q]uit")
+			for i, k := range keys {
+				master.WriteString(k)
+				if i < len(keys)-1 {
+					screen.waitFor(t, "from proposed to")
+				}
+			}
+			if code := wait(); code != 1 {
+				t.Fatalf("exit = %d, want 1 for a cancel:\n%s", code, screen.text())
+			}
+			if after := readFixture(t, root, "clasm", "0001"); after != before {
+				t.Errorf("a cancelled review changed the record file:\n%s", after)
+			}
+		})
+	}
+}
+
+// Enter at the confirmation is not consent: it leaves the review waiting for a
+// real answer.
+func TestBinary_ReviewEnterDoesNotConfirm(t *testing.T) {
+	root, master, screen, wait := reviewOnATerminal(t)
+	screen.waitFor(t, "[q]uit")
+	master.WriteString("r")
+	screen.waitFor(t, "from proposed to rejected")
+	master.WriteString("\r")
+	time.Sleep(300 * time.Millisecond)
+	if got := readFixture(t, root, "clasm", "0001"); strings.Contains(got, "status: rejected") {
+		t.Fatal("Enter applied the write")
+	}
+	master.WriteString("n")
+	if code := wait(); code != 1 {
+		t.Errorf("exit = %d after n, want 1", code)
 	}
 }
 
@@ -335,7 +447,7 @@ func TestBinary_ReviewWithRedirectedStreamsIsExit2(t *testing.T) {
 	before := readFixture(t, root, "clasm", "0001")
 	cmd := exec.Command(bin, "record", "set-status", "clasm/DR-0001")
 	cmd.Dir = root
-	cmd.Stdin = strings.NewReader("r\ny\n")
+	cmd.Stdin = strings.NewReader("ry")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if code := exitCode(t, cmd.Run()); code != 2 {

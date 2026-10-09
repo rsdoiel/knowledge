@@ -33,6 +33,14 @@ Foundations for the TUI write flows, from the design brief
 
 ### Changed
 
+- **The `kb record set-status REF` review takes single keys** (DR-0065). A status letter chooses at once and
+  `y` confirms; `Esc`, `q` or `Ctrl-C` backs out at either step, as does `n` at the confirmation, all without
+  Enter. `Enter` on the confirmation does nothing, so a habitual Enter is never consent to a write. It
+  replaces the v0.0.18 prompt, which read whole lines and could not see a bare `Esc`; the whole-name answers
+  and `[y/N]` default are gone. It runs as a small inline bubbletea program, the same component the TUI will
+  embed, and a review fed from a pipe treats the end of input as a cancel instead of waiting. A text field
+  never treats `q` as a command (DR-0064 amendment); the typed confirmation the removing gate will use
+  (`typedConfirmModel`) is built and tested for it already.
 - **`kb document review promote` needs a person at a terminal** (DR-0070, extending DR-0061). It exits 2,
   writing nothing, unless standard input and standard output are both terminals, with a message that a person
   must promote it. No flag or environment variable turns that off, and `draft`, `review list` and every other

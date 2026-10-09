@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -13,9 +12,10 @@ import (
 	"github.com/rsdoiel/knowledge"
 )
 
-// reviewStdin is where the review form reads the person's answers. It is a
-// variable so tests can supply them; production reads the process's own
-// standard input, the same stream the terminal check looked at.
+// reviewStdin is where the review reads its keys. It is a variable so tests can
+// supply them; production reads the process's own standard input, the same
+// stream the terminal check looked at. A terminal is put in raw mode so each key
+// acts at once; anything else is read as a stream of keys and its end cancels.
 var reviewStdin io.Reader = os.Stdin
 
 /** pagerCommand chooses the program that shows a record for review: $KB_PAGER
@@ -96,16 +96,6 @@ func showRecord(out io.Writer, raw []byte) {
 	}
 }
 
-// readAnswer reads one trimmed line. ok is false at end of input with nothing
-// read, which the review treats as backing out.
-func readAnswer(r *bufio.Reader) (answer string, ok bool) {
-	line, err := r.ReadString('\n')
-	if err != nil && line == "" {
-		return "", false
-	}
-	return strings.TrimSpace(line), true
-}
-
 /** recordReviewStatus is record set-status with no status: it shows the record,
  * offers the moves the transition table allows, asks for confirmation, and
  * writes only then (DR-0060). Backing out at either step writes nothing and is
@@ -149,41 +139,13 @@ func recordReviewStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags
 
 	showRecord(out, raw)
 
-	in := bufio.NewReader(reviewStdin)
-	labels := make([]string, 0, len(options)+1)
-	for _, o := range options {
-		labels = append(labels, fmt.Sprintf("[%c]%s", statusKey(o), o[1:]))
+	// One key chooses, one confirms, and Esc or q backs out at either, with no
+	// Enter (DR-0065). The program is inline, so the record above stays on screen.
+	chosen, confirmed, err := runReview(reviewStdin, out, ref, from, options)
+	if err != nil {
+		return err
 	}
-	labels = append(labels, "[q]uit")
-
-	var chosen string
-	for chosen == "" {
-		fmt.Fprintf(out, "%s is %s -> %s: ", ref, from, strings.Join(labels, " "))
-		line, ok := readAnswer(in)
-		if !ok {
-			fmt.Fprintln(out)
-			return negativef("cancelled; %s is unchanged", ref)
-		}
-		line = strings.ToLower(line)
-		if line == "q" || line == "quit" {
-			return negativef("cancelled; %s is unchanged", ref)
-		}
-		for _, o := range options {
-			if line == o || (utf8.RuneCountInString(line) == 1 && []rune(line)[0] == statusKey(o)) {
-				chosen = o
-			}
-		}
-		if chosen == "" && line != "" {
-			fmt.Fprintf(out, "%q is not one of the choices.\n", line)
-		}
-	}
-
-	fmt.Fprintf(out, "Set %s from %s to %s? [y/N] ", ref, from, chosen)
-	line, ok := readAnswer(in)
-	if !ok {
-		fmt.Fprintln(out)
-	}
-	if answer := strings.ToLower(line); !ok || (answer != "y" && answer != "yes") {
+	if !confirmed {
 		return negativef("cancelled; %s is unchanged", ref)
 	}
 	return applyRecordStatus(kb, false, f, out, rec, chosen)

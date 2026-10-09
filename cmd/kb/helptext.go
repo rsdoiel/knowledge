@@ -1520,14 +1520,15 @@ set-status
   With no STATUS it is a review, for a person at a terminal: the record is
   shown through $KB_PAGER (else bat, else less -R, else printed), then the
   prompt names the current status and the moves the table allows, for example
-  harvey/DR-0004 is proposed -> [a]ccepted [r]ejected [c]ancelled [q]uit. Each
-  status is chosen by its first letter or its whole name; q backs out. A
-  confirmation line follows (Set ... from proposed to accepted? [y/N]) and
-  nothing is written until it is answered y or yes. Backing out at either step,
-  an empty answer to the confirmation, or end of input leaves the record
-  unchanged and is exit 1, since the command ran and the answer is no. The
-  review without a terminal, or with --json, is exit 2; the form with a STATUS
-  is what a script uses
+  harvey/DR-0004 is proposed -> [a]ccepted [r]ejected [c]ancelled [q]uit. A
+  status is chosen by pressing its first letter, at once, with no Enter. A
+  confirmation follows (Set ... from proposed to accepted?) and nothing is
+  written until you press y. Esc, q or Ctrl-C backs out at either step, as does
+  n at the confirmation, again at once; Enter does nothing, so a habitual Enter is
+  never consent to a write. Backing out, or end of input when the keys come from
+  a pipe, leaves the record unchanged and is exit 1, since the command ran and
+  the answer is no. The review without a terminal, or with --json, is exit 2;
+  the form with a STATUS is what a script uses
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on
