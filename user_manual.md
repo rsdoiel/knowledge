@@ -68,6 +68,8 @@ On a record (the Records screens and a project's Records tab) `Enter` reads it a
 
 `d` deletes the selected project, observation, concept or record. It is not a y/n: a screen shows what will be removed and what points at it, and you type the thing's name (a record's reference, an observation's number) exactly; only an exact match and `Enter` delete, and `Esc` cancels. While you type every key is text, `q` included. A delete the command line would refuse (a project that owns content, a record whose file still exists) is refused here too, with the reason, and the screen shows the equivalent command after a delete.
 
+Changes work the same way: the item is shown with its current value, the new one is picked (a project's status, one key each) or typed (a description, a name, an observation's correction), and `y` confirms old to new before anything is written. On the project list `s` sets the status, `e` edits the description and `r` renames; on an observation `e` writes a correction (a new observation that supersedes it, as `kb observation update` does); on a concept `e` renames it. In a text field `Enter` accepts, `Ctrl-J` starts a new line, `Ctrl-U` clears the line, and `Esc` cancels. Each change is the command's own function, so its refusals are shown with nothing changed.
+
 A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group such as `kb record`, and `kb record show` or `kb project show` with no argument. `kb -i record pending` (or `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. See [kb(1)](kb.1.md) for the full description.
 
 ---

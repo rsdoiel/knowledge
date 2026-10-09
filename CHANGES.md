@@ -21,6 +21,17 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   gate and the reason: a project that owns observations, records or documents, and a record whose file still
   exists (delete the file, or retire it with `set-status REF cancelled`). After a delete the screen shows
   `equivalent:  kb ... delete ...` and the lists, counts and header are refreshed.
+- **Changing writes in the TUI** (DR-0067, DR-0064 amendment; plan item U2). On the project list `s` sets a
+  project's status (one key each; `concept`, `active`, `paused` and `concluded` take `c`, `a`, `p` and `l`),
+  `e` edits its description and `r` renames it; on an observation `e` writes a correction; on a concept `e`
+  renames it. The item is shown with its current value, the new value is picked or typed, and `y` confirms old
+  to new. Each change calls the command's own function (`cmdProject`, `cmdObservation`, `cmdConcept`), so the
+  rules and the errors are the command's, and a refusal (a rename onto a taken name) is a notice with nothing
+  changed. A text field is a `bubbles` text area that starts from the current text (`Enter` accepts, `Ctrl-J`
+  starts a new line, `Ctrl-U` clears the line, `Esc` cancels) and takes every key as text, `q` included. An
+  observation correction says on the confirmation that, as `kb observation update` does (DR-0023), it adds a new
+  observation that supersedes the old and keeps the original wording. A chooser's keys are no longer only the
+  first letter, which two project statuses share.
 - Long notices wrap to the window instead of being cut at the edge, and a legend that is wider than the window
   drops its spacing, then its movement hint, instead of losing its last key.
 

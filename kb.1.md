@@ -131,6 +131,18 @@ file first, or retire the record with kb record set-status REF cancelled).
 When it deletes, the screen shows the command that does the same. Deleting is local:
 kb merge or kb import from a database that still has the thing brings it back.
 
+Changes are made the same way: the item is shown with its current value, the new
+one is picked or typed, and old to new is confirmed with y before anything is
+written. On the project list s sets a project's status (each status is one key),
+e edits its description and r renames it; on an observation e writes a correction
+(as kb observation update does, the new text is a new observation that
+supersedes the old and the original wording is kept); on a concept e renames it. A
+text field starts from the current text; Enter accepts it, Ctrl-J starts a new
+line, Ctrl-U clears the line, and Esc cancels. While you type every key is text,
+q included. Each change is made by the command's own function, so a refusal (a
+rename onto a name that is taken) is the command's refusal, shown on the screen
+with nothing changed, and a success shows the command that does the same.
+
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
 a terminal: bare kb, a bare group (kb record opens the Records menu), and

@@ -31,6 +31,7 @@ const (
 	viewReview      // choosing and confirming a status for the selected record
 	viewText        // a record shown in the built-in viewer, when there is no pager
 	viewRemove      // the gate for a removing verb: a plan and a typed confirmation
+	viewChange      // a changing write: pick or type the new value, then confirm old to new
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -123,6 +124,7 @@ type tuiModel struct {
 	removal         *removalPlan // the delete the gate is asking about, in viewRemove
 	removeInput     *typedConfirmModel
 	removeBack      viewState
+	change          *changeFlow // the changing write in progress, in viewChange
 	textPurpose     string
 	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string // the workspace directory, for the header
@@ -246,6 +248,7 @@ var viewStateNames = map[viewState]string{
 	viewReview:       "viewReview",
 	viewText:         "viewText",
 	viewRemove:       "viewRemove",
+	viewChange:       "viewChange",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -314,6 +317,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// A notice lasts until the next key.
 		m.notice = ""
+		if m.state == viewChange {
+			return m.updateChange(msg)
+		}
 		// While text is being typed every printable key is text, so this is
 		// asked before any letter is bound (DR-0064, amendment).
 		if m.capturingText() {
@@ -411,7 +417,12 @@ func (m *tuiModel) tabHeight() int {
 // capturingText reports whether the TUI is taking text, so a key handler treats
 // q, j, k and the rest as characters (DR-0064, amendment). Today that is the
 // search prompt; filters, forms and the command line join it later.
-func (m *tuiModel) capturingText() bool { return m.searching || m.state == viewRemove }
+func (m *tuiModel) capturingText() bool {
+	if m.state == viewChange && m.change != nil {
+		return m.change.edit != nil && m.change.phase == changePick
+	}
+	return m.searching || m.state == viewRemove
+}
 
 // updateError handles a key while an error is on screen: q or Enter dismisses it
 // and nothing else happens. Ctrl-C is handled before this is reached.
@@ -657,6 +668,12 @@ func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "d":
 		return m.removeSelected()
+	case "s":
+		return m.changeSelected("status")
+	case "e":
+		return m.changeSelected("describe")
+	case "r":
+		return m.changeSelected("rename")
 	case "enter":
 		if item, ok := m.projectList.SelectedItem().(projectItem); ok {
 			p := item.p
@@ -696,6 +713,8 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "d":
 		return m.removeSelected()
+	case "e":
+		return m.changeSelected("edit")
 	case "q":
 		return m.goTo(viewProjects, nil)
 	case "esc":
@@ -717,6 +736,8 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "d":
 		return m.removeSelected()
+	case "e":
+		return m.changeSelected("edit")
 	case "q":
 		return m.goTo(viewProjects, nil)
 	case "esc":
@@ -920,7 +941,7 @@ func (m *tuiModel) legendFull() string {
 	switch {
 	case m.err != nil:
 		return "q dismiss   Ctrl-C quit"
-	case m.capturingText():
+	case m.searching:
 		return "Esc cancel   Enter search   Ctrl-C quit"
 	}
 	move := "↑/↓ j/k move"
@@ -936,6 +957,8 @@ func (m *tuiModel) legendFull() string {
 		return move + "   Enter read   s status   d delete   " + m.scopeKey() + "   / search   q back"
 	case viewRemove:
 		return "Esc cancel   Enter delete (only when the name matches)   Ctrl-C quit"
+	case viewChange:
+		return m.changeLegend()
 	case viewReview:
 		return m.reviewLegend()
 	case viewText:
@@ -943,11 +966,14 @@ func (m *tuiModel) legendFull() string {
 	case viewRecords:
 		return move + "   Enter read   s status   d delete   o c r tabs   / search   q back"
 	case viewObservations, viewConcepts:
-		return move + "   d delete   o c r tabs   / search   q back"
+		if m.state == viewObservations {
+			return move + "   e edit   d delete   o c r tabs   / search   q back"
+		}
+		return move + "   e rename   d delete   o c r tabs   / search   q back"
 	case viewSearch:
 		return move + "   / search   q back"
 	}
-	return move + "   Enter open   d delete   / search   q back"
+	return move + "   Enter open   s status   e describe   r rename   d delete   / search   q back"
 }
 
 // menuRows renders a menu's rows: the cursor, the label, what it does, and for a
@@ -1003,6 +1029,8 @@ func (m *tuiModel) screen() (string, []string) {
 		return m.textScreen()
 	case viewRemove:
 		return m.removeScreen()
+	case viewChange:
+		return m.changeScreen()
 	case viewObservations:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:

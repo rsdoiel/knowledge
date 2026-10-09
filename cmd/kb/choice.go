@@ -78,8 +78,17 @@ func isBackOut(k tea.KeyMsg) bool {
 type chooserModel struct {
 	ref, from string
 	options   []string
+	keys      map[string]rune // an option's key when it is not its first letter
 	chosen    string
 	cancelled bool
+}
+
+// keyOf is the key that picks an option: its entry in keys, else its first letter.
+func (m *chooserModel) keyOf(option string) rune {
+	if k, ok := m.keys[option]; ok {
+		return k
+	}
+	return statusKey(option)
 }
 
 func newChooser(ref, from string, options []string) *chooserModel {
@@ -94,7 +103,7 @@ func (m *chooserModel) step(k tea.KeyMsg) bool {
 	}
 	if r := typedRune(k); r != 0 {
 		for _, o := range m.options {
-			if statusKey(o) == r {
+			if m.keyOf(o) == r {
 				m.chosen = o
 				return true
 			}
@@ -119,7 +128,13 @@ func (m *chooserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *chooserModel) View() string {
 	labels := make([]string, 0, len(m.options)+1)
 	for _, o := range m.options {
-		labels = append(labels, fmt.Sprintf("[%c]%s", statusKey(o), o[1:]))
+		k := m.keyOf(o)
+		// The key is shown inside the word where it falls: [c]oncept, conc[l]uded.
+		if i := strings.IndexRune(strings.ToLower(o), k); i >= 0 {
+			labels = append(labels, o[:i]+"["+string(k)+"]"+o[i+1:])
+		} else {
+			labels = append(labels, fmt.Sprintf("[%c] %s", k, o))
+		}
 	}
 	labels = append(labels, "[q]uit")
 	return fmt.Sprintf("%s is %s -> %s", m.ref, m.from, strings.Join(labels, " "))
