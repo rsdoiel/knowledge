@@ -21,13 +21,125 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.17-2026-10-08">v0.0.17 — 2026-10-08</h2>
+<p>Everything below is written and tested red first. The decisions are
+knowledge DR-0057 (qualified record references) and DR-0058 (scope),
+accepted 2026-10-08, from the design brief
+<code>agents/projects/knowledge/design/scoped-refs-and-tui-parity-design.md</code>.
+DR-0059 to DR-0062 (a verb table, review-then-decide, the terminal
+requirement for <code>accepted</code>, a read/write TUI) are accepted
+but are not in this release. The race detector was run on darwin/arm64
+at the last code commit and the suite passed; the new commands were
+checked read-only, with a scratch build, against both the Laboratory and
+the WorkLab workspaces (277 records, 23 projects in the second, with
+<code>DR-0001</code> repeated ten times).</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>A workspace is found by walking up</strong> (DR-0058): from
+the current directory to the nearest ancestor with
+<code>agents/knowledge.db</code> or <code>agents/knowledge.jsonl</code>,
+as git finds <code>.git</code>, so every verb works from any
+subdirectory. <code>-db</code> still wins. A fresh clone that has only
+the JSONL file is told to run
+<code>kb import -in agents/knowledge.jsonl</code>, not
+<code>kb init</code>, and <code>kb import</code> builds the database in
+the workspace and not in the current directory. Library:
+<code>knowledge.FindWorkspace</code>, <code>MarkerDB</code>,
+<code>MarkerJSONL</code>.</li>
+<li><strong>Environment:</strong> <code>KB_DB</code> (the database, as
+<code>-db</code>), <code>KB_PROJECT</code> (the project to act on when
+the directory gives none), <code>KB_CEILING_DIRECTORIES</code>
+(directories the walk never enters or passes, as git’s
+<code>GIT_CEILING_DIRECTORIES</code>), <code>KB_QUIET</code> (silences
+advisory notes, never an error). When the workspace found is not the
+current directory, a note on standard error says so; standard output is
+untouched.</li>
+<li><strong>Qualified record references</strong>
+<code>SCOPE/DR-NNNN</code> (DR-0057), where SCOPE is a project name or
+<code>workspace</code>. The workspace directory’s own name, in any case,
+is accepted for <code>workspace</code>, and a project of that name wins.
+A short id is padded (<code>harvey/4</code> is
+<code>harvey/DR-0004</code>). Library: <code>Ref</code>,
+<code>ParseRef</code>, <code>(*KnowledgeBase).ResolveRef</code> and
+<code>*AmbiguousRefError</code>, so harvey shares the syntax and the
+lookup.</li>
+<li><strong>Scope on the record verbs</strong> (DR-0058):
+<code>kb record list harvey clasm workspace</code>; with no scope, the
+project the working directory belongs to (under
+<code>agents/projects/NAME/</code>, or a repository directory
+<code>NAME/</code> beside it), then <code>KB_PROJECT</code>, then the
+whole workspace; <code>--all</code> widens it. <code>record new</code>
+takes its project the same way. Library:
+<code>(*KnowledgeBase).ProjectForDir</code>.</li>
+<li><strong><code>kb record pending [SCOPE...] [--all]</code></strong>:
+every <code>proposed</code> record in scope, oldest first, with the
+other <code>list</code> filters. <code>--status</code> is a usage
+error.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><strong>Listings name records by reference.</strong>
+<code>record list</code> starts each line with
+<code>harvey/DR-0004</code> (columns aligned) in place of the bare id
+and the <code>-</code> project column; <code>--json</code> gains
+<code>ref</code> beside the unchanged <code>record_id</code>,
+<code>project</code> and <code>scope</code>. <code>record show</code>
+heads with the reference and qualifies every relation.
+<code>set-status</code>, <code>supersede</code>, <code>delete</code>,
+<code>new</code> and <code>fuzzy-tag</code> confirm with references, and
+their <code>--json</code> gains <code>ref</code> (<code>new_ref</code>
+and <code>old_ref</code> for <code>supersede</code>).</li>
+<li><strong>A change needs a scope.</strong> <code>set-status</code>,
+<code>supersede</code> and <code>delete</code> refuse a bare id with no
+scope, even when it is unique (exit 2, offering the qualified form). Say
+<code>harvey/DR-0004</code>, run it inside the project, or set
+<code>KB_PROJECT</code>. Reading verbs resolve a bare id inside the
+inferred project.</li>
+<li><strong>A bare id is looked up in this workspace’s records
+only</strong>, where it used to count every workspace’s.</li>
+<li><strong><code>record list</code> takes scope arguments</strong>, so
+a trailing word is no longer a surplus argument (exit 2); an unknown
+scope is exit 1, as an unknown <code>--project</code> always was.</li>
+<li><strong><code>--project</code> and <code>--workspace</code> are
+deprecated</strong> on <code>list</code>, <code>pending</code>,
+<code>show</code>, <code>concepts</code>, <code>set-status</code>,
+<code>supersede</code> and <code>delete</code>. They still work, must
+agree with a qualified reference, and print one line on standard error
+naming the better spelling. <code>record new</code>,
+<code>record fuzzy-tag</code> and other verbs’ <code>--project</code>
+are unchanged.</li>
+<li><strong>A project cannot be named <code>workspace</code></strong>
+(any case): <code>project add</code> and <code>project rename</code>
+refuse it, exit 2. It names the workspace tier in a reference, so such a
+project could never be reached.</li>
+<li>The tests set <code>KB_CEILING_DIRECTORIES</code>,
+<code>KB_DB</code> and <code>KB_QUIET</code> themselves, so a
+developer’s shell cannot change them, and the record round-trip test
+reads only the workspace it sits in.</li>
+</ul>
+<h3 id="upgrade-notes">Upgrade notes</h3>
+<ul>
+<li>A script that reads <code>record list</code> output by column
+breaks: the first column is now the reference and its width varies. Use
+<code>--json</code>; <code>record_id</code> is unchanged and
+<code>ref</code> is new.</li>
+<li>A script or skill that changes a record with a bare id
+(<code>record set-status 0004 accepted --project X</code> still works,
+with a note) should use <code>X/DR-0004</code>. Skills that quote the
+old forms need <code>kb &gt;= 0.0.17</code>.</li>
+<li><code>kb</code> run from a subdirectory of a workspace used to fail
+with exit 66; it now finds the workspace. A scratch directory inside a
+real workspace therefore reaches it: set
+<code>KB_CEILING_DIRECTORIES</code> to the scratch directory to prevent
+that.</li>
+</ul>
 <h2 id="v0.0.16-2026-10-06">v0.0.16 — 2026-10-06</h2>
 <p>Written and tested red first. The decision is knowledge DR-0056. It
 was checked by sourcing the generated script in real bash and PowerShell
 (<code>TabExpansion2</code>) against the real workspace; that run found
 a placeholder left unsubstituted in the project-name path, which the
 unit tests had missed, and it is fixed and now tested.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><strong><code>kb completion bash|powershell [-install]</code></strong>
 (DR-0056): writes a shell completion script to standard output, or with
@@ -53,7 +165,7 @@ flag check is union-wide, not per verb.</li>
 <code>kb(1)</code>, <code>kb help topics</code> and the Makefile’s
 <code>KB_TOPICS</code>.</li>
 </ul>
-<h3 id="upgrade-notes">Upgrade notes</h3>
+<h3 id="upgrade-notes-1">Upgrade notes</h3>
 <ul>
 <li>Nothing that worked changes. <code>kb completion</code> did not
 exist before, so a script that called it got exit 2 (unknown verb) and
@@ -72,7 +184,7 @@ subverb” to “not found”), and nothing exits 70. That comparison was made
 before the <code>kb import</code> and <code>kb project add</code> fixes
 below, and <code>project add</code> on an existing name changes from
 exit 0 to 1.</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><strong><code>kb concept show NAME [--limit N]</code></strong>
 (DR-0051): a concept’s description and identifier, and per kind
@@ -136,7 +248,7 @@ purpose.</li>
 <code>RecallByText</code> adds a project filter, the project and matched
 concepts on every hit, and the list of linked projects.</li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li><strong><code>kb project add</code> refuses a name that already
 exists</strong> (DR-0055): exit 1,
@@ -171,7 +283,7 @@ from <code>kb record set-status</code>,
 <code>kb record fuzzy-tag</code>, where the first three exited 2. The
 file’s content is what is wrong, not the command line.</li>
 </ul>
-<h3 id="upgrade-notes-1">Upgrade notes</h3>
+<h3 id="upgrade-notes-2">Upgrade notes</h3>
 <ul>
 <li>Nothing that worked changes, apart from the malformed record file
 exit above. A script that treated 2 from <code>record set-status</code>
@@ -195,7 +307,7 @@ the question that was asked, 2 says the command was wrong, and the
 change was checked by running the v0.0.13 build alongside the new one,
 387 commands in plain and <code>--json</code> mode, on a copy of the
 real database.</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><strong>Removal verbs</strong> (DR-0050), so a mistake is fixable
 without raw SQL, which skips the search index:
@@ -243,7 +355,7 @@ that is not absolute, and a <code>--doi</code> that is not the bare
 <code>check-retractions</code> sends the DOI to Retraction Watch, and a
 mistyped one used to read as “not retracted”.</li>
 </ul>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><strong>Bulk commands do everything they can, then exit with the
 class of the first failure</strong> instead of 0: <code>kb ingest</code>
@@ -306,7 +418,7 @@ keyword is a usage error.</li>
 v0.0.13 (exit 2), and its <code>|| true</code> hid the failure: the
 index check never ran.</li>
 </ul>
-<h3 id="upgrade-notes-2">Upgrade notes</h3>
+<h3 id="upgrade-notes-3">Upgrade notes</h3>
 <p>For scripts. <strong>Exit 1 no longer means “anything went
 wrong”.</strong> It is the normal “no” (not found, nothing matched, a
 stale index, refused by the current state), as it is for
@@ -439,7 +551,7 @@ The decisions behind the changes are DR-0040 to DR-0044. Every fix below
 was written red first, and the command-line changes were checked by
 running a build from before the change alongside the new one, on a copy
 of the real database.</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><code>CleanName(kind, name)</code>, exported (DR-0042): trims
 surrounding whitespace from a project or concept name and refuses one
@@ -456,7 +568,7 @@ go before the verb, a name that begins with a dash follows
 <code>--</code>, and free text after a verb’s fixed arguments is taken
 as typed. EXIT STATUS now says exactly what 1 and 2 mean.</li>
 </ul>
-<h3 id="changed-2">Changed</h3>
+<h3 id="changed-3">Changed</h3>
 <ul>
 <li><strong>Usage errors exit 2</strong> (they exited 1; DR-0040).
 <code>kb -help</code> had always documented 2 for “usage error”, but
@@ -598,7 +710,7 @@ an exact tie keeps the local row, are tests of their own. The old test
 failed 3 of 3 with a forced tick; the new ones pass with it, and 600
 runs are clean.</li>
 </ul>
-<h3 id="upgrade-notes-3">Upgrade notes</h3>
+<h3 id="upgrade-notes-4">Upgrade notes</h3>
 <p>For scripts:</p>
 <ul>
 <li>Exit 2 now means a usage error. A script that treated any non-zero
@@ -645,7 +757,7 @@ sweep of bugs that only showed up by running a build from before each
 change against the new one on real data. Every fix below was written red
 first, and each move was checked by diffing the old binary’s output
 against the new one, byte for byte.</p>
-<h3 id="added-4">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><strong>The workflow logic is now library API</strong> (DR-0035).
 <code>cmd/kb</code> is <code>package   main</code>, so everything
@@ -704,7 +816,7 @@ vocabulary (DR-0038): adopted, then abandoned. It differs from
 record’s body, by convention. <code>kb help record</code> documents
 it.</li>
 </ul>
-<h3 id="changed-3">Changed</h3>
+<h3 id="changed-4">Changed</h3>
 <ul>
 <li><strong>Concept names that begin or end in punctuation now
 match</strong> (DR-0037). <code>C++</code>, <code>F#</code> and
@@ -782,7 +894,7 @@ near-miss tagging, a frontmatter provenance generator, and fuzzy
 candidate clustering, each of which surfaced and fixed a real
 self-contradiction in its own design doc before shipping, verified by
 hand rather than trusting the design’s own worked examples.</p>
-<h3 id="added-5">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
 (DR-0032) catches what <code>tag</code>’s exact whole-word matching
@@ -856,7 +968,7 @@ unchanged.</li>
 v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
 two corpus-improvement verbs that surface candidates for a human to
 confirm rather than committing anything themselves.</p>
-<h3 id="added-6">Added</h3>
+<h3 id="added-7">Added</h3>
 <ul>
 <li><code>kb concept suggest [--project NAME] [--limit N]</code>
 (DR-0028), a read-only verb that scans every record body and document
@@ -890,7 +1002,7 @@ and fenced blocks, is auto-linked. <code>tag_density</code> is
 deliberately left counting the unfiltered text — it is the raw signal
 the threshold is applied to, not the threshold’s output.</li>
 </ul>
-<h3 id="changed-4">Changed</h3>
+<h3 id="changed-5">Changed</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> now completes for a project
 that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
@@ -973,7 +1085,7 @@ in favour of the per-file property the test was always really asserting
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added-7">Added</h3>
+<h3 id="added-8">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -1011,7 +1123,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-8">Added</h3>
+<h3 id="added-9">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -1093,7 +1205,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-9">Added</h3>
+<h3 id="added-10">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -1136,7 +1248,7 @@ every portability path, per the project’s standing rule that a table
 missing from the merge summary is a table whose loss goes
 unreported.</li>
 </ul>
-<h3 id="changed-5">Changed</h3>
+<h3 id="changed-6">Changed</h3>
 <ul>
 <li>The independent hand-rolled CLI flag/positional parsers in
 <code>ingest</code>, <code>record</code>, <code>source</code>, and the
@@ -1151,7 +1263,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-10">Added</h3>
+<h3 id="added-11">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -1186,7 +1298,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-11">Added</h3>
+<h3 id="added-12">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -1195,7 +1307,7 @@ start a workspace (DR-0021, DR-0022).</p>
 location for a new record, relative to <code>--root</code> like every
 other stored record path.</li>
 </ul>
-<h3 id="changed-6">Changed</h3>
+<h3 id="changed-7">Changed</h3>
 <ul>
 <li><code>kb record new --project P</code> (no <code>--dir</code>) now
 writes to <code>agents/projects/P/decisions/</code> instead of
@@ -1226,7 +1338,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-12">Added</h3>
+<h3 id="added-13">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -1268,7 +1380,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed-7">Changed</h3>
+<h3 id="changed-8">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather

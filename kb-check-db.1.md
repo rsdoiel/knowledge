@@ -1,4 +1,4 @@
-%kb-check-db(1) user manual | version 0.0.17 46c080a
+%kb-check-db(1) user manual | version 0.0.17 09be4ca
 % R. S. Doiel
 % 2026-10-08
 

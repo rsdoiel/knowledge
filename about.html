@@ -19,44 +19,47 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.16">knowledge 0.0.16</h2>
-<p>One new verb, <code>kb completion</code>, so that tab completion
-works in bash and PowerShell. The decision is DR-0056. It was written
-and tested red first, and checked by sourcing the script in real bash
-and PowerShell against the real workspace.</p>
-<p><code>kb completion bash</code> and
-<code>kb completion powershell</code> write a completion script to
-standard output (<code>pwsh</code> is accepted for
-<code>powershell</code>). It completes the verbs, the subverbs of
-<code>project</code>, <code>observation</code>, <code>concept</code>,
-<code>source</code>, <code>link</code>, <code>record</code> and
-<code>document</code> (and <code>document review</code>), each verb’s
-flags once a dash is typed, help topics after <code>help</code>, paths
-after <code>-db</code>, <code>-in</code>, <code>-out</code>,
-<code>-a</code>, <code>-b</code>, <code>-jsonl</code>,
-<code>-root</code> and <code>-dir</code>, and project names after
-<code>--project</code> and after <code>project show</code>,
-<code>concepts</code>, <code>set-status</code>,
-<code>set-description</code>, <code>rename</code> and
-<code>delete</code>. Project names come from
-<code>kb project list</code> in the current directory and honour a
-<code>-db</code> typed earlier on the line.</p>
-<p><code>kb completion SHELL -install</code> installs it instead. With
-bash the script goes to
-<code>$XDG_DATA_HOME/bash-completion/completions/kb</code>, or the same
-path under <code>~/.local/share</code>, and a file that <code>kb</code>
-did not write is never overwritten (exit 73). With PowerShell it writes
-<code>kb-completion.ps1</code> beside the profile and adds one line that
-dot-sources it, once. Windows PowerShell 5.1 is not covered.</p>
-<p>The verb list is read from the verbs <code>kb</code> registers, so a
-new verb is completed without anyone naming it. The subverbs and flags
-are tables, and the tests fail when a table disagrees with the code, so
-a new flag or subverb must be added to them. The verb opens no database
-and refuses <code>-db</code>. A bad or missing shell name, a surplus
-argument and an unknown flag exit 2.</p>
-<p>Upgrading: nothing that worked changes. <code>kb completion</code>
-did not exist before, so a script that called it got exit 2 (unknown
-verb).</p>
+<h2 id="knowledge-0.0.17">knowledge 0.0.17</h2>
+<p>Records are named by scope, and the workspace is found from anywhere
+inside it. The decisions are DR-0057 (qualified record references) and
+DR-0058 (scope). It was written and tested red first, the race detector
+passed on darwin/arm64, and the new commands were checked read-only
+against two real workspaces, one with 277 records in 23 projects where
+<code>DR-0001</code> appears ten times.</p>
+<p>A record is <code>SCOPE/DR-NNNN</code>, where SCOPE is a project name
+or <code>workspace</code> (the workspace directory’s own name is
+accepted for it). <code>kb record list</code> prints that reference
+first on every line, <code>--json</code> gains <code>ref</code>, and
+<code>show</code>, <code>set-status</code>, <code>supersede</code>,
+<code>delete</code>, <code>new</code> and <code>fuzzy-tag</code> confirm
+with it, so “DR-0047 needs accepting” says which project. A bare id
+still works where only one record has it, and otherwise lists the
+qualified forms. A change (<code>set-status</code>,
+<code>supersede</code>, <code>delete</code>) will not act on a bare id
+with no scope.</p>
+<p><code>kb record list harvey clasm workspace</code> takes scopes as
+arguments. With none it uses the project the working directory belongs
+to, then <code>KB_PROJECT</code>, then the whole workspace;
+<code>--all</code> widens it; <code>record new</code> does the same.
+<code>kb record pending</code> lists the proposed records in scope.
+<code>--project</code> and <code>--workspace</code> still work on those
+verbs and say on standard error that they are deprecated. A project can
+no longer be named <code>workspace</code>.</p>
+<p><code>kb</code> walks up from the current directory to the nearest
+<code>agents/knowledge.db</code> or <code>agents/knowledge.jsonl</code>,
+so it works from any subdirectory; a fresh clone with only the JSONL
+file is told to <code>kb import -in agents/knowledge.jsonl</code>.
+<code>KB_DB</code>, <code>KB_PROJECT</code>,
+<code>KB_CEILING_DIRECTORIES</code> and <code>KB_QUIET</code> are read;
+a note on standard error says when the workspace is not the current
+directory. The library exports <code>FindWorkspace</code>,
+<code>Ref</code>, <code>ParseRef</code>, <code>ResolveRef</code> and
+<code>ProjectForDir</code>, for harvey.</p>
+<p>Upgrading: a script that reads <code>record list</code> by column
+breaks; use <code>--json</code>. Skills that quote the old forms need
+<code>kb &gt;= 0.0.17</code>. A scratch directory inside a real
+workspace now reaches it unless <code>KB_CEILING_DIRECTORIES</code>
+names the scratch directory.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

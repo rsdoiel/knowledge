@@ -146,8 +146,11 @@ database</td>
 </table>
 <h3 id="global-flags">Global flags</h3>
 <ul>
-<li><code>--db PATH</code> — path to <code>knowledge.db</code> (default
-<code>./agents/knowledge.db</code>)</li>
+<li><code>--db PATH</code> — path to <code>knowledge.db</code>. Without
+it, <code>kb</code> walks up from the current directory to the nearest
+<code>agents/knowledge.db</code> (or
+<code>agents/knowledge.jsonl</code>, in a fresh clone), so it works from
+any subdirectory of a workspace</li>
 <li><code>--json</code> — machine-readable output on stdout; errors
 always go to stderr in both modes, so scripts and other language-model
 harnesses can drive <code>kb</code> directly</li>
@@ -156,7 +159,32 @@ call (and, in the TUI, every input event and view change) to
 <code>./kb-debug-&lt;timestamp&gt;.jsonl</code></li>
 </ul>
 <p>Full detail on all three: <a href="kb.1.html">kb(1)</a>, § GLOBAL
-FLAGS.</p>
+OPTIONS.</p>
+<h3 id="workspace-and-environment">Workspace and environment</h3>
+<p><code>kb</code> finds its workspace by walking up, never sideways:
+another workspace on the same machine is never reached. These variables
+are read, and an option on the command line wins over each:</p>
+<ul>
+<li><code>KB_DB</code> — the database path, as <code>--db</code></li>
+<li><code>KB_PROJECT</code> — the project to act on when none is given
+and the current directory belongs to none</li>
+<li><code>KB_CEILING_DIRECTORIES</code> — directories the walk up never
+enters or passes (like git’s <code>GIT_CEILING_DIRECTORIES</code>); set
+it to a scratch directory that sits inside a real workspace</li>
+<li><code>KB_QUIET</code> — silence advisory notes on standard error;
+never an error</li>
+</ul>
+<p>See <a href="kb.1.html">kb(1)</a>, § WORKSPACE AND ENVIRONMENT.</p>
+<h3 id="naming-records">Naming records</h3>
+<p>A decision record is <code>SCOPE/DR-NNNN</code>, where SCOPE is a
+project name or <code>workspace</code>: <code>harvey/DR-0004</code>,
+<code>workspace/DR-0003</code>. Listings print that form, and a change
+to a record (<code>set-status</code>, <code>supersede</code>,
+<code>delete</code>) needs it, or a project inferred from the working
+directory. <code>kb record list harvey clasm</code> takes scopes as
+arguments, <code>kb record pending</code> lists what is waiting for a
+decision, and <code>--all</code> widens a project directory to the whole
+workspace. See <a href="kb-record.1.html">kb-record(1)</a>.</p>
 <h3 id="interactive-tui">Interactive TUI</h3>
 <p>Bare <code>kb</code> (no verb) launches a read-mostly browser:
 project list → Enter drills into observations →

@@ -24,7 +24,11 @@
 <p>kb import [-in PATH]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>import reads a JSON-L stream produced by export — from -in, or stdin
-when -in is omitted — and applies it to the already-open –db database.
+when -in is omitted — and applies it to the already-open –db database,
+or, without -db, to the database of the workspace found by walking up
+from the current directory. In a fresh clone that has only
+agents/knowledge.jsonl, run “kb import -in agents/knowledge.jsonl” from
+anywhere inside the workspace to build agents/knowledge.db there.
 Projects and concepts are matched by uuid first (DR-0026): a match
 reconciles name/description/status by whichever side’s updated_at is
 later, the same last-writer-wins rule merge uses. A uuid miss falls back

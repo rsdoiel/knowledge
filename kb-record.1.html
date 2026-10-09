@@ -21,20 +21,22 @@
 <h1 id="name">NAME</h1>
 <p>kb-record — read and maintain decision records</p>
 <h1 id="synopsis">SYNOPSIS</h1>
-<p>kb record list [–project P] [–workspace] [–status S] [–kind K]
-[–trigger T] [–initiative I] [–since DATE]</p>
-<p>kb record show RECORD_ID [–project P] [–workspace]</p>
-<p>kb record set-status RECORD_ID STATUS [–project P] [–workspace]
+<p>kb record pending [SCOPE…] [–all] [–kind K] [–trigger T] [–initiative
+I] [–since DATE]</p>
+<p>kb record list [SCOPE…] [–all] [–status S] [–kind K] [–trigger T]
+[–initiative I] [–since DATE]</p>
+<p>kb record show RECORD_REF [–project P] [–workspace]</p>
+<p>kb record set-status RECORD_REF STATUS [–project P] [–workspace]
 [–root DIR]</p>
-<p>kb record supersede NEW OLD [–partial] [–project P] [–workspace]
-[–root DIR]</p>
-<p>kb record new –title T –trigger G (–project P | –workspace) [–kind K]
+<p>kb record supersede NEW_REF OLD_REF [–partial] [–project P]
+[–workspace] [–root DIR]</p>
+<p>kb record new –title T –trigger G [–project P | –workspace] [–kind K]
 [–dir DIR] [–root DIR]</p>
 <p>kb record fmt PATH [–dry-run]</p>
-<p>kb record concepts RECORD_ID [–project P] [–workspace]</p>
+<p>kb record concepts RECORD_REF [–project P] [–workspace]</p>
 <p>kb record fuzzy-tag –project P [–concept NAME,…] [–write] [–dry-run]
 [–root DIR]</p>
-<p>kb record delete RECORD_ID [–project P] [–workspace] [–root DIR]
+<p>kb record delete RECORD_REF [–project P] [–workspace] [–root DIR]
 [–dry-run]</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>A decision record is one file, indexed by ingest. new writes a
@@ -44,29 +46,50 @@ Records are listed oldest first, sorted by date and then by id — never
 by id alone, because ids are identity, not chronology: a correction can
 carry a lower id than the record it supersedes.</p>
 <p>A record id is not by itself an identity, since two projects may each
-have a DR-0001. Where a bare id is ambiguous, the command reports the
-candidates and asks for –project or –workspace rather than choosing
-one.</p>
+have a DR-0001, and listings print the qualified form for that reason. A
+record is named by SCOPE/DR-NNNN, where SCOPE is a project name or
+workspace (the workspace directory’s own name is accepted as an alias
+for it, and a project of that name wins): harvey/DR-0004,
+workspace/DR-0003. A bare id resolves only where one record has it;
+otherwise the command lists the qualified candidates rather than
+choosing one. A command that changes a record (set-status, supersede,
+delete) never acts on a bare id with no scope: say harvey/DR-0004, run
+it from inside the project, or set KB_PROJECT.</p>
+<p>Scope. list takes scopes as arguments: kb record list harvey clasm
+workspace. With none it uses the project the working directory belongs
+to (under agents/projects/NAME/, or in a repository directory NAME/
+beside it), else the project KB_PROJECT names, else the whole workspace;
+–all widens it to the whole workspace. An unknown scope is exit 1.
+–project and –workspace remain as aliases for one scope and cannot be
+mixed with scope arguments or –all.</p>
 <dl>
 <dt>list</dt>
 <dd>
-print matching records, one per line. –status, –kind, –trigger and
-–initiative filter on those fields and –since DATE (YYYY, YYYY-MM or
-YYYY-MM-DD) keeps records dated on or after it; filters combine. “no
-matching records” means a real filter matched nothing. A value that no
-record carries and the vocabularies below do not list is a typo, and is
-an error that names what is known (exit 1, a lookup that found nothing;
-record new and set-status, which write a value, exit 2 for the same
-thing). A record ID that exists in more than one tier is ambiguous and
-exits 2: qualify it with –project or –workspace. A value outside the
-vocabularies that some record does carry still filters. –workspace and
-–project cannot be combined, since workspace-tier records have no
-project
+print matching records, one per line, each starting with its
+SCOPE/DR-NNNN reference. –status, –kind, –trigger and –initiative filter
+on those fields and –since DATE (YYYY, YYYY-MM or YYYY-MM-DD) keeps
+records dated on or after it; filters combine. “no matching records”
+means a real filter matched nothing. A value that no record carries and
+the vocabularies below do not list is a typo, and is an error that names
+what is known (exit 1, a lookup that found nothing; record new and
+set-status, which write a value, exit 2 for the same thing). A bare
+record id that exists in more than one tier is ambiguous and exits 2,
+listing the qualified forms. A value outside the vocabularies that some
+record does carry still filters. –workspace and –project cannot be
+combined, since workspace-tier records have no project
+</dd>
+<dt>pending</dt>
+<dd>
+list the records waiting for a decision: every record whose status is
+proposed, oldest first, in the scope list would use. The other list
+filters apply; –status does not (exit 2), since the status is what
+pending means. Nothing pending is success
 </dd>
 <dt>show</dt>
 <dd>
 print one record with its body and its relations resolved in both
-directions. Only supersedes is stored; superseded_by is its inverse
+directions, every one named SCOPE/DR-NNNN. Only supersedes is stored;
+superseded_by is its inverse
 </dd>
 <dt>set-status</dt>
 <dd>
@@ -154,8 +177,11 @@ commands that write a record file; ingest never does. A record is
 written proposed and stays proposed: a model may write a record, but
 only the author accepts one.</p>
 <h1 id="exit-status">EXIT STATUS</h1>
-<p>The workspace convention, as described in kb(1). For record
-fuzzy-tag: 0 the report was produced, or the tags were written,
+<p>The workspace convention, as described in kb(1). A scope that is
+neither a project nor the workspace is 1; a malformed reference, a bare
+id that is ambiguous, a change (set-status, supersede, delete) given a
+bare id with no scope, and record new with no scope anywhere are 2. For
+record fuzzy-tag: 0 the report was produced, or the tags were written,
 including “nothing found”; 1 no such project or concept; 2 a bad flag, a
 missing –project, or a surplus argument, and on any record verb a
 –concept or –write it does not take; 65 a record file that is malformed
@@ -194,13 +220,23 @@ external. May be empty on a record converted from an existing log
 </dl>
 <h1 id="options">OPTIONS</h1>
 <dl>
+<dt>–all</dt>
+<dd>
+on list and pending, every project and the workspace tier, whatever the
+current directory is
+</dd>
 <dt>–project P</dt>
 <dd>
-restrict to, or resolve within, project P
+restrict to, or resolve within, project P. On new and fuzzy-tag it is
+how the project is named. Elsewhere it is deprecated: give the scope as
+an argument to list and pending, or qualify the record as P/DR-NNNN. It
+still works and says so on standard error
 </dd>
 <dt>–workspace</dt>
 <dd>
-restrict to, or resolve within, the workspace tier
+restrict to, or resolve within, the workspace tier. On new it names the
+tier. Elsewhere it is deprecated in the same way: use workspace as the
+scope or workspace/DR-NNNN
 </dd>
 <dt>–partial</dt>
 <dd>
@@ -235,15 +271,27 @@ the parent of the directory holding the database
 </dd>
 </dl>
 <h1 id="examples">EXAMPLES</h1>
-<p>Every correction in one project, and everything since a date:</p>
-<pre class="shell"><code>kb record list --project clasm --kind correction
-kb record list --project clasm --since 2026-08-01</code></pre>
-<p>Promote a proposed record, then wholly and partially supersede:</p>
-<pre class="shell"><code>kb record set-status 0004 accepted --project knowledge
-kb record supersede 0149 0148 --project clasm
-kb record supersede 0159 0160 --project clasm --partial</code></pre>
+<p>Every correction in one project, and everything since a date, then
+two scopes at once and the workspace tier:</p>
+<pre class="shell"><code>kb record list clasm --kind correction
+kb record list clasm --since 2026-08-01
+kb record list clasm cold workspace</code></pre>
+<p>What is waiting for a decision, in every project or in one:</p>
+<pre class="shell"><code>kb record pending --all
+kb record pending knowledge</code></pre>
+<p>Inside a project directory the project is the scope, and –all widens
+it:</p>
+<pre class="shell"><code>cd ~/Laboratory/harvey &amp;&amp; kb record list
+cd ~/Laboratory/harvey &amp;&amp; kb record list --all</code></pre>
+<p>Promote a proposed record, then wholly and partially supersede. A
+change names the record by its qualified reference, since a bare id is
+not enough to act on:</p>
+<pre class="shell"><code>kb record set-status knowledge/DR-0004 accepted
+kb record supersede clasm/DR-0149 clasm/DR-0148
+kb record supersede clasm/DR-0159 clasm/DR-0160 --partial</code></pre>
 <p>Start a new record, and bring a corpus into canonical form:</p>
 <pre class="shell"><code>kb record new --project clasm --title &quot;Retry the profile attach&quot; --trigger live-test
+kb record new --title &quot;Run from inside the project&quot; --trigger design
 kb record new --project clasm --title &quot;Filed under the old layout&quot; --trigger request --dir clasm/decisions
 kb record fmt clasm/decisions --dry-run</code></pre>
 </section>
