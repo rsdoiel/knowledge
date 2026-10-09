@@ -88,13 +88,13 @@ set-status
   filters, so a typo such as "acepted" cannot leave a record in limbo; the file and
   database are untouched. Ingest of a hand-edited file still only warns.
   Only the moves in the transition table are made: proposed to accepted,
-  rejected or superseded; accepted to cancelled or superseded; rejected or
+  rejected, cancelled or superseded; accepted to cancelled or superseded; rejected or
   cancelled back to proposed; superseded is final. superseded also needs
   superseded_by already set, so use record supersede, which writes both sides.
   A move outside the table, including setting the status a record already has,
-  is refused (exit 1) with the allowed moves named, and nothing is written. The
-  table applies only when the current and the requested status are both in the
-  vocabulary, so a record carrying some other value can still be repaired
+  is refused (exit 1) with the allowed moves named, and nothing is written. A
+  record whose status is outside the vocabulary can be set to proposed and
+  nothing else, so it reaches accepted in two moves
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on

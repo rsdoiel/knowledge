@@ -11,7 +11,7 @@ import (
 // when superseded_by is already set.
 //
 //	from \ to   proposed accepted rejected cancelled superseded
-//	proposed       -        Y        Y         N        Y*
+//	proposed       -        Y        Y         Y        Y*
 //	accepted       N        -        N         Y        Y*
 //	rejected       Y        N        -         N        N
 //	cancelled      Y        N        N         -        N
@@ -19,7 +19,7 @@ import (
 //
 // * only with superseded_by set.
 var transitionWant = map[string]map[string]bool{
-	"proposed":   {"accepted": true, "rejected": true, "superseded": true},
+	"proposed":   {"accepted": true, "rejected": true, "cancelled": true, "superseded": true},
 	"accepted":   {"cancelled": true, "superseded": true},
 	"rejected":   {"proposed": true},
 	"cancelled":  {"proposed": true},
@@ -98,8 +98,8 @@ func TestAllowedTransitionsExamples(t *testing.T) {
 		linked bool
 		want   []string
 	}{
-		{"proposed", false, []string{"accepted", "rejected"}},
-		{"proposed", true, []string{"accepted", "superseded", "rejected"}},
+		{"proposed", false, []string{"accepted", "rejected", "cancelled"}},
+		{"proposed", true, []string{"accepted", "superseded", "rejected", "cancelled"}},
 		{"accepted", false, []string{"cancelled"}},
 		{"accepted", true, []string{"superseded", "cancelled"}},
 		{"rejected", false, []string{"proposed"}},

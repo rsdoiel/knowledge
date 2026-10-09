@@ -736,9 +736,11 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 }
 
 /** checkTransition applies the status transition table (DR-0060) to one move.
- * The table is enforced only when both ends are in the record vocabulary: a
- * value outside it that a record already carries is data to repair, not a state
- * the table describes. A refused move is a negative answer (exit 1): the command
+ * A record whose current status is outside the record vocabulary is data to
+ * repair, not a state the table describes: it may become proposed and nothing
+ * else, so reaching accepted takes two moves. A move onto a value outside the
+ * vocabulary is not checked here (the caller has already required that another
+ * record carries it). A refused move is a negative answer (exit 1): the command
  * line was well formed and the record's current state forbids it.
  *
  * Parameters:
@@ -754,7 +756,13 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
  *   err := checkTransition("rejected", "accepted", false) // negative: reopen first
  */
 func checkTransition(from, to string, hasSupersededBy bool) error {
-	if !containsString(knowledge.RecordStatuses, from) || !containsString(knowledge.RecordStatuses, to) {
+	if !containsString(knowledge.RecordStatuses, from) {
+		if to == "proposed" {
+			return nil
+		}
+		return negativef("a record whose status %q is outside the vocabulary can only be set to proposed; it can then follow the table", from)
+	}
+	if !containsString(knowledge.RecordStatuses, to) {
 		return nil
 	}
 	if knowledge.CanTransition(from, to, hasSupersededBy) {

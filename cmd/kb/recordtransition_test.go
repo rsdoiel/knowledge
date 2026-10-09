@@ -32,7 +32,6 @@ func transitionFixture(t *testing.T) (root string, run func(args ...string) (str
 
 func TestCmdRecord_SetStatusRefusesAForbiddenTransition(t *testing.T) {
 	for _, c := range []struct{ id, to string }{
-		{"0001", "cancelled"}, // never adopted, so cannot be abandoned
 		{"0001", "proposed"},  // same status
 		{"0002", "rejected"},  // adopted, so not "never adopted"
 		{"0002", "proposed"},  // no way back
@@ -66,6 +65,7 @@ func TestCmdRecord_SetStatusAppliesAPermittedTransition(t *testing.T) {
 	for _, c := range []struct{ id, to string }{
 		{"0001", "accepted"},
 		{"0001", "rejected"},
+		{"0001", "cancelled"}, // pursued or explored, then abandoned; need not have been accepted
 		{"0002", "cancelled"},
 		{"0003", "proposed"},
 		{"0004", "proposed"},
@@ -123,18 +123,41 @@ func TestCmdRecord_SetStatusRefusalNamesTheAlternatives(t *testing.T) {
 }
 
 // A status outside the vocabulary that a record already carries is data to
-// repair, not a state in the table: the table is enforced only when both ends
-// are in the vocabulary, so such a record can be moved onto it.
-func TestCmdRecord_SetStatusLeavesCarriedValuesAlone(t *testing.T) {
-	root, run := transitionFixture(t)
-	// 0008 is the only carrier of legacy-status, so use it as a target first.
-	if out, err := run("0001", "legacy-status", "--project", "clasm"); err != nil {
-		t.Fatalf("proposed -> legacy-status = %v (%q), want it applied", err, out)
+// repair. It can become proposed and nothing else, so reaching accepted takes
+// two moves and the second is the one DR-0061 guards. The table is not applied
+// to a move onto a carried value, which stays as it was.
+func TestCmdRecord_SetStatusAStrayValueBecomesProposedOnly(t *testing.T) {
+	for _, to := range []string{"accepted", "rejected", "cancelled", "superseded"} {
+		t.Run(to, func(t *testing.T) {
+			root, run := transitionFixture(t)
+			before := readFixture(t, root, "clasm", "0008")
+			_, err := run("0008", to, "--project", "clasm")
+			if err == nil {
+				t.Fatalf("legacy-status -> %s succeeded, want a refusal", to)
+			}
+			if class, ok := classify(err); !ok || class != classNegative {
+				t.Errorf("error %v is class %v, want negative (exit 1)", err, class)
+			}
+			if !strings.Contains(err.Error(), "proposed") {
+				t.Errorf("error %q should say the record can become proposed", err)
+			}
+			if after := readFixture(t, root, "clasm", "0008"); after != before {
+				t.Errorf("a refused transition changed the record file:\n%s", after)
+			}
+		})
 	}
+	root, run := transitionFixture(t)
 	if out, err := run("0008", "proposed", "--project", "clasm"); err != nil {
 		t.Fatalf("legacy-status -> proposed = %v (%q), want it applied", err, out)
 	}
 	if got := readFixture(t, root, "clasm", "0008"); !strings.Contains(got, "status: proposed") {
 		t.Errorf("record file does not carry status proposed:\n%s", got)
+	}
+}
+
+func TestCmdRecord_SetStatusAVocabularyStatusMayBecomeACarriedValue(t *testing.T) {
+	_, run := transitionFixture(t)
+	if out, err := run("0001", "legacy-status", "--project", "clasm"); err != nil {
+		t.Fatalf("proposed -> legacy-status = %v (%q), want it applied", err, out)
 	}
 }

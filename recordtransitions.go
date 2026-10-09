@@ -7,7 +7,7 @@ import "slices"
 // CanTransition: it also needs superseded_by. Whether a person must be at a
 // terminal for accepted (DR-0061) is the command's rule, not the table's.
 var recordTransitions = map[string][]string{
-	"proposed":   {"accepted", "rejected", "superseded"},
+	"proposed":   {"accepted", "rejected", "cancelled", "superseded"},
 	"accepted":   {"cancelled", "superseded"},
 	"rejected":   {"proposed"},
 	"cancelled":  {"proposed"},
