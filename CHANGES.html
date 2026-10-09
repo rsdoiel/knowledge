@@ -21,6 +21,194 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.20-2026-10-09">v0.0.20 — 2026-10-09</h2>
+<p>The rest of the TUI writes behind the same gates (knowledge DR-0066
+to DR-0070 and the plan,
+<code>agents/projects/knowledge/plans/tui-keys-and-write-flows-plan.md</code>,
+items U1 to U7). Written and tested red first, including the built
+binary on a pseudo-terminal. The race detector passed on darwin/arm64 at
+<code>5fd9b2e</code>; the interface was tried by hand on Raspberry Pi OS
+and macOS. It has not been run on Windows.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>The removing gate</strong> (DR-0067, DR-0064 amendment; plan
+item U3). <code>d</code> deletes the selected project (the project
+list), observation or concept (a project’s tabs), or record (the Records
+screens and tab). It is not a y/n: a screen shows what will be removed
+and what points at it, for a record the records that supersede or relate
+to it, and asks for the thing’s name, a record’s qualified reference, or
+an observation’s number, typed exactly. Only an exact match and
+<code>Enter</code> delete; <code>Esc</code> cancels; there is no flag.
+While the name is typed every key is text, so a project called
+<code>quokka</code> can be confirmed (tested on a real terminal). The
+delete is the library call the command uses (<code>DeleteProject</code>,
+<code>DeleteObservation</code>, <code>DeleteConcept</code>,
+<code>DeleteRecord</code>), and the plan shows the command’s own usage
+summary, so the two cannot disagree. A delete the command would refuse
+is refused with no gate and the reason: a project that owns
+observations, records or documents, and a record whose file still exists
+(delete the file, or retire it with
+<code>set-status REF cancelled</code>). After a delete the screen shows
+<code>equivalent:  kb ... delete ...</code> and the lists, counts and
+header are refreshed.</li>
+<li><strong>Changing writes in the TUI</strong> (DR-0067, DR-0064
+amendment; plan item U2). On the project list <code>s</code> sets a
+project’s status (one key each; <code>concept</code>,
+<code>active</code>, <code>paused</code> and <code>concluded</code> take
+<code>c</code>, <code>a</code>, <code>p</code> and <code>l</code>),
+<code>e</code> edits its description and <code>r</code> renames it; on
+an observation <code>e</code> writes a correction; on a concept
+<code>e</code> renames it. The item is shown with its current value, the
+new value is picked or typed, and <code>y</code> confirms old to new.
+Each change calls the command’s own function (<code>cmdProject</code>,
+<code>cmdObservation</code>, <code>cmdConcept</code>), so the rules and
+the errors are the command’s, and a refusal (a rename onto a taken name)
+is a notice with nothing changed. A text field is a <code>bubbles</code>
+text area that starts from the current text (<code>Enter</code> accepts,
+<code>Ctrl-J</code> starts a new line, <code>Ctrl-U</code> clears the
+line, <code>Esc</code> cancels) and takes every key as text,
+<code>q</code> included. An observation correction says on the
+confirmation that, as <code>kb observation update</code> does (DR-0023),
+it adds a new observation that supersedes the old and keeps the original
+wording. A chooser’s keys are no longer only the first letter, which two
+project statuses share.</li>
+<li><strong><code>u</code> makes the selected record supersede
+another</strong> (DR-0067). The field starts with the record’s scope, so
+a number is enough; the typed reference is checked by
+<code>resolveSupersession</code>, now shared with
+<code>kb record supersede</code>, so a record that is not there, the
+record itself, and a record in another tier are refused in the field
+before any confirmation; the confirmation shows both records and that
+the replaced one becomes superseded; the write is
+<code>recordSupersede</code>, both files and the database with its
+rollback. The command’s <code>--partial</code> option is not offered.
+<code>supersede</code> has no extra gate, as DR-0067 says: it removes no
+knowledge.</li>
+<li><strong><code>kb ingest</code> says which concepts it created, or
+would create</strong> (DR-0068). A <code>[[wikilink]]</code> or a
+<code>tags:</code> entry that matches no concept creates one, so a typo
+adds a concept without a word. The summary prints
+<code>concept: created Alpha, Beta</code> (and
+<code>concept: would create ...</code> with <code>--dry-run</code>,
+which creates nothing and used to skip concept linking entirely), and
+<code>-json ingest</code> has them all in <code>concepts_created</code>.
+A case variant of an existing concept is that concept; a
+<code>[[DR-0012]]</code> is a record reference. Library:
+<code>(*KnowledgeBase).HasConcept</code>, a case-insensitive lookup that
+creates nothing.</li>
+<li><strong>Additive forms in the TUI</strong> (DR-0067, DR-0064
+amendment; plan item U1). New project…, New observation…, New concept…,
+New source… and New record… on the menus, and <code>n</code> on the
+project list, an observations tab, a concepts tab and the Records
+screens, ask the fields one at a time (a text field, or a choice made
+with one key; an optional field may be left empty), keep what has been
+entered on the screen, and end with the command that does the same and
+<code>y</code>. <code>Esc</code> cancels the whole form at any step;
+<code>q</code> is text in a text field. One form engine serves all five;
+each write is the command’s own function (<code>cmdProject</code>,
+<code>cmdObservation</code>, <code>cmdConcept</code>,
+<code>cmdSource</code>, <code>recordNew</code>), so the rules and the
+refusals (a project that exists, a source’s bad date) are the command’s.
+A project name is checked in the field before the form goes on, as is a
+record’s scope. An observation’s kind takes <code>n f d u h</code>
+(question has <code>u</code>, since <code>q</code> cancels), a record’s
+trigger <code>d p i l v r x</code>. A new record is written
+<code>proposed</code> and reaches the database at the next ingest, which
+the notice says. A source’s publisher, rights and version stay on the
+command line. A text field starts empty or from the scope and an empty
+required field says so.</li>
+<li><strong>Plan-then-apply screens</strong> (DR-0068, DR-0067 class
+plan_apply; plan item U4). Ingest (top menu), Records → Fuzzy-tag…, and
+Documents → Ingest a document…, Tag… and Fuzzy-tag… show the command’s
+own <code>--dry-run</code> output first, scrollable, with nothing
+written; <code>y</code> runs the same command without
+<code>--dry-run</code> and shows its output with the equivalent command,
+and <code>n</code>, <code>q</code> and <code>Esc</code> leave with
+nothing done (<code>Enter</code> does nothing). <code>ingest</code> and
+the scope’s project follow the Records scope, with every scope the
+project is asked first, and Ingest a document asks for the file, the
+project and an optional title. <code>document frontmatter</code> stays
+on the command line until it has a field picker.</li>
+<li><strong>The document summary workflow</strong> (DR-0069; plan item
+U7). Documents → Review queue lists the sections waiting for a person in
+the library’s triage order (gist first), each with its status, size, tag
+density and confidence. <code>Enter</code> starts a unit of two steps.
+The summary is written in <code>$VISUAL</code> or <code>$EDITOR</code>,
+with the interface suspended and resumed, from a file that starts with
+<code>#</code> lines (removed on return), or, with no editor set, in a
+text area; an empty or unchanged text is refused. It is then shown above
+its source and <code>y</code> runs <code>DraftDocumentSummary</code> as
+<code>human</code> and <code>PromoteDocumentSummary</code>, the library
+calls the commands make; <code>e</code> writes it again; <code>n</code>,
+<code>q</code> and <code>Esc</code> leave with nothing done and keep
+what was approved before. A section with a draft starts at the review,
+which is the review form for promote: a model’s draft is read beside its
+source and, promoted as it is, keeps its author. A gist has no text of
+its own, so it is written from the document’s sections in order. The
+promote is a person’s act at a terminal (DR-0070), which being in the
+interface is. <code>document review promote ID</code> typed at
+<code>:</code> opens the same form.</li>
+<li><strong>The <code>:</code> command line</strong> (DR-0066 point 2,
+DR-0067; plan item U6). <code>:</code> on a menu or a browsing screen
+opens a one-line prompt (every key is text, <code>Esc</code> cancels);
+the line is split as a shell would, a leading <code>kb</code> is
+optional, and it is run in-process by the command line’s own dispatcher,
+so the verbs, flags, errors and exit statuses are the command’s (a
+failure shows its message and <code>exit status N</code>). What happens
+next follows the verb’s write class from the table: reads and direct
+verbs (<code>index</code>, <code>record fmt</code>) run and are shown;
+additive and changing writes show the typed command and ask
+<code>y</code>, <code>record set-status REF STATUS</code> showing old to
+new and checking the move against the table first, and with no status
+opening the same review as <code>s</code>; <code>project</code>,
+<code>observation</code>, <code>concept</code> and <code>record</code>
+<code>delete</code> meet the typed-name gate that <code>d</code> opens;
+<code>ingest</code>,
+<code>document ingest|tag|fuzzy-tag|frontmatter</code> and
+<code>record fuzzy-tag --write</code> show their <code>--dry-run</code>
+first; <code>source remove</code>, <code>unlink</code> and
+<code>document delete</code> say they have no confirmation screen here,
+<code>document review promote ID</code> opens the review form below,
+<code>document draft</code> asks first, and <code>merge</code>,
+<code>import</code>, <code>init</code>, <code>export</code>,
+<code>completion</code> and the global options are refused. The legend
+of the menus names the key.</li>
+<li><strong><code>index</code> and <code>record fmt</code> from the
+menus</strong> (DR-0067; plan item U5). Index (top menu) and Records →
+Format files… run the commands at once, with no confirmation, on the
+Records scope’s decisions directory
+(<code>agents/projects/NAME/decisions</code>, or the whole
+<code>agents</code> tree with every scope, with <code>--all</code> for
+<code>index</code>). The command’s own output is shown on a result
+screen you leave with <code>q</code>, with the command that does the
+same; a scope with no decisions directory is a notice and nothing is
+created; the command’s errors (a record that cannot be parsed) are
+notices. The built-in viewer now shows a screenful even before the
+terminal has reported a size.</li>
+<li>Long notices wrap to the window instead of being cut at the edge,
+and a legend that is wider than the window drops its spacing, then its
+movement hint, instead of losing its last key.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><strong><code>cmt</code> is no longer part of
+<code>make</code>.</strong> <code>make build</code> compiles the program
+and regenerates the help text and man pages only.
+<code>make generate</code> runs <code>cmt</code> for
+<code>version.go</code>, <code>CITATION.cff</code>,
+<code>about.md</code> and the installers, and <code>make release</code>
+depends on it, so a release cannot be built from a stale
+<code>version.go</code> and the version and release hash change only
+when asked for.</li>
+</ul>
+<h3 id="not-in-the-interface-yet">Not in the interface yet</h3>
+<p>Documents → Browse and Frontmatter (<code>document frontmatter</code>
+runs through <code>:</code>), Concepts → Recall and Suggest, Check,
+Enter on search results and observations, and the removing writes
+<code>source remove</code>, <code>unlink</code> and
+<code>document delete</code>, which <code>:</code> refuses with the
+command to run. <code>kb verbs --json</code> does not carry the menu
+fields.</p>
 <h2 id="v0.0.19-2026-10-09">v0.0.19 — 2026-10-09</h2>
 <p>The terminal interface can now change something, and <code>kb</code>
 describes its own command language in one table. The decisions are
@@ -33,7 +221,7 @@ detector passed on darwin/arm64 at the last code commit
 The interface was tried by hand in a real terminal on Linux. The next
 release, v0.0.20, brings the rest of the writes behind the same
 gates.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><strong><code>kb verbs</code> prints the verb table</strong>
 (DR-0059). One table in <code>cmd/kb/verbtable.go</code> now describes
@@ -71,7 +259,7 @@ same.</li>
 DR-0067 names; the table classes them so and a test pins the full
 set.</li>
 </ul>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><strong>The first write in the TUI: read a record and set its
 status</strong> (DR-0066, DR-0065, DR-0067, DR-0061). On the Records
@@ -94,7 +282,7 @@ record. Tested at unit level with a pager seam, and on a pseudo-terminal
 with a pager that waits for a key, showing the terminal is handed over
 and taken back.</li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li><strong>The TUI opens at a menu, in a frame, with tabs</strong>
 (DR-0066 and its 2026-10-09 amendment). Bare <code>kb</code> on a
@@ -184,7 +372,7 @@ Everything was written and tested red first. The release shipped before
 the race detector was run; it was run afterwards, on darwin/arm64 (Go
 1.26.5) at the release commit <code>258600d</code>, and both packages
 pass (the Linux-only pseudo-terminal tests skip there).</p>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><p><strong><code>kb record set-status</code> follows a transition
 table</strong> (DR-0060). It used to write any status on any record. Now
@@ -222,7 +410,7 @@ file mode, so <code>&lt; /dev/null</code> does not count.
 <code>golang.org/x/sys</code> are now direct dependencies; both were
 already built into <code>kb</code> through bubbletea.</p></li>
 </ul>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><strong><code>kb record set-status REF</code> with no status is a
 review</strong> (DR-0060): the record is shown through
@@ -255,7 +443,7 @@ at the last code commit and the suite passed; the new commands were
 checked read-only, with a scratch build, against both the Laboratory and
 the WorkLab workspaces (277 records, 23 projects in the second, with
 <code>DR-0001</code> repeated ten times).</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><strong>A workspace is found by walking up</strong> (DR-0058): from
 the current directory to the nearest ancestor with
@@ -298,7 +486,7 @@ every <code>proposed</code> record in scope, oldest first, with the
 other <code>list</code> filters. <code>--status</code> is a usage
 error.</li>
 </ul>
-<h3 id="changed-2">Changed</h3>
+<h3 id="changed-3">Changed</h3>
 <ul>
 <li><strong>Listings name records by reference.</strong>
 <code>record list</code> starts each line with
@@ -361,7 +549,7 @@ was checked by sourcing the generated script in real bash and PowerShell
 (<code>TabExpansion2</code>) against the real workspace; that run found
 a placeholder left unsubstituted in the project-name path, which the
 unit tests had missed, and it is fixed and now tested.</p>
-<h3 id="added-4">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><strong><code>kb completion bash|powershell [-install]</code></strong>
 (DR-0056): writes a shell completion script to standard output, or with
@@ -406,7 +594,7 @@ subverb” to “not found”), and nothing exits 70. That comparison was made
 before the <code>kb import</code> and <code>kb project add</code> fixes
 below, and <code>project add</code> on an existing name changes from
 exit 0 to 1.</p>
-<h3 id="added-5">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><strong><code>kb concept show NAME [--limit N]</code></strong>
 (DR-0051): a concept’s description and identifier, and per kind
@@ -470,7 +658,7 @@ purpose.</li>
 <code>RecallByText</code> adds a project filter, the project and matched
 concepts on every hit, and the list of linked projects.</li>
 </ul>
-<h3 id="changed-3">Changed</h3>
+<h3 id="changed-4">Changed</h3>
 <ul>
 <li><strong><code>kb project add</code> refuses a name that already
 exists</strong> (DR-0055): exit 1,
@@ -529,7 +717,7 @@ the question that was asked, 2 says the command was wrong, and the
 change was checked by running the v0.0.13 build alongside the new one,
 387 commands in plain and <code>--json</code> mode, on a copy of the
 real database.</p>
-<h3 id="added-6">Added</h3>
+<h3 id="added-7">Added</h3>
 <ul>
 <li><strong>Removal verbs</strong> (DR-0050), so a mistake is fixable
 without raw SQL, which skips the search index:
@@ -577,7 +765,7 @@ that is not absolute, and a <code>--doi</code> that is not the bare
 <code>check-retractions</code> sends the DOI to Retraction Watch, and a
 mistyped one used to read as “not retracted”.</li>
 </ul>
-<h3 id="changed-4">Changed</h3>
+<h3 id="changed-5">Changed</h3>
 <ul>
 <li><strong>Bulk commands do everything they can, then exit with the
 class of the first failure</strong> instead of 0: <code>kb ingest</code>
@@ -773,7 +961,7 @@ The decisions behind the changes are DR-0040 to DR-0044. Every fix below
 was written red first, and the command-line changes were checked by
 running a build from before the change alongside the new one, on a copy
 of the real database.</p>
-<h3 id="added-7">Added</h3>
+<h3 id="added-8">Added</h3>
 <ul>
 <li><code>CleanName(kind, name)</code>, exported (DR-0042): trims
 surrounding whitespace from a project or concept name and refuses one
@@ -790,7 +978,7 @@ go before the verb, a name that begins with a dash follows
 <code>--</code>, and free text after a verb’s fixed arguments is taken
 as typed. EXIT STATUS now says exactly what 1 and 2 mean.</li>
 </ul>
-<h3 id="changed-5">Changed</h3>
+<h3 id="changed-6">Changed</h3>
 <ul>
 <li><strong>Usage errors exit 2</strong> (they exited 1; DR-0040).
 <code>kb -help</code> had always documented 2 for “usage error”, but
@@ -979,7 +1167,7 @@ sweep of bugs that only showed up by running a build from before each
 change against the new one on real data. Every fix below was written red
 first, and each move was checked by diffing the old binary’s output
 against the new one, byte for byte.</p>
-<h3 id="added-8">Added</h3>
+<h3 id="added-9">Added</h3>
 <ul>
 <li><strong>The workflow logic is now library API</strong> (DR-0035).
 <code>cmd/kb</code> is <code>package   main</code>, so everything
@@ -1038,7 +1226,7 @@ vocabulary (DR-0038): adopted, then abandoned. It differs from
 record’s body, by convention. <code>kb help record</code> documents
 it.</li>
 </ul>
-<h3 id="changed-6">Changed</h3>
+<h3 id="changed-7">Changed</h3>
 <ul>
 <li><strong>Concept names that begin or end in punctuation now
 match</strong> (DR-0037). <code>C++</code>, <code>F#</code> and
@@ -1116,7 +1304,7 @@ near-miss tagging, a frontmatter provenance generator, and fuzzy
 candidate clustering, each of which surfaced and fixed a real
 self-contradiction in its own design doc before shipping, verified by
 hand rather than trusting the design’s own worked examples.</p>
-<h3 id="added-9">Added</h3>
+<h3 id="added-10">Added</h3>
 <ul>
 <li><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
 (DR-0032) catches what <code>tag</code>’s exact whole-word matching
@@ -1190,7 +1378,7 @@ unchanged.</li>
 v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
 two corpus-improvement verbs that surface candidates for a human to
 confirm rather than committing anything themselves.</p>
-<h3 id="added-10">Added</h3>
+<h3 id="added-11">Added</h3>
 <ul>
 <li><code>kb concept suggest [--project NAME] [--limit N]</code>
 (DR-0028), a read-only verb that scans every record body and document
@@ -1224,7 +1412,7 @@ and fenced blocks, is auto-linked. <code>tag_density</code> is
 deliberately left counting the unfiltered text — it is the raw signal
 the threshold is applied to, not the threshold’s output.</li>
 </ul>
-<h3 id="changed-7">Changed</h3>
+<h3 id="changed-8">Changed</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> now completes for a project
 that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
@@ -1307,7 +1495,7 @@ in favour of the per-file property the test was always really asserting
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added-11">Added</h3>
+<h3 id="added-12">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -1345,7 +1533,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-12">Added</h3>
+<h3 id="added-13">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -1427,7 +1615,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-13">Added</h3>
+<h3 id="added-14">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -1470,7 +1658,7 @@ every portability path, per the project’s standing rule that a table
 missing from the merge summary is a table whose loss goes
 unreported.</li>
 </ul>
-<h3 id="changed-8">Changed</h3>
+<h3 id="changed-9">Changed</h3>
 <ul>
 <li>The independent hand-rolled CLI flag/positional parsers in
 <code>ingest</code>, <code>record</code>, <code>source</code>, and the
@@ -1485,7 +1673,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-14">Added</h3>
+<h3 id="added-15">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -1520,7 +1708,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-15">Added</h3>
+<h3 id="added-16">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -1529,7 +1717,7 @@ start a workspace (DR-0021, DR-0022).</p>
 location for a new record, relative to <code>--root</code> like every
 other stored record path.</li>
 </ul>
-<h3 id="changed-9">Changed</h3>
+<h3 id="changed-10">Changed</h3>
 <ul>
 <li><code>kb record new --project P</code> (no <code>--dir</code>) now
 writes to <code>agents/projects/P/decisions/</code> instead of
@@ -1560,7 +1748,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-16">Added</h3>
+<h3 id="added-17">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -1602,7 +1790,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed-10">Changed</h3>
+<h3 id="changed-11">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather

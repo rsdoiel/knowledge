@@ -132,6 +132,97 @@ teaches the command line; a move the record’s file now refuses is
 reported and writes nothing. A record that is superseded has no move to
 make and says so before anything is shown. Accepting is allowed here,
 since the interface is a terminal.</p>
+<p>d deletes the selected thing, from the project list (a project), a
+project’s observations and concepts tabs, and the Records screens and
+tab (a record). A delete is not confirmed with y: a screen shows what
+will be removed and what points at it (for a record, the records that
+supersede or relate to it), and asks you to type the thing’s name, or a
+record’s reference, or an observation’s number, exactly. Only an exact
+match and Enter delete; Esc cancels. While you type, every key is text,
+q included, so a project called quokka can be confirmed. A delete that
+the command line would refuse is refused here without a gate and says
+why: a project that owns observations, records or documents, and a
+record whose file still exists (delete the file first, or retire the
+record with kb record set-status REF cancelled). When it deletes, the
+screen shows the command that does the same. Deleting is local: kb merge
+or kb import from a database that still has the thing brings it
+back.</p>
+<p>Changes are made the same way: the item is shown with its current
+value, the new one is picked or typed, and old to new is confirmed with
+y before anything is written. On the project list s sets a project’s
+status (each status is one key), e edits its description and r renames
+it; on an observation e writes a correction (as kb observation update
+does, the new text is a new observation that supersedes the old and the
+original wording is kept); on a concept e renames it. On a record u
+makes the selected record supersede another: you type which one (its
+scope is filled in, so a number is enough), the field refuses what kb
+record supersede refuses (a record that is not there, itself, one in
+another tier), and the confirmation shows both records and that the
+replaced one becomes superseded; both files and the database are
+written. A text field starts from the current text; Enter accepts it,
+Ctrl-J starts a new line, Ctrl-U clears the line, and Esc cancels. While
+you type every key is text, q included. Each change is made by the
+command’s own function, so a refusal (a rename onto a name that is
+taken) is the command’s refusal, shown on the screen with nothing
+changed, and a success shows the command that does the same.</p>
+<p>New things are made with a form: the New project…, New observation…,
+New concept…, New source… and New record… rows of the menus, and n on
+the project list (a project), a project’s observations tab (an
+observation in that project), its concepts tab (a concept) and the
+Records screens (a decision record). The fields are asked one at a time:
+a line of text (Enter accepts, Ctrl-J starts a new line, an optional
+field may be left empty) or a choice made with one key (an observation’s
+kind: note, finding, decision, q[u]estion, hypothesis). What has been
+entered stays on the screen, and the last screen shows the command that
+does the same and asks for y. Esc cancels the whole form at any step and
+nothing is written; while you type every key is text, q included. The
+write is the command’s own function, so its refusal (a project that
+exists, a source’s bad date) is shown as it would be on the command
+line. A new decision record is written proposed, as the command does,
+and reaches the database at the next kb ingest.</p>
+<p>Index (on the top menu) and Records → Format files… run kb index and
+kb record fmt straight away, with no confirmation, since both only write
+generated files or canonical form and are safe to repeat. They run on
+the Records scope’s decisions directory (agents/projects/NAME/decisions
+for a project, the whole agents tree with every scope, which a widens),
+the command’s own output is shown on a screen you leave with q, and so
+is the command that does the same. A scope with no decisions directory
+says so and nothing is created.</p>
+<p>Ingest (top menu), Records → Fuzzy-tag… and Documents → Ingest a
+document…, Tag… and Fuzzy-tag… show a plan first: the command’s own
+–dry-run output, scrollable with j and k, with nothing written. y
+applies it by running the same command without –dry-run, and the result
+is shown with the command that does the same; n, q and Esc leave with
+nothing done, and Enter does nothing, so a habitual key cannot write.
+With every scope the project is asked first; Ingest a document asks for
+the file, the project and an optional title. Documents → Frontmatter… is
+still the command line.</p>
+<p>Documents → Review queue lists the sections waiting for a person,
+gist first, with each one’s size, tag density and confidence. Enter on
+one is a unit of two steps. The summary is written: in $VISUAL or
+$EDITOR with the interface suspended (the file starts with a few #
+lines, which are removed), or, with neither set, in a text area (Enter
+accepts, Ctrl-J starts a new line, Esc cancels). An empty or unchanged
+text is refused. Then it is shown above its source and y saves it as
+written by a person and promotes it; e writes it again; n, q and Esc
+leave with nothing done, and what was approved earlier stays. A section
+that already has a draft starts at the second step, so a draft is read
+beside its source before it is promoted, and promoted as it is keeps its
+author. A gist is written from the document’s sections in order. The
+promote is a person’s act at a terminal (DR-0070), which being here
+meets.</p>
+<p>: opens a command line on the menus and the browsing screens: type
+any command as you would at the shell (the leading kb is optional) and
+press Enter. The line is run by the command line’s own code, and what
+happens next follows the verb’s class (see kb verbs): a read or index
+runs and its output is shown on a screen you leave with q; adding and
+changing writes show the command and ask y, with record set-status
+showing old to new; delete asks for the name to be typed, as d does, for
+a project, observation, concept or record; ingest and the document and
+record fuzzy-tag verbs show their –dry-run first; document review
+promote ID opens the review form for a drafted section and document
+draft asks first; merge, import, init, export and completion are command
+line only. While you type, every key is text; Esc cancels.</p>
 <p>A complete command always runs as a command and prints, on a terminal
 or not, so scripts can rely on it. Only an incomplete one opens the
 interface, and only on a terminal: bare kb, a bare group (kb record

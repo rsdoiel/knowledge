@@ -30,21 +30,21 @@ experiments and language-model harnesses can read and write structured
 observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb,
 a single “kb VERB ARGS” binary (matching the git/go command model)
 covering the full API with both human-readable and –json output, a merge
-verb for reconciling two databases that drifted independently, and a
-read-only interactive TUI browser for exploring projects, observations,
-and concepts. It also indexes Decision Records – episode-scoped Markdown
-files with YAML frontmatter, kept in a project’s decisions/ directory –
-as first-class rows, so the reasoning behind a decision is retrievable
-rather than living only in files the knowledge base never reads. Inline
-[[wikilink]] tagging and frontmatter tags/keywords resolve to concepts
-at ingest time (records and documents alike), an embedder-free
-RecallByConceptNames/MatchConceptNames pair gives small/CPU-only models
-a cheap concept-based retrieval path ahead of any vector RAG, and a
-documents/document_sections schema ingests narratives and articles
-(Markdown, Fountain, plain text) at graduated abstraction levels – a
-document-level gist plus per-section summaries, each going through an
-explicit human review step before being trusted as searchable
-content.</p>
+verb for reconciling two databases that drifted independently, and an
+interactive terminal interface for browsing and, behind explicit gates,
+changing the knowledge base. It also indexes Decision Records –
+episode-scoped Markdown files with YAML frontmatter, kept in a project’s
+decisions/ directory – as first-class rows, so the reasoning behind a
+decision is retrievable rather than living only in files the knowledge
+base never reads. Inline [[wikilink]] tagging and frontmatter
+tags/keywords resolve to concepts at ingest time (records and documents
+alike), an embedder-free RecallByConceptNames/MatchConceptNames pair
+gives small/CPU-only models a cheap concept-based retrieval path ahead
+of any vector RAG, and a documents/document_sections schema ingests
+narratives and articles (Markdown, Fountain, plain text) at graduated
+abstraction levels – a document-level gist plus per-section summaries,
+each going through an explicit human review step before being trusted as
+searchable content.</p>
 <h2 id="the-interactive-interface">The interactive interface</h2>
 <p><code>kb</code> with no verb, on a terminal, opens a menu with one
 row per verb group, so using it teaches the command line:</p>
@@ -53,10 +53,11 @@ row per verb group, so using it teaches the command line:</p>
 │                                                                            │
 │ &gt; Projects         browse projects, their notes, concepts, records         │
 │   Records          decision records: browse, pending, …                    │
-│   Observations     notes, findings, decisions, questions         (v0.0.20) │
+│   Observations     notes, findings, decisions, questions                   │
+│   Concepts         named ideas that span projects                          │
 │   …                                                                        │
 ├────────────────────────────────────────────────────────────────────────────┤
-│ ↑/↓ j/k move   Enter open   / search   q quit                              │
+│ ↑/↓ j/k move   Enter open   / search   : command   q quit                  │
 └────────────────────────────────────────────────────────────────────────────┘</code></pre>
 <p>Rows that are not built yet are dimmed with the release that brings
 them, and choosing one prints the command that does the same. A project
@@ -67,8 +68,32 @@ records in the scope <code>kb record list</code> would use, and
 at the top menu), <code>Esc</code> cancels only something in progress
 and never closes a screen, <code>Ctrl-C</code> quits from anywhere, and
 a line at the bottom of every screen lists the keys that apply. While
-you type in the search prompt every key is text, <code>q</code>
-included.</p>
+you type, every key is text, <code>q</code> included.</p>
+<p><strong>What it can write</strong> (the gate depends on the kind of
+write, and every write is the command’s own function, so the rules and
+refusals are the same as on the command line; the screen ends by showing
+the command that does the same):</p>
+<ul>
+<li><em>Adding</em> (<code>n</code>, or the New rows): a form asks the
+fields one at a time and ends with <code>y</code>.</li>
+<li><em>Changing</em> (<code>s</code>, <code>e</code>, <code>r</code> on
+a project; <code>e</code> on an observation or concept; <code>u</code>
+on a record to supersede another): the old and new values are shown and
+<code>y</code> confirms.</li>
+<li><em>Removing</em> (<code>d</code> on a project, observation, concept
+or record): a screen shows what points at it and asks for its name to be
+typed exactly.</li>
+<li><em>Plans</em> (Ingest, Records → Fuzzy-tag, Documents → Ingest,
+Tag, Fuzzy-tag): the command’s <code>--dry-run</code> output is shown
+first and <code>y</code> applies it. Index and Format files run at
+once.</li>
+<li><em>Summaries</em> (Documents → Review queue): write the summary in
+<code>$VISUAL</code> or <code>$EDITOR</code>, or a built-in text area;
+it is shown beside its source and <code>y</code> saves it as written by
+a person and promotes it.</li>
+<li><em>Anything else</em>: <code>:</code> opens a command line; type
+any verb, and it meets the gate its class calls for.</li>
+</ul>
 <p>A complete command line always runs and prints, on a terminal or not.
 Only an incomplete one opens the interface, and only on a terminal: bare
 <code>kb</code>, a bare group (<code>kb record</code>), and
@@ -119,72 +144,68 @@ a status that arrives through a file edit, so that route is visible too.
 See <a href="kb-record.1.html">kb-record(1)</a>.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.19</li>
+<li>version: 0.0.20</li>
 <li>status: active</li>
 <li>released: 2026-10-09</li>
 </ul>
-<p>The terminal interface can now change something, and <code>kb</code>
-describes its own command language in one table. The decisions are
-DR-0059 (one verb table, in part), DR-0064 to DR-0067 (keys, a shared
-chooser, the menu tree, and which writes get which gate), DR-0068
-(ingest) and DR-0069 and DR-0070 (documents and promotion), from the
-design brief <code>tui-keys-and-write-flows-design.md</code>. Everything
+<p>The terminal interface can now do everything the command line does to
+what you are looking at, behind the same gates. The decisions are
+DR-0066 to DR-0070 (the menu tree and <code>:</code>, the shared
+chooser, the write classes and the removing gate, plan then apply for
+ingest, the document summary workflow, and the terminal rule for
+promote), from the design brief
+<code>tui-keys-and-write-flows-design.md</code> and its plan. Everything
 was written and tested red first, including the built binary on a
 pseudo-terminal with real bytes. The race detector passed on
 darwin/arm64 at the last code commit, and the interface was tried by
-hand in a real terminal on Linux.</p>
-<p>Bare <code>kb</code>, on a terminal, opens a menu with one row per
-verb group (Projects, Records, Observations, Concepts, Sources,
-Documents, Search, Ingest, Index, Check), under a header naming the
-workspace, its database and what it holds. A group opens its own menu;
-rows that are not built yet are dimmed with the release that brings
-them, and choosing one shows the command-line equivalent. A project’s
-observations, concepts and records are tabs with counts (<code>o</code>,
-<code>c</code>, <code>r</code>). Records Browse and Pending list records
-in the scope <code>kb record list</code> would use, one line each with
-its qualified reference, and <code>a</code> widens the scope. On a
-record, <code>Enter</code> reads it and <code>s</code> sets its status:
-the record file is shown in your pager (<code>$KB_PAGER</code>, else
-<code>bat</code>, else <code>less -R</code>) with the interface
-suspended, or in a built-in viewer when there is none, then each status
-is one key, <code>y</code> confirms, and <code>Esc</code> or
-<code>q</code> backs out at either step with nothing written. The write
-is the same function <code>kb record set-status</code> uses, and the
-screen shows the equivalent command.</p>
-<p>The keys follow clasm’s. <code>q</code> goes back one screen and
-quits only at the top menu, <code>Esc</code> cancels something in
-progress and never closes a screen, <code>Ctrl-C</code> quits from
-anywhere, and a legend line on every screen lists the keys that apply.
-While you type in the search prompt every key is text, so a term that
-starts with <code>q</code> works. A complete command line always runs
-and prints, on a terminal or not; only an incomplete one opens the
-interface, and only on a terminal (bare <code>kb</code>, a bare group
-such as <code>kb record</code>, <code>kb record show</code> or
-<code>kb project show</code> with no argument). The new global option
-<code>-i</code> opens the interface at a command:
-<code>kb -i record pending</code>, <code>kb -i record show REF</code>,
-<code>kb -i search TERM</code>.</p>
-<p><code>kb verbs</code> (and <code>kb -json verbs</code>) prints the
-verb table: every verb, subverb and flag, with what it does to the
-database. <code>kb record set-status REF</code> with no status is now a
-review that takes single keys, with no Enter, and <code>Enter</code> on
-the confirmation does nothing. <code>kb document review promote</code>
-needs a person at a terminal, as <code>accepted</code> does: a model can
-draft a summary but cannot make it trusted. <code>kb ingest</code>
-reports a status that arrives through a file, such as
-<code>clasm/DR-0012 proposed -&gt; accepted (edited in file)</code> or a
-record first ingested already accepted; it is a report, not a block.</p>
-<p>Upgrading: the interface’s keys changed (<code>q</code> goes back
-instead of quitting, <code>Esc</code> no longer leaves a screen), and a
-script that promoted summaries without a person at the keyboard must
-hand that step over. Bare <code>kb</code> with no terminal is now a
-usage error (exit 2) and no longer tries to start a terminal program,
-and opening the interface no longer creates a database where there is no
-workspace. <code>lipgloss</code> is a direct dependency; it was already
-built into <code>kb</code> through bubbles. Skills that tell a model to
-run <code>set-status ... accepted</code> or
-<code>document review promote</code> need
-<code>kb &gt;= 0.0.19</code>.</p>
+hand on Linux (Raspberry Pi OS) and macOS. It has not been run on
+Windows.</p>
+<p>Writes. <code>n</code> on the project list, an observation or concept
+tab and the Records screens, and the New rows of the menus, open a form
+that asks the fields one at a time and ends with the command that does
+the same and <code>y</code>. <code>s</code>, <code>e</code> and
+<code>r</code> on the project list change a project’s status,
+description and name; <code>e</code> on an observation writes a
+correction (a new observation that supersedes it, as
+<code>kb observation update</code> does) and on a concept renames it;
+<code>u</code> on a record makes it supersede another. <code>d</code>
+deletes a project, observation, concept or record behind a gate that
+shows what points at it and asks for its name to be typed. Each write is
+the command’s own function, so its rules and refusals are the same, and
+the screen ends by showing the command that does the same.</p>
+<p>Plans and the command line. Ingest, Records, Fuzzy-tag and Documents
+(Ingest a document, Tag, Fuzzy-tag) show the command’s own
+<code>--dry-run</code> output first and apply on <code>y</code>; Index
+and Format files run at once. <code>:</code> opens a command line on the
+menus and browsing screens: any verb, run by the command line’s own
+code, with the gate its write class calls for (reads and direct verbs
+run, additive and changing writes ask <code>y</code>, a delete meets the
+typed-name gate, plan verbs show their dry run, <code>merge</code>,
+<code>import</code>, <code>init</code>, <code>export</code> and
+<code>completion</code> are refused).</p>
+<p>Documents. Documents, Review queue lists the sections waiting for a
+person; <code>Enter</code> writes the summary in <code>$VISUAL</code> or
+<code>$EDITOR</code> (the interface is suspended) or in a built-in text
+area, then shows it above its source, and <code>y</code> saves it as
+written by a person and promotes it. A section that already has a draft
+starts at that review, so a model’s draft is read beside its source, and
+promoted as it is it keeps its author.</p>
+<p><code>kb ingest</code> now says which concepts it created, or with
+<code>--dry-run</code> would create, so a typo in a
+<code>[[wikilink]]</code> no longer adds a concept silently
+(<code>concepts_created</code> in <code>-json</code>;
+<code>(*KnowledgeBase).HasConcept</code> in the library).</p>
+<p>Building: <code>cmt</code> is no longer part of <code>make</code>.
+<code>make generate</code> regenerates <code>version.go</code>,
+<code>about.md</code>, <code>CITATION.cff</code> and the installers from
+<code>codemeta.json</code>, and <code>make release</code> runs it, so
+the version and release hash change only when asked for.</p>
+<p>Not in the interface yet: Documents Browse, Documents Frontmatter
+(<code>document frontmatter</code> is reachable through <code>:</code>),
+Concepts Recall and Suggest, Check, and the removing writes
+<code>source remove</code>, <code>unlink</code> and
+<code>document delete</code>; <code>kb verbs --json</code> does not yet
+carry the menu fields.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>

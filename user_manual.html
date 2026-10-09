@@ -221,6 +221,76 @@ one key, asks for <code>y</code>, and writes by the same function as
 <code>kb record set-status REF</code>. <code>Esc</code> or
 <code>q</code> backs out at either step with nothing written. When it
 writes, the screen shows the equivalent command line.</p>
+<p><code>d</code> deletes the selected project, observation, concept or
+record. It is not a y/n: a screen shows what will be removed and what
+points at it, and you type the thing’s name (a record’s reference, an
+observation’s number) exactly; only an exact match and
+<code>Enter</code> delete, and <code>Esc</code> cancels. While you type
+every key is text, <code>q</code> included. A delete the command line
+would refuse (a project that owns content, a record whose file still
+exists) is refused here too, with the reason, and the screen shows the
+equivalent command after a delete.</p>
+<p>Changes work the same way: the item is shown with its current value,
+the new one is picked (a project’s status, one key each) or typed (a
+description, a name, an observation’s correction), and <code>y</code>
+confirms old to new before anything is written. On the project list
+<code>s</code> sets the status, <code>e</code> edits the description and
+<code>r</code> renames; on an observation <code>e</code> writes a
+correction (a new observation that supersedes it, as
+<code>kb observation update</code> does); on a concept <code>e</code>
+renames it; on a record <code>u</code> makes it supersede another (you
+type which one, and the field refuses what
+<code>kb record supersede</code> refuses). In a text field
+<code>Enter</code> accepts, <code>Ctrl-J</code> starts a new line,
+<code>Ctrl-U</code> clears the line, and <code>Esc</code> cancels. Each
+change is the command’s own function, so its refusals are shown with
+nothing changed.</p>
+<p>New things are made with a form (the New… rows of the menus, and
+<code>n</code> on the project list, an observations tab, a concepts tab
+and the Records screens): the fields are asked one at a time, a line of
+text or a choice made with one key, what has been entered stays on
+screen, and the last screen shows the command that does the same and
+asks for <code>y</code>. <code>Esc</code> cancels the whole form. A new
+decision record is written <code>proposed</code> and reaches the
+database at the next <code>kb ingest</code>.</p>
+<p>Index (top menu) and Records → Format files… run
+<code>kb index</code> and <code>kb record fmt</code> at once, with no
+confirmation, on the Records scope’s decisions directory (a project’s,
+or the whole <code>agents</code> tree with every scope); the command’s
+own output is shown, with the equivalent command.</p>
+<p>Ingest (top menu), Records → Fuzzy-tag… and Documents → Ingest a
+document…, Tag… and Fuzzy-tag… show a plan first: the command’s own
+<code>--dry-run</code> output, scrollable, with nothing written.
+<code>y</code> applies it by running the same command without
+<code>--dry-run</code> and shows the result with the equivalent command;
+<code>n</code>, <code>q</code> and <code>Esc</code> leave with nothing
+done, and <code>Enter</code> does nothing. With every scope the project
+is asked first. <code>Documents → Frontmatter…</code> stays on the
+command line.</p>
+<p>Documents → Review queue lists the sections waiting for a person
+(gist first, with size, tag density and confidence). <code>Enter</code>
+starts a unit of two steps: the summary is written, in
+<code>$VISUAL</code> or <code>$EDITOR</code> with the interface
+suspended or, with neither set, in a built-in text area (an empty or
+unchanged text is refused), and then shown above its source, where
+<code>y</code> saves it as written by a person and promotes it,
+<code>e</code> writes it again, and <code>n</code>, <code>q</code> and
+<code>Esc</code> leave with nothing done. A section that already has a
+draft starts at the second step, and a draft promoted as it is keeps its
+author. A gist is written from the document’s sections in order.</p>
+<p><code>:</code> opens a command line on the menus and browsing
+screens: type any command as at the shell (a leading <code>kb</code> is
+optional) and press <code>Enter</code>. It runs the command line’s own
+code, and what follows depends on the verb’s class
+(<code>kb verbs</code>): reads and <code>index</code> run and show their
+output; adding and changing writes show the command and ask
+<code>y</code> (<code>record set-status</code> shows old to new);
+<code>delete</code> asks for the name to be typed, as <code>d</code>
+does; <code>ingest</code> and the fuzzy-tag verbs show their
+<code>--dry-run</code> first; <code>merge</code>, <code>import</code>,
+<code>init</code>, <code>export</code> and <code>completion</code> are
+command line only. While you type every key is text, and
+<code>Esc</code> cancels.</p>
 <p>A complete command line always runs and prints, on a terminal or not.
 Only an incomplete one opens the interface, and only on a terminal: bare
 <code>kb</code>, a bare group such as <code>kb record</code>, and
