@@ -815,6 +815,46 @@ func checkTransition(from, to string, hasSupersededBy bool) error {
 	return negativef("a record that is %s cannot be set to %s; it may become: %s", from, to, strings.Join(allowed, ", "))
 }
 
+/** resolveSupersession finds the two records of a supersession and applies the
+ * rules that do not need a write: both must resolve to a qualified record, they
+ * must be in the same tier (writing both sides must not mean writing into another
+ * repository), and a record cannot supersede itself. The command and the TUI both
+ * call it, so the field refuses exactly what the command refuses.
+ *
+ * Parameters:
+ *   kb (*knowledge.KnowledgeBase) — the open knowledge base
+ *   newArg (string) — the record that supersedes, as typed
+ *   oldArg (string) — the record that is superseded, as typed
+ *   f (recordFlags) — the flags, for scope inference
+ *
+ * Returns:
+ *   newer (*knowledge.Record) — the superseding record
+ *   older (*knowledge.Record) — the superseded record
+ *   err (error) — a not-found or usage error naming what is wrong
+ *
+ * Example:
+ *   newer, older, err := resolveSupersession(kb, "clasm/DR-0004", "clasm/DR-0002", recordFlags{})
+ */
+func resolveSupersession(kb *knowledge.KnowledgeBase, newArg, oldArg string, f recordFlags) (newer, older *knowledge.Record, err error) {
+	newer, err = resolveRecordForWrite(kb, newArg, f)
+	if err != nil {
+		return nil, nil, err
+	}
+	older, err = resolveRecordForWrite(kb, oldArg, f)
+	if err != nil {
+		return nil, nil, err
+	}
+	if newer.ProjectID != older.ProjectID || newer.Scope != older.Scope {
+		return nil, nil, usageErrorf(
+			"DR-%s and DR-%s are in different tiers; supersession is same-tier only, because writing both sides would mean writing into another repository",
+			newer.RecordID, older.RecordID)
+	}
+	if newer.ID == older.ID {
+		return nil, nil, usageErrorf("DR-%s cannot supersede itself", newer.RecordID)
+	}
+	return newer, older, nil
+}
+
 // recordSupersede writes both sides of a supersession: supersedes on the new
 // record, superseded_by on the old one, the relation row, and — unless
 // --partial — the old record's superseded status.
@@ -827,21 +867,9 @@ func recordSupersede(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if len(f.args) != 2 {
 		return usageErrorf("usage: record supersede NEW OLD")
 	}
-	newer, err := resolveRecordForWrite(kb, f.args[0], f)
+	newer, older, err := resolveSupersession(kb, f.args[0], f.args[1], f)
 	if err != nil {
 		return err
-	}
-	older, err := resolveRecordForWrite(kb, f.args[1], f)
-	if err != nil {
-		return err
-	}
-	if newer.ProjectID != older.ProjectID || newer.Scope != older.Scope {
-		return usageErrorf(
-			"DR-%s and DR-%s are in different tiers; supersession is same-tier only, because writing both sides would mean writing into another repository",
-			newer.RecordID, older.RecordID)
-	}
-	if newer.ID == older.ID {
-		return usageErrorf("DR-%s cannot supersede itself", newer.RecordID)
 	}
 
 	root := recordRoot(kb, f)

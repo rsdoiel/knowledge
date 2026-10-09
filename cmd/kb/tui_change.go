@@ -37,6 +37,8 @@ const (
  *   equivalent (func(string) string) — the command that does the same.
  *   apply      (func(string) error)  — the write.
  *   note       (string)           — what the write really does, when that is not obvious.
+ *   validate   (func)             — checks a typed value before the confirmation and describes the change.
+ *   summary    ([]string)         — validate's description, shown on the confirmation.
  */
 type changeFlow struct {
 	subject    string
@@ -51,6 +53,11 @@ type changeFlow struct {
 	equivalent func(string) string
 	apply      func(string) error
 	note       string // explains what the write really does, shown on the confirmation
+	// validate is asked when a typed value is accepted, before the confirmation. It
+	// returns the lines that describe the change, or the reason it cannot be made,
+	// which is shown in the field so the person can correct it.
+	validate func(string) ([]string, error)
+	summary  []string // the lines validate returned, shown instead of was/now
 }
 
 // shellWord quotes a value for the equivalent command line: bare when it is a plain
@@ -205,6 +212,15 @@ func (m *tuiModel) updateChange(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case f.edit.cancelled:
 				return cancel()
 			case f.edit.submitted:
+				if f.validate != nil {
+					lines, err := f.validate(f.edit.value())
+					if err != nil {
+						f.edit.submitted = false
+						f.edit.message = err.Error()
+						return m, nil
+					}
+					f.summary = lines
+				}
 				f.toConfirm(f.edit.value())
 			}
 			return m, nil
@@ -266,6 +282,15 @@ func (m *tuiModel) changeScreen() (string, []string) {
 	}
 	indent := func(s string) []string { return wrap(s, 4) }
 	switch {
+	case f.phase == changeConfirm && len(f.summary) > 0:
+		for _, l := range f.summary {
+			body = append(body, wrap(l, 0)...)
+		}
+		if f.note != "" {
+			body = append(body, "")
+			body = append(body, wrap(f.note, 0)...)
+		}
+		body = append(body, "", f.confirm.View())
 	case f.phase == changeConfirm:
 		body = append(body, "was:")
 		body = append(body, indent(f.old)...)
@@ -297,4 +322,50 @@ func (m *tuiModel) changeLegend() string {
 		return "Enter accept   Ctrl-J newline   Esc cancel   Ctrl-C quit"
 	}
 	return "press a key to pick   q Esc cancel   Ctrl-C quit"
+}
+
+// supersedeSelected starts a supersession with the selected record as the new one:
+// the person types which record it replaces, and the field refuses what the command
+// refuses before anything is confirmed.
+func (m *tuiModel) supersedeSelected() (tea.Model, tea.Cmd) {
+	ref, ok := m.selectedRecordRef()
+	if !ok {
+		return m, nil
+	}
+	prefix := ref[:strings.Index(ref, "/")+1] // the same scope, so a bare number completes it
+	names := projectNames(m.kb)
+	oldRef := "" // the replaced record's qualified reference, set when the field is accepted
+	f := &changeFlow{
+		subject: "record " + ref,
+		old:     prefix,
+		edit:    newEdit(prefix, false, m.cols()-8),
+		note:    "Both records' files and the database are written. The replaced record's status becomes superseded (the command's --partial option, which leaves it, is not offered here).",
+		validate: func(v string) ([]string, error) {
+			newer, older, err := resolveSupersession(m.kb, ref, strings.TrimSpace(v), recordFlags{})
+			if err != nil {
+				return nil, err
+			}
+			root := recordRoot(m.kb, recordFlags{})
+			for _, r := range []*knowledge.Record{newer, older} {
+				if _, _, err := loadRecordFile(root, r); err != nil {
+					return nil, err
+				}
+			}
+			n, o := refOf(*newer, names).String(), refOf(*older, names).String()
+			oldRef = o
+			return []string{
+				fmt.Sprintf("%s  %s", n, newer.Title),
+				"supersedes",
+				fmt.Sprintf("%s  %s  (%s)", o, older.Title, older.Status),
+				"",
+				fmt.Sprintf("%s becomes superseded, by %s.", o, n),
+			}, nil
+		},
+		equivalent: func(string) string { return "kb record supersede " + ref + " " + oldRef },
+		describe:   func(string) string { return ref + " supersedes " + oldRef + "; " + oldRef + " is now superseded" },
+		apply: func(string) error {
+			return recordSupersede(m.kb, false, recordFlags{args: []string{ref, oldRef}}, &bytes.Buffer{})
+		},
+	}
+	return m.beginChange(f)
 }

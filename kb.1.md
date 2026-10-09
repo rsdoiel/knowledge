@@ -136,8 +136,12 @@ one is picked or typed, and old to new is confirmed with y before anything is
 written. On the project list s sets a project's status (each status is one key),
 e edits its description and r renames it; on an observation e writes a correction
 (as kb observation update does, the new text is a new observation that
-supersedes the old and the original wording is kept); on a concept e renames it. A
-text field starts from the current text; Enter accepts it, Ctrl-J starts a new
+supersedes the old and the original wording is kept); on a concept e renames it. On a record u makes the selected record
+supersede another: you type which one (its scope is filled in, so a number is
+enough), the field refuses what kb record supersede refuses (a record that
+is not there, itself, one in another tier), and the confirmation shows both records
+and that the replaced one becomes superseded; both files and the database are
+written. A text field starts from the current text; Enter accepts it, Ctrl-J starts a new
 line, Ctrl-U clears the line, and Esc cancels. While you type every key is text,
 q included. Each change is made by the command's own function, so a refusal (a
 rename onto a name that is taken) is the command's refusal, shown on the screen

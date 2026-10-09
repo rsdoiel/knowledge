@@ -32,6 +32,13 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   observation correction says on the confirmation that, as `kb observation update` does (DR-0023), it adds a new
   observation that supersedes the old and keeps the original wording. A chooser's keys are no longer only the
   first letter, which two project statuses share.
+- **`u` makes the selected record supersede another** (DR-0067). The field starts with the record's scope, so a
+  number is enough; the typed reference is checked by `resolveSupersession`, now shared with
+  `kb record supersede`, so a record that is not there, the record itself, and a record in another tier are
+  refused in the field before any confirmation; the confirmation shows both records and that the replaced one
+  becomes superseded; the write is `recordSupersede`, both files and the database with its rollback. The
+  command's `--partial` option is not offered. `supersede` has no extra gate, as DR-0067 says: it removes no
+  knowledge.
 - Long notices wrap to the window instead of being cut at the edge, and a legend that is wider than the window
   drops its spacing, then its movement hint, instead of losing its last key.
 

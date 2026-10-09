@@ -373,3 +373,106 @@ func TestBinary_TUIEditEscCancelsWithNoEnter(t *testing.T) {
 		t.Errorf("exit = %d, want 0", code)
 	}
 }
+
+// ─── supersede ───────────────────────────────────────────────────────────────
+
+// fileHas reports whether a record's file contains text.
+func fileHas(t *testing.T, root, id, text string) bool {
+	t.Helper()
+	return strings.Contains(readFixture(t, root, "clasm", id), text)
+}
+
+func TestChange_ARecordSupersedesAnotherAndBothSidesAreWritten(t *testing.T) {
+	fakePagerSeam(t)
+	m, root := writeModel(t) // 0001 proposed; 0002 accepted
+	selectRef(t, m, "clasm/DR-0001")
+	m, _ = press(t, m, ch('u'))
+	if m.state != viewChange || !m.capturingText() {
+		t.Fatalf("state %s, capturing %v; want the field, taking text", viewStateNames[m.state], m.capturingText())
+	}
+	v := m.View()
+	if !strings.Contains(v, "clasm/DR-0001") || !strings.Contains(v, "clasm/") {
+		t.Errorf("the screen should name the record and start the reference with its scope:\n%s", v)
+	}
+	m, _ = press(t, m, append(typed("0002"), keyEnter)...)
+	v = m.View()
+	for _, want := range []string{"clasm/DR-0001", "clasm/DR-0002", "supersedes", "becomes superseded", "y apply"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("the confirmation lacks %q:\n%s", want, v)
+		}
+	}
+	if fileHas(t, root, "0002", "status: superseded") {
+		t.Fatal("something was written before the confirmation")
+	}
+	m, _ = press(t, m, ch('y'))
+	if m.state != viewRecordScope {
+		t.Fatalf("state = %s, want the Records screen", viewStateNames[m.state])
+	}
+	if !fileHas(t, root, "0002", "status: superseded") || !fileHas(t, root, "0002", "0001") {
+		t.Errorf("the old record was not marked superseded by DR-0001:\n%s", readFixture(t, root, "clasm", "0002"))
+	}
+	if !fileHas(t, root, "0001", "supersedes: [") || !fileHas(t, root, "0001", "0002") {
+		t.Errorf("the new record does not carry supersedes DR-0002:\n%s", readFixture(t, root, "clasm", "0001"))
+	}
+	v = m.View()
+	for _, want := range []string{"✓", "equivalent:  kb record supersede clasm/DR-0001 clasm/DR-0002"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("the screen lacks %q:\n%s", want, v)
+		}
+	}
+}
+
+// What the command refuses is refused in the field, before any confirmation, and
+// the person stays there to correct it.
+func TestChange_ASupersessionTheCommandRefusesStaysInTheField(t *testing.T) {
+	for name, typedRef := range map[string]string{"itself": "0001", "a record that is not there": "9999"} {
+		t.Run(name, func(t *testing.T) {
+			fakePagerSeam(t)
+			m, root := writeModel(t)
+			before := readFixture(t, root, "clasm", "0001")
+			selectRef(t, m, "clasm/DR-0001")
+			m, _ = press(t, m, ch('u'))
+			m, cmd := press(t, m, append(typed(typedRef), keyEnter)...)
+			if m.state != viewChange || isQuit(cmd) {
+				t.Fatalf("state %s; a refusal should stay in the field", viewStateNames[m.state])
+			}
+			if strings.Contains(m.View(), "y apply") {
+				t.Errorf("a refused supersession reached the confirmation:\n%s", m.View())
+			}
+			if readFixture(t, root, "clasm", "0001") != before {
+				t.Error("a refused supersession wrote")
+			}
+		})
+	}
+}
+
+func TestChange_ASupersessionCanBeCancelledAtEveryStep(t *testing.T) {
+	for name, keys := range map[string][]tea.Msg{
+		"Esc in the field":        {keyEsc},
+		"n at the confirmation":   append(typed("0002"), keyEnter, ch('n')),
+		"Esc at the confirmation": append(typed("0002"), keyEnter, keyEsc),
+	} {
+		t.Run(name, func(t *testing.T) {
+			fakePagerSeam(t)
+			m, root := writeModel(t)
+			b1, b2 := readFixture(t, root, "clasm", "0001"), readFixture(t, root, "clasm", "0002")
+			selectRef(t, m, "clasm/DR-0001")
+			m, _ = press(t, m, ch('u'))
+			m, cmd := press(t, m, keys...)
+			if isQuit(cmd) || m.state != viewRecordScope || !strings.Contains(m.View(), "cancelled") {
+				t.Fatalf("state %s (quit %v); want the Records screen and a cancelled notice:\n%s", viewStateNames[m.state], isQuit(cmd), m.View())
+			}
+			if readFixture(t, root, "clasm", "0001") != b1 || readFixture(t, root, "clasm", "0002") != b2 {
+				t.Error("a cancel wrote")
+			}
+		})
+	}
+}
+
+func TestChange_TheLegendsOfferSupersede(t *testing.T) {
+	fakePagerSeam(t)
+	m, _ := writeModel(t)
+	if !strings.Contains(m.View(), "u supersede") {
+		t.Errorf("the Records screen legend lacks u supersede:\n%s", m.View())
+	}
+}

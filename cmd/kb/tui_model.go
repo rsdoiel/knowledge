@@ -633,6 +633,8 @@ func (m *tuiModel) updateRecordScope(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("read")
 	case "s":
 		return m.showSelected("status")
+	case "u":
+		return m.supersedeSelected()
 	case "d":
 		return m.removeSelected()
 	}
@@ -763,6 +765,8 @@ func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("read")
 	case "s":
 		return m.showSelected("status")
+	case "u":
+		return m.supersedeSelected()
 	case "d":
 		return m.removeSelected()
 	case "q":
@@ -954,7 +958,7 @@ func (m *tuiModel) legendFull() string {
 		}
 		return move + "   Enter open   / search   q back"
 	case viewRecordScope:
-		return move + "   Enter read   s status   d delete   " + m.scopeKey() + "   / search   q back"
+		return move + "   Enter read   s status   u supersede   d delete   " + m.scopeKey() + "   / search   q back"
 	case viewRemove:
 		return "Esc cancel   Enter delete (only when the name matches)   Ctrl-C quit"
 	case viewChange:
@@ -964,7 +968,7 @@ func (m *tuiModel) legendFull() string {
 	case viewText:
 		return m.textLegend()
 	case viewRecords:
-		return move + "   Enter read   s status   d delete   o c r tabs   / search   q back"
+		return move + "   Enter read   s status   u supersede   d delete   o c r tabs   / search   q back"
 	case viewObservations, viewConcepts:
 		if m.state == viewObservations {
 			return move + "   e edit   d delete   o c r tabs   / search   q back"
