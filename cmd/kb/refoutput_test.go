@@ -135,7 +135,7 @@ func TestRecordSetStatus_ConfirmsWithTheQualifiedRef(t *testing.T) {
 		t.Errorf("output = %q, want it to begin with the qualified ref", out)
 	}
 	var result map[string]any
-	runRecordJSON(t, kb, &result, "set-status", "clasm/0001", "rejected")
+	runRecordJSON(t, kb, &result, "set-status", "clasm/0001", "cancelled")
 	if result["ref"] != "clasm/DR-0001" || result["record_id"] != "0001" {
 		t.Errorf("json = %v, want ref clasm/DR-0001 and record_id kept", result)
 	}

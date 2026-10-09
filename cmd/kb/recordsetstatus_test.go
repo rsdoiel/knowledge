@@ -49,8 +49,11 @@ func TestCmdRecord_SetStatusRefusesAnUnknownStatus(t *testing.T) {
 	}
 }
 
+// Record 0001 is proposed, so only the statuses the D0 table lists from there
+// (plus a value another record already carries) are applied. The full matrix is
+// in recordtransition_test.go.
 func TestCmdRecord_SetStatusAcceptsTheVocabularyAndCarriedValues(t *testing.T) {
-	for _, status := range []string{"proposed", "accepted", "superseded", "rejected", "cancelled", "legacy-status"} {
+	for _, status := range []string{"accepted", "rejected", "legacy-status"} {
 		t.Run(status, func(t *testing.T) {
 			root, run := setStatusFixture(t)
 			if _, err := run("0001", status, "--project", "clasm"); err != nil {

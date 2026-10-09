@@ -708,6 +708,9 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	}
 	note := normalisationNote(rf, raw, rec.Path)
 
+	if err := checkTransition(rf.Record.Status, status, len(rf.SupersededBy) > 0); err != nil {
+		return err
+	}
 	rf.Record.Status = status
 	if _, err := saveRecordFile(kb, root, rec, rf); err != nil {
 		_ = os.WriteFile(filepath.Join(root, rec.Path), raw, 0o644)
@@ -730,6 +733,44 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 		fmt.Fprintln(out, note)
 	}
 	return nil
+}
+
+/** checkTransition applies the status transition table (DR-0060) to one move.
+ * The table is enforced only when both ends are in the record vocabulary: a
+ * value outside it that a record already carries is data to repair, not a state
+ * the table describes. A refused move is a negative answer (exit 1): the command
+ * line was well formed and the record's current state forbids it.
+ *
+ * Parameters:
+ *   from (string) — the record's current status
+ *   to (string) — the requested status
+ *   hasSupersededBy (bool) — whether the record already carries superseded_by
+ *
+ * Returns:
+ *   error — nil when the move is allowed, else a negative-class error naming
+ *           the current status and the statuses it may move to
+ *
+ * Example:
+ *   err := checkTransition("rejected", "accepted", false) // negative: reopen first
+ */
+func checkTransition(from, to string, hasSupersededBy bool) error {
+	if !containsString(knowledge.RecordStatuses, from) || !containsString(knowledge.RecordStatuses, to) {
+		return nil
+	}
+	if knowledge.CanTransition(from, to, hasSupersededBy) {
+		return nil
+	}
+	switch {
+	case from == to:
+		return negativef("the record is already %s", from)
+	case to == "superseded" && !hasSupersededBy && containsString(knowledge.AllowedTransitions(from, true), to):
+		return negativef("a record that is %s cannot be set to superseded without a superseded_by; use `kb record supersede NEW OLD`, which writes both sides", from)
+	}
+	allowed := knowledge.AllowedTransitions(from, hasSupersededBy)
+	if len(allowed) == 0 {
+		return negativef("a record that is %s cannot be set to %s; %s is final", from, to, from)
+	}
+	return negativef("a record that is %s cannot be set to %s; it may become: %s", from, to, strings.Join(allowed, ", "))
 }
 
 // recordSupersede writes both sides of a supersession: supersedes on the new
