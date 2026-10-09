@@ -147,6 +147,20 @@ q included. Each change is made by the command's own function, so a refusal (a
 rename onto a name that is taken) is the command's refusal, shown on the screen
 with nothing changed, and a success shows the command that does the same.
 
+New things are made with a form: the New project…, New observation…, New concept…,
+New source… and New record… rows of the menus, and n on the project list (a project),
+a project's observations tab (an observation in that project), its concepts tab (a
+concept) and the Records screens (a decision record). The fields are asked one at a
+time: a line of text (Enter accepts, Ctrl-J starts a new line, an optional field may
+be left empty) or a choice made with one key (an observation's kind: note, finding,
+decision, q[u]estion, hypothesis). What has been entered stays on the screen, and the
+last screen shows the command that does the same and asks for y. Esc cancels the whole
+form at any step and nothing is written; while you type every key is text, q
+included. The write is the command's own function, so its refusal (a project that
+exists, a source's bad date) is shown as it would be on the command line. A new
+decision record is written proposed, as the command does, and reaches the database
+at the next kb ingest.
+
 Index (on the top menu) and Records → Format files… run kb index and kb
 record fmt straight away, with no confirmation, since both only write generated
 files or canonical form and are safe to repeat. They run on the Records scope's

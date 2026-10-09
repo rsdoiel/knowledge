@@ -39,6 +39,18 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   becomes superseded; the write is `recordSupersede`, both files and the database with its rollback. The
   command's `--partial` option is not offered. `supersede` has no extra gate, as DR-0067 says: it removes no
   knowledge.
+- **Additive forms in the TUI** (DR-0067, DR-0064 amendment; plan item U1). New project…, New observation…,
+  New concept…, New source… and New record… on the menus, and `n` on the project list, an observations tab, a
+  concepts tab and the Records screens, ask the fields one at a time (a text field, or a choice made with one
+  key; an optional field may be left empty), keep what has been entered on the screen, and end with the command
+  that does the same and `y`. `Esc` cancels the whole form at any step; `q` is text in a text field. One form
+  engine serves all five; each write is the command's own function (`cmdProject`, `cmdObservation`,
+  `cmdConcept`, `cmdSource`, `recordNew`), so the rules and the refusals (a project that exists, a source's bad
+  date) are the command's. A project name is checked in the field before the form goes on, as is a record's
+  scope. An observation's kind takes `n f d u h` (question has `u`, since `q` cancels), a record's trigger
+  `d p i l v r x`. A new record is written `proposed` and reaches the database at the next ingest, which the
+  notice says. A source's publisher, rights and version stay on the command line. A text field starts empty or
+  from the scope and an empty required field says so.
 - **`index` and `record fmt` from the menus** (DR-0067; plan item U5). Index (top menu) and Records → Format
   files… run the commands at once, with no confirmation, on the Records scope's decisions directory
   (`agents/projects/NAME/decisions`, or the whole `agents` tree with every scope, with `--all` for `index`).

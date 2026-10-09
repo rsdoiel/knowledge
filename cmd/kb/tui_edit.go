@@ -17,6 +17,7 @@ import (
  *   ta         (textarea.Model) — the field.
  *   old        (string)         — the value it started from.
  *   allowEmpty (bool)           — whether clearing the value is allowed.
+ *   allowSame  (bool)           — whether the starting value may be accepted unchanged.
  *   message    (string)         — why the last Enter did nothing.
  *   submitted  (bool)           — true once a new value was accepted.
  *   cancelled  (bool)           — true once the person backed out.
@@ -25,6 +26,7 @@ type editModel struct {
 	ta         textarea.Model
 	old        string
 	allowEmpty bool
+	allowSame  bool // accept the starting value as it is (a field being filled in, not changed)
 	message    string
 	submitted  bool
 	cancelled  bool
@@ -60,10 +62,10 @@ func (m *editModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyEnter:
 		v := m.ta.Value()
 		switch {
-		case v == m.old:
-			m.message = "unchanged: edit it, or Esc to cancel"
 		case v == "" && !m.allowEmpty:
-			m.message = "empty: type something, or Esc to cancel"
+			m.message = "empty (required): type something, or Esc to cancel"
+		case v == m.old && !m.allowSame:
+			m.message = "unchanged: edit it, or Esc to cancel"
 		default:
 			m.submitted = true
 		}

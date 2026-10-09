@@ -32,6 +32,7 @@ const (
 	viewText        // a record shown in the built-in viewer, when there is no pager
 	viewRemove      // the gate for a removing verb: a plan and a typed confirmation
 	viewChange      // a changing write: pick or type the new value, then confirm old to new
+	viewForm        // an additive write: the fields one at a time, then confirm
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -125,6 +126,7 @@ type tuiModel struct {
 	removeInput     *typedConfirmModel
 	removeBack      viewState
 	change          *changeFlow // the changing write in progress, in viewChange
+	form            *formFlow   // the additive form in progress, in viewForm
 	textPurpose     string
 	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string // the workspace directory, for the header
@@ -249,6 +251,7 @@ var viewStateNames = map[viewState]string{
 	viewText:         "viewText",
 	viewRemove:       "viewRemove",
 	viewChange:       "viewChange",
+	viewForm:         "viewForm",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -319,6 +322,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notice = ""
 		if m.state == viewChange {
 			return m.updateChange(msg)
+		}
+		if m.state == viewForm {
+			return m.updateForm(msg)
 		}
 		// While text is being typed every printable key is text, so this is
 		// asked before any letter is bound (DR-0064, amendment).
@@ -420,6 +426,9 @@ func (m *tuiModel) tabHeight() int {
 func (m *tuiModel) capturingText() bool {
 	if m.state == viewChange && m.change != nil {
 		return m.change.edit != nil && m.change.phase == changePick
+	}
+	if m.state == viewForm && m.form != nil {
+		return m.form.edit != nil
 	}
 	return m.searching || m.state == viewRemove
 }
@@ -637,6 +646,8 @@ func (m *tuiModel) updateRecordScope(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("status")
 	case "u":
 		return m.supersedeSelected()
+	case "n":
+		return m.beginForm(m.newRecordForm(m.scopeForForm()))
 	case "d":
 		return m.removeSelected()
 	}
@@ -656,6 +667,16 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 		return m.openRecordScope("proposed")
 	case "record fmt":
 		return m.runDirect("fmt")
+	case "project add":
+		return m.beginForm(m.newProjectForm())
+	case "observation add":
+		return m.beginForm(m.newObservationForm(""))
+	case "concept add":
+		return m.beginForm(m.newConceptForm())
+	case "source add":
+		return m.beginForm(m.newSourceForm())
+	case "record new":
+		return m.beginForm(m.newRecordForm(m.scopeForForm()))
 	default:
 		m.notice = fmt.Sprintf("%s has no screen yet.\nFrom the command line: %s", it.Label, it.Equivalent)
 	}
@@ -674,6 +695,8 @@ func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "d":
 		return m.removeSelected()
+	case "n":
+		return m.beginForm(m.newProjectForm())
 	case "s":
 		return m.changeSelected("status")
 	case "e":
@@ -719,6 +742,8 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "d":
 		return m.removeSelected()
+	case "n":
+		return m.beginForm(m.newObservationForm(m.projectName()))
 	case "e":
 		return m.changeSelected("edit")
 	case "q":
@@ -742,6 +767,8 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "d":
 		return m.removeSelected()
+	case "n":
+		return m.beginForm(m.newConceptForm())
 	case "e":
 		return m.changeSelected("edit")
 	case "q":
@@ -771,6 +798,8 @@ func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("status")
 	case "u":
 		return m.supersedeSelected()
+	case "n":
+		return m.beginForm(m.newRecordForm(m.projectName()))
 	case "d":
 		return m.removeSelected()
 	case "q":
@@ -934,14 +963,20 @@ func (m *tuiModel) legend() string {
  *   fitLegend("↑/↓ j/k move   Enter open   q back", 20) // "Enter open  q back"
  */
 func fitLegend(legend string, width int) string {
-	if lipgloss.Width(legend) <= width {
-		return legend
-	}
 	tight := strings.ReplaceAll(legend, "   ", "  ")
-	if lipgloss.Width(tight) <= width {
-		return tight
+	noMove := strings.TrimPrefix(tight, "↑/↓ j/k move  ")
+	short := noMove
+	for _, r := range [][2]string{{"e describe", "e desc"}, {"u supersede", "u super"}} {
+		short = strings.Replace(short, r[0], r[1], 1)
 	}
-	return strings.TrimPrefix(tight, "↑/↓ j/k move  ")
+	// In order of how little is lost: the spacing, then the movement hint (every
+	// screen shares it and a person already knows it), then long words shortened.
+	for _, candidate := range []string{legend, tight, noMove, short} {
+		if lipgloss.Width(candidate) <= width {
+			return candidate
+		}
+	}
+	return short
 }
 
 // legendFull is the legend before it is fitted to the window.
@@ -967,6 +1002,8 @@ func (m *tuiModel) legendFull() string {
 		return "Esc cancel   Enter delete (only when the name matches)   Ctrl-C quit"
 	case viewChange:
 		return m.changeLegend()
+	case viewForm:
+		return m.formLegend()
 	case viewReview:
 		return m.reviewLegend()
 	case viewText:
@@ -975,13 +1012,13 @@ func (m *tuiModel) legendFull() string {
 		return move + "   Enter read   s status   u supersede   d delete   o c r tabs   / search   q back"
 	case viewObservations, viewConcepts:
 		if m.state == viewObservations {
-			return move + "   e edit   d delete   o c r tabs   / search   q back"
+			return move + "   n new   e edit   d delete   o c r tabs   / search   q back"
 		}
-		return move + "   e rename   d delete   o c r tabs   / search   q back"
+		return move + "   n new   e rename   d delete   o c r tabs   / search   q back"
 	case viewSearch:
 		return move + "   / search   q back"
 	}
-	return move + "   Enter open   s status   e describe   r rename   d delete   / search   q back"
+	return move + "   Enter open   n new   s status   e describe   r rename   d delete   / search   q back"
 }
 
 // menuRows renders a menu's rows: the cursor, the label, what it does, and for a
@@ -1039,6 +1076,8 @@ func (m *tuiModel) screen() (string, []string) {
 		return m.removeScreen()
 	case viewChange:
 		return m.changeScreen()
+	case viewForm:
+		return m.formScreen()
 	case viewObservations:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:
@@ -1181,4 +1220,21 @@ func (m *tuiModel) frame(title string, body []string, legend string) string {
 func (m *tuiModel) View() string {
 	title, body := m.screen()
 	return m.frame(title, body, m.legend())
+}
+
+// scopeForForm is the Records scope's project, to start the record form with; empty
+// when the scope is every scope.
+func (m *tuiModel) scopeForForm() string {
+	if name := m.recordScopeName(); name != "all scopes" {
+		return name
+	}
+	return ""
+}
+
+// projectName is the project whose tabs are open, or "".
+func (m *tuiModel) projectName() string {
+	if m.selectedProject != nil {
+		return m.selectedProject.Name
+	}
+	return ""
 }

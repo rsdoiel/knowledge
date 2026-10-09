@@ -79,6 +79,7 @@ type chooserModel struct {
 	ref, from string
 	options   []string
 	keys      map[string]rune // an option's key when it is not its first letter
+	prompt    string          // replaces "REF is FROM ->" when a choice is not a move
 	chosen    string
 	cancelled bool
 }
@@ -137,6 +138,9 @@ func (m *chooserModel) View() string {
 		}
 	}
 	labels = append(labels, "[q]uit")
+	if m.prompt != "" {
+		return m.prompt + " " + strings.Join(labels, " ")
+	}
 	return fmt.Sprintf("%s is %s -> %s", m.ref, m.from, strings.Join(labels, " "))
 }
 

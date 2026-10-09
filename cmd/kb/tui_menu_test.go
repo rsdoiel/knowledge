@@ -139,7 +139,7 @@ func TestMenu_AGroupOpensItsMenuAndBrowseOpensTheProjects(t *testing.T) {
 		t.Fatalf("state %s group %q, want the project group menu", viewStateNames[m.state], m.group)
 	}
 	v := m.View()
-	for _, want := range []string{"Browse", "New project…", "(v0.0.20)"} {
+	for _, want := range []string{"Browse", "New project…"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the Projects menu lacks %q:\n%s", want, v)
 		}
@@ -175,12 +175,12 @@ func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
 
 // A group with nothing built opens to a menu of dimmed rows, so what is coming is visible.
 func TestMenu_AGroupWithNothingBuiltStillOpens(t *testing.T) {
-	m := openRow(t, menuModel(t), "Observations")
-	if m.state != viewGroup || m.group != "observation" {
-		t.Fatalf("state %s group %q, want the observation group menu", viewStateNames[m.state], m.group)
+	m := openRow(t, menuModel(t), "Documents")
+	if m.state != viewGroup || m.group != "document" {
+		t.Fatalf("state %s group %q, want the document group menu", viewStateNames[m.state], m.group)
 	}
 	m, _ = press(t, m, keyEnter)
-	if v := m.View(); !strings.Contains(v, "kb observation list --project P") {
+	if v := m.View(); !strings.Contains(v, "kb document list") {
 		t.Errorf("choosing Browse in a dimmed group should show its command:\n%s", v)
 	}
 }

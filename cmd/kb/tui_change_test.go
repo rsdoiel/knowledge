@@ -278,7 +278,7 @@ func TestChange_AConceptIsRenamedFromItsTab(t *testing.T) {
 
 func TestChange_TheLegendsOfferTheKeys(t *testing.T) {
 	m := removeModel(t)
-	for _, want := range []string{"s status", "e describe", "r rename"} {
+	for _, want := range []string{"s status", "e desc", "r rename"} {
 		if !strings.Contains(m.View(), want) {
 			t.Errorf("the project list legend lacks %q:\n%s", want, m.View())
 		}
