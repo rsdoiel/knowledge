@@ -173,6 +173,10 @@ enters or passes (like git’s <code>GIT_CEILING_DIRECTORIES</code>); set
 it to a scratch directory that sits inside a real workspace</li>
 <li><code>KB_QUIET</code> — silence advisory notes on standard error;
 never an error</li>
+<li><code>KB_PAGER</code> — the program that shows a record for
+<code>kb record set-status REF</code> (no status):
+<code>bat -l markdown</code>, else <code>less -R</code>, else the record
+is printed</li>
 </ul>
 <p>See <a href="kb.1.html">kb(1)</a>, § WORKSPACE AND ENVIRONMENT.</p>
 <h3 id="naming-records">Naming records</h3>
