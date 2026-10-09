@@ -490,6 +490,8 @@ func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.openGroup(it.Verb)
 		case it.Verb == "search":
 			m.startSearch()
+		case it.Verb == "index":
+			return m.runDirect("index")
 		case !it.Built:
 			m.explainUnbuilt(it)
 		}
@@ -652,6 +654,8 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 		return m.openRecordScope("")
 	case "record pending":
 		return m.openRecordScope("proposed")
+	case "record fmt":
+		return m.runDirect("fmt")
 	default:
 		m.notice = fmt.Sprintf("%s has no screen yet.\nFrom the command line: %s", it.Label, it.Equivalent)
 	}

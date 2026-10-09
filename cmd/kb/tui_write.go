@@ -125,7 +125,13 @@ func (m *tuiModel) handlePagerDone(msg pagerDoneMsg) (tea.Model, tea.Cmd) {
 // openViewer shows the record in the built-in scrolling viewer: the fallback when
 // there is no pager.
 func (m *tuiModel) openViewer(purpose string) {
-	vp := viewport.New(m.cols()-4, m.bodyHeight())
+	// With no window size yet (a terminal that has not reported one) the viewer
+	// still shows a screenful instead of nothing.
+	h := m.bodyHeight()
+	if h <= 0 {
+		h = 20
+	}
+	vp := viewport.New(m.cols()-4, h)
 	wrapped := lipgloss.NewStyle().Width(m.cols() - 4).Render(string(m.reviewRaw))
 	vp.SetContent(wrapped)
 	m.text = vp

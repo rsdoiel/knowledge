@@ -39,6 +39,13 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   becomes superseded; the write is `recordSupersede`, both files and the database with its rollback. The
   command's `--partial` option is not offered. `supersede` has no extra gate, as DR-0067 says: it removes no
   knowledge.
+- **`index` and `record fmt` from the menus** (DR-0067; plan item U5). Index (top menu) and Records → Format
+  files… run the commands at once, with no confirmation, on the Records scope's decisions directory
+  (`agents/projects/NAME/decisions`, or the whole `agents` tree with every scope, with `--all` for `index`).
+  The command's own output is shown on a result screen you leave with `q`, with the command that does the
+  same; a scope with no decisions directory is a notice and nothing is created; the command's errors (a record
+  that cannot be parsed) are notices. The built-in viewer now shows a screenful even before the terminal has
+  reported a size.
 - Long notices wrap to the window instead of being cut at the edge, and a legend that is wider than the window
   drops its spacing, then its movement hint, instead of losing its last key.
 

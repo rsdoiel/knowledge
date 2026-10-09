@@ -151,6 +151,14 @@ q included. Each change is made by the command's own function, so a refusal (a
 rename onto a name that is taken) is the command's refusal, shown on the screen
 with nothing changed, and a success shows the command that does the same.
 
+Index (on the top menu) and Records → Format files… run {app_name} index and {app_name}
+record fmt straight away, with no confirmation, since both only write generated
+files or canonical form and are safe to repeat. They run on the Records scope's
+decisions directory (agents/projects/NAME/decisions for a project, the whole agents
+tree with every scope, which a widens), the command's own output is shown on a
+screen you leave with q, and so is the command that does the same. A scope with no
+decisions directory says so and nothing is created.
+
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
 a terminal: bare {app_name}, a bare group ({app_name} record opens the Records menu), and

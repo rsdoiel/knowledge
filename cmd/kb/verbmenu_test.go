@@ -26,15 +26,15 @@ func TestMenu_TheTopMenuIsOneRowPerVerbGroupInOrder(t *testing.T) {
 	}
 }
 
-func TestMenu_WhatIsBuiltInV0019(t *testing.T) {
+func TestMenu_WhatIsBuilt(t *testing.T) {
 	built := map[string]bool{}
 	for _, it := range topMenu() {
 		built[it.Label] = it.Built
 	}
 	for label, want := range map[string]bool{
-		"Projects": true, "Records": true, "Search": true,
+		"Projects": true, "Records": true, "Search": true, "Index": true,
 		"Observations": false, "Concepts": false, "Sources": false, "Documents": false,
-		"Ingest": false, "Index": false, "Check": false,
+		"Ingest": false, "Check": false,
 	} {
 		if built[label] != want {
 			t.Errorf("%s: built = %v, want %v", label, built[label], want)
@@ -47,7 +47,7 @@ func TestMenu_TheRecordsGroup(t *testing.T) {
 	if got, want := labels(items), "Browse, Pending, New record…, Format files…, Fuzzy-tag…"; got != want {
 		t.Fatalf("records menu = %s, want %s", got, want)
 	}
-	for i, wantBuilt := range []bool{true, true, false, false, false} {
+	for i, wantBuilt := range []bool{true, true, false, true, false} {
 		if items[i].Built != wantBuilt {
 			t.Errorf("%s: built = %v, want %v", items[i].Label, items[i].Built, wantBuilt)
 		}
