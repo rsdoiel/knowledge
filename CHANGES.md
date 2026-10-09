@@ -3,10 +3,12 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## v0.0.20 — unreleased
+## v0.0.20 — 2026-10-09
 
-The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026-10-09 plan,
-`agents/projects/knowledge/plans/tui-keys-and-write-flows-plan.md`, release v0.0.20). Written and tested red first.
+The rest of the TUI writes behind the same gates (knowledge DR-0066 to DR-0070 and the plan,
+`agents/projects/knowledge/plans/tui-keys-and-write-flows-plan.md`, items U1 to U7). Written and tested red
+first, including the built binary on a pseudo-terminal. The race detector passed on darwin/arm64 at `5fd9b2e`;
+the interface was tried by hand on Raspberry Pi OS and macOS. It has not been run on Windows.
 
 ### Added
 
@@ -96,6 +98,19 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   reported a size.
 - Long notices wrap to the window instead of being cut at the edge, and a legend that is wider than the window
   drops its spacing, then its movement hint, instead of losing its last key.
+
+### Changed
+
+- **`cmt` is no longer part of `make`.** `make build` compiles the program and regenerates the help text and man
+  pages only. `make generate` runs `cmt` for `version.go`, `CITATION.cff`, `about.md` and the installers, and
+  `make release` depends on it, so a release cannot be built from a stale `version.go` and the version and
+  release hash change only when asked for.
+
+### Not in the interface yet
+
+Documents → Browse and Frontmatter (`document frontmatter` runs through `:`), Concepts → Recall and Suggest,
+Check, Enter on search results and observations, and the removing writes `source remove`, `unlink` and
+`document delete`, which `:` refuses with the command to run. `kb verbs --json` does not carry the menu fields.
 
 ## v0.0.19 — 2026-10-09
 
