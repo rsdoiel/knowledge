@@ -33,6 +33,24 @@ var wikilinkPattern = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
 // of warning. See TODO.md "[[NNNN]] in a record body mints a junk concept".
 var recordIDLikeWikilink = regexp.MustCompile(`(?i)^(dr-)?[0-9]{4}$`)
 
+/** statusChange is a record whose status entered the database through a file
+ * and not through `kb record set-status` (DR-0068): either the file's status
+ * differs from the stored one ("edited"), or the record is new and already
+ * accepted ("arrived"). A report, never a block.
+ *
+ * Fields:
+ *   Ref  (string) — the qualified reference, such as clasm/DR-0012.
+ *   From (string) — the stored status; empty for an arrival.
+ *   To   (string) — the status in the file.
+ *   Kind (string) — "edited" or "arrived".
+ */
+type statusChange struct {
+	Ref  string `json:"ref"`
+	From string `json:"from,omitempty"`
+	To   string `json:"to"`
+	Kind string `json:"kind"`
+}
+
 // ingestSummary is what one ingest run reports, in both JSON and text form.
 // Unresolved, Malformed and Missing are the three ways a run can be
 // incomplete without being a failure.
@@ -51,6 +69,8 @@ type ingestSummary struct {
 	Malformed  []string `json:"malformed,omitempty"`
 	Missing    []string `json:"missing,omitempty"`
 	Errors     []string `json:"errors,omitempty"`
+	// StatusChanges lists the statuses that arrived through a file (DR-0068).
+	StatusChanges []statusChange `json:"status_changes,omitempty"`
 }
 
 // ingestedRecord is one file that made it through pass one, carrying what
@@ -297,6 +317,12 @@ func (ing *ingester) upsertAll(files []string) {
 					name, rf.Record.RecordID, existing.Path))
 			}
 		}
+		// A status that enters through a file is reported (DR-0068), not blocked:
+		// the file is the source of truth. It is noted here, where both the stored
+		// and the incoming record are in hand, and recorded below once the write
+		// has succeeded (or in a dry run, where nothing is written).
+		var change *statusChange
+		ref := statusChangeRef(rf.ProjectName, rf.Record.RecordID)
 		switch {
 		case err == nil && existing.Checksum == rf.Record.Checksum:
 			ing.summary.Skipped++
@@ -310,8 +336,14 @@ func (ing *ingester) upsertAll(files []string) {
 			}
 		case err == nil:
 			ing.summary.Updated++
+			if existing.Status != rf.Record.Status {
+				change = &statusChange{Ref: ref, From: existing.Status, To: rf.Record.Status, Kind: "edited"}
+			}
 		default:
 			ing.summary.Added++
+			if rf.Record.Status == "accepted" {
+				change = &statusChange{Ref: ref, To: rf.Record.Status, Kind: "arrived"}
+			}
 		}
 
 		if !ing.dryRun && rec.dbID == 0 {
@@ -325,6 +357,9 @@ func (ing *ingester) upsertAll(files []string) {
 				continue
 			}
 			rec.dbID = id
+		}
+		if change != nil {
+			ing.summary.StatusChanges = append(ing.summary.StatusChanges, *change)
 		}
 		ing.linkInitiative(rf, projectID)
 		ing.linkWikilinkTags(rf, rec.dbID)
@@ -652,6 +687,7 @@ func writeIngestText(out io.Writer, s ingestSummary) {
 	fmt.Fprintf(out, "%d added, %d updated, %d skipped, %d failed\n",
 		s.Added, s.Updated, s.Skipped, s.Failed)
 	fmt.Fprintf(out, "%d supersedes, %d relates_to\n", s.Supersedes, s.RelatesTo)
+	writeStatusChanges(out, s.StatusChanges)
 	for _, group := range []struct {
 		label string
 		lines []string
@@ -665,5 +701,47 @@ func writeIngestText(out io.Writer, s ingestSummary) {
 		for _, line := range group.lines {
 			fmt.Fprintf(out, "%s: %s\n", group.label, line)
 		}
+	}
+}
+
+/** statusChangeRef is the qualified reference ingest prints for a record: its
+ * project name, or "workspace" for the workspace tier, and its id.
+ *
+ * Parameters:
+ *   projectName (string) — the frontmatter project; empty at the workspace tier
+ *   recordID (string) — the record id, such as "0012"
+ *
+ * Returns:
+ *   string — such as "clasm/DR-0012" or "workspace/DR-0003"
+ *
+ * Example:
+ *   statusChangeRef("", "0003") // "workspace/DR-0003"
+ */
+func statusChangeRef(projectName, recordID string) string {
+	scope := projectName
+	if scope == "" {
+		scope = "workspace"
+	}
+	return knowledge.Ref{Scope: scope, ID: recordID}.String()
+}
+
+// maxStatusLines is how many status changes the text summary lists. Ingesting a
+// whole tree into an empty database arrives every accepted record at once; the
+// JSON keeps them all and the text says how many it left out.
+const maxStatusLines = 20
+
+// writeStatusChanges prints the statuses that arrived through a file, one line
+// each, up to maxStatusLines.
+func writeStatusChanges(out io.Writer, changes []statusChange) {
+	for i, c := range changes {
+		if i == maxStatusLines {
+			fmt.Fprintf(out, "status: and %d more (kb -json ingest lists them all)\n", len(changes)-maxStatusLines)
+			return
+		}
+		if c.Kind == "arrived" {
+			fmt.Fprintf(out, "status: %s arrived %s\n", c.Ref, c.To)
+			continue
+		}
+		fmt.Fprintf(out, "status: %s %s -> %s (edited in file)\n", c.Ref, c.From, c.To)
 	}
 }

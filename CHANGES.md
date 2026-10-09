@@ -20,6 +20,14 @@ Foundations for the TUI write flows, from the design brief
   table instead of hand-kept lists; the generated completion scripts are byte for byte what they were,
   held by golden files in `cmd/kb/testdata/`. Parsing is still per-verb (flags are declared three ways);
   the TUI menu and `:` will read the table in later items.
+- **`kb ingest` reports a status that arrives through a file** (DR-0068). Ingest is how a status edited by
+  hand in a record file reaches the database, without the transition table or the terminal rule; that is by
+  design (the file is the source of truth) but nothing said so. The summary now prints
+  `status: clasm/DR-0012 proposed -> accepted (edited in file)` for a stored status that differs from the
+  file's, and `status: clasm/DR-0013 arrived accepted` for a record first ingested already accepted. A report,
+  not a failure: the status is applied and the exit code is unchanged, and a move `set-status` would refuse is
+  reported like any other. The text lists the first 20 and says how many it left out; `kb -json ingest` has
+  every one in a new `status_changes` array (`ref`, `from`, `to`, `kind`). `--dry-run` reports the same.
 - Table finding: `observation delete` and `project delete` are removing verbs too, beside the five DR-0067
   names; the table classes them so and a test pins the full set.
 
