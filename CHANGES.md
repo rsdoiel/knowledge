@@ -3,11 +3,14 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## v0.0.19 — unreleased
+## v0.0.19 — 2026-10-09
 
-Foundations for the TUI write flows, from the design brief
-`agents/projects/knowledge/design/tui-keys-and-write-flows-design.md` and knowledge DR-0064 to DR-0070
-(accepted 2026-10-09). Written and tested red first.
+The terminal interface can now change something, and `kb` describes its own command language in one table.
+The decisions are knowledge DR-0059 (one verb table, in part) and DR-0064 to DR-0070 (accepted 2026-10-09),
+from the design brief `agents/projects/knowledge/design/tui-keys-and-write-flows-design.md` and its plan.
+Everything was written and tested red first. The race detector passed on darwin/arm64 at the last code commit
+(`727f963`); the Linux-only pseudo-terminal tests skip there. The interface was tried by hand in a real
+terminal on Linux. The next release, v0.0.20, brings the rest of the writes behind the same gates.
 
 ### Added
 
