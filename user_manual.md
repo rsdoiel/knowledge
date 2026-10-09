@@ -62,7 +62,9 @@ A decision record is `SCOPE/DR-NNNN`, where SCOPE is a project name or `workspac
 
 ### Interactive TUI
 
-Bare `kb` (no verb) launches a read-mostly browser: project list → Enter drills into observations → `c`, `o` and `r` switch between a project's concepts, observations and records → `/` opens a search prompt from any view. `q` goes back (and quits at the project list), `Esc` cancels only something in progress and never closes a screen, `Ctrl-C` quits from anywhere, and a legend line at the bottom of every screen lists the keys that apply. Typing in the search prompt takes every key as text, `q` included. See [kb(1)](kb.1.md) for the full description.
+Bare `kb` on a terminal opens a menu with one entry per verb group (Projects, Records, Observations, Concepts, Sources, Documents, Search, Ingest, Index, Check), so using it teaches the command line. A header names the workspace and what it holds. Rows that are not built yet are dimmed with the release that brings them, and choosing one prints the command that does the same. Projects → Browse opens a project's observations, concepts and records as tabs (`o`, `c`, `r`); Records → Browse and Pending list records in the scope `kb record list` would use, and `a` widens it. `q` goes back one screen (and quits at the top menu), `Esc` cancels only something in progress and never closes a screen, `Ctrl-C` quits from anywhere, and a legend line at the bottom of every screen lists the keys that apply. Typing in the search prompt takes every key as text, `q` included.
+
+A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group such as `kb record`, and `kb record show` or `kb project show` with no argument. `kb -i record pending` (or `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. See [kb(1)](kb.1.md) for the full description.
 
 ---
 

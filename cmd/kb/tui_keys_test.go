@@ -377,3 +377,37 @@ func TestBinary_TUIWalksDownAndUpWithEscDoingNothing(t *testing.T) {
 		t.Fatalf("q at the top menu did not quit:\n%s", screen.text())
 	}
 }
+
+// ─── keys that arrive together ───────────────────────────────────────────────
+
+// Keys typed ahead, or pasted, can reach the program as one message ("qq"). Each is
+// a key of its own, taken in turn; dropping them silently would lose input.
+func TestTUIKeys_SeveralKeysInOneMessageAreTakenInTurn(t *testing.T) {
+	m := menuModel(t)
+	m, _ = press(t, m, runeKey("jj"))
+	if m.menuCursor != 2 {
+		t.Errorf("jj in one message moved the cursor to %d, want 2", m.menuCursor)
+	}
+	g := openRow(t, menuModel(t), "Records")
+	g, cmd := press(t, g, runeKey("qq")) // back to the top menu, then quit
+	if !isQuit(cmd) {
+		t.Errorf("qq from a group menu: state %s, quit %v; want back to the menu and then quit", viewStateNames[g.state], isQuit(cmd))
+	}
+}
+
+// A command key that starts the search prompt hands the rest of the message to it as text.
+func TestTUIKeys_TheKeysAfterASlashAreTextEvenInTheSameMessage(t *testing.T) {
+	m, cmd := press(t, menuModel(t), runeKey("/qjk"))
+	if isQuit(cmd) || !m.searching || m.searchInput.Value() != "qjk" {
+		t.Errorf("/qjk: quit %v, searching %v, value %q; want the prompt open holding qjk", isQuit(cmd), m.searching, m.searchInput.Value())
+	}
+}
+
+// Typed into the prompt, a run of characters is text and is not split.
+func TestTUIKeys_ARunOfCharactersInThePromptIsOneInput(t *testing.T) {
+	m, _ := press(t, menuModel(t), ch('/'))
+	m, cmd := press(t, m, runeKey("quokka"))
+	if isQuit(cmd) || m.searchInput.Value() != "quokka" {
+		t.Errorf("quit %v, value %q; want quokka typed", isQuit(cmd), m.searchInput.Value())
+	}
+}

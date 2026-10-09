@@ -31,7 +31,7 @@ _kb() {
     verb="${pos[0]}"
     if [[ -z "$verb" ]]; then
         if [[ "$cur" == -* ]]; then
-            COMPREPLY=( $(compgen -W "--db --debug --help --json --license --version" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--db --debug --help -i --json --license --version" -- "$cur") )
         else
             COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink verbs" -- "$cur") )
         fi

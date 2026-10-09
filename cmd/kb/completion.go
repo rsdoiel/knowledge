@@ -40,7 +40,7 @@ var completionProjectArgs = projectArgMap()
 var completionVerbFlags = flagMap()
 
 // completionGlobalFlags are the options that go before the verb.
-var completionGlobalFlags = []string{"--db", "--debug", "--help", "--json", "--license", "--version"}
+var completionGlobalFlags = []string{"--db", "--debug", "--help", "-i", "--json", "--license", "--version"}
 
 // completionBoolFlags take no value; every other flag does, so completion
 // skips the word after it when looking for the verb's arguments.

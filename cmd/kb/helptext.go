@@ -29,18 +29,8 @@ follows the "TOOL VERB PARAMETERS"
 model (the same shape as git and go), so scripts and other language-model
 harnesses can drive it directly, not just people at a terminal.
 
-Run with no verb at all to launch the interactive browser (TUI) instead —
-a read-only view over the same data, for exploring projects, observations,
-concepts and records, and running searches, without leaving the terminal.
-
-Its keys: q goes back to the screen you came from, and quits at the project list;
-Esc cancels something in progress (a search you are typing) and does nothing
-otherwise, so it never closes a screen; Ctrl-C quits from anywhere; the arrow
-keys or j and k move; Enter opens; / searches; c, o and r switch between a
-project's concepts, observations and records. A line at the bottom of every screen
-lists the keys that apply to it. While you are typing in the search prompt every
-key is text, q included, so a term that starts with q works; Esc leaves the
-prompt, and q is a command again afterwards.
+Run with no verb at all, on a terminal, to open the interactive interface
+instead; see INTERACTIVE INTERFACE below.
 
 # STANDARD OPTIONS
 
@@ -75,6 +65,15 @@ a difference of opinion.
   scripts consuming JSON output can rely on stdout staying valid JSON
   even when a call fails.
 
+-i
+: open the interface at this command instead of running it. {app_name} -i
+  record pending opens the Pending screen, {app_name} -i record show
+  harvey/DR-0004 opens the Records screen with the cursor on that record, and
+  {app_name} -i alone opens the top menu. It needs a terminal on standard
+  input and output and cannot be combined with -json. A command with no
+  screen yet is a usage error that says so; it is not run instead. See
+  INTERACTIVE INTERFACE
+
 A global option must precede the verb. Parsing stops at the first
 non-option argument, which is what lets a verb's own flags through
 untouched: in "{app_name} -json ingest DIR --dry-run", -json is global and
@@ -86,6 +85,36 @@ untouched: in "{app_name} -json ingest DIR --dry-run", -json is global and
   the current directory. The path is printed to stderr once at startup.
   Applies to every verb and the TUI. Omitting --debug costs nothing —
   no file is written and behavior is unchanged.
+
+# INTERACTIVE INTERFACE
+
+Bare {app_name}, on a terminal, opens a menu with one entry per verb group
+(Projects, Records, Observations, Concepts, Sources, Documents, Search, Ingest,
+Index, Check), so choosing from it teaches the command line. A header names the
+workspace directory, its database and what it holds, because a machine can have
+more than one workspace. A group opens its own menu of the things that need no
+selection; rows that are not built yet are dimmed with the release that brings
+them, and choosing one prints the command that does the same. Projects: Browse
+shows the projects, and opening a project shows its observations, concepts and
+records as tabs with their counts. Records: Browse (newest first) and Pending
+(oldest first) show one line a record, in the scope {app_name} record list would
+use, and a widens it to every scope. Search asks for a term.
+
+Keys: the arrow keys or j and k move; Enter opens; / searches; o, c and r switch
+a project's tabs. q goes back to the screen above (the project list to the
+Projects menu, a group menu to the top menu) and quits at the top menu. Esc
+cancels something in progress, such as a search being typed, and does nothing
+otherwise, so it never closes a screen. Ctrl-C quits from anywhere. A line at
+the bottom of every screen lists the keys that apply. While you type in the
+search prompt every key is text, q included, so a term that starts with q works;
+Esc leaves the prompt, and q is a command again afterwards.
+
+A complete command always runs as a command and prints, on a terminal or not, so
+scripts can rely on it. Only an incomplete one opens the interface, and only on
+a terminal: bare {app_name}, a bare group ({app_name} record opens the Records menu), and
+{app_name} record show or {app_name} project show with no argument. Without a terminal
+those are usage errors, exit 2. -i opens the interface at a command that has a
+screen; see GLOBAL OPTIONS.
 
 # WORKSPACE AND ENVIRONMENT
 

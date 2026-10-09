@@ -56,26 +56,18 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	}
 	dbPath, jsonOut, debugOn := opts.dbPath, opts.jsonOut, opts.debugOn
 
-	if len(rest) == 0 {
-		dl, err := openDebugLogIfRequested(debugOn, errOut)
-		if err != nil {
-			return failWith(errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
-		}
-		defer dl.Close()
-		resolvedPath, err := resolveDBPath(dbPath)
-		if err != nil {
-			return failWith(errOut, jsonOut, err)
-		}
-		noteWorkspaceAbove(errOut, dbPath, resolvedPath)
-		kb, err := knowledge.Open(resolvedPath)
-		if err != nil {
-			return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
-		}
-		defer kb.Close()
-		if err := runTUI(kb, dl); err != nil {
-			return failWith(errOut, jsonOut, err)
-		}
-		return 0
+	// Where the interface opens, if this command line asks for it: bare kb, a bare
+	// group, a leaf missing its argument, or any supported command after -i. A
+	// complete command always runs as a command and prints (DR-0066 amendment).
+	if opts.interactive && jsonOut {
+		return failWith(errOut, jsonOut, usageErrorf("-i opens the interface; it cannot be combined with -json"))
+	}
+	start, open, err := deepLink(rest, opts.interactive, atTerminal(out))
+	if err != nil {
+		return failWith(errOut, jsonOut, err)
+	}
+	if open {
+		return openInterface(dbPath, jsonOut, debugOn, start, errOut)
 	}
 	// help is also a verb, per the git/go convention, and takes an optional
 	// topic. kb -help TOPIC reaches the same text by way of the option.
@@ -150,15 +142,9 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// entirely on this branch for its create-capability, which the
 	// workspace:DR-0002 rebuild recipe (rm agents/knowledge.db && kb import
 	// -in agents/knowledge.jsonl) relies on.
-	if dbPath == "" && rest[0] != "import" {
-		if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
-			// A fresh clone has the tracked export but not the gitignored
-			// database. Say how to rebuild it; kb init would start an empty
-			// history beside the real one.
-			if jsonl := filepath.Join(filepath.Dir(resolvedPath), knowledge.MarkerJSONL); fileExists(jsonl) {
-				return failWith(errOut, jsonOut, noInputf("no %s yet, but %s exists; rebuild it with \"kb import -in %s\"", resolvedPath, jsonl, jsonl))
-			}
-			return failWith(errOut, jsonOut, noInputf("no %s here; run \"kb init\" to start a new workspace, or \"kb import -in FILE\" to rebuild one from an export", resolvedPath))
+	if rest[0] != "import" {
+		if err := missingWorkspace(dbPath, resolvedPath); err != nil {
+			return failWith(errOut, jsonOut, err)
 		}
 	}
 
@@ -307,6 +293,7 @@ type globalOptions struct {
 	dbPath      string
 	jsonOut     bool
 	debugOn     bool
+	interactive bool
 }
 
 /** parseGlobalFlags reads the options preceding the verb and returns them
@@ -350,6 +337,7 @@ func parseGlobalFlags(args []string) (globalOptions, []string, error) {
 	fs.StringVar(&opts.dbPath, "db", "", "path to the knowledge base to open")
 	fs.BoolVar(&opts.jsonOut, "json", false, "emit JSON instead of human-readable text")
 	fs.BoolVar(&opts.debugOn, "debug", false, "write a JSONL debug trace")
+	fs.BoolVar(&opts.interactive, "i", false, "open the interface at this command")
 
 	if err := fs.Parse(args); err != nil {
 		return opts, nil, err
@@ -461,4 +449,90 @@ func advise(format string, a ...any) {
 		return
 	}
 	fmt.Fprintf(adviceOut, "kb: "+format+"\n", a...)
+}
+
+/** missingWorkspace is the ambient-open guard (DR-0021 item 4, narrowed by DR-0022):
+ * a command resolved through the true ambient default (no --db given) must not
+ * silently create a workspace wherever it happens to be run from. An explicit
+ * --db PATH is the opposite case, the caller said exactly where to open, so it
+ * keeps open-or-create. A fresh clone has the tracked export but not the
+ * gitignored database, so the error says how to rebuild it; kb init would start
+ * an empty history beside the real one.
+ *
+ * Parameters:
+ *   dbPath (string) — the --db value, "" when none was given
+ *   resolvedPath (string) — the database path resolveDBPath returned
+ *
+ * Returns:
+ *   error — a no-input error when the database is absent and was not named, else nil
+ *
+ * Example:
+ *   if err := missingWorkspace("", "/tmp/x/agents/knowledge.db"); err != nil { return err }
+ */
+func missingWorkspace(dbPath, resolvedPath string) error {
+	if dbPath != "" {
+		return nil
+	}
+	if _, err := os.Stat(resolvedPath); !os.IsNotExist(err) {
+		return nil
+	}
+	if jsonl := filepath.Join(filepath.Dir(resolvedPath), knowledge.MarkerJSONL); fileExists(jsonl) {
+		return noInputf("no %s yet, but %s exists; rebuild it with \"kb import -in %s\"", resolvedPath, jsonl, jsonl)
+	}
+	return noInputf("no %s here; run \"kb init\" to start a new workspace, or \"kb import -in FILE\" to rebuild one from an export", resolvedPath)
+}
+
+/** openInterface opens the knowledge base and starts the interface at start. It
+ * applies the same workspace rules as every other verb: --db or KB_DB if given,
+ * else the workspace found by walking up, and no database is created where there
+ * is none.
+ *
+ * Parameters:
+ *   dbPath (string) — the --db value
+ *   jsonOut (bool) — report errors as JSON
+ *   debugOn (bool) — write a debug trace
+ *   start (tuiStart) — where the interface opens
+ *   errOut (io.Writer) — where notes and errors go
+ *
+ * Returns:
+ *   int — the exit code
+ *
+ * Example:
+ *   return openInterface("", false, false, tuiStart{state: viewMenu}, os.Stderr)
+ */
+func openInterface(dbPath string, jsonOut, debugOn bool, start tuiStart, errOut io.Writer) int {
+	dl, err := openDebugLogIfRequested(debugOn, errOut)
+	if err != nil {
+		return failWith(errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
+	}
+	defer dl.Close()
+	if dbPath == "" {
+		dbPath = os.Getenv("KB_DB")
+	}
+	resolvedPath, err := resolveDBPath(dbPath)
+	if err != nil {
+		return failWith(errOut, jsonOut, err)
+	}
+	if err := missingWorkspace(dbPath, resolvedPath); err != nil {
+		return failWith(errOut, jsonOut, err)
+	}
+	noteWorkspaceAbove(errOut, dbPath, resolvedPath)
+	kb, err := knowledge.Open(resolvedPath)
+	if err != nil {
+		return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
+	}
+	defer kb.Close()
+	// A record named on the command line must exist, and is shown by its qualified
+	// reference whatever spelling was typed.
+	if start.ref != "" {
+		rec, err := resolveRecordScoped(kb, start.ref, recordFlags{}, false)
+		if err != nil {
+			return failWith(errOut, jsonOut, err)
+		}
+		start.ref = refOf(*rec, projectNames(kb)).String()
+	}
+	if err := launchTUI(kb, dl, start); err != nil {
+		return failWith(errOut, jsonOut, err)
+	}
+	return 0
 }

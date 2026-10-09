@@ -33,6 +33,25 @@ Foundations for the TUI write flows, from the design brief
 
 ### Changed
 
+- **The TUI opens at a menu, in a frame, with tabs** (DR-0066 and its 2026-10-09 amendment). Bare `kb` on a
+  terminal opens a top menu with one row per verb group, derived from the verb table, under a header naming the
+  workspace directory, its database and what it holds. Each group opens its own menu. Rows with no screen yet
+  are dimmed with the release that brings them, and choosing one shows the equivalent command. Back is
+  structural, so a deep link has a way back: `q` goes to the screen above and quits only at the top menu.
+  Every screen is drawn in one box (title, body, divider, legend) the width of the window; the frame no longer
+  ends in a newline, which made the view a line taller than the window. A project's observations, concepts and
+  records are tabs with counts and a rule under the active one (`o`, `c`, `r`), all three loaded when the
+  project is opened. **New screens:** Records → Browse (newest first) and Pending (oldest first), one line a
+  record with its qualified reference, in the scope `kb record list` would use (the same code), `a` widens it.
+  **Keys typed together** ("qq", a paste) are taken in turn instead of being dropped.
+- **Deep links.** A complete command always runs and prints, on a terminal or not. Only an incomplete one opens
+  the interface, and only on a terminal: bare `kb`, a bare group (`kb record`), and `kb record show` or
+  `kb project show` with no argument. Without a terminal those are usage errors (exit 2), and bare `kb`
+  without one no longer tries to start a terminal program. **`-i` is a new global option** that opens the
+  interface at a command: `-i record list`, `-i record pending`, `-i record show REF` (the cursor on that
+  record), `-i project list`, `-i search TERM`, `-i` alone, or a group. A command with no screen yet is a
+  usage error that says so. Opening the interface no longer creates a database where there is no workspace
+  (exit 66, as every other verb).
 - **The TUI follows clasm's key conventions, and every screen shows its keys** (DR-0064). **This changes
   today's keys.** `q` now goes back to the screen you came from (a search's results return to where the search
   began) and quits only at the project list; `Esc` cancels something in progress and otherwise does nothing,

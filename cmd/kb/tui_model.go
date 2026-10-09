@@ -32,8 +32,12 @@ const (
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
 // tree for a deep link.
 type tuiStart struct {
-	state viewState
-	group string
+	state  viewState
+	group  string
+	status string // for the Records screen: "" to browse, "proposed" for pending
+	all    bool   // for the Records screen: every scope
+	term   string // for search results: the term, which is run at once
+	ref    string // for the Records screen: the record the cursor starts on
 }
 
 // projectItem, observationItem, conceptItem, and searchResultItem each
@@ -103,6 +107,7 @@ type tuiModel struct {
 	group           string    // the group whose menu is shown, in viewGroup
 	menuCursor      int       // the row in the top menu
 	groupCursor     int       // the row in a group menu
+	quitting        bool      // set when the program has been told to quit
 	notice          string    // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string    // the workspace directory, for the header
 	dbRel           string    // the database path inside it
@@ -159,6 +164,24 @@ func newTUIModelAt(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) (*
 	m.workspaceDir, m.dbRel = workspaceLabel(kb.Path())
 	if recs, err := kb.ListRecords(knowledge.RecordFilter{}); err == nil {
 		m.recordCount = len(recs)
+	}
+	// A deep link opens in the middle of the tree.
+	switch start.state {
+	case viewRecordScope:
+		m.scopeStatus, m.scopeAll = start.status, start.all
+		if err := m.loadRecordScope(); err != nil {
+			return nil, err
+		}
+		for i, it := range m.scopeList.Items() {
+			if r, ok := it.(scopedRecordItem); ok && start.ref != "" && r.e.Ref == start.ref {
+				m.scopeList.Select(i)
+			}
+		}
+	case viewSearch:
+		m.searchFrom = viewMenu
+		if err := m.runSearch(start.term); err != nil {
+			return nil, err
+		}
 	}
 	return m, nil
 }
@@ -249,10 +272,23 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Ctrl-C quits from everywhere, typing and errors included, and writes
 		// nothing (DR-0064).
 		if msg.Type == tea.KeyCtrlC {
-			return m, tea.Quit
+			return m.quit()
 		}
 		if m.err != nil {
 			return m.updateError(msg)
+		}
+		// Keys typed ahead, or pasted, can arrive as one message ("qq"). Each is a
+		// key of its own and is taken in turn, stopping if one quits. While text is
+		// being typed the run is text and goes to the prompt whole.
+		if keys := keysOf(msg); len(keys) > 1 && !m.capturingText() {
+			var last tea.Cmd
+			for _, k := range keys {
+				_, last = m.Update(k)
+				if m.quitting {
+					break
+				}
+			}
+			return m, last
 		}
 		// A notice lasts until the next key.
 		m.notice = ""
@@ -386,12 +422,19 @@ func (m *tuiModel) explainUnbuilt(it menuItem) {
 	m.notice = fmt.Sprintf("%s is not in the TUI yet (%s).\nFrom the command line: %s", it.Label, it.Since, it.Equivalent)
 }
 
+// quit ends the program and remembers that it did, so a run of keys in one
+// message stops there.
+func (m *tuiModel) quit() (tea.Model, tea.Cmd) {
+	m.quitting = true
+	return m, tea.Quit
+}
+
 // updateMenu handles a key on the top menu. q quits: there is nowhere further back.
 func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	items := topMenu()
 	switch msg.String() {
 	case "q":
-		return m, tea.Quit
+		return m.quit()
 	case "esc":
 		return m, nil
 	case "/":

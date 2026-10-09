@@ -16,6 +16,10 @@ import (
 
 func runKB(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
+	// These are scripted command lines, so there is no terminal: an incomplete
+	// command (a bare group, a leaf missing its argument) is the usage error it has
+	// always been. On a terminal it would open the interface instead (DR-0066).
+	noTerminal(t)
 	dbPath := filepath.Join(t.TempDir(), "kb.db")
 	var out, errOut bytes.Buffer
 	code := mainRun(append([]string{"--db", dbPath}, args...), &out, &errOut)
