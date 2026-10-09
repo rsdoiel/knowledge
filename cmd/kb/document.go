@@ -129,6 +129,14 @@ func cmdDocumentReviewPromote(kb *knowledge.KnowledgeBase, jsonOut bool, args []
 	if err != nil {
 		return usageErrorf("invalid section id %q", positional[0])
 	}
+	// Promoting is what makes a summary trusted, searchable and returned by
+	// retrieval, so it is a person's act (DR-0070, extending DR-0061): it needs
+	// a terminal, and nothing on the command line or in the environment turns
+	// that off. The check comes before the section is looked up. harvey promotes
+	// through the library, which has no terminal logic, and is unaffected.
+	if !atTerminal(out) {
+		return usageErrorf("a summary can only be promoted by a person at a terminal: run kb document review promote %d from an interactive shell (standard input and output must be a terminal)", sectionID)
+	}
 	if err := kb.PromoteDocumentSummary(sectionID); err != nil {
 		return err
 	}

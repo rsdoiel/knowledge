@@ -3,9 +3,25 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.19 — unreleased
+
+Foundations for the TUI write flows, from the design brief
+`agents/projects/knowledge/design/tui-keys-and-write-flows-design.md` and knowledge DR-0064 to DR-0070
+(accepted 2026-10-09). Written and tested red first.
+
+### Changed
+
+- **`kb document review promote` needs a person at a terminal** (DR-0070, extending DR-0061). It exits 2,
+  writing nothing, unless standard input and standard output are both terminals, with a message that a person
+  must promote it. No flag or environment variable turns that off, and `draft`, `review list` and every other
+  document verb need no terminal, so a model or script can draft a summary but cannot make it trusted. The
+  library is unchanged: `PromoteDocumentSummary` has no terminal rule, and harvey's `LearnSession.Accept` is
+  unaffected. Scripts that promote without a person at the keyboard must hand that step over. `kb document`
+  gains an EXIT STATUS section.
+
 ## v0.0.18 — 2026-10-09
 
-Review then decide. The decisions are knowledge DR-0060 and DR-0061 (accepted) and DR-0063 (proposed, for the author to promote), from the design brief `agents/projects/knowledge/design/scoped-refs-and-tui-parity-design.md`. Everything was written and tested red first. The race detector has not been run on this release yet.
+Review then decide. The decisions are knowledge DR-0060 and DR-0061 (accepted) and DR-0063 (proposed, for the author to promote), from the design brief `agents/projects/knowledge/design/scoped-refs-and-tui-parity-design.md`. Everything was written and tested red first. The release shipped before the race detector was run; it was run afterwards, on darwin/arm64 (Go 1.26.5) at the release commit `258600d`, and both packages pass (the Linux-only pseudo-terminal tests skip there).
 
 ### Changed
 

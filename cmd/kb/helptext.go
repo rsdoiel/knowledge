@@ -367,7 +367,12 @@ review promote
 : promote a drafted summary to reviewed -- the only human action that
   makes a summary trusted. Only a reviewed summary is indexed for search
   or returned as content by a concept-tag query; a section's raw body is
-  never indexed at all, only its reviewed summary
+  never indexed at all, only its reviewed summary. It requires an
+  interactive terminal on standard input and output (exit 2 without one,
+  nothing written, no way to turn that off; see EXIT STATUS), so a model
+  that drafted a summary cannot also make it trusted. The library call
+  PromoteDocumentSummary has no such rule: a program that links the
+  package, harvey for one, enforces its own
 
 tag
 : a pure file operation over every already-ingested document in --project:
@@ -451,6 +456,17 @@ so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions
 summary_status
 : unsummarized, drafted, reviewed -- promotion is a one-way, human-only
   action for a first pass; no path un-reviews a promoted summary yet
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1): 0 success; 1 the
+command ran and the answer is no (no such document or section, a section that is
+not drafted so there is nothing to promote); 2 the command line is wrong. Setting
+a summary to reviewed is a person's act: review promote exits 2, and writes
+nothing, unless standard input and standard output are both a terminal, with a
+message that a person must promote it. No flag or environment variable turns that
+off. draft, review list and every other verb here need no terminal, so a model or
+a script can draft but not make a summary trusted.
 
 # SEE ALSO
 
