@@ -94,7 +94,12 @@ set-status
   A move outside the table, including setting the status a record already has,
   is refused (exit 1) with the allowed moves named, and nothing is written. A
   record whose status is outside the vocabulary can be set to proposed and
-  nothing else, so it reaches accepted in two moves
+  nothing else, so it reaches accepted in two moves.
+  Setting a record to accepted is for a person: standard input and standard
+  output must both be a terminal, or the command exits 2 with a message saying
+  so and writes nothing. No flag or environment variable turns that off, and
+  every other move works without a terminal, so a script can propose, reject,
+  cancel and supersede but not accept
 
 supersede
 : write both sides of a supersession — supersedes on NEW, superseded_by on
@@ -162,7 +167,8 @@ model may write a record, but only the author accepts one.
 
 The workspace convention, as described in kb(1). A scope that is neither a
 project nor the workspace is 1, and so is a set-status move the transition
-table does not allow; a malformed reference, a bare id that is
+table does not allow; set-status accepted without a terminal on standard input
+and output is 2; a malformed reference, a bare id that is
 ambiguous, a change (set-status, supersede, delete) given a bare id with no
 scope, and record new with no scope anywhere are 2. For record fuzzy-tag:
 0 the report was produced, or the tags were written, including "nothing found";

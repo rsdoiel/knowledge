@@ -697,6 +697,13 @@ func recordSetStatus(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 	if err := checkRecordVocabulary(kb, "status", "statuses", status, knowledge.RecordStatuses); err != nil {
 		return wrapUsage(err)
 	}
+	// Accepting a record is the author's act (DR-0061): it needs a person at a
+	// terminal, and nothing on the command line or in the environment turns that
+	// off. The check comes before anything is read or written, and it is a usage
+	// error because the command as run cannot do what it asks.
+	if status == "accepted" && !atTerminal(out) {
+		return usageErrorf("a record can only be accepted by a person at a terminal: run kb record set-status %s accepted from an interactive shell (standard input and output must be a terminal)", id)
+	}
 	rec, err := resolveRecordForWrite(kb, id, f)
 	if err != nil {
 		return err

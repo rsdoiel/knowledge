@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"testing"
 )
@@ -13,5 +14,8 @@ func TestMain(m *testing.M) {
 	os.Setenv("KB_CEILING_DIRECTORIES", os.TempDir())
 	os.Unsetenv("KB_DB")
 	os.Unsetenv("KB_QUIET")
+	// Tests drive the commands with buffers, so by default stand in for a person
+	// at a terminal (DR-0061). The tests of the rule itself turn this off.
+	atTerminal = func(io.Writer) bool { return true }
 	os.Exit(m.Run())
 }

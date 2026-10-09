@@ -20,6 +20,15 @@ Review then decide, in progress. Decisions: knowledge DR-0060 and DR-0061 (accep
   have been accepted. `rejected` is considered and not pursued. `DECISION_RECORD_FORMAT.md` and `kb-record(1)`
   carry the wording.
 
+- **`accepted` needs a person at a terminal** (DR-0061). `kb record set-status REF accepted` exits 2 with a
+  message that a person must accept it unless standard input and standard output are both terminals, and writes
+  nothing. There is no flag or environment variable to turn it off; every other move works without a terminal.
+  A script that promoted records must hand that step to the author. This guards the accidental path (a model or
+  script following instructions), not a determined one: a process can allocate a pseudo-terminal, and a file can
+  be edited by hand. The terminal test asks the driver, not the file mode, so `< /dev/null` does not count.
+  `github.com/charmbracelet/x/term` and `golang.org/x/sys` are now direct dependencies; both were already built
+  into `kb` through bubbletea.
+
 ### Added
 
 - Library: `AllowedTransitions` and `CanTransition`, so the CLI, the review prompt and the TUI read one table.
