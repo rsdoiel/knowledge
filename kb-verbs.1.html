@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-verbs — print the verb table: every verb, subverb, flag and what
+it does to the database</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb verbs</p>
+<p>kb -json verbs</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Prints the one table that describes kb’s command language, so a
+person, a script or a model has a single place to ask what exists.
+Completion, the subverb help flags and the interactive interface read
+the same table, so they cannot disagree with it.</p>
+<p>Plain text lists a row per verb and per subverb with its write class.
+With the global -json option it prints a document with a “verbs” array.
+Each verb has “name”, “summary” and “tui” (whether the interactive
+interface offers it); a verb with no subverbs has a “class”, and one
+with subverbs lists them, each with its own “class” and “tui”, and a
+subverb’s own subverbs (document review has list and promote). “flags”
+lists the flags the verb accepts, subverbs included.</p>
+<p>The classes say what a verb does to the knowledge base:</p>
+<dl>
+<dt>read</dt>
+<dd>
+reads only
+</dd>
+<dt>additive</dt>
+<dd>
+adds knowledge
+</dd>
+<dt>changing</dt>
+<dd>
+changes something that exists
+</dd>
+<dt>removing</dt>
+<dd>
+removes knowledge, or links other records rely on
+</dd>
+<dt>direct</dt>
+<dd>
+writes files or an index and is run without asking, such as index and
+record fmt
+</dd>
+<dt>plan_apply</dt>
+<dd>
+has a –dry-run plan, then applies it
+</dd>
+<dt>guided</dt>
+<dd>
+a multi-step workflow with a person in it, such as document ingest and
+review promote
+</dd>
+<dt>cli_only</dt>
+<dd>
+not offered in the interactive interface (merge, import, init, export,
+completion, verbs)
+</dd>
+</dl>
+<p>The verb opens no database, so it works anywhere and –db does not
+apply to it. kb -json verbs, not kb verbs -json: the global options go
+before the verb.</p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1): 0 success; 2 an
+unknown flag or a surplus argument, or -db, which does not apply to this
+verb.</p>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1), kb-completion(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

@@ -45,18 +45,60 @@ documents/document_sections schema ingests narratives and articles
 document-level gist plus per-section summaries, each going through an
 explicit human review step before being trusted as searchable
 content.</p>
+<h2 id="the-interactive-interface">The interactive interface</h2>
+<p><code>kb</code> with no verb, on a terminal, opens a menu with one
+row per verb group, so using it teaches the command line:</p>
+<pre><code>┌ kb — knowledge ────────────────────────────────────────────────────────────┐
+│ ~/Laboratory   agents/knowledge.db   119 records · 23 projects             │
+│                                                                            │
+│ &gt; Projects         browse projects, their notes, concepts, records         │
+│   Records          decision records: browse, pending, …                    │
+│   Observations     notes, findings, decisions, questions         (v0.0.20) │
+│   …                                                                        │
+├────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ j/k move   Enter open   / search   q quit                              │
+└────────────────────────────────────────────────────────────────────────────┘</code></pre>
+<p>Rows that are not built yet are dimmed with the release that brings
+them, and choosing one prints the command that does the same. A project
+opens to its observations, concepts and records as tabs (<code>o</code>,
+<code>c</code>, <code>r</code>); Records → Browse and Pending list
+records in the scope <code>kb record list</code> would use, and
+<code>a</code> widens it. <code>q</code> goes back one screen (and quits
+at the top menu), <code>Esc</code> cancels only something in progress
+and never closes a screen, <code>Ctrl-C</code> quits from anywhere, and
+a line at the bottom of every screen lists the keys that apply. While
+you type in the search prompt every key is text, <code>q</code>
+included.</p>
+<p>A complete command line always runs and prints, on a terminal or not.
+Only an incomplete one opens the interface, and only on a terminal: bare
+<code>kb</code>, a bare group (<code>kb record</code>), and
+<code>kb record show</code> or <code>kb project show</code> with no
+argument. <code>kb -i record pending</code> (also
+<code>-i record list</code>, <code>-i record show REF</code>,
+<code>-i project list</code>, <code>-i search TERM</code>) opens the
+interface at that command. <code>kb verbs</code> prints the table every
+menu, completion script and help flag is built from;
+<code>kb -json verbs</code> gives it to a script or a model.</p>
 <h2 id="deciding-on-a-record">Deciding on a record</h2>
 <p>A decision record is written <code>proposed</code> and a person
-decides it. <code>kb</code> enforces that from v0.0.18:</p>
+decides it. <code>kb</code> enforces that: accepting needs a
+terminal.</p>
 <pre class="shell"><code>kb record pending harvey              # what is waiting for a decision
 kb record set-status harvey/DR-0004   # shows the record, offers the moves, asks before it writes</code></pre>
-<p><code>set-status</code> with no status needs a terminal. It shows the
-record through <code>$KB_PAGER</code> (else
-<code>bat -l markdown</code>, else <code>less -R</code>), then prompts
-with the moves the record’s current status allows, for example
-<code>harvey/DR-0004 is proposed -&gt; [a]ccepted [r]ejected [c]ancelled [q]uit</code>,
-and asks <code>[y/N]</code> before writing. <code>q</code>, an empty or
-negative answer, or end of input changes nothing and exits 1.</p>
+<p>In the interface, <code>Enter</code> on a record reads it and
+<code>s</code> sets its status; both show the record file in your pager
+(<code>$KB_PAGER</code>, else <code>bat -l markdown</code>, else
+<code>less -R</code>) with the interface suspended, or in a built-in
+viewer when there is none. From the command line,
+<code>set-status</code> with no status needs a terminal and does the
+same: it shows the record, prompts with the moves the record’s current
+status allows
+(<code>harvey/DR-0004 is proposed -&gt; [a]ccepted [r]ejected [c]ancelled [q]uit</code>),
+and writes nothing until you press <code>y</code>. A status is one key,
+with no Enter. <code>Esc</code>, <code>q</code> or <code>Ctrl-C</code>
+backs out at either step, as does <code>n</code> at the confirmation;
+<code>Enter</code> does nothing, so a habitual Enter is never consent.
+Backing out changes nothing and exits 1.</p>
 <p>The moves are a table: <code>proposed</code> to
 <code>accepted</code>, <code>rejected</code>, <code>cancelled</code> or
 <code>superseded</code>; <code>accepted</code> to <code>cancelled</code>
@@ -70,62 +112,79 @@ explored and then abandoned. Scripts use the direct form,
 table. <code>kb record set-status REF accepted</code> exits 2 unless
 standard input and output are a terminal, and nothing turns that off, so
 a script or a model can propose, reject, cancel and supersede but not
-accept. See <a href="kb-record.1.html">kb-record(1)</a>.</p>
+accept. The same holds for
+<code>kb document review promote SECTION_ID</code>, which makes a
+document summary trusted and searchable. <code>kb ingest</code> reports
+a status that arrives through a file edit, so that route is visible too.
+See <a href="kb-record.1.html">kb-record(1)</a>.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.18</li>
+<li>version: 0.0.19</li>
 <li>status: active</li>
 <li>released: 2026-10-09</li>
 </ul>
-<p>Accepting a record is now the author’s act, and the tool enforces it.
-The decisions are DR-0060 (set-status reviews the record, then asks),
-DR-0061 (accepting needs a terminal) and DR-0063 (cancelled covers
-explored work), all from the review-then-decide design. Everything was
-written and tested red first, including the built binary on a
-pseudo-terminal and with redirected streams.</p>
-<p><code>kb record set-status</code> follows a table of allowed moves. A
-record that is <code>proposed</code> may become <code>accepted</code>,
-<code>rejected</code>, <code>cancelled</code> or
-<code>superseded</code>; <code>accepted</code> may become
-<code>cancelled</code> or <code>superseded</code>; <code>rejected</code>
-and <code>cancelled</code> may go back to <code>proposed</code>;
-<code>superseded</code> is final, and needs <code>superseded_by</code>
-already set (use <code>kb record supersede</code>). A move outside the
-table, or setting the status a record already has, exits 1 and names the
-moves it may make; nothing is written. A record whose status is outside
-the vocabulary can only become <code>proposed</code>.
-<code>cancelled</code> now means pursued or explored and then abandoned,
-and need not have been accepted; <code>rejected</code> means considered
-and not pursued.</p>
-<p><code>kb record set-status REF accepted</code> exits 2 unless
-standard input and standard output are both a terminal, with a message
-that a person must accept it. No flag or environment variable turns that
-off, and every other move works without a terminal, so a script can
-propose, reject, cancel and supersede but not accept. The test asks the
-terminal driver, so <code>&lt; /dev/null</code> does not count. It
-guards the accidental path, not a determined one: a process can allocate
-a pseudo-terminal, and a record file can be edited by hand.</p>
-<p><code>kb record set-status REF</code> with no status is a review for
-a person at a terminal. It shows the record through
-<code>$KB_PAGER</code> (else <code>bat -l markdown</code>, else
-<code>less -R</code>, else prints it), prompts with the current status
-and the moves allowed
-(<code>harvey/DR-0004 is proposed -&gt; [a]ccepted [r]ejected [c]ancelled [q]uit</code>),
-and asks <code>[y/N]</code> before it writes. <code>q</code>, an empty
-or negative answer, or end of input leaves the record unchanged and
-exits 1. <code>KB_PAGER</code> is new. The library exports
-<code>AllowedTransitions</code> and <code>CanTransition</code>, so
-harvey and the TUI read the same table.</p>
-<p>Upgrading: a script that ran <code>set-status ... accepted</code>
-must hand that step to the author, and one that relied on arbitrary
-moves (for example <code>accepted</code> to <code>rejected</code>; use
-<code>cancelled</code>) now gets exit 1. Skills that tell a model to
-promote a record need updating; the ones in the Laboratory do not any
-longer. <code>github.com/charmbracelet/x/term</code> and
-<code>golang.org/x/sys</code> are direct requirements, both already
-built into kb through bubbletea. The generated <code>kb-*.1.md</code>
-pages are now checked against their help text, so an edit made only to a
-page fails the tests.</p>
+<p>The terminal interface can now change something, and <code>kb</code>
+describes its own command language in one table. The decisions are
+DR-0059 (one verb table, in part), DR-0064 to DR-0067 (keys, a shared
+chooser, the menu tree, and which writes get which gate), DR-0068
+(ingest) and DR-0069 and DR-0070 (documents and promotion), from the
+design brief <code>tui-keys-and-write-flows-design.md</code>. Everything
+was written and tested red first, including the built binary on a
+pseudo-terminal with real bytes. The race detector passed on
+darwin/arm64 at the last code commit, and the interface was tried by
+hand in a real terminal on Linux.</p>
+<p>Bare <code>kb</code>, on a terminal, opens a menu with one row per
+verb group (Projects, Records, Observations, Concepts, Sources,
+Documents, Search, Ingest, Index, Check), under a header naming the
+workspace, its database and what it holds. A group opens its own menu;
+rows that are not built yet are dimmed with the release that brings
+them, and choosing one shows the command-line equivalent. A project’s
+observations, concepts and records are tabs with counts (<code>o</code>,
+<code>c</code>, <code>r</code>). Records Browse and Pending list records
+in the scope <code>kb record list</code> would use, one line each with
+its qualified reference, and <code>a</code> widens the scope. On a
+record, <code>Enter</code> reads it and <code>s</code> sets its status:
+the record file is shown in your pager (<code>$KB_PAGER</code>, else
+<code>bat</code>, else <code>less -R</code>) with the interface
+suspended, or in a built-in viewer when there is none, then each status
+is one key, <code>y</code> confirms, and <code>Esc</code> or
+<code>q</code> backs out at either step with nothing written. The write
+is the same function <code>kb record set-status</code> uses, and the
+screen shows the equivalent command.</p>
+<p>The keys follow clasm’s. <code>q</code> goes back one screen and
+quits only at the top menu, <code>Esc</code> cancels something in
+progress and never closes a screen, <code>Ctrl-C</code> quits from
+anywhere, and a legend line on every screen lists the keys that apply.
+While you type in the search prompt every key is text, so a term that
+starts with <code>q</code> works. A complete command line always runs
+and prints, on a terminal or not; only an incomplete one opens the
+interface, and only on a terminal (bare <code>kb</code>, a bare group
+such as <code>kb record</code>, <code>kb record show</code> or
+<code>kb project show</code> with no argument). The new global option
+<code>-i</code> opens the interface at a command:
+<code>kb -i record pending</code>, <code>kb -i record show REF</code>,
+<code>kb -i search TERM</code>.</p>
+<p><code>kb verbs</code> (and <code>kb -json verbs</code>) prints the
+verb table: every verb, subverb and flag, with what it does to the
+database. <code>kb record set-status REF</code> with no status is now a
+review that takes single keys, with no Enter, and <code>Enter</code> on
+the confirmation does nothing. <code>kb document review promote</code>
+needs a person at a terminal, as <code>accepted</code> does: a model can
+draft a summary but cannot make it trusted. <code>kb ingest</code>
+reports a status that arrives through a file, such as
+<code>clasm/DR-0012 proposed -&gt; accepted (edited in file)</code> or a
+record first ingested already accepted; it is a report, not a block.</p>
+<p>Upgrading: the interface’s keys changed (<code>q</code> goes back
+instead of quitting, <code>Esc</code> no longer leaves a screen), and a
+script that promoted summaries without a person at the keyboard must
+hand that step over. Bare <code>kb</code> with no terminal is now a
+usage error (exit 2) and no longer tries to start a terminal program,
+and opening the interface no longer creates a database where there is no
+workspace. <code>lipgloss</code> is a direct dependency; it was already
+built into <code>kb</code> through bubbles. Skills that tell a model to
+run <code>set-status ... accepted</code> or
+<code>document review promote</code> need
+<code>kb &gt;= 0.0.19</code>.</p>
 <h3 id="authors">Authors</h3>
 <ul>
 <li>Doiel, R. S.</li>

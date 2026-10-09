@@ -120,24 +120,30 @@ tree</td>
 Fountain, text) at graduated abstraction levels</td>
 </tr>
 <tr class="even">
+<td><code>verbs</code></td>
+<td><a href="kb-verbs.1.html">kb-verbs(1)</a></td>
+<td>print the verb table — every verb, subverb, flag and what it does to
+the database; <code>kb -json verbs</code> for models and scripts</td>
+</tr>
+<tr class="odd">
 <td><code>merge</code></td>
 <td><a href="kb-merge.1.html">kb-merge(1)</a></td>
 <td>reconcile two <code>knowledge.db</code> files that drifted
 independently (e.g. across machines)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>export</code></td>
 <td><a href="kb-export.1.html">kb-export(1)</a></td>
 <td>write a portable JSON-L snapshot — the no-file-access alternative to
 <code>merge</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>import</code></td>
 <td><a href="kb-import.1.html">kb-import(1)</a></td>
 <td>apply a JSON-L snapshot (from <code>export</code>) to the
 database</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>topics</code></td>
 <td><a href="kb-topics.1.html">kb-topics(1)</a></td>
 <td>list every help topic, one man page per verb</td>
@@ -190,12 +196,40 @@ arguments, <code>kb record pending</code> lists what is waiting for a
 decision, and <code>--all</code> widens a project directory to the whole
 workspace. See <a href="kb-record.1.html">kb-record(1)</a>.</p>
 <h3 id="interactive-tui">Interactive TUI</h3>
-<p>Bare <code>kb</code> (no verb) launches a read-mostly browser:
-project list → Enter drills into observations →
-<code>c</code>/<code>o</code> toggles to/from concepts → <code>/</code>
-opens a search prompt from any view → <code>esc</code> backs out,
-<code>q</code> quits. See <a href="kb.1.html">kb(1)</a> for the full
-description.</p>
+<p>Bare <code>kb</code> on a terminal opens a menu with one entry per
+verb group (Projects, Records, Observations, Concepts, Sources,
+Documents, Search, Ingest, Index, Check), so using it teaches the
+command line. A header names the workspace and what it holds. Rows that
+are not built yet are dimmed with the release that brings them, and
+choosing one prints the command that does the same. Projects → Browse
+opens a project’s observations, concepts and records as tabs
+(<code>o</code>, <code>c</code>, <code>r</code>); Records → Browse and
+Pending list records in the scope <code>kb record list</code> would use,
+and <code>a</code> widens it. <code>q</code> goes back one screen (and
+quits at the top menu), <code>Esc</code> cancels only something in
+progress and never closes a screen, <code>Ctrl-C</code> quits from
+anywhere, and a legend line at the bottom of every screen lists the keys
+that apply. Typing in the search prompt takes every key as text,
+<code>q</code> included.</p>
+<p>On a record (the Records screens and a project’s Records tab)
+<code>Enter</code> reads it and <code>s</code> sets its status. Both
+show the record file in your pager (<code>$KB_PAGER</code>, else
+<code>bat</code>, else <code>less -R</code>) with the interface
+suspended, or in a built-in viewer when there is no pager.
+<code>s</code> then offers the moves the record’s status allows, each on
+one key, asks for <code>y</code>, and writes by the same function as
+<code>kb record set-status REF</code>. <code>Esc</code> or
+<code>q</code> backs out at either step with nothing written. When it
+writes, the screen shows the equivalent command line.</p>
+<p>A complete command line always runs and prints, on a terminal or not.
+Only an incomplete one opens the interface, and only on a terminal: bare
+<code>kb</code>, a bare group such as <code>kb record</code>, and
+<code>kb record show</code> or <code>kb project show</code> with no
+argument. <code>kb -i record pending</code> (or
+<code>-i record list</code>, <code>-i record show REF</code>,
+<code>-i project list</code>, <code>-i search TERM</code>) opens the
+interface at that command. See <a href="kb.1.html">kb(1)</a> for the
+full description.</p>
 <hr />
 <h2 id="background-design">Background &amp; Design</h2>
 <p>These documents record why <code>kb</code> is shaped the way it is —

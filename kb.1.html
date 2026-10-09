@@ -32,10 +32,8 @@ narrative documents, with full-text search and a cross-machine merge
 tool. Every verb follows the “TOOL VERB PARAMETERS” model (the same
 shape as git and go), so scripts and other language-model harnesses can
 drive it directly, not just people at a terminal.</p>
-<p>Run with no verb at all to launch the interactive browser (TUI)
-instead — a read-only view over the same data, for exploring projects,
-observations, and concepts, and running searches, without leaving the
-terminal.</p>
+<p>Run with no verb at all, on a terminal, to open the interactive
+interface instead; see INTERACTIVE INTERFACE below.</p>
 <h1 id="standard-options">STANDARD OPTIONS</h1>
 <p>Each is accepted in either dash form: -help and –help are the same
 option. All three are answered and exited immediately, without opening
@@ -73,6 +71,15 @@ every verb. Errors always go to stderr, never stdout, in both modes —
 scripts consuming JSON output can rely on stdout staying valid JSON even
 when a call fails.
 </dd>
+<dt>-i</dt>
+<dd>
+open the interface at this command instead of running it. kb -i record
+pending opens the Pending screen, kb -i record show harvey/DR-0004 opens
+the Records screen with the cursor on that record, and kb -i alone opens
+the top menu. It needs a terminal on standard input and output and
+cannot be combined with -json. A command with no screen yet is a usage
+error that says so; it is not run instead. See INTERACTIVE INTERFACE
+</dd>
 </dl>
 <p>A global option must precede the verb. Parsing stops at the first
 non-option argument, which is what lets a verb’s own flags through
@@ -88,6 +95,49 @@ Applies to every verb and the TUI. Omitting –debug costs nothing — no
 file is written and behavior is unchanged.
 </dd>
 </dl>
+<h1 id="interactive-interface">INTERACTIVE INTERFACE</h1>
+<p>Bare kb, on a terminal, opens a menu with one entry per verb group
+(Projects, Records, Observations, Concepts, Sources, Documents, Search,
+Ingest, Index, Check), so choosing from it teaches the command line. A
+header names the workspace directory, its database and what it holds,
+because a machine can have more than one workspace. A group opens its
+own menu of the things that need no selection; rows that are not built
+yet are dimmed with the release that brings them, and choosing one
+prints the command that does the same. Projects: Browse shows the
+projects, and opening a project shows its observations, concepts and
+records as tabs with their counts. Records: Browse (newest first) and
+Pending (oldest first) show one line a record, in the scope kb record
+list would use, and a widens it to every scope. Search asks for a
+term.</p>
+<p>Keys: the arrow keys or j and k move; Enter opens; / searches; o, c
+and r switch a project’s tabs. q goes back to the screen above (the
+project list to the Projects menu, a group menu to the top menu) and
+quits at the top menu. Esc cancels something in progress, such as a
+search being typed, and does nothing otherwise, so it never closes a
+screen. Ctrl-C quits from anywhere. A line at the bottom of every screen
+lists the keys that apply. While you type in the search prompt every key
+is text, q included, so a term that starts with q works; Esc leaves the
+prompt, and q is a command again afterwards.</p>
+<p>On a record, on the Records screens and on a project’s Records tab,
+Enter reads it and s sets its status. Both show the record file in the
+pager ($KB_PAGER, else bat, else less -R), with the interface suspended
+while it runs and restored when it ends; with no pager the record is
+shown in a built-in viewer instead (the arrows or j and k scroll, space
+pages, q finishes). s then offers the moves the record’s status allows,
+each on one key, and asks for y before it writes, exactly as kb record
+set-status REF does, and by the same function. Esc, q and Ctrl-C back
+out at either step with nothing written. When it writes, the screen says
+what was done and shows the command that does the same, so the interface
+teaches the command line; a move the record’s file now refuses is
+reported and writes nothing. A record that is superseded has no move to
+make and says so before anything is shown. Accepting is allowed here,
+since the interface is a terminal.</p>
+<p>A complete command always runs as a command and prints, on a terminal
+or not, so scripts can rely on it. Only an incomplete one opens the
+interface, and only on a terminal: bare kb, a bare group (kb record
+opens the Records menu), and kb record show or kb project show with no
+argument. Without a terminal those are usage errors, exit 2. -i opens
+the interface at a command that has a screen; see GLOBAL OPTIONS.</p>
 <h1 id="workspace-and-environment">WORKSPACE AND ENVIRONMENT</h1>
 <p>A workspace is a directory with an agents/ directory holding
 knowledge.db, the working copy, or knowledge.jsonl, the export that is
@@ -215,6 +265,11 @@ create a new, empty workspace — see kb-init(1)
 <dd>
 write a shell completion script for bash or PowerShell, or install it —
 see kb-completion(1)
+</dd>
+<dt>verbs</dt>
+<dd>
+print the verb table: every verb, subverb, flag and write class, as text
+or with -json — see kb-verbs(1)
 </dd>
 </dl>
 <h1 id="arguments">ARGUMENTS</h1>

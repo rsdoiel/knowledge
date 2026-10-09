@@ -57,6 +57,22 @@ avoid.</p>
 database and is reported, never deleted — pruning would destroy data on
 a partial or wrong-directory run. Ingest never writes to a record file;
 only record does.</p>
+<p>Ingest is how a status written in a record file reaches the database,
+without the transition table or the terminal rule that kb record
+set-status applies: the file is the source of truth, so a status edited
+by hand is stored as it stands. The summary reports it, so the bypass is
+visible and never silent. A line “status: clasm/DR-0012 proposed -&gt;
+accepted (edited in file)” means the stored status differed from the
+file’s; “status: clasm/DR-0013 arrived accepted” means a record was
+first ingested already accepted. It is a report and not a failure, the
+status is applied, and a move that set-status would refuse is reported
+like any other. The text lists the first 20 (a whole tree ingested into
+an empty database arrives every accepted record at once) and says how
+many it left out; -json kb ingest lists them all in “status_changes”,
+each with “ref”, “from”, “to” and “kind” (“edited” or “arrived”).
+–dry-run reports the same lines and writes nothing. A status written by
+set-status is in the file and the database together, so the next ingest
+does not report it.</p>
 <p>Every [<a href="#name">Name</a>] found in a record’s body, and every
 entry in its frontmatter tags list, is resolved to a concept and linked
 to the record (kb record concepts shows the result). A name that does
