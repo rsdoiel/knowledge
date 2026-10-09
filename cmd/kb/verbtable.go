@@ -352,11 +352,17 @@ func topMenu() []menuItem {
 		it := menuItem{Verb: v.Name, Label: v.Menu.Label, Desc: v.Menu.Desc, Built: v.Menu.Built,
 			Since: v.Menu.Since, Equivalent: v.Menu.Equivalent, Group: len(v.Subverbs) > 0}
 		if it.Group {
+			// A group is built when any leaf is; when none is, it names the release
+			// of its first leaf, so a dimmed group row says when it arrives.
 			it.Built = false
-			for _, l := range groupMenu(v.Name) {
+			leaves := groupMenu(v.Name)
+			for _, l := range leaves {
 				if l.Built {
 					it.Built = true
 				}
+			}
+			if !it.Built && len(leaves) > 0 {
+				it.Since = leaves[0].Since
 			}
 		}
 		order[v.Name] = v.Menu.Order

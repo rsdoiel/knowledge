@@ -35,7 +35,7 @@ func newTestTUIModelWithDebugLog(t *testing.T, dl *DebugLog) *tuiModel {
 		t.Fatalf("LinkProjectConcept: %v", err)
 	}
 
-	m, err := newTUIModel(kb, dl)
+	m, err := newTUIModelAt(kb, dl, tuiStart{state: viewProjects})
 	if err != nil {
 		t.Fatalf("newTUIModel: %v", err)
 	}
@@ -117,11 +117,12 @@ func TestTUIModel_QNavigatesBackToProjects(t *testing.T) {
 	}
 }
 
-func TestTUIModel_QQuitsFromProjectList(t *testing.T) {
+func TestTUIModel_QFromTheProjectListGoesToTheProjectsMenu(t *testing.T) {
 	m := newTestTUIModel(t)
-	_, cmd := m.Update(runeKey("q"))
-	if cmd == nil {
-		t.Fatal("expected a quit command from 'q', got nil")
+	updated, cmd := m.Update(runeKey("q"))
+	m = updated.(*tuiModel)
+	if m.state != viewGroup || m.group != "project" || isQuit(cmd) {
+		t.Errorf("q gave state %s group %q, quit %v; want the Projects menu", viewStateNames[m.state], m.group, isQuit(cmd))
 	}
 }
 

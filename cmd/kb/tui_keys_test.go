@@ -72,11 +72,18 @@ func TestTUIKeys_QGoesBackFromEverySubScreen(t *testing.T) {
 	}
 }
 
-// q at the top quits.
-func TestTUIKeys_QQuitsAtTheTop(t *testing.T) {
+// q walks up the tree one level at a time and quits only at the top menu.
+func TestTUIKeys_QWalksUpToTheTopMenuAndQuitsThere(t *testing.T) {
 	m := browserAt(t, viewProjects)
+	for _, want := range []viewState{viewGroup, viewMenu} {
+		var cmd tea.Cmd
+		m, cmd = press(t, m, ch('q'))
+		if m.state != want || isQuit(cmd) {
+			t.Fatalf("q gave %s (quit %v), want %s", viewStateNames[m.state], isQuit(cmd), viewStateNames[want])
+		}
+	}
 	if _, cmd := press(t, m, ch('q')); !isQuit(cmd) {
-		t.Error("q at the project list did not quit")
+		t.Error("q at the top menu did not quit")
 	}
 }
 
@@ -174,11 +181,7 @@ func TestTUIKeys_CommandLettersAreTextInTheSearchPrompt(t *testing.T) {
 			t.Fatalf("%s: Esc gave searching %v, state %s, quit %v; want the mode ended and nothing else", viewStateNames[state], m.searching, viewStateNames[m.state], isQuit(cmd))
 		}
 		m, cmd = press(t, m, ch('q'))
-		if state == viewProjects {
-			if !isQuit(cmd) {
-				t.Errorf("projects: q after the prompt should quit")
-			}
-		} else if isQuit(cmd) || m.state == state {
+		if isQuit(cmd) || m.state == state {
 			t.Errorf("%s: q after the prompt should go back (state %s, quit %v)", viewStateNames[state], viewStateNames[m.state], isQuit(cmd))
 		}
 	}
@@ -197,7 +200,7 @@ func TestTUIKeys_ASearchTermStartingWithQIsSearched(t *testing.T) {
 
 func TestTUIKeys_EveryScreenShowsItsKeys(t *testing.T) {
 	for state, want := range map[viewState][]string{
-		viewProjects:     {"Enter open", "/ search", "q quit"},
+		viewProjects:     {"Enter open", "/ search", "q back"},
 		viewObservations: {"c concepts", "r records", "/ search", "q back"},
 		viewConcepts:     {"o observations", "r records", "/ search", "q back"},
 		viewRecords:      {"o observations", "c concepts", "/ search", "q back"},
@@ -284,16 +287,30 @@ func TestTUIKeys_TheLegendFitsInTheWindow(t *testing.T) {
 	}
 	m := browserAt(t, viewRecords)
 	m, _ = press(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	if got := m.recordList.Height(); got != 29 {
-		t.Errorf("the records list is %d lines after a resize to 30, want 29: it was missing from the resize", got)
+	if got := m.recordList.Height(); got != 26 {
+		t.Errorf("the records list is %d lines after a resize to 30, want 26 (the frame takes four): it was missing from the resize", got)
 	}
 }
 
 // ─── the real binary on a terminal ───────────────────────────────────────────
 
-// Real bytes through the built kb: a lone Esc must not quit (the list's own keymap
-// quits on it), Enter opens, q goes back, and q at the top quits.
-func TestBinary_TUIEscDoesNothingAndQGoesBack(t *testing.T) {
+// waitForCount waits until text has appeared at least n times on the screen.
+func (sc *ptyScreen) waitForCount(t *testing.T, text string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Count(sc.text(), text) >= n {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("%q never appeared %d times on the terminal; it showed:\n%s", text, n, sc.text())
+}
+
+// Real bytes through the built kb: bare kb opens the top menu; a lone Esc must not
+// quit (the list's own keymap quits on it); Enter opens; q goes up one level at a
+// time; and q at the top menu quits.
+func TestBinary_TUIWalksDownAndUpWithEscDoingNothing(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("pseudo-terminal test is Linux only")
 	}
@@ -319,39 +336,44 @@ func TestBinary_TUIEscDoesNothingAndQGoesBack(t *testing.T) {
 			return false
 		}
 	}
+	alive := func(what string) {
+		t.Helper()
+		time.Sleep(400 * time.Millisecond)
+		if exited() {
+			t.Fatalf("%s quit the program:\n%s", what, screen.text())
+		}
+	}
 
-	screen.waitFor(t, "q quit")
-	master.WriteString("\x1b") // Esc: nothing
-	time.Sleep(400 * time.Millisecond)
-	if exited() {
-		t.Fatalf("a lone Esc quit the program:\n%s", screen.text())
+	screen.waitFor(t, "kb — knowledge") // the top menu
+	for _, want := range []string{"agents/knowledge.db", "q quit", "(v0.0.20)"} {
+		if !strings.Contains(screen.text(), want) {
+			t.Errorf("the top menu lacks %q:\n%s", want, screen.text())
+		}
 	}
-	master.WriteString("\r") // Enter opens the project
-	screen.waitFor(t, "q back")
-	master.WriteString("\x1b") // Esc again: still on the observations
-	time.Sleep(400 * time.Millisecond)
-	if exited() {
-		t.Fatal("Esc quit the program from a sub-screen")
-	}
-	before := strings.Count(screen.text(), "q quit")
-	master.WriteString("q") // back to the projects
-	deadline := time.Now().Add(10 * time.Second)
-	for strings.Count(screen.text(), "q quit") == before && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
-	}
-	if strings.Count(screen.text(), "q quit") == before {
-		t.Fatalf("q did not go back to the projects:\n%s", screen.text())
-	}
-	if exited() {
-		t.Fatal("q quit the program instead of going back")
-	}
-	master.WriteString("q") // at the top: quit
+	master.WriteString("\x1b")
+	alive("a lone Esc on the top menu")
+	master.WriteString("\r") // Projects
+	screen.waitFor(t, "New project…")
+	master.WriteString("\r") // Browse
+	screen.waitFor(t, "1 item")
+	master.WriteString("\r") // the project
+	screen.waitFor(t, "Observations — clasm")
+	master.WriteString("\x1b")
+	alive("Esc on a project")
+	master.WriteString("q") // back to the project list
+	screen.waitForCount(t, "1 item", 2)
+	master.WriteString("q") // back to the Projects menu
+	screen.waitForCount(t, "New project…", 2)
+	master.WriteString("q") // back to the top menu
+	screen.waitForCount(t, "kb — knowledge", 2)
+	alive("walking back up")
+	master.WriteString("q") // quit
 	select {
 	case err := <-done:
 		if code := exitCode(t, err); code != 0 {
-			t.Errorf("exit = %d after q at the top, want 0", code)
+			t.Errorf("exit = %d after q at the top menu, want 0", code)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatalf("q at the top did not quit:\n%s", screen.text())
+		t.Fatalf("q at the top menu did not quit:\n%s", screen.text())
 	}
 }
