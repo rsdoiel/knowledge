@@ -105,6 +105,19 @@ the bottom of every screen lists the keys that apply. While you type in the
 search prompt every key is text, q included, so a term that starts with q works;
 Esc leaves the prompt, and q is a command again afterwards.
 
+On a record, on the Records screens and on a project's Records tab, Enter reads
+it and s sets its status. Both show the record file in the pager ($KB_PAGER, else
+bat, else less -R), with the interface suspended while it runs and restored when
+it ends; with no pager the record is shown in a built-in viewer instead (the
+arrows or j and k scroll, space pages, q finishes). s then offers the moves the
+record's status allows, each on one key, and asks for y before it writes, exactly
+as kb record set-status REF does, and by the same function. Esc, q and Ctrl-C
+back out at either step with nothing written. When it writes, the screen says what
+was done and shows the command that does the same, so the interface teaches the
+command line; a move the record's file now refuses is reported and writes nothing.
+A record that is superseded has no move to make and says so before anything is
+shown. Accepting is allowed here, since the interface is a terminal.
+
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
 a terminal: bare kb, a bare group (kb record opens the Records menu), and

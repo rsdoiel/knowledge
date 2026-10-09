@@ -31,6 +31,20 @@ Foundations for the TUI write flows, from the design brief
 - Table finding: `observation delete` and `project delete` are removing verbs too, beside the five DR-0067
   names; the table classes them so and a test pins the full set.
 
+### Added
+
+- **The first write in the TUI: read a record and set its status** (DR-0066, DR-0065, DR-0067, DR-0061). On
+  the Records screens and a project's Records tab, `Enter` reads the selected record and `s` sets its status.
+  Both show the record file in the pager (`$KB_PAGER`, else `bat`, else `less -R`) with the TUI suspended while
+  it runs (`tea.ExecProcess`); with no pager, or one that cannot start, the record is shown in a built-in
+  scrolling viewer. `s` then runs the T3 chooser and confirmation inside the TUI and writes through
+  `applyRecordStatus`, the function `kb record set-status` uses, so the two cannot disagree. Esc, `q` and
+  `Ctrl-C` back out at either step and write nothing; a move the file now refuses is a notice, checked against
+  the record as it is on disk; a superseded record says it is final before any pager starts. The screen then
+  shows `✓ REF status set to X` and `equivalent:  kb record set-status REF X`. Accepting is allowed because the
+  TUI is a terminal. The list keeps its cursor on the record. Tested at unit level with a pager seam, and on a
+  pseudo-terminal with a pager that waits for a key, showing the terminal is handed over and taken back.
+
 ### Changed
 
 - **The TUI opens at a menu, in a frame, with tabs** (DR-0066 and its 2026-10-09 amendment). Bare `kb` on a

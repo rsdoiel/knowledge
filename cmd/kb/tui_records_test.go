@@ -150,15 +150,9 @@ func TestRecords_SearchFromHereReturnsHere(t *testing.T) {
 	}
 }
 
-func TestRecords_ThereIsNoReadKeyYet(t *testing.T) {
-	// Enter and s arrive with T6; until then the legend does not offer them.
+func TestRecords_TheLegendOffersReadAndStatus(t *testing.T) {
 	v := openRecords(t, recordsModel(t), 0).View()
-	for _, bad := range []string{"Enter read", "s status"} {
-		if strings.Contains(v, bad) {
-			t.Errorf("the legend offers %q, which does nothing yet:\n%s", bad, v)
-		}
-	}
-	for _, want := range []string{"a all scopes", "/ search", "q back"} {
+	for _, want := range []string{"Enter read", "s status", "a all scopes", "/ search", "q back"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the legend lacks %q:\n%s", want, v)
 		}

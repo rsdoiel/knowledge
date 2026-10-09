@@ -9,6 +9,7 @@ import (
 	bkey "github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -27,6 +28,8 @@ const (
 	viewMenu        // the top menu
 	viewGroup       // one group's menu (m.group)
 	viewRecordScope // records in a scope, and the pending ones
+	viewReview      // choosing and confirming a status for the selected record
+	viewText        // a record shown in the built-in viewer, when there is no pager
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -103,14 +106,23 @@ type tuiModel struct {
 	recordList      list.Model
 	searchInput     textinput.Model
 	searching       bool
-	searchFrom      viewState // where a search began, which q from its results returns to
-	group           string    // the group whose menu is shown, in viewGroup
-	menuCursor      int       // the row in the top menu
-	groupCursor     int       // the row in a group menu
-	quitting        bool      // set when the program has been told to quit
-	notice          string    // lines under the screen: a dimmed choice's explanation, or what just happened
-	workspaceDir    string    // the workspace directory, for the header
-	dbRel           string    // the database path inside it
+	searchFrom      viewState    // where a search began, which q from its results returns to
+	group           string       // the group whose menu is shown, in viewGroup
+	menuCursor      int          // the row in the top menu
+	groupCursor     int          // the row in a group menu
+	quitting        bool         // set when the program has been told to quit
+	review          *reviewModel // the status review in progress, in viewReview
+	reviewRec       *knowledge.Record
+	reviewRef       string
+	reviewFrom      string
+	reviewOptions   []string
+	reviewRaw       []byte
+	reviewBack      viewState // the screen the review returns to
+	text            viewport.Model
+	textPurpose     string
+	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
+	workspaceDir    string // the workspace directory, for the header
+	dbRel           string // the database path inside it
 	recordCount     int
 	scopeList       list.Model // the Records screens: records in a scope
 	scopeStatus     string     // "" to browse, "proposed" for the pending ones
@@ -227,6 +239,8 @@ var viewStateNames = map[viewState]string{
 	viewMenu:         "viewMenu",
 	viewGroup:        "viewGroup",
 	viewRecordScope:  "viewRecordScope",
+	viewReview:       "viewReview",
+	viewText:         "viewText",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -267,6 +281,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			l.SetSize(m.cols()-4, m.tabHeight())
 		}
 		return m, nil
+
+	case pagerDoneMsg:
+		return m.handlePagerDone(msg)
 
 	case tea.KeyMsg:
 		// Ctrl-C quits from everywhere, typing and errors included, and writes
@@ -312,6 +329,10 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRecords(msg)
 		case viewRecordScope:
 			return m.updateRecordScope(msg)
+		case viewReview:
+			return m.updateReview(msg)
+		case viewText:
+			return m.updateText(msg)
 		default:
 			return m.updateProjects(msg)
 		}
@@ -589,6 +610,10 @@ func (m *tuiModel) updateRecordScope(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setErr(err)
 		}
 		return m, nil
+	case "enter":
+		return m.showSelected("read")
+	case "s":
+		return m.showSelected("status")
 	}
 	var cmd tea.Cmd
 	m.scopeList, cmd = m.scopeList.Update(msg)
@@ -693,10 +718,14 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// updateRecords handles the records view. No key here writes yet: the first
-// write, set-status from a selected record, arrives with v0.0.19 T6.
+// updateRecords handles a project's Records tab: Enter reads the selected record
+// and s sets its status, as on the Records screen.
 func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "enter":
+		return m.showSelected("read")
+	case "s":
+		return m.showSelected("status")
 	case "q":
 		return m.goTo(viewProjects, nil)
 	case "esc":
@@ -856,8 +885,14 @@ func (m *tuiModel) legend() string {
 		}
 		return move + "   Enter open   / search   q back"
 	case viewRecordScope:
-		return move + "   " + m.scopeKey() + "   / search   q back"
-	case viewObservations, viewConcepts, viewRecords:
+		return move + "   Enter read   s status   " + m.scopeKey() + "   / search   q back"
+	case viewReview:
+		return m.reviewLegend()
+	case viewText:
+		return m.textLegend()
+	case viewRecords:
+		return move + "   Enter read   s status   o c r tabs   / search   q back"
+	case viewObservations, viewConcepts:
 		return move + "   o c r tabs   / search   q back"
 	case viewSearch:
 		return move + "   / search   q back"
@@ -912,6 +947,10 @@ func (m *tuiModel) screen() (string, []string) {
 		return groupTitle(m.group), rows
 	case viewRecordScope:
 		return m.scopeList.Title, viewLines(m.scopeList)
+	case viewReview:
+		return m.reviewScreen()
+	case viewText:
+		return m.textScreen()
 	case viewObservations:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:
