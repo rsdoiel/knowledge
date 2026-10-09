@@ -1,4 +1,4 @@
-%kb-completion(1) user manual | version 0.0.17 09be4ca
+%kb-completion(1) user manual | version 0.0.17 2547ff0
 % R. S. Doiel
 % 2026-10-08
 
