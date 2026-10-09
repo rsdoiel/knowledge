@@ -181,11 +181,12 @@ harnesses write should be a fixable row, not a failed run.
 status
 : proposed, accepted, superseded, rejected, cancelled
 
-  rejected means the decisions were never adopted. superseded means a later
-  record replaced them. cancelled means they were adopted and then the work was
-  abandoned: its reasoning still stands and is where anyone revisiting the
-  question should start, but it is not live. Say why in the record's body, since
-  "the need was met another way" and "deprioritised" tell a later reader
+  rejected means the decisions were considered and not pursued. superseded
+  means a later record replaced them. cancelled means the work was pursued or
+  explored and then abandoned; it need not have been accepted first. Its
+  reasoning still stands and is where anyone revisiting the question should
+  start, but it is not live. Say why in the record's body, since "the need was
+  met another way" and "deprioritised" tell a later reader
   different things; there is no field for it. Use kb record set-status ID
   cancelled, without writing a replacement record.
 
