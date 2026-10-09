@@ -237,8 +237,11 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		for _, l := range []*list.Model{&m.projectList, &m.observationList, &m.conceptList, &m.recordList, &m.searchList, &m.scopeList} {
+		for _, l := range []*list.Model{&m.projectList, &m.searchList, &m.scopeList} {
 			l.SetSize(m.cols()-4, m.listHeight())
+		}
+		for _, l := range []*list.Model{&m.observationList, &m.conceptList, &m.recordList} {
+			l.SetSize(m.cols()-4, m.tabHeight())
 		}
 		return m, nil
 
@@ -330,6 +333,15 @@ func (m *tuiModel) bodyHeight() int {
 
 // listHeight is the height given to a list: the body of the frame.
 func (m *tuiModel) listHeight() int { return m.bodyHeight() }
+
+// tabHeight is the height of a project tab's list: the body less the two lines
+// the tab strip takes.
+func (m *tuiModel) tabHeight() int {
+	if h := m.bodyHeight() - 2; h > 0 {
+		return h
+	}
+	return 0
+}
 
 // capturingText reports whether the TUI is taking text, so a key handler treats
 // q, j, k and the rest as characters (DR-0064, amendment). Today that is the
@@ -569,9 +581,13 @@ func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if item, ok := m.projectList.SelectedItem().(projectItem); ok {
 			p := item.p
 			m.selectedProject = &p
-			if err := m.loadObservations(); err != nil {
-				m.setErr(err)
-				return m, nil
+			// All three tabs are loaded at once, so the counts in the strip are
+			// true before any of them is visited.
+			for _, load := range []func() error{m.loadObservations, m.loadConcepts, m.loadRecords} {
+				if err := load(); err != nil {
+					m.setErr(err)
+					return m, nil
+				}
 			}
 			m.setState(viewObservations)
 		}
@@ -606,9 +622,9 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.startSearch()
 		return m, nil
 	case "c":
-		return m.goTo(viewConcepts, m.loadConcepts)
+		return m.goTo(viewConcepts, nil)
 	case "r":
-		return m.goTo(viewRecords, m.loadRecords)
+		return m.goTo(viewRecords, nil)
 	}
 	var cmd tea.Cmd
 	m.observationList, cmd = m.observationList.Update(msg)
@@ -624,7 +640,7 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		return m.goTo(viewObservations, nil)
 	case "r":
-		return m.goTo(viewRecords, m.loadRecords)
+		return m.goTo(viewRecords, nil)
 	case "/":
 		m.startSearch()
 		return m, nil
@@ -645,7 +661,7 @@ func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		return m.goTo(viewObservations, nil)
 	case "c":
-		return m.goTo(viewConcepts, m.loadConcepts)
+		return m.goTo(viewConcepts, nil)
 	case "/":
 		m.startSearch()
 		return m, nil
@@ -718,7 +734,7 @@ func (m *tuiModel) loadObservations() error {
 	for i, o := range obs {
 		items[i] = observationItem{o}
 	}
-	l := newBrowserList(items, fmt.Sprintf("Observations — %s", m.selectedProject.Name), m.cols()-4, m.listHeight())
+	l := newBrowserList(items, fmt.Sprintf("Observations — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.observationList = l
 	return nil
 }
@@ -740,7 +756,7 @@ func (m *tuiModel) loadRecords() error {
 	for i, r := range records {
 		items[len(records)-1-i] = recordItem{r}
 	}
-	l := newBrowserList(items, fmt.Sprintf("Records — %s", m.selectedProject.Name), m.cols()-4, m.listHeight())
+	l := newBrowserList(items, fmt.Sprintf("Records — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.recordList = l
 	return nil
 }
@@ -757,7 +773,7 @@ func (m *tuiModel) loadConcepts() error {
 	for i, c := range concepts {
 		items[i] = conceptItem{c}
 	}
-	l := newBrowserList(items, fmt.Sprintf("Concepts — %s", m.selectedProject.Name), m.cols()-4, m.listHeight())
+	l := newBrowserList(items, fmt.Sprintf("Concepts — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.conceptList = l
 	return nil
 }
@@ -798,12 +814,8 @@ func (m *tuiModel) legend() string {
 		return move + "   Enter open   / search   q back"
 	case viewRecordScope:
 		return move + "   " + m.scopeKey() + "   / search   q back"
-	case viewObservations:
-		return move + "   c concepts   r records   / search   q back"
-	case viewConcepts:
-		return move + "   o observations   r records   / search   q back"
-	case viewRecords:
-		return move + "   o observations   c concepts   / search   q back"
+	case viewObservations, viewConcepts, viewRecords:
+		return move + "   o c r tabs   / search   q back"
 	case viewSearch:
 		return move + "   / search   q back"
 	}
@@ -858,13 +870,13 @@ func (m *tuiModel) screen() (string, []string) {
 	case viewRecordScope:
 		return m.scopeList.Title, viewLines(m.scopeList)
 	case viewObservations:
-		return m.observationList.Title, viewLines(m.observationList)
+		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:
-		return m.conceptList.Title, viewLines(m.conceptList)
+		return m.projectTitle(), append(m.tabStrip(), viewLines(m.conceptList)...)
+	case viewRecords:
+		return m.projectTitle(), append(m.tabStrip(), viewLines(m.recordList)...)
 	case viewSearch:
 		return m.searchList.Title, viewLines(m.searchList)
-	case viewRecords:
-		return m.recordList.Title, viewLines(m.recordList)
 	}
 	return "Projects", viewLines(m.projectList)
 }
@@ -880,6 +892,42 @@ func (m *tuiModel) header() string {
 		dir = "…" + string(r[len(r)-(room-1):])
 	}
 	return fmt.Sprintf("%s   %s   %s", dir, m.dbRel, counts)
+}
+
+// projectTitle is the frame title of a project's tabs: the project's name.
+func (m *tuiModel) projectTitle() string {
+	if m.selectedProject != nil {
+		return m.selectedProject.Name
+	}
+	return "Project"
+}
+
+// tabStrip is the two lines above a project's list: the three tabs with their
+// counts, and under the active one a rule. o, c and r switch between them.
+func (m *tuiModel) tabStrip() []string {
+	tabs := []struct {
+		label  string
+		active bool
+	}{
+		{fmt.Sprintf("Observations (%d)", len(m.observationList.Items())), m.state == viewObservations},
+		{fmt.Sprintf("Concepts (%d)", len(m.conceptList.Items())), m.state == viewConcepts},
+		{fmt.Sprintf("Records (%d)", len(m.recordList.Items())), m.state == viewRecords},
+	}
+	const sep = "  │  "
+	strip, rule := "  ", "  "
+	for i, t := range tabs {
+		if i > 0 {
+			strip += sep
+			rule += strings.Repeat(" ", lipgloss.Width(sep))
+		}
+		strip += t.label
+		if t.active {
+			rule += strings.Repeat("━", lipgloss.Width(t.label))
+		} else {
+			rule += strings.Repeat(" ", lipgloss.Width(t.label))
+		}
+	}
+	return []string{strip, strings.TrimRight(rule, " ")}
 }
 
 // groupTitle is a group menu's title: its top-menu label.

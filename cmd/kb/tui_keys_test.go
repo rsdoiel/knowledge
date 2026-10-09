@@ -201,9 +201,9 @@ func TestTUIKeys_ASearchTermStartingWithQIsSearched(t *testing.T) {
 func TestTUIKeys_EveryScreenShowsItsKeys(t *testing.T) {
 	for state, want := range map[viewState][]string{
 		viewProjects:     {"Enter open", "/ search", "q back"},
-		viewObservations: {"c concepts", "r records", "/ search", "q back"},
-		viewConcepts:     {"o observations", "r records", "/ search", "q back"},
-		viewRecords:      {"o observations", "c concepts", "/ search", "q back"},
+		viewObservations: {"o c r tabs", "/ search", "q back"},
+		viewConcepts:     {"o c r tabs", "/ search", "q back"},
+		viewRecords:      {"o c r tabs", "/ search", "q back"},
 		viewSearch:       {"/ search", "q back"},
 	} {
 		view := browserAt(t, state).View()
@@ -287,8 +287,8 @@ func TestTUIKeys_TheLegendFitsInTheWindow(t *testing.T) {
 	}
 	m := browserAt(t, viewRecords)
 	m, _ = press(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	if got := m.recordList.Height(); got != 26 {
-		t.Errorf("the records list is %d lines after a resize to 30, want 26 (the frame takes four): it was missing from the resize", got)
+	if got := m.recordList.Height(); got != 24 {
+		t.Errorf("the records list is %d lines after a resize to 30, want 24 (the frame takes four and the tab strip two): it was missing from the resize", got)
 	}
 }
 
@@ -357,7 +357,7 @@ func TestBinary_TUIWalksDownAndUpWithEscDoingNothing(t *testing.T) {
 	master.WriteString("\r") // Browse
 	screen.waitFor(t, "1 item")
 	master.WriteString("\r") // the project
-	screen.waitFor(t, "Observations — clasm")
+	screen.waitFor(t, "Observations (")
 	master.WriteString("\x1b")
 	alive("Esc on a project")
 	master.WriteString("q") // back to the project list
