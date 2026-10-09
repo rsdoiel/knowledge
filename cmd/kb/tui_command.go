@@ -158,7 +158,7 @@ func (m *tuiModel) canOpenCommand() bool {
 	}
 	switch m.state {
 	case viewMenu, viewGroup, viewProjects, viewObservations, viewConcepts,
-		viewRecords, viewRecordScope, viewSearch:
+		viewRecords, viewRecordScope, viewSearch, viewReviewQueue:
 		return true
 	}
 	return false
@@ -293,8 +293,20 @@ func (m *tuiModel) runCommandLine(raw, line string) (tea.Model, tea.Cmd) {
 	case classRemoving:
 		return m.removingFromCommand(args)
 	case classPlanApply, classGuided:
-		if class == classGuided && !(args[0] == "document" && len(args) > 1 && args[1] == "ingest") {
-			return m.refuse("%s has no screen here yet (the document summary workflow is v0.0.21); from the command line: %s", strings.Join(args[:min(len(args), 3)], " "), cmdWords(args))
+		if class == classGuided && args[0] == "document" {
+			switch {
+			case len(args) == 4 && args[1] == "review" && args[2] == "promote":
+				id, err := strconv.ParseInt(args[3], 10, 64)
+				if err != nil {
+					return m.refuse("invalid section id %q", args[3])
+				}
+				return m.openFromCommand(id)
+			case len(args) > 1 && args[1] == "draft":
+				return m.confirmTyped(args, classChanging)
+			case len(args) > 1 && args[1] == "ingest":
+			default:
+				return m.refuse("%s has no screen here; from the command line: %s", strings.Join(args[:min(len(args), 3)], " "), cmdWords(args))
+			}
 		}
 		reportOnly := hasFlag("--dry-run", "dry-run") ||
 			(args[0] == "record" && len(args) > 1 && args[1] == "fuzzy-tag" && !hasFlag("--write", "write")) ||
@@ -322,13 +334,18 @@ func (m *tuiModel) runCommandLine(raw, line string) (tea.Model, tea.Cmd) {
 	if args[0] == "record" && len(args) >= 2 && args[1] == "set-status" && len(args) <= 4 {
 		return m.statusFromCommand(args)
 	}
+	return m.confirmTyped(args, class)
+}
+
+// confirmTyped shows a typed write and asks y before running it exactly as typed.
+func (m *tuiModel) confirmTyped(args []string, class writeClass) (tea.Model, tea.Cmd) {
 	m.beginPlan(&planFlow{
 		title:      cmdWords(args),
 		note:       "this command has not been run yet",
 		text:       classNote(class),
 		equivalent: cmdWords(args),
 		apply:      func() (string, error) { return m.runArgs(args) },
-	}, back)
+	}, m.state)
 	return m, nil
 }
 

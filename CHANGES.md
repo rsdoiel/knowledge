@@ -64,6 +64,17 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   and the scope's project follow the Records scope, with every scope the project is asked first, and Ingest a
   document asks for the file, the project and an optional title. `document frontmatter` stays on the command
   line until it has a field picker.
+- **The document summary workflow** (DR-0069; plan item U7). Documents → Review queue lists the sections
+  waiting for a person in the library's triage order (gist first), each with its status, size, tag density and
+  confidence. `Enter` starts a unit of two steps. The summary is written in `$VISUAL` or `$EDITOR`, with the
+  interface suspended and resumed, from a file that starts with `#` lines (removed on return), or, with no
+  editor set, in a text area; an empty or unchanged text is refused. It is then shown above its source and `y`
+  runs `DraftDocumentSummary` as `human` and `PromoteDocumentSummary`, the library calls the commands make;
+  `e` writes it again; `n`, `q` and `Esc` leave with nothing done and keep what was approved before. A section
+  with a draft starts at the review, which is the review form for promote: a model's draft is read beside its
+  source and, promoted as it is, keeps its author. A gist has no text of its own, so it is written from the
+  document's sections in order. The promote is a person's act at a terminal (DR-0070), which being in the
+  interface is. `document review promote ID` typed at `:` opens the same form.
 - **The `:` command line** (DR-0066 point 2, DR-0067; plan item U6). `:` on a menu or a browsing screen opens a
   one-line prompt (every key is text, `Esc` cancels); the line is split as a shell would, a leading `kb` is
   optional, and it is run in-process by the command line's own dispatcher, so the verbs, flags, errors and exit
@@ -73,8 +84,8 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   checking the move against the table first, and with no status opening the same review as `s`; `project`,
   `observation`, `concept` and `record` `delete` meet the typed-name gate that `d` opens; `ingest`,
   `document ingest|tag|fuzzy-tag|frontmatter` and `record fuzzy-tag --write` show their `--dry-run` first;
-  `source remove`, `unlink` and `document delete` say they have no confirmation screen here, the document
-  summary verbs wait for the document workflow, and `merge`, `import`, `init`, `export`, `completion` and the
+  `source remove`, `unlink` and `document delete` say they have no confirmation screen here, `document review promote ID` opens the
+  review form below, `document draft` asks first, and `merge`, `import`, `init`, `export`, `completion` and the
   global options are refused. The legend of the menus names the key.
 - **`index` and `record fmt` from the menus** (DR-0067; plan item U5). Index (top menu) and Records → Format
   files… run the commands at once, with no confirmation, on the Records scope's decisions directory

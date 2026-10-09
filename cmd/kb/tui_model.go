@@ -35,6 +35,8 @@ const (
 	viewForm        // an additive write: the fields one at a time, then confirm
 	viewPlan        // a plan-then-apply write: the dry run is shown, then y applies it
 	viewCommand     // the `:` command line
+	viewReviewQueue // document sections waiting for a person
+	viewSummary     // one section's summary unit: write it, then review it beside its source
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -132,6 +134,8 @@ type tuiModel struct {
 	plan            *planFlow   // the plan-then-apply write in progress, in viewPlan
 	planView        viewport.Model
 	command         *commandFlow // the `:` prompt, in viewCommand
+	queueList       list.Model   // the review queue
+	unit            *summaryUnit // the summary unit in progress, in viewSummary
 	textPurpose     string
 	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string // the workspace directory, for the header
@@ -259,6 +263,8 @@ var viewStateNames = map[viewState]string{
 	viewForm:         "viewForm",
 	viewPlan:         "viewPlan",
 	viewCommand:      "viewCommand",
+	viewReviewQueue:  "viewReviewQueue",
+	viewSummary:      "viewSummary",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -303,6 +309,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pagerDoneMsg:
 		return m.handlePagerDone(msg)
 
+	case editorDoneMsg:
+		return m.handleEditorDone(msg)
+
 	case tea.KeyMsg:
 		// Ctrl-C quits from everywhere, typing and errors included, and writes
 		// nothing (DR-0064).
@@ -336,6 +345,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == viewCommand {
 			return m.updateCommand(msg)
 		}
+		if m.state == viewSummary {
+			return m.updateSummary(msg)
+		}
 		if msg.String() == ":" && m.canOpenCommand() {
 			return m.openCommand()
 		}
@@ -368,6 +380,8 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateText(msg)
 		case viewPlan:
 			return m.updatePlan(msg)
+		case viewReviewQueue:
+			return m.updateReviewQueue(msg)
 		default:
 			return m.updateProjects(msg)
 		}
@@ -444,6 +458,9 @@ func (m *tuiModel) capturingText() bool {
 	}
 	if m.state == viewForm && m.form != nil {
 		return m.form.edit != nil
+	}
+	if m.state == viewSummary && m.unit != nil {
+		return !m.unit.reviewing
 	}
 	return m.searching || m.state == viewRemove
 }
@@ -684,6 +701,9 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 		return m.openRecordScope("proposed")
 	case "record fmt":
 		return m.runDirect("fmt")
+	case "document review list":
+		m.scopeAll = false
+		return m.goTo(viewReviewQueue, m.loadReviewQueue)
 	case "record fuzzy-tag":
 		return m.planRecordFuzzyTag()
 	case "document ingest":
@@ -1031,6 +1051,10 @@ func (m *tuiModel) legendFull() string {
 		return m.formLegend()
 	case viewCommand:
 		return "Enter run   Esc cancel   Ctrl-C quit"
+	case viewSummary:
+		return m.summaryLegend()
+	case viewReviewQueue:
+		return move + "   Enter summarise   " + m.scopeKey() + "   / search   : command   q back"
 	case viewPlan:
 		return "↑/↓ j/k scroll   space page   y apply   n q Esc cancel   Ctrl-C quit"
 	case viewReview:
@@ -1111,6 +1135,10 @@ func (m *tuiModel) screen() (string, []string) {
 		return m.planScreen()
 	case viewCommand:
 		return m.commandScreen()
+	case viewSummary:
+		return m.summaryScreen()
+	case viewReviewQueue:
+		return m.queueList.Title, viewLines(m.queueList)
 	case viewObservations:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:

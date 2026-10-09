@@ -181,6 +181,18 @@ leave with nothing done, and Enter does nothing, so a habitual key cannot write.
 every scope the project is asked first; Ingest a document asks for the file, the
 project and an optional title. Documents → Frontmatter… is still the command line.
 
+Documents → Review queue lists the sections waiting for a person, gist first, with
+each one's size, tag density and confidence. Enter on one is a unit of two steps. The
+summary is written: in $VISUAL or $EDITOR with the interface suspended (the file starts
+with a few # lines, which are removed), or, with neither set, in a text area (Enter
+accepts, Ctrl-J starts a new line, Esc cancels). An empty or unchanged text is
+refused. Then it is shown above its source and y saves it as written by a person
+and promotes it; e writes it again; n, q and Esc leave with nothing done, and what
+was approved earlier stays. A section that already has a draft starts at the second
+step, so a draft is read beside its source before it is promoted, and promoted as it
+is keeps its author. A gist is written from the document's sections in order. The
+promote is a person's act at a terminal (DR-0070), which being here meets.
+
 : opens a command line on the menus and the browsing screens: type any command as
 you would at the shell (the leading {app_name} is optional) and press Enter. The line is
 run by the command line's own code, and what happens next follows the verb's class
@@ -188,8 +200,9 @@ run by the command line's own code, and what happens next follows the verb's cla
 leave with q; adding and changing writes show the command and ask y, with
 record set-status showing old to new; delete asks for the name to be typed, as d
 does, for a project, observation, concept or record; ingest and the document and
-record fuzzy-tag verbs show their --dry-run first; merge, import, init, export and
-completion are command line only. While you type, every key is text; Esc cancels.
+record fuzzy-tag verbs show their --dry-run first; document review promote ID
+opens the review form for a drafted section and document draft asks first; merge,
+import, init, export and completion are command line only. While you type, every key is text; Esc cancels.
 
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
