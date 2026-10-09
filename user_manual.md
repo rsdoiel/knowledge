@@ -76,6 +76,8 @@ Index (top menu) and Records → Format files… run `kb index` and `kb record f
 
 Ingest (top menu), Records → Fuzzy-tag… and Documents → Ingest a document…, Tag… and Fuzzy-tag… show a plan first: the command's own `--dry-run` output, scrollable, with nothing written. `y` applies it by running the same command without `--dry-run` and shows the result with the equivalent command; `n`, `q` and `Esc` leave with nothing done, and `Enter` does nothing. With every scope the project is asked first. `Documents → Frontmatter…` stays on the command line.
 
+`:` opens a command line on the menus and browsing screens: type any command as at the shell (a leading `kb` is optional) and press `Enter`. It runs the command line's own code, and what follows depends on the verb's class (`kb verbs`): reads and `index` run and show their output; adding and changing writes show the command and ask `y` (`record set-status` shows old to new); `delete` asks for the name to be typed, as `d` does; `ingest` and the fuzzy-tag verbs show their `--dry-run` first; `merge`, `import`, `init`, `export` and `completion` are command line only. While you type every key is text, and `Esc` cancels.
+
 A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group such as `kb record`, and `kb record show` or `kb project show` with no argument. `kb -i record pending` (or `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. See [kb(1)](kb.1.md) for the full description.
 
 ---

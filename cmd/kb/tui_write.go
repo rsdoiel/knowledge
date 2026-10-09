@@ -73,6 +73,12 @@ func (m *tuiModel) showSelected(purpose string) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+	return m.showRecord(ref, purpose)
+}
+
+// showRecord shows the record with that reference for reading or for a status
+// review: in the pager when there is one, else in the built-in viewer.
+func (m *tuiModel) showRecord(ref, purpose string) (tea.Model, tea.Cmd) {
 	rec, err := resolveRecordForWrite(m.kb, ref, recordFlags{})
 	if err != nil {
 		m.notice = err.Error()

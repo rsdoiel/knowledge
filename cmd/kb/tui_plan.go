@@ -21,6 +21,7 @@ import (
  *   equivalent (string)        — the command that applies it, shown with the result
  *   apply (func() (string, error)) — runs the write; returns the command's output
  *   back (viewState)           — the screen to return to
+ *   note (string)              — the first line of the screen; "dry run — nothing has been written" when empty
  *
  * Example:
  *   m.beginPlan(&planFlow{title: "Ingest", text: out, equivalent: "kb ingest DIR",
@@ -32,6 +33,7 @@ type planFlow struct {
 	equivalent string
 	apply      func() (string, error)
 	back       viewState
+	note       string
 }
 
 // beginPlan shows a plan. Nothing has been written yet.
@@ -94,8 +96,12 @@ func (m *tuiModel) applyPlan() (tea.Model, tea.Cmd) {
 // planScreen is the plan's screen: what it is, the command that applies it, then
 // the dry run.
 func (m *tuiModel) planScreen() (string, []string) {
+	note := m.plan.note
+	if note == "" {
+		note = "dry run — nothing has been written"
+	}
 	lines := []string{
-		"dry run — nothing has been written",
+		note,
 		"y runs:  " + m.plan.equivalent,
 		"",
 	}

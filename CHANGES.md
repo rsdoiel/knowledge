@@ -64,6 +64,18 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   and the scope's project follow the Records scope, with every scope the project is asked first, and Ingest a
   document asks for the file, the project and an optional title. `document frontmatter` stays on the command
   line until it has a field picker.
+- **The `:` command line** (DR-0066 point 2, DR-0067; plan item U6). `:` on a menu or a browsing screen opens a
+  one-line prompt (every key is text, `Esc` cancels); the line is split as a shell would, a leading `kb` is
+  optional, and it is run in-process by the command line's own dispatcher, so the verbs, flags, errors and exit
+  statuses are the command's (a failure shows its message and `exit status N`). What happens next follows the
+  verb's write class from the table: reads and direct verbs (`index`, `record fmt`) run and are shown; additive
+  and changing writes show the typed command and ask `y`, `record set-status REF STATUS` showing old to new and
+  checking the move against the table first, and with no status opening the same review as `s`; `project`,
+  `observation`, `concept` and `record` `delete` meet the typed-name gate that `d` opens; `ingest`,
+  `document ingest|tag|fuzzy-tag|frontmatter` and `record fuzzy-tag --write` show their `--dry-run` first;
+  `source remove`, `unlink` and `document delete` say they have no confirmation screen here, the document
+  summary verbs wait for the document workflow, and `merge`, `import`, `init`, `export`, `completion` and the
+  global options are refused. The legend of the menus names the key.
 - **`index` and `record fmt` from the menus** (DR-0067; plan item U5). Index (top menu) and Records → Format
   files… run the commands at once, with no confirmation, on the Records scope's decisions directory
   (`agents/projects/NAME/decisions`, or the whole `agents` tree with every scope, with `--all` for `index`).

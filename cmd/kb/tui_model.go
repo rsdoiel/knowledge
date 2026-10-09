@@ -34,6 +34,7 @@ const (
 	viewChange      // a changing write: pick or type the new value, then confirm old to new
 	viewForm        // an additive write: the fields one at a time, then confirm
 	viewPlan        // a plan-then-apply write: the dry run is shown, then y applies it
+	viewCommand     // the `:` command line
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -130,6 +131,7 @@ type tuiModel struct {
 	form            *formFlow   // the additive form in progress, in viewForm
 	plan            *planFlow   // the plan-then-apply write in progress, in viewPlan
 	planView        viewport.Model
+	command         *commandFlow // the `:` prompt, in viewCommand
 	textPurpose     string
 	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string // the workspace directory, for the header
@@ -256,6 +258,7 @@ var viewStateNames = map[viewState]string{
 	viewChange:       "viewChange",
 	viewForm:         "viewForm",
 	viewPlan:         "viewPlan",
+	viewCommand:      "viewCommand",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -329,6 +332,12 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.state == viewForm {
 			return m.updateForm(msg)
+		}
+		if m.state == viewCommand {
+			return m.updateCommand(msg)
+		}
+		if msg.String() == ":" && m.canOpenCommand() {
+			return m.openCommand()
 		}
 		// While text is being typed every printable key is text, so this is
 		// asked before any letter is bound (DR-0064, amendment).
@@ -1006,12 +1015,12 @@ func (m *tuiModel) legendFull() string {
 	move := "↑/↓ j/k move"
 	switch m.state {
 	case viewMenu:
-		return move + "   Enter open   / search   q quit"
+		return move + "   Enter open   / search   : command   q quit"
 	case viewGroup:
 		if m.group == "record" {
-			return move + "   Enter open   " + m.scopeKey() + "   / search   q back"
+			return move + "   Enter open   " + m.scopeKey() + "   / search   : command   q back"
 		}
-		return move + "   Enter open   / search   q back"
+		return move + "   Enter open   / search   : command   q back"
 	case viewRecordScope:
 		return move + "   Enter read   s status   u supersede   d delete   " + m.scopeKey() + "   / search   q back"
 	case viewRemove:
@@ -1020,6 +1029,8 @@ func (m *tuiModel) legendFull() string {
 		return m.changeLegend()
 	case viewForm:
 		return m.formLegend()
+	case viewCommand:
+		return "Enter run   Esc cancel   Ctrl-C quit"
 	case viewPlan:
 		return "↑/↓ j/k scroll   space page   y apply   n q Esc cancel   Ctrl-C quit"
 	case viewReview:
@@ -1098,6 +1109,8 @@ func (m *tuiModel) screen() (string, []string) {
 		return m.formScreen()
 	case viewPlan:
 		return m.planScreen()
+	case viewCommand:
+		return m.commandScreen()
 	case viewObservations:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:
