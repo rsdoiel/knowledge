@@ -195,3 +195,33 @@ func (kb *KnowledgeBase) DeleteConcept(name string, force bool) (ConceptUsage, e
 	}
 	return u, nil
 }
+
+/** HasConcept reports whether a concept with this name exists, matching
+ * case-insensitively as ResolveConceptName does, and creates nothing. It is what a
+ * plan needs to say which concepts an ingest would create.
+ *
+ * Parameters:
+ *   name (string) — the concept name as it appears in text.
+ *
+ * Returns:
+ *   bool  — true when a concept of that name exists.
+ *   error — on database failure, or when the name is blank.
+ *
+ * Example:
+ *   ok, err := kb.HasConcept("computer")
+ */
+func (kb *KnowledgeBase) HasConcept(name string) (bool, error) {
+	name, err := CleanName("concept", name)
+	if err != nil {
+		return false, err
+	}
+	var id int64
+	err = kb.db.QueryRow(`SELECT id FROM concepts WHERE name = ?1 COLLATE NOCASE LIMIT 1`, name).Scan(&id)
+	switch {
+	case err == nil:
+		return true, nil
+	case err == sql.ErrNoRows:
+		return false, nil
+	}
+	return false, fmt.Errorf("knowledge: has concept: %w", err)
+}

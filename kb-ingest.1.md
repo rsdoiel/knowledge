@@ -60,6 +60,13 @@ lists them all in "status_changes", each with "ref", "from", "to" and "kind"
 written by set-status is in the file and the database together, so the next ingest
 does not report it.
 
+A [[wikilink]] or a tag that matches no concept creates one, silently, so a typo
+makes a concept. The summary says which: "concept: created Alpha, Beta" for a run
+that wrote, "concept: would create Alpha, Beta" for --dry-run, which creates none;
+-json kb ingest lists them all in "concepts_created". A name that differs
+only in case from an existing concept is that concept, not a new one, and a
+[[DR-0012]] is a record reference and is warned about, not made a concept.
+
 Every [[Name]] found in a record's body, and every entry in its frontmatter
 tags list, is resolved to a concept and linked to the record (kb record
 concepts shows the result). A name that does not match an existing concept

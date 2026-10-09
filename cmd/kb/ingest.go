@@ -71,6 +71,9 @@ type ingestSummary struct {
 	Errors     []string `json:"errors,omitempty"`
 	// StatusChanges lists the statuses that arrived through a file (DR-0068).
 	StatusChanges []statusChange `json:"status_changes,omitempty"`
+	// ConceptsCreated lists the concepts the ingest created from [[wikilinks]] and
+	// tags, or with --dry-run would create (DR-0068): a typo makes one silently.
+	ConceptsCreated []string `json:"concepts_created,omitempty"`
 }
 
 // ingestedRecord is one file that made it through pass one, carrying what
@@ -103,7 +106,8 @@ type ingester struct {
 	// firstFail is the first thing that went wrong, in path order. Ingest keeps
 	// going after a failure, so every record it can is ingested, but the command
 	// exits with this error's class (workspace DR-0003 rule 4, DR-0047 item 6).
-	firstFail error
+	firstFail   error
+	newConcepts map[string]bool // lower-cased names already noted as new this run
 }
 
 // noteFailure remembers the first failure so cmdIngest can exit with its class.
@@ -445,13 +449,15 @@ func (ing *ingester) linkInitiative(rf *knowledge.RecordFile, projectID int64) {
 // skipped rather than resolved: it almost always means the author meant to
 // cite a record via supersedes/relates_to, not tag a concept named "0007".
 func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64) {
-	if ing.dryRun || recordDBID == 0 {
-		return
-	}
-	if err := ing.kb.ClearRecordConcepts(recordDBID); err != nil {
-		ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
-			"%s: clear concept links: %v", rf.Record.Path, err))
-		return
+	if !ing.dryRun {
+		if recordDBID == 0 {
+			return
+		}
+		if err := ing.kb.ClearRecordConcepts(recordDBID); err != nil {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: clear concept links: %v", rf.Record.Path, err))
+			return
+		}
 	}
 	seen := map[string]bool{}
 	var names []string
@@ -488,6 +494,13 @@ func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64
 				rf.Record.Path, name))
 			continue
 		}
+		// A name that matches no concept creates one, silently, so the summary
+		// says which (DR-0068); a dry run says which it would create and writes
+		// nothing.
+		ing.noteNewConcept(name)
+		if ing.dryRun {
+			continue
+		}
 		conceptID, err := ing.kb.ResolveConceptName(name)
 		if err != nil {
 			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
@@ -499,6 +512,23 @@ func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64
 				"%s: link concept %q: %v", rf.Record.Path, name, err))
 		}
 	}
+}
+
+// noteNewConcept records a concept name that the database does not have yet, once
+// however often and in whatever case it is mentioned.
+func (ing *ingester) noteNewConcept(name string) {
+	key := strings.ToLower(name)
+	if ing.newConcepts[key] {
+		return
+	}
+	if ok, err := ing.kb.HasConcept(name); err != nil || ok {
+		return
+	}
+	if ing.newConcepts == nil {
+		ing.newConcepts = map[string]bool{}
+	}
+	ing.newConcepts[key] = true
+	ing.summary.ConceptsCreated = append(ing.summary.ConceptsCreated, name)
 }
 
 // relativeTo renders a file path relative to the workspace root, falling back
@@ -688,6 +718,7 @@ func writeIngestText(out io.Writer, s ingestSummary) {
 		s.Added, s.Updated, s.Skipped, s.Failed)
 	fmt.Fprintf(out, "%d supersedes, %d relates_to\n", s.Supersedes, s.RelatesTo)
 	writeStatusChanges(out, s.StatusChanges)
+	writeNewConcepts(out, s.ConceptsCreated, s.DryRun)
 	for _, group := range []struct {
 		label string
 		lines []string
@@ -744,4 +775,23 @@ func writeStatusChanges(out io.Writer, changes []statusChange) {
 		}
 		fmt.Fprintf(out, "status: %s %s -> %s (edited in file)\n", c.Ref, c.From, c.To)
 	}
+}
+
+// writeNewConcepts prints the concepts an ingest created, or would create, up to
+// maxStatusLines names; the JSON has them all.
+func writeNewConcepts(out io.Writer, names []string, dryRun bool) {
+	if len(names) == 0 {
+		return
+	}
+	verb := "created"
+	if dryRun {
+		verb = "would create"
+	}
+	shown := names
+	more := ""
+	if len(shown) > maxStatusLines {
+		more = fmt.Sprintf(" and %d more", len(names)-maxStatusLines)
+		shown = shown[:maxStatusLines]
+	}
+	fmt.Fprintf(out, "concept: %s %s%s\n", verb, strings.Join(shown, ", "), more)
 }

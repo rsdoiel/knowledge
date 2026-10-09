@@ -39,6 +39,12 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   becomes superseded; the write is `recordSupersede`, both files and the database with its rollback. The
   command's `--partial` option is not offered. `supersede` has no extra gate, as DR-0067 says: it removes no
   knowledge.
+- **`kb ingest` says which concepts it created, or would create** (DR-0068). A `[[wikilink]]` or a `tags:`
+  entry that matches no concept creates one, so a typo adds a concept without a word. The summary prints
+  `concept: created Alpha, Beta` (and `concept: would create ...` with `--dry-run`, which creates nothing and
+  used to skip concept linking entirely), and `-json ingest` has them all in `concepts_created`. A case
+  variant of an existing concept is that concept; a `[[DR-0012]]` is a record reference. Library:
+  `(*KnowledgeBase).HasConcept`, a case-insensitive lookup that creates nothing.
 - **Additive forms in the TUI** (DR-0067, DR-0064 amendment; plan item U1). New project…, New observation…,
   New concept…, New source… and New record… on the menus, and `n` on the project list, an observations tab, a
   concepts tab and the Records screens, ask the fields one at a time (a text field, or a choice made with one
