@@ -173,6 +173,14 @@ tree with every scope, which a widens), the command's own output is shown on a
 screen you leave with q, and so is the command that does the same. A scope with no
 decisions directory says so and nothing is created.
 
+Ingest (top menu), Records → Fuzzy-tag… and Documents → Ingest a document…, Tag… and
+Fuzzy-tag… show a plan first: the command's own --dry-run output, scrollable with
+j and k, with nothing written. y applies it by running the same command without
+--dry-run, and the result is shown with the command that does the same; n, q and Esc
+leave with nothing done, and Enter does nothing, so a habitual key cannot write. With
+every scope the project is asked first; Ingest a document asks for the file, the
+project and an optional title. Documents → Frontmatter… is still the command line.
+
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
 a terminal: bare {app_name}, a bare group ({app_name} record opens the Records menu), and

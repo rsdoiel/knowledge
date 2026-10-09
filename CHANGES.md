@@ -57,6 +57,13 @@ The rest of the TUI writes behind the same gates (knowledge DR-0067 and the 2026
   `d p i l v r x`. A new record is written `proposed` and reaches the database at the next ingest, which the
   notice says. A source's publisher, rights and version stay on the command line. A text field starts empty or
   from the scope and an empty required field says so.
+- **Plan-then-apply screens** (DR-0068, DR-0067 class plan_apply; plan item U4). Ingest (top menu), Records →
+  Fuzzy-tag…, and Documents → Ingest a document…, Tag… and Fuzzy-tag… show the command's own `--dry-run` output
+  first, scrollable, with nothing written; `y` runs the same command without `--dry-run` and shows its output
+  with the equivalent command, and `n`, `q` and `Esc` leave with nothing done (`Enter` does nothing). `ingest`
+  and the scope's project follow the Records scope, with every scope the project is asked first, and Ingest a
+  document asks for the file, the project and an optional title. `document frontmatter` stays on the command
+  line until it has a field picker.
 - **`index` and `record fmt` from the menus** (DR-0067; plan item U5). Index (top menu) and Records → Format
   files… run the commands at once, with no confirmation, on the Records scope's decisions directory
   (`agents/projects/NAME/decisions`, or the whole `agents` tree with every scope, with `--all` for `index`).

@@ -33,6 +33,7 @@ const (
 	viewRemove      // the gate for a removing verb: a plan and a typed confirmation
 	viewChange      // a changing write: pick or type the new value, then confirm old to new
 	viewForm        // an additive write: the fields one at a time, then confirm
+	viewPlan        // a plan-then-apply write: the dry run is shown, then y applies it
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -127,6 +128,8 @@ type tuiModel struct {
 	removeBack      viewState
 	change          *changeFlow // the changing write in progress, in viewChange
 	form            *formFlow   // the additive form in progress, in viewForm
+	plan            *planFlow   // the plan-then-apply write in progress, in viewPlan
+	planView        viewport.Model
 	textPurpose     string
 	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string // the workspace directory, for the header
@@ -252,6 +255,7 @@ var viewStateNames = map[viewState]string{
 	viewRemove:       "viewRemove",
 	viewChange:       "viewChange",
 	viewForm:         "viewForm",
+	viewPlan:         "viewPlan",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -353,6 +357,8 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateReview(msg)
 		case viewText:
 			return m.updateText(msg)
+		case viewPlan:
+			return m.updatePlan(msg)
 		default:
 			return m.updateProjects(msg)
 		}
@@ -501,6 +507,8 @@ func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.startSearch()
 		case it.Verb == "index":
 			return m.runDirect("index")
+		case it.Verb == "ingest":
+			return m.planIngest()
 		case !it.Built:
 			m.explainUnbuilt(it)
 		}
@@ -667,6 +675,14 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 		return m.openRecordScope("proposed")
 	case "record fmt":
 		return m.runDirect("fmt")
+	case "record fuzzy-tag":
+		return m.planRecordFuzzyTag()
+	case "document ingest":
+		return m.planDocumentIngest()
+	case "document tag":
+		return m.planDocumentEdit("tag")
+	case "document fuzzy-tag":
+		return m.planDocumentEdit("fuzzy-tag")
 	case "project add":
 		return m.beginForm(m.newProjectForm())
 	case "observation add":
@@ -1004,6 +1020,8 @@ func (m *tuiModel) legendFull() string {
 		return m.changeLegend()
 	case viewForm:
 		return m.formLegend()
+	case viewPlan:
+		return "↑/↓ j/k scroll   space page   y apply   n q Esc cancel   Ctrl-C quit"
 	case viewReview:
 		return m.reviewLegend()
 	case viewText:
@@ -1078,6 +1096,8 @@ func (m *tuiModel) screen() (string, []string) {
 		return m.changeScreen()
 	case viewForm:
 		return m.formScreen()
+	case viewPlan:
+		return m.planScreen()
 	case viewObservations:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
 	case viewConcepts:

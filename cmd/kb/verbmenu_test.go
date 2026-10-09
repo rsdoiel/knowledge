@@ -33,8 +33,8 @@ func TestMenu_WhatIsBuilt(t *testing.T) {
 	}
 	for label, want := range map[string]bool{
 		"Projects": true, "Records": true, "Search": true, "Index": true,
-		"Observations": true, "Concepts": true, "Sources": true, "Documents": false,
-		"Ingest": false, "Check": false,
+		"Observations": true, "Concepts": true, "Sources": true, "Documents": true,
+		"Ingest": true, "Check": false,
 	} {
 		if built[label] != want {
 			t.Errorf("%s: built = %v, want %v", label, built[label], want)
@@ -47,7 +47,7 @@ func TestMenu_TheRecordsGroup(t *testing.T) {
 	if got, want := labels(items), "Browse, Pending, New record…, Format files…, Fuzzy-tag…"; got != want {
 		t.Fatalf("records menu = %s, want %s", got, want)
 	}
-	for i, wantBuilt := range []bool{true, true, true, true, false} {
+	for i, wantBuilt := range []bool{true, true, true, true, true} {
 		if items[i].Built != wantBuilt {
 			t.Errorf("%s: built = %v, want %v", items[i].Label, items[i].Built, wantBuilt)
 		}

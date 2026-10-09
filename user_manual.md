@@ -74,6 +74,8 @@ New things are made with a form (the New… rows of the menus, and `n` on the pr
 
 Index (top menu) and Records → Format files… run `kb index` and `kb record fmt` at once, with no confirmation, on the Records scope's decisions directory (a project's, or the whole `agents` tree with every scope); the command's own output is shown, with the equivalent command.
 
+Ingest (top menu), Records → Fuzzy-tag… and Documents → Ingest a document…, Tag… and Fuzzy-tag… show a plan first: the command's own `--dry-run` output, scrollable, with nothing written. `y` applies it by running the same command without `--dry-run` and shows the result with the equivalent command; `n`, `q` and `Esc` leave with nothing done, and `Enter` does nothing. With every scope the project is asked first. `Documents → Frontmatter…` stays on the command line.
+
 A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group such as `kb record`, and `kb record show` or `kb project show` with no argument. `kb -i record pending` (or `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. See [kb(1)](kb.1.md) for the full description.
 
 ---

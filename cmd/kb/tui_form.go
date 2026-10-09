@@ -67,6 +67,10 @@ type formFlow struct {
 	apply   func([]string) (string, error)
 	after   string
 	context []string // facts already known, shown above the questions ("project: alpha")
+	// plan, when set, replaces the final confirmation: the answers become a
+	// plan-then-apply screen (DR-0068) and apply is not used.
+	plan    func([]string) (*planFlow, error)
+	heading string // the screen title; "New — TITLE" when empty
 }
 
 // beginForm opens a form on the current screen at its first field.
@@ -84,6 +88,16 @@ func (m *tuiModel) enterField(i int) {
 	f := m.form
 	f.step, f.chooser, f.edit = i, nil, nil
 	if i >= len(f.fields) {
+		if f.plan != nil {
+			p, err := f.plan(f.values)
+			if err != nil {
+				m.setState(f.back)
+				m.notice = err.Error()
+				return
+			}
+			m.beginPlan(p, f.back)
+			return
+		}
 		f.confirm = newConfirm("Create it?")
 		return
 	}
@@ -197,7 +211,7 @@ func (m *tuiModel) formScreen() (string, []string) {
 		body = append(body, "", "This is the same as:")
 		body = append(body, wrap("  "+f.command(f.values))...)
 		body = append(body, "", f.confirm.View())
-		return "New — " + f.title, body
+		return m.formTitle(), body
 	}
 	if len(body) > 0 {
 		body = append(body, "")
@@ -213,7 +227,15 @@ func (m *tuiModel) formScreen() (string, []string) {
 	} else {
 		body = append(body, strings.Split(f.edit.View(), "\n")...)
 	}
-	return "New — " + f.title, body
+	return m.formTitle(), body
+}
+
+// formTitle is the form's screen title.
+func (m *tuiModel) formTitle() string {
+	if m.form.heading != "" {
+		return m.form.heading
+	}
+	return "New — " + m.form.title
 }
 
 // fieldMark marks a field that may be left empty.
