@@ -3,6 +3,27 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.18 — unreleased
+
+Review then decide, in progress. Decisions: knowledge DR-0060 and DR-0061 (accepted), DR-0063 (proposed).
+
+### Changed
+
+- **`kb record set-status` follows a transition table** (DR-0060). It used to write any status on any record.
+  Now `proposed` may become `accepted`, `rejected`, `cancelled` or `superseded`; `accepted` may become
+  `cancelled` or `superseded`; `rejected` and `cancelled` may go back to `proposed`; `superseded` is final.
+  `superseded` also needs `superseded_by` already set, so use `kb record supersede`. A move outside the table,
+  including setting the status a record already has, exits 1 with the allowed moves named and writes nothing.
+  A record whose status is outside the vocabulary can be set to `proposed` and nothing else. Scripts that
+  relied on arbitrary moves (for example `accepted` to `rejected`, use `cancelled`) will see exit 1.
+- **`cancelled` is wider than DR-0038 said** (DR-0063): pursued or explored, then abandoned, and need not
+  have been accepted. `rejected` is considered and not pursued. `DECISION_RECORD_FORMAT.md` and `kb-record(1)`
+  carry the wording.
+
+### Added
+
+- Library: `AllowedTransitions` and `CanTransition`, so the CLI, the review prompt and the TUI read one table.
+
 ## v0.0.17 — 2026-10-08
 
 Everything below is written and tested red first. The decisions are knowledge DR-0057 (qualified record
