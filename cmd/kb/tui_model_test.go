@@ -101,16 +101,19 @@ func TestTUIModel_ToggleToConceptsAndBack(t *testing.T) {
 	}
 }
 
-func TestTUIModel_EscNavigatesBackToProjects(t *testing.T) {
+func TestTUIModel_QNavigatesBackToProjects(t *testing.T) {
 	m := newTestTUIModel(t)
 	m.projectList.Select(0)
 	updated, _ := m.Update(key(tea.KeyEnter))
 	m = updated.(*tuiModel)
 
-	updated, _ = m.Update(key(tea.KeyEsc))
+	updated, cmd := m.Update(runeKey("q"))
 	m = updated.(*tuiModel)
 	if m.state != viewProjects {
-		t.Errorf("state after Esc = %v, want viewProjects", m.state)
+		t.Errorf("state after q = %v, want viewProjects", m.state)
+	}
+	if isQuit(cmd) {
+		t.Error("q quit the program from a sub-view; it goes back (DR-0064)")
 	}
 }
 
@@ -310,15 +313,15 @@ func TestTUIModel_RecordsNavigateBackAndAcross(t *testing.T) {
 
 	updated, _ = m.Update(runeKey("r"))
 	m = updated.(*tuiModel)
-	updated, _ = m.Update(key(tea.KeyEsc))
+	updated, _ = m.Update(runeKey("q"))
 	m = updated.(*tuiModel)
 	if m.state != viewProjects {
-		t.Errorf("state after esc = %v, want viewProjects", m.state)
+		t.Errorf("state after q = %v, want viewProjects", m.state)
 	}
 }
 
-// The TUI is read-mostly by design: no key in the records view writes.
-func TestTUIModel_RecordsViewRendersAndQuits(t *testing.T) {
+// The records view renders, and q goes back to the projects (DR-0064).
+func TestTUIModel_RecordsViewRendersAndGoesBack(t *testing.T) {
 	m := newTestTUIModelWithRecords(t)
 	m.projectList.Select(0)
 	updated, _ := m.Update(key(tea.KeyEnter))
@@ -329,7 +332,9 @@ func TestTUIModel_RecordsViewRendersAndQuits(t *testing.T) {
 	if view := m.View(); !strings.Contains(view, "Records") {
 		t.Errorf("View() = %q, want the records list rendered", view)
 	}
-	if _, cmd := m.Update(runeKey("q")); cmd == nil {
-		t.Error("q did not quit from the records view")
+	updated, cmd := m.Update(runeKey("q"))
+	m = updated.(*tuiModel)
+	if isQuit(cmd) || m.state != viewProjects {
+		t.Errorf("q from the records view: state %v, quit %v; want back to the projects", m.state, isQuit(cmd))
 	}
 }

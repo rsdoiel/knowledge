@@ -33,6 +33,16 @@ Foundations for the TUI write flows, from the design brief
 
 ### Changed
 
+- **The TUI follows clasm's key conventions, and every screen shows its keys** (DR-0064). **This changes
+  today's keys.** `q` now goes back to the screen you came from (a search's results return to where the search
+  began) and quits only at the project list; `Esc` cancels something in progress and otherwise does nothing,
+  so it never closes a screen; `Ctrl-C` quits from anywhere, including while typing and over an error.
+  A legend line at the bottom of every screen lists the keys that apply, and changes with the mode. While you
+  type in the search prompt every key is text, `q` included, so a term that starts with `q` works; the model
+  asks one question, `capturingText()`, before it binds any letter. An error is dismissed with `q` or `Enter`
+  (it used to stay on screen for ever). The lists no longer carry quit keys, a hidden filter or help of their
+  own, and the records list is resized with the others. A test per screen types `q j k a y n :` into the
+  prompt, and the built binary on a pseudo-terminal shows a lone `Esc` does not quit.
 - **The `kb record set-status REF` review takes single keys** (DR-0065). A status letter chooses at once and
   `y` confirms; `Esc`, `q` or `Ctrl-C` backs out at either step, as does `n` at the confirmation, all without
   Enter. `Enter` on the confirmation does nothing, so a habitual Enter is never consent to a write. It

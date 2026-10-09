@@ -62,7 +62,7 @@ A decision record is `SCOPE/DR-NNNN`, where SCOPE is a project name or `workspac
 
 ### Interactive TUI
 
-Bare `kb` (no verb) launches a read-mostly browser: project list → Enter drills into observations → `c`/`o` toggles to/from concepts → `/` opens a search prompt from any view → `esc` backs out, `q` quits. See [kb(1)](kb.1.md) for the full description.
+Bare `kb` (no verb) launches a read-mostly browser: project list → Enter drills into observations → `c`, `o` and `r` switch between a project's concepts, observations and records → `/` opens a search prompt from any view. `q` goes back (and quits at the project list), `Esc` cancels only something in progress and never closes a screen, `Ctrl-C` quits from anywhere, and a legend line at the bottom of every screen lists the keys that apply. Typing in the search prompt takes every key as text, `q` included. See [kb(1)](kb.1.md) for the full description.
 
 ---
 

@@ -31,7 +31,16 @@ harnesses can drive it directly, not just people at a terminal.
 
 Run with no verb at all to launch the interactive browser (TUI) instead —
 a read-only view over the same data, for exploring projects, observations,
-and concepts, and running searches, without leaving the terminal.
+concepts and records, and running searches, without leaving the terminal.
+
+Its keys: q goes back to the screen you came from, and quits at the project list;
+Esc cancels something in progress (a search you are typing) and does nothing
+otherwise, so it never closes a screen; Ctrl-C quits from anywhere; the arrow
+keys or j and k move; Enter opens; / searches; c, o and r switch between a
+project's concepts, observations and records. A line at the bottom of every screen
+lists the keys that apply to it. While you are typing in the search prompt every
+key is text, q included, so a term that starts with q works; Esc leaves the
+prompt, and q is a command again afterwards.
 
 # STANDARD OPTIONS
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	bkey "github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -84,6 +85,7 @@ type tuiModel struct {
 	recordList      list.Model
 	searchInput     textinput.Model
 	searching       bool
+	searchFrom      viewState // where a search began, which q from its results returns to
 
 	selectedProject *knowledge.Project
 	err             error
@@ -99,8 +101,7 @@ func newTUIModel(kb *knowledge.KnowledgeBase, dl *DebugLog) (*tuiModel, error) {
 	for i, p := range projects {
 		items[i] = projectItem{p}
 	}
-	projectList := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	projectList.Title = "Projects"
+	projectList := newBrowserList(items, "Projects", 0, 0)
 
 	ti := textinput.New()
 	ti.Placeholder = "search term"
@@ -116,10 +117,10 @@ func newTUIModel(kb *knowledge.KnowledgeBase, dl *DebugLog) (*tuiModel, error) {
 		// anything can still call SetSize on these safely -- list.Model
 		// has internal state a zero value doesn't populate, and calling
 		// its methods before list.New has run panics.
-		observationList: list.New(nil, list.NewDefaultDelegate(), 0, 0),
-		conceptList:     list.New(nil, list.NewDefaultDelegate(), 0, 0),
-		recordList:      list.New(nil, list.NewDefaultDelegate(), 0, 0),
-		searchList:      list.New(nil, list.NewDefaultDelegate(), 0, 0),
+		observationList: newBrowserList(nil, "", 0, 0),
+		conceptList:     newBrowserList(nil, "", 0, 0),
+		recordList:      newBrowserList(nil, "", 0, 0),
+		searchList:      newBrowserList(nil, "", 0, 0),
 		searchInput:     ti,
 	}, nil
 }
@@ -167,14 +168,24 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.projectList.SetSize(msg.Width, msg.Height)
-		m.observationList.SetSize(msg.Width, msg.Height)
-		m.conceptList.SetSize(msg.Width, msg.Height)
-		m.searchList.SetSize(msg.Width, msg.Height)
+		h := m.listHeight()
+		for _, l := range []*list.Model{&m.projectList, &m.observationList, &m.conceptList, &m.recordList, &m.searchList} {
+			l.SetSize(msg.Width, h)
+		}
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.searching {
+		// Ctrl-C quits from everywhere, typing and errors included, and writes
+		// nothing (DR-0064).
+		if msg.Type == tea.KeyCtrlC {
+			return m, tea.Quit
+		}
+		if m.err != nil {
+			return m.updateError(msg)
+		}
+		// While text is being typed every printable key is text, so this is
+		// asked before any letter is bound (DR-0064, amendment).
+		if m.capturingText() {
 			return m.updateSearching(msg)
 		}
 		switch m.state {
@@ -193,10 +204,65 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+/** newBrowserList builds one of the TUI's lists. The model owns the keys, so the
+ * list gets none of its own that act: no quit keys (its keymap quits on q and
+ * Esc, and Esc must do nothing outside a step), no filter of its own (it would be
+ * a hidden text mode where q is text), and no help line (the legend bar is the
+ * screen's help).
+ *
+ * Parameters:
+ *   items ([]list.Item) — the rows
+ *   title (string) — the list title, "" for none
+ *   w, h (int) — the size
+ *
+ * Returns:
+ *   list.Model — a list with only navigation keys
+ *
+ * Example:
+ *   l := newBrowserList(items, "Records — alpha", 80, 23)
+ */
+func newBrowserList(items []list.Item, title string, w, h int) list.Model {
+	l := list.New(items, list.NewDefaultDelegate(), w, h)
+	l.Title = title
+	l.SetFilteringEnabled(false)
+	l.SetShowHelp(false)
+	// Empty bindings, not disabled ones: the list re-enables its own quit keys
+	// whenever its filter or key state changes, but a binding with no keys never
+	// matches.
+	l.KeyMap.Quit = bkey.NewBinding()
+	l.KeyMap.ForceQuit = bkey.NewBinding()
+	return l
+}
+
+// listHeight is the window height less the legend line.
+func (m *tuiModel) listHeight() int {
+	if m.height <= 1 {
+		return 0
+	}
+	return m.height - 1
+}
+
+// capturingText reports whether the TUI is taking text, so a key handler treats
+// q, j, k and the rest as characters (DR-0064, amendment). Today that is the
+// search prompt; filters, forms and the command line join it later.
+func (m *tuiModel) capturingText() bool { return m.searching }
+
+// updateError handles a key while an error is on screen: q or Enter dismisses it
+// and nothing else happens. Ctrl-C is handled before this is reached.
+func (m *tuiModel) updateError(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Type == tea.KeyEnter || (msg.Type == tea.KeyRunes && string(msg.Runes) == "q") {
+		m.err = nil
+	}
+	return m, nil
+}
+
+// updateProjects: the top screen. q quits here (there is nowhere further back).
 func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "q":
 		return m, tea.Quit
+	case "esc":
+		return m, nil
 	case "/":
 		m.startSearch()
 		return m, nil
@@ -217,30 +283,33 @@ func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// goTo loads and shows one of a project's lists, or shows the error.
+func (m *tuiModel) goTo(state viewState, load func() error) (tea.Model, tea.Cmd) {
+	if load != nil {
+		if err := load(); err != nil {
+			m.setErr(err)
+			return m, nil
+		}
+	}
+	m.setState(state)
+	return m, nil
+}
+
+// updateObservations: a project's observations. q goes back to the projects; c and
+// r switch to its concepts and records.
 func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "ctrl+c":
-		return m, tea.Quit
+	case "q":
+		return m.goTo(viewProjects, nil)
 	case "esc":
-		m.setState(viewProjects)
 		return m, nil
 	case "/":
 		m.startSearch()
 		return m, nil
 	case "c":
-		if err := m.loadConcepts(); err != nil {
-			m.setErr(err)
-			return m, nil
-		}
-		m.setState(viewConcepts)
-		return m, nil
+		return m.goTo(viewConcepts, m.loadConcepts)
 	case "r":
-		if err := m.loadRecords(); err != nil {
-			m.setErr(err)
-			return m, nil
-		}
-		m.setState(viewRecords)
-		return m, nil
+		return m.goTo(viewRecords, m.loadRecords)
 	}
 	var cmd tea.Cmd
 	m.observationList, cmd = m.observationList.Update(msg)
@@ -249,21 +318,14 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "ctrl+c":
-		return m, tea.Quit
+	case "q":
+		return m.goTo(viewProjects, nil)
 	case "esc":
-		m.setState(viewProjects)
 		return m, nil
 	case "o":
-		m.setState(viewObservations)
-		return m, nil
+		return m.goTo(viewObservations, nil)
 	case "r":
-		if err := m.loadRecords(); err != nil {
-			m.setErr(err)
-			return m, nil
-		}
-		m.setState(viewRecords)
-		return m, nil
+		return m.goTo(viewRecords, m.loadRecords)
 	case "/":
 		m.startSearch()
 		return m, nil
@@ -273,26 +335,18 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// updateRecords handles the records view. Read-only: no key here writes,
-// consistent with the TUI's existing scope. record new, set-status and
-// supersede are CLI verbs.
+// updateRecords handles the records view. No key here writes yet: the first
+// write, set-status from a selected record, arrives with v0.0.19 T6.
 func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "ctrl+c":
-		return m, tea.Quit
+	case "q":
+		return m.goTo(viewProjects, nil)
 	case "esc":
-		m.setState(viewProjects)
 		return m, nil
 	case "o":
-		m.setState(viewObservations)
-		return m, nil
+		return m.goTo(viewObservations, nil)
 	case "c":
-		if err := m.loadConcepts(); err != nil {
-			m.setErr(err)
-			return m, nil
-		}
-		m.setState(viewConcepts)
-		return m, nil
+		return m.goTo(viewConcepts, m.loadConcepts)
 	case "/":
 		m.startSearch()
 		return m, nil
@@ -302,12 +356,12 @@ func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateSearchResults: q returns to the screen the search began on.
 func (m *tuiModel) updateSearchResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "q", "ctrl+c":
-		return m, tea.Quit
+	case "q":
+		return m.goTo(m.searchFrom, nil)
 	case "esc":
-		m.setState(viewProjects)
 		return m, nil
 	case "/":
 		m.startSearch()
@@ -318,6 +372,8 @@ func (m *tuiModel) updateSearchResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateSearching handles a key in the search prompt. Everything printable is
+// text; Esc leaves the prompt and Enter runs the search.
 func (m *tuiModel) updateSearching(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -341,6 +397,11 @@ func (m *tuiModel) updateSearching(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *tuiModel) startSearch() {
+	// A search started from its own results keeps the way back to where the first
+	// one began.
+	if m.state != viewSearch {
+		m.searchFrom = m.state
+	}
 	m.searching = true
 	m.searchInput.SetValue("")
 	m.searchInput.Focus()
@@ -358,8 +419,7 @@ func (m *tuiModel) loadObservations() error {
 	for i, o := range obs {
 		items[i] = observationItem{o}
 	}
-	l := list.New(items, list.NewDefaultDelegate(), m.width, m.height)
-	l.Title = fmt.Sprintf("Observations — %s", m.selectedProject.Name)
+	l := newBrowserList(items, fmt.Sprintf("Observations — %s", m.selectedProject.Name), m.width, m.listHeight())
 	m.observationList = l
 	return nil
 }
@@ -381,8 +441,7 @@ func (m *tuiModel) loadRecords() error {
 	for i, r := range records {
 		items[len(records)-1-i] = recordItem{r}
 	}
-	l := list.New(items, list.NewDefaultDelegate(), m.width, m.height)
-	l.Title = fmt.Sprintf("Records — %s", m.selectedProject.Name)
+	l := newBrowserList(items, fmt.Sprintf("Records — %s", m.selectedProject.Name), m.width, m.listHeight())
 	m.recordList = l
 	return nil
 }
@@ -399,8 +458,7 @@ func (m *tuiModel) loadConcepts() error {
 	for i, c := range concepts {
 		items[i] = conceptItem{c}
 	}
-	l := list.New(items, list.NewDefaultDelegate(), m.width, m.height)
-	l.Title = fmt.Sprintf("Concepts — %s", m.selectedProject.Name)
+	l := newBrowserList(items, fmt.Sprintf("Concepts — %s", m.selectedProject.Name), m.width, m.listHeight())
 	m.conceptList = l
 	return nil
 }
@@ -416,29 +474,53 @@ func (m *tuiModel) runSearch(term string) error {
 	for i, r := range results {
 		items[i] = searchResultItem{r}
 	}
-	l := list.New(items, list.NewDefaultDelegate(), m.width, m.height)
-	l.Title = fmt.Sprintf("Search: %s", term)
+	l := newBrowserList(items, fmt.Sprintf("Search: %s", term), m.width, m.listHeight())
 	m.searchList = l
 	return nil
 }
 
-func (m *tuiModel) View() string {
-	if m.err != nil {
-		return fmt.Sprintf("error: %v\n\npress q to quit\n", m.err)
+// legend is the line of keys that apply on the current screen. It changes with
+// the mode: while typing, q is text and is not offered.
+func (m *tuiModel) legend() string {
+	switch {
+	case m.err != nil:
+		return "q dismiss   Ctrl-C quit"
+	case m.capturingText():
+		return "Esc cancel   Enter search   Ctrl-C quit"
 	}
-	if m.searching {
-		return fmt.Sprintf("Search: %s\n\n(enter to search, esc to cancel)\n", m.searchInput.View())
-	}
+	move := "↑/↓ j/k move"
 	switch m.state {
 	case viewObservations:
-		return m.observationList.View()
+		return move + "   c concepts   r records   / search   q back"
 	case viewConcepts:
-		return m.conceptList.View()
-	case viewSearch:
-		return m.searchList.View()
+		return move + "   o observations   r records   / search   q back"
 	case viewRecords:
-		return m.recordList.View()
-	default:
-		return m.projectList.View()
+		return move + "   o observations   c concepts   / search   q back"
+	case viewSearch:
+		return move + "   / search   q back"
 	}
+	return move + "   Enter open   / search   q quit"
+}
+
+func (m *tuiModel) View() string {
+	if m.err != nil {
+		return fmt.Sprintf("error: %v\n\n%s\n", m.err, m.legend())
+	}
+	if m.searching {
+		return fmt.Sprintf("Search: %s\n\n%s\n", m.searchInput.View(), m.legend())
+	}
+	var body string
+	switch m.state {
+	case viewObservations:
+		body = m.observationList.View()
+	case viewConcepts:
+		body = m.conceptList.View()
+	case viewSearch:
+		body = m.searchList.View()
+	case viewRecords:
+		body = m.recordList.View()
+	default:
+		body = m.projectList.View()
+	}
+	return body + "\n" + m.legend()
 }
