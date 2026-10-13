@@ -45,9 +45,9 @@
   retractions, and Observations → Browse (the project list). Still not in the interface: Documents →
   Frontmatter (frontmatter runs through `:`; it needs a field picker), Enter on search results and on
   observations, and the removing writes `source remove`, `unlink` and `document delete` (no screen to select
-  from yet). `kb verbs --json` does not carry the menu fields (label, built, release). The Browse rows show
-  the command's output and are not selectable lists, so there is no Enter-to-open-detail yet (each verb has
-  a `show`). The viewer has no horizontal scroll and the find does not mark the match inside the line;
+  from yet). `kb verbs --json` does not carry the menu fields (label, built, release). The Browse rows are
+  a selectable list, and Enter runs the verb's `show`; there is no filter on those lists yet (`/` is the global
+  search). The viewer has no horizontal scroll and the find does not mark the match inside the line;
   `KB_PAGER=less -R` is the escape hatch.
 
 - [x] **DONE 2026-10-06, released in v0.0.16.** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,

@@ -7,11 +7,11 @@ release notes; maintained going forward.
 
 ### Added
 
-- **Four more rows are built in the terminal interface:** Check (`kb check-db`), Concepts → Browse,
-  Documents → Browse and Sources → Browse run the command's own read and show its output in the viewer, with
-  the command that does the same. Observations → Browse opens the project list, where Enter and `o` reach a
-  project's observations.
-
+- **Five more rows are built in the terminal interface.** Check (`kb check-db`) runs the command's own read and
+  shows its output with the command that does the same. Concepts → Browse, Documents → Browse and Sources →
+  Browse are lists to choose from: Enter shows the item through the command's own `show`, `q` returns to the
+  list, and an empty list says so on the menu. Observations → Browse opens the project list, where Enter and
+  `o` reach a project's observations.
 - **Concepts → Recall… and Suggest… ask for their arguments in a form** (text, concept names and project for
   Recall; project and limit for Suggest) and show the command's own output with the command that does the same.
   A text that starts with a dash is passed after `--`, so it is read as text.

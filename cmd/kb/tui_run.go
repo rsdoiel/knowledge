@@ -101,6 +101,12 @@ func (m *tuiModel) runDirect(what string) (tea.Model, tea.Cmd) {
  *   return m.showRead([]string{"source", "list"})
  */
 func (m *tuiModel) showRead(args []string) (tea.Model, tea.Cmd) {
+	return m.showReadFrom(args, m.state)
+}
+
+// showReadFrom is showRead with the screen q returns to named: a list shows an
+// item and q comes back to the list.
+func (m *tuiModel) showReadFrom(args []string, back viewState) (tea.Model, tea.Cmd) {
 	text, err := m.runArgs(args)
 	if text == "" && err == nil {
 		text = "(nothing to list)"
@@ -110,5 +116,5 @@ func (m *tuiModel) showRead(args []string) (tea.Model, tea.Cmd) {
 		words[i] = shellWord(a)
 	}
 	text += "\n\nequivalent:  kb " + strings.Join(words, " ")
-	return m.showCommandResult(args, text, err, m.state, false)
+	return m.showCommandResult(args, text, err, back, false)
 }

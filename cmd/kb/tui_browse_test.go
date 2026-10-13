@@ -29,29 +29,51 @@ func browseResult(t *testing.T, m *tuiModel, wants ...string) {
 	}
 }
 
-func TestBrowse_ConceptsListsConceptsAndShowsTheCommand(t *testing.T) {
-	m, _, kb := layoutModel(t)
-	if _, err := kb.AddConcept("Zebra crossing", "a place to cross"); err != nil {
-		t.Fatal(err)
+// browseList asserts the model is on a Browse list showing every want.
+func browseList(t *testing.T, m *tuiModel, wants ...string) {
+	t.Helper()
+	if m.state != viewBrowse {
+		t.Fatalf("state = %s, want a selectable list\n%s", viewStateNames[m.state], m.View())
 	}
-	m = openLeaf(t, m, "Concepts", "Browse")
-	browseResult(t, m, "Zebra crossing", "equivalent:", "kb concept list")
-	m, _ = press(t, m, ch('q'))
-	if m.state != viewGroup {
-		t.Errorf("q from the result gave %s, want the Concepts menu", viewStateNames[m.state])
+	v := m.View()
+	for _, want := range wants {
+		if !strings.Contains(v, want) {
+			t.Errorf("the list lacks %q:\n%s", want, v)
+		}
 	}
 }
 
-func TestBrowse_SourcesListsSourcesAndShowsTheCommand(t *testing.T) {
+func TestBrowse_ConceptsIsAListAndEnterShowsTheConcept(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	for _, n := range []string{"Zebra crossing", "Aardvark"} {
+		if _, err := kb.AddConcept(n, "about "+n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m = openLeaf(t, m, "Concepts", "Browse")
+	browseList(t, m, "Aardvark", "Zebra crossing", "Enter show")
+	m, _ = press(t, m, keyEnter) // the first row
+	browseResult(t, m, "Aardvark", "equivalent:", "kb concept show")
+	m, _ = press(t, m, ch('q'))
+	browseList(t, m, "Zebra crossing")
+	m, _ = press(t, m, ch('q'))
+	if m.state != viewGroup {
+		t.Errorf("q from the list gave %s, want the Concepts menu", viewStateNames[m.state])
+	}
+}
+
+func TestBrowse_SourcesIsAListAndEnterShowsTheSource(t *testing.T) {
 	m, _, kb := layoutModel(t)
 	if _, err := kb.AddSource(knowledge.Source{Title: "A Cited Work On Zebras"}); err != nil {
 		t.Fatal(err)
 	}
 	m = openLeaf(t, m, "Sources", "Browse")
-	browseResult(t, m, "A Cited Work On Zebras", "equivalent:", "kb source list")
+	browseList(t, m, "A Cited Work On Zebras")
+	m, _ = press(t, m, keyEnter)
+	browseResult(t, m, "A Cited Work On Zebras", "equivalent:", "kb source show")
 }
 
-func TestBrowse_DocumentsListsDocumentsAndShowsTheCommand(t *testing.T) {
+func TestBrowse_DocumentsIsAListAndEnterShowsTheDocument(t *testing.T) {
 	m, _, kb := layoutModel(t)
 	p, err := kb.ProjectByName("clasm")
 	if err != nil || p == nil {
@@ -61,7 +83,21 @@ func TestBrowse_DocumentsListsDocumentsAndShowsTheCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	m = openLeaf(t, m, "Documents", "Browse")
-	browseResult(t, m, "The Zebra Chronicle", "equivalent:", "kb document list")
+	browseList(t, m, "The Zebra Chronicle")
+	m, _ = press(t, m, keyEnter)
+	browseResult(t, m, "The Zebra Chronicle", "equivalent:", "kb document show")
+}
+
+// An empty list says so on the menu it came from and does not open a blank screen.
+func TestBrowse_AnEmptyListSaysSoAndStaysOnTheMenu(t *testing.T) {
+	m, _, _ := layoutModel(t)
+	m = openLeaf(t, m, "Sources", "Browse")
+	if m.state != viewGroup {
+		t.Fatalf("state = %s, want the Sources menu", viewStateNames[m.state])
+	}
+	if v := m.View(); !strings.Contains(v, "no sources") {
+		t.Errorf("an empty list does not say so:\n%s", v)
+	}
 }
 
 func TestBrowse_CheckRunsCheckDBAndShowsTheCommand(t *testing.T) {

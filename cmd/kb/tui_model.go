@@ -37,6 +37,7 @@ const (
 	viewCommand     // the `:` command line
 	viewReviewQueue // document sections waiting for a person
 	viewSummary     // one section's summary unit: write it, then review it beside its source
+	viewBrowse      // a Browse list of concepts, sources or documents: Enter shows the item
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -135,6 +136,8 @@ type tuiModel struct {
 	planView        viewport.Model
 	command         *commandFlow // the `:` prompt, in viewCommand
 	queueList       list.Model   // the review queue
+	browseList      list.Model   // a Browse list, in viewBrowse
+	browseKind      string       // what it lists: concept, source or document
 	unit            *summaryUnit // the summary unit in progress, in viewSummary
 	textPurpose     string
 	textPlain       []string        // the viewer's lines without colour, for the find
@@ -272,6 +275,7 @@ var viewStateNames = map[viewState]string{
 	viewCommand:      "viewCommand",
 	viewReviewQueue:  "viewReviewQueue",
 	viewSummary:      "viewSummary",
+	viewBrowse:       "viewBrowse",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -307,6 +311,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		for _, l := range []*list.Model{&m.projectList, &m.searchList, &m.scopeList} {
 			l.SetSize(m.cols()-4, m.listHeight())
+		}
+		if m.browseKind != "" { // the list exists once a Browse row has been opened
+			m.browseList.SetSize(m.cols()-4, m.listHeight())
 		}
 		for _, l := range []*list.Model{&m.observationList, &m.conceptList, &m.recordList} {
 			l.SetSize(m.cols()-4, m.tabHeight())
@@ -392,6 +399,8 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePlan(msg)
 		case viewReviewQueue:
 			return m.updateReviewQueue(msg)
+		case viewBrowse:
+			return m.updateBrowse(msg)
 		default:
 			return m.updateProjects(msg)
 		}
@@ -717,7 +726,7 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 	case "record fmt":
 		return m.runDirect("fmt")
 	case "concept list", "document list", "source list":
-		return m.showRead([]string{it.Verb, it.Sub})
+		return m.openBrowse(it.Verb)
 	case "source check-retractions":
 		// It sends every registered DOI to a service and marks hits as retracted, so
 		// it asks first (DR-0067: a write that reaches the network is not a read).
@@ -1090,6 +1099,8 @@ func (m *tuiModel) legendFull() string {
 		return "Enter run   Esc cancel   Ctrl-C quit"
 	case viewSummary:
 		return m.summaryLegend()
+	case viewBrowse:
+		return move + "   Enter show   / search   q back"
 	case viewReviewQueue:
 		return move + "   Enter summarise   " + m.scopeKey() + "   / search   : command   q back"
 	case viewPlan:
@@ -1174,6 +1185,8 @@ func (m *tuiModel) screen() (string, []string) {
 		return m.commandScreen()
 	case viewSummary:
 		return m.summaryScreen()
+	case viewBrowse:
+		return m.browseList.Title, viewLines(m.browseList)
 	case viewReviewQueue:
 		return m.queueList.Title, viewLines(m.queueList)
 	case viewObservations:
