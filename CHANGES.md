@@ -3,13 +3,16 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased
+## v0.0.21 — 2026-10-13
+
+Records are read in kb's own viewer with Markdown highlighting, and a pager no longer depends on which programs
+are installed (knowledge DR-0071, a partial supersede of DR-0066 point 5). Written and tested red first; the
+race detector passed on darwin/arm64 at `13c96bf`, the last code commit.
 
 ### Fixed
 
 - **Enter on a record in the interface returned straight to the list.** `bat` was chosen as the pager when
   installed, and its default quits at once when the record fits one screen, so the interface repainted over it.
-
 - **`kb ingest`'s "missing" line said kb had no verb to remove the row.** It now names the command:
   `kb record delete clasm/DR-0002`.
 - **The `kb-index(1)` man page pointed at `TODO.md`**, a developers' file; the sentence now says what the
