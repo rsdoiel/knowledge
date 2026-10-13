@@ -548,6 +548,8 @@ func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.runDirect("index")
 		case it.Verb == "ingest":
 			return m.planIngest()
+		case it.Verb == "check-db":
+			return m.showRead([]string{"check-db"})
 		case !it.Built:
 			m.explainUnbuilt(it)
 		}
@@ -714,6 +716,13 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 		return m.openRecordScope("proposed")
 	case "record fmt":
 		return m.runDirect("fmt")
+	case "concept list", "document list", "source list":
+		return m.showRead([]string{it.Verb, it.Sub})
+	case "observation list":
+		// Observations belong to a project, so Browse is the project list, where
+		// Enter opens a project and o its observations.
+		m.setState(viewProjects)
+		m.notice = "Observations belong to a project: press Enter on one, then o for its observations."
 	case "document review list":
 		m.scopeAll = false
 		return m.goTo(viewReviewQueue, m.loadReviewQueue)

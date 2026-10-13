@@ -3,6 +3,20 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+### Added
+
+- **Four more rows are built in the terminal interface:** Check (`kb check-db`), Concepts → Browse,
+  Documents → Browse and Sources → Browse run the command's own read and show its output in the viewer, with
+  the command that does the same. Observations → Browse opens the project list, where Enter and `o` reach a
+  project's observations.
+
+### Fixed
+
+- **Dimmed menu rows named v0.0.20, a release that had shipped.** They now name v0.0.22, and a test fails when a
+  row that is not built names a release at or below the current version.
+
 ## v0.0.21 — 2026-10-13
 
 Records are read in kb's own viewer with Markdown highlighting, and a pager no longer depends on which programs

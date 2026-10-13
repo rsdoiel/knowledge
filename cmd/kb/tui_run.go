@@ -84,3 +84,27 @@ func (m *tuiModel) runDirect(what string) (tea.Model, tea.Cmd) {
 	m.openViewer("result")
 	return m, nil
 }
+
+/** showRead runs a read verb that needs no argument (check-db, concept list,
+ * document list, source list) in-process, as the command line does, and shows its
+ * output in the viewer with the command that does the same. A read has no gate
+ * (knowledge DR-0067). A failure is shown as the command's own error, under what it
+ * printed.
+ *
+ * Parameters:
+ *   args ([]string) — the verb and subverb, such as {"concept", "list"}
+ *
+ * Returns:
+ *   (tea.Model, tea.Cmd) — the model, showing the result
+ *
+ * Example:
+ *   return m.showRead([]string{"source", "list"})
+ */
+func (m *tuiModel) showRead(args []string) (tea.Model, tea.Cmd) {
+	text, err := m.runArgs(args)
+	if text == "" && err == nil {
+		text = "(nothing to list)"
+	}
+	text += "\n\nequivalent:  kb " + strings.Join(args, " ")
+	return m.showCommandResult(args, text, err, m.state, false)
+}

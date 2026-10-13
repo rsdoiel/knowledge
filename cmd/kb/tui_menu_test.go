@@ -153,35 +153,43 @@ func TestMenu_AGroupOpensItsMenuAndBrowseOpensTheProjects(t *testing.T) {
 // A row that is not built is dimmed with its release, and choosing it explains
 // itself and shows the command that does the same, without leaving the screen.
 func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
-	m := menuModel(t)
-	if v := m.View(); !strings.Contains(v, "Check") || !strings.Contains(v, "(v0.0.22)") {
-		t.Errorf("the top menu does not mark Check as coming:\n%s", v)
+	m := openRow(t, menuModel(t), "Concepts")
+	if v := m.View(); !strings.Contains(v, "Recall") || !strings.Contains(v, "(v0.0.22)") {
+		t.Errorf("the Concepts menu does not mark Recall as coming:\n%s", v)
 	}
-	m = openRow(t, m, "Check")
-	if m.state != viewMenu {
+	for i, it := range groupMenu("concept") {
+		if it.Label == "Recall…" {
+			for j := 0; j < i; j++ {
+				m, _ = press(t, m, ch('j'))
+			}
+			break
+		}
+	}
+	m, _ = press(t, m, keyEnter)
+	if m.state != viewGroup {
 		t.Errorf("choosing an unbuilt row left the menu for %s", viewStateNames[m.state])
 	}
 	v := m.View()
-	for _, want := range []string{"not in the TUI yet", "v0.0.22", "kb check-db"} {
+	for _, want := range []string{"not in the TUI yet", "v0.0.22", "kb concept recall"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the explanation lacks %q:\n%s", want, v)
 		}
 	}
-	m, _ = press(t, m, ch('j'))
+	m, _ = press(t, m, ch('k'))
 	if strings.Contains(m.View(), "not in the TUI yet") {
 		t.Error("the explanation stayed after another key")
 	}
 }
 
-// A group with nothing built opens to a menu of dimmed rows, so what is coming is visible.
-func TestMenu_AGroupWithNothingBuiltStillOpens(t *testing.T) {
-	m := openRow(t, menuModel(t), "Documents")
+// A group whose rows are not all built still opens, and an unbuilt row in it shows
+// its command.
+func TestMenu_AGroupWithAnUnbuiltRowStillOpens(t *testing.T) {
+	m := openLeaf(t, menuModel(t), "Documents", "Frontmatter…")
 	if m.state != viewGroup || m.group != "document" {
 		t.Fatalf("state %s group %q, want the document group menu", viewStateNames[m.state], m.group)
 	}
-	m, _ = press(t, m, keyEnter)
-	if v := m.View(); !strings.Contains(v, "kb document list") {
-		t.Errorf("choosing Browse in a dimmed group should show its command:\n%s", v)
+	if v := m.View(); !strings.Contains(v, "kb document frontmatter") {
+		t.Errorf("choosing Frontmatter in the Documents group should show its command:\n%s", v)
 	}
 }
 

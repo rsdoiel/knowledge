@@ -37,7 +37,7 @@ func TestMenu_WhatIsBuilt(t *testing.T) {
 	for label, want := range map[string]bool{
 		"Projects": true, "Records": true, "Search": true, "Index": true,
 		"Observations": true, "Concepts": true, "Sources": true, "Documents": true,
-		"Ingest": true, "Check": false,
+		"Ingest": true, "Check": true,
 	} {
 		if built[label] != want {
 			t.Errorf("%s: built = %v, want %v", label, built[label], want)

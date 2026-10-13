@@ -318,7 +318,7 @@ func TestSummary_DraftTypedAtTheCommandLineAsksFirst(t *testing.T) {
 
 func TestSummary_TheRowIsBuilt(t *testing.T) {
 	for _, it := range groupMenu("document") {
-		want := it.Label == "Review queue" || it.Label == "Ingest a document…" || it.Label == "Tag…" || it.Label == "Fuzzy-tag…"
+		want := it.Label == "Browse" || it.Label == "Review queue" || it.Label == "Ingest a document…" || it.Label == "Tag…" || it.Label == "Fuzzy-tag…"
 		if it.Built != want {
 			t.Errorf("%s built = %v, want %v", it.Label, it.Built, want)
 		}
