@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+
+	knowledge "github.com/rsdoiel/knowledge"
 )
 
 /** browseItem is one row of a Browse list: a concept, source or document, and the
@@ -111,4 +113,40 @@ func (m *tuiModel) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.browseList, cmd = m.browseList.Update(msg)
 	return m, cmd
+}
+
+/** showSearchResult shows the row a search result names through the command's own
+ * show, with the command that does the same. A result the index holds by a type
+ * with no show of its own (a document summary) says where to find it.
+ *
+ * Parameters:
+ *   r (knowledge.KBSearchResult) — the selected result
+ *
+ * Returns:
+ *   (tea.Model, tea.Cmd) — the model, showing the item or a notice
+ *
+ * Example:
+ *   return m.showSearchResult(it.r)
+ */
+func (m *tuiModel) showSearchResult(r knowledge.KBSearchResult) (tea.Model, tea.Cmd) {
+	var args []string
+	switch r.SourceType {
+	case "observation":
+		args = []string{"observation", "show", strconv.FormatInt(r.SourceID, 10)}
+	case "concept":
+		args = []string{"concept", "show", "--", r.Label}
+	case "project":
+		args = []string{"project", "show", r.Label}
+	case "record":
+		rec, err := m.kb.RecordByID(r.SourceID)
+		if err != nil || rec == nil {
+			m.notice = fmt.Sprintf("the record this result names is no longer in the database (id %d)", r.SourceID)
+			return m, nil
+		}
+		args = []string{"record", "show", refOf(*rec, projectNames(m.kb)).String()}
+	default:
+		m.notice = fmt.Sprintf("a %s has no screen of its own here; Documents → Review queue lists summaries", r.SourceType)
+		return m, nil
+	}
+	return m.showReadFrom(args, viewSearch)
 }

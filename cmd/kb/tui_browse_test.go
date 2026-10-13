@@ -247,3 +247,67 @@ func TestBrowse_CheckRetractionsRunsOnYAndShowsTheResult(t *testing.T) {
 		t.Errorf("y did not run the command:\n%s", m.View())
 	}
 }
+
+// Enter on a search result and on an observation shows the item through the
+// command's own show, with the command that does the same; q comes back to the
+// list it was opened from.
+
+func searchFor(t *testing.T, m *tuiModel, term string) *tuiModel {
+	t.Helper()
+	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed(term)...), keyEnter)...)
+	if m.state != viewSearch {
+		t.Fatalf("state = %s, want the search results\n%s", viewStateNames[m.state], m.View())
+	}
+	return m
+}
+
+func TestBrowse_EnterOnAnObservationSearchResultShowsTheObservation(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	p, _ := kb.ProjectByName("clasm")
+	if _, err := kb.AddObservation(p.ID, "finding", "a zzzebra was seen near the gate"); err != nil {
+		t.Fatal(err)
+	}
+	m = searchFor(t, m, "zzzebra")
+	m, _ = press(t, m, keyEnter)
+	browseResult(t, m, "zzzebra was seen", "equivalent:", "kb observation show")
+	m, _ = press(t, m, ch('q'))
+	if m.state != viewSearch {
+		t.Errorf("q gave %s, want the search results", viewStateNames[m.state])
+	}
+}
+
+func TestBrowse_EnterOnAConceptSearchResultShowsTheConcept(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	if _, err := kb.AddConcept("Zzzebra", "a striped animal"); err != nil {
+		t.Fatal(err)
+	}
+	m = searchFor(t, m, "zzzebra")
+	m, _ = press(t, m, keyEnter)
+	browseResult(t, m, "Zzzebra", "equivalent:", "kb concept show")
+}
+
+func TestBrowse_EnterOnARecordSearchResultShowsTheRecord(t *testing.T) {
+	m, _, _ := layoutModel(t)
+	m = searchFor(t, m, "rough")
+	m, _ = press(t, m, keyEnter)
+	browseResult(t, m, "equivalent:", "kb record show")
+}
+
+func TestBrowse_EnterOnAnObservationInAProjectShowsIt(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	p, _ := kb.ProjectByName("clasm")
+	if _, err := kb.AddObservation(p.ID, "note", "the quick zzzebra jumps"); err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Projects", "Browse")
+	m, _ = press(t, m, keyEnter) // the project: its observations tab
+	if m.state != viewObservations {
+		t.Fatalf("state = %s, want the observations tab", viewStateNames[m.state])
+	}
+	m, _ = press(t, m, keyEnter)
+	browseResult(t, m, "quick zzzebra", "equivalent:", "kb observation show")
+	m, _ = press(t, m, ch('q'))
+	if m.state != viewObservations {
+		t.Errorf("q gave %s, want the observations tab", viewStateNames[m.state])
+	}
+}

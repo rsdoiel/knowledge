@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	bkey "github.com/charmbracelet/bubbles/key"
@@ -831,6 +832,11 @@ func (m *tuiModel) goTo(state viewState, load func() error) (tea.Model, tea.Cmd)
 // r switch to its concepts and records.
 func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "enter":
+		if it, ok := m.observationList.SelectedItem().(observationItem); ok {
+			return m.showReadFrom([]string{"observation", "show", strconv.FormatInt(it.o.ID, 10)}, viewObservations)
+		}
+		return m, nil
 	case "d":
 		return m.removeSelected()
 	case "n":
@@ -919,6 +925,11 @@ func (m *tuiModel) updateSearchResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "/":
 		m.startSearch()
+		return m, nil
+	case "enter":
+		if it, ok := m.searchList.SelectedItem().(searchResultItem); ok {
+			return m.showSearchResult(it.r)
+		}
 		return m, nil
 	}
 	var cmd tea.Cmd
@@ -1113,11 +1124,11 @@ func (m *tuiModel) legendFull() string {
 		return move + "   Enter read   s status   u supersede   d delete   o c r tabs   / search   q back"
 	case viewObservations, viewConcepts:
 		if m.state == viewObservations {
-			return move + "   n new   e edit   d delete   o c r tabs   / search   q back"
+			return move + "   Enter show   n new   e edit   d delete   o c r tabs   / search   q back"
 		}
 		return move + "   n new   e rename   d delete   o c r tabs   / search   q back"
 	case viewSearch:
-		return move + "   / search   q back"
+		return move + "   Enter show   / search   q back"
 	}
 	return move + "   Enter open   n new   s status   e describe   r rename   d delete   / search   q back"
 }

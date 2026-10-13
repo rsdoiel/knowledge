@@ -1726,6 +1726,8 @@ type KBSearchResult struct {
 	Label      string
 	Snippet    string
 	SourceType string
+	SourceID   int64 // the row's id in its own table, as the index stores it; 0 when unknown
+	ProjectID  int64 // the owning project's id; 0 for a concept or a workspace-tier record
 }
 
 /** Search performs a full-text search across observations, projects, and concepts
@@ -1804,7 +1806,9 @@ func (kb *KnowledgeBase) runSearch(term string) ([]KBSearchResult, error) {
 		            THEN COALESCE(p.name, '') ELSE kb_fts.label END,
 		       CASE WHEN kb_fts.source_type = 'observation'
 		            THEN kb_fts.body ELSE kb_fts.descr END,
-		       kb_fts.source_type
+		       kb_fts.source_type,
+		       CAST(COALESCE(NULLIF(kb_fts.source_id, ''), 0) AS INTEGER),
+		       CAST(COALESCE(NULLIF(kb_fts.project_id, ''), 0) AS INTEGER)
 		FROM   kb_fts
 		LEFT JOIN projects p ON kb_fts.source_type = 'observation'
 		                     AND p.id = kb_fts.project_id
@@ -1819,7 +1823,7 @@ func (kb *KnowledgeBase) runSearch(term string) ([]KBSearchResult, error) {
 	var out []KBSearchResult
 	for rows.Next() {
 		var r KBSearchResult
-		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet, &r.SourceType); err != nil {
+		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet, &r.SourceType, &r.SourceID, &r.ProjectID); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

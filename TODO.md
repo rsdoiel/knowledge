@@ -43,8 +43,7 @@
 - [ ] **TUI: one row still dimmed, and `kb verbs --json` without the menu fields (v0.0.22).** Built since v0.0.21
   (unreleased): Check, Concepts → Browse, Recall and Suggest, Documents → Browse, Sources → Browse and Check
   retractions, and Observations → Browse (the project list). Still not in the interface: Documents →
-  Frontmatter (frontmatter runs through `:`; it needs a field picker), Enter on search results and on
-  observations, and the removing writes `source remove`, `unlink` and `document delete` (no screen to select
+  Frontmatter (frontmatter runs through `:`; it needs a field picker), and the removing writes `source remove`, `unlink` and `document delete` (no screen to select
   from yet). `kb verbs --json` does not carry the menu fields (label, built, release). The Browse rows are
   a selectable list, and Enter runs the verb's `show`; there is no filter on those lists yet (`/` is the global
   search). The viewer has no horizontal scroll and the find does not mark the match inside the line;

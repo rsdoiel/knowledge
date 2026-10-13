@@ -12,6 +12,10 @@ release notes; maintained going forward.
   Browse are lists to choose from: Enter shows the item through the command's own `show`, `q` returns to the
   list, and an empty list says so on the menu. Observations → Browse opens the project list, where Enter and
   `o` reach a project's observations.
+- **Enter shows the item** on a search result (an observation, concept, project or record, through the
+  command's own `show`) and on an observation in a project's tab. `q` returns to the list it came from.
+- **Library: `KBSearchResult` carries `SourceID` and `ProjectID`**, the row's id and its project's, as the
+  index stores them (additive; `Search` is unchanged).
 - **Concepts → Recall… and Suggest… ask for their arguments in a form** (text, concept names and project for
   Recall; project and limit for Suggest) and show the command's own output with the command that does the same.
   A text that starts with a dash is passed after `--`, so it is read as text.

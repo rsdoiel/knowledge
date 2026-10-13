@@ -2532,3 +2532,40 @@ func TestSearch_DocumentedSyntaxIsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// A search result says which row it is, so a caller can open it: the row's id and
+// the project's, as the index stores them.
+func TestSearch_ResultsCarryTheRowAndProjectIDs(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	oid, err := kb.AddObservation(pid, "note", "a zzzebra was seen")
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	cid, err := kb.AddConcept("Zzzebra", "a striped animal")
+	if err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	results, err := kb.Search("zzzebra")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	var sawObs, sawConcept bool
+	for _, r := range results {
+		switch r.SourceType {
+		case "observation":
+			sawObs = true
+			if r.SourceID != oid || r.ProjectID != pid {
+				t.Errorf("observation result: SourceID %d ProjectID %d, want %d and %d", r.SourceID, r.ProjectID, oid, pid)
+			}
+		case "concept":
+			sawConcept = true
+			if r.SourceID != cid {
+				t.Errorf("concept result: SourceID %d, want %d", r.SourceID, cid)
+			}
+		}
+	}
+	if !sawObs || !sawConcept {
+		t.Errorf("results %+v lack the observation or the concept", results)
+	}
+}
