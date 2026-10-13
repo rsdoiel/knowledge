@@ -718,6 +718,21 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 		return m.runDirect("fmt")
 	case "concept list", "document list", "source list":
 		return m.showRead([]string{it.Verb, it.Sub})
+	case "source check-retractions":
+		// It sends every registered DOI to a service and marks hits as retracted, so
+		// it asks first (DR-0067: a write that reaches the network is not a read).
+		args := []string{"source", "check-retractions"}
+		m.beginPlan(&planFlow{
+			title:      "source check-retractions",
+			note:       "this command has not been run yet",
+			text:       "It looks up every registered, non-retracted DOI source in the Retraction Watch service, which needs network access, and marks hits as retracted. It changes the database. y runs it.",
+			equivalent: "kb source check-retractions",
+			apply:      func() (string, error) { return m.runArgs(args) },
+		}, m.state)
+	case "concept recall":
+		return m.beginForm(m.newRecallForm())
+	case "concept suggest":
+		return m.beginForm(m.newSuggestForm())
 	case "observation list":
 		// Observations belong to a project, so Browse is the project list, where
 		// Enter opens a project and o its observations.

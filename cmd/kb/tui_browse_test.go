@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/rsdoiel/knowledge"
 )
 
@@ -79,5 +80,134 @@ func TestBrowse_ObservationsGoesToTheProjectList(t *testing.T) {
 	}
 	if v := m.View(); !strings.Contains(v, "observations") {
 		t.Errorf("the project list does not say how to reach observations:\n%s", v)
+	}
+}
+
+// Recall and Suggest take arguments, so they ask for them in a form and then show
+// the command's own output; a read has no confirmation (DR-0067).
+
+func TestBrowse_RecallAsksForTextAndShowsWhatIsLinked(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	if _, err := kb.AddConcept("Zebra", "a striped animal"); err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Concepts", "Recall…")
+	if m.state != viewForm {
+		t.Fatalf("state = %s, want a form asking for the text", viewStateNames[m.state])
+	}
+	// text, then concept names and project left empty
+	m, _ = press(t, m, append(typed("I saw a zebra"), keyEnter, keyEnter, keyEnter)...)
+	browseResult(t, m, "matched concepts", "Zebra", "equivalent:", "kb concept recall", "zebra")
+	m, _ = press(t, m, ch('q'))
+	if m.state != viewGroup {
+		t.Errorf("q from the result gave %s, want the Concepts menu", viewStateNames[m.state])
+	}
+}
+
+func TestBrowse_RecallWithNothingToLookForSaysSo(t *testing.T) {
+	m, _, _ := layoutModel(t)
+	m = openLeaf(t, m, "Concepts", "Recall…")
+	m, _ = press(t, m, keyEnter, keyEnter, keyEnter)
+	if m.state != viewGroup {
+		t.Fatalf("state = %s, want the Concepts menu", viewStateNames[m.state])
+	}
+	if v := m.View(); !strings.Contains(v, "text or concept names") {
+		t.Errorf("no explanation of what to give:\n%s", v)
+	}
+}
+
+func TestBrowse_RecallGivesADashLeadingTextToTheCommandWhole(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	if _, err := kb.AddConcept("Zebra", "a striped animal"); err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Concepts", "Recall…")
+	m, _ = press(t, m, append(typed("--force zebra"), keyEnter, keyEnter, keyEnter)...)
+	browseResult(t, m, "Zebra", "equivalent:")
+}
+
+func TestBrowse_SuggestAsksForAProjectAndALimit(t *testing.T) {
+	m, _, _ := layoutModel(t)
+	m = openLeaf(t, m, "Concepts", "Suggest…")
+	if m.state != viewForm {
+		t.Fatalf("state = %s, want a form", viewStateNames[m.state])
+	}
+	// project left empty; the limit starts at 20, so clear it and give 5
+	m, _ = press(t, m, keyEnter)
+	back := tea.KeyMsg{Type: tea.KeyBackspace}
+	m, _ = press(t, m, append([]tea.Msg{back, back}, append(typed("5"), keyEnter)...)...)
+	if m.state != viewText {
+		t.Fatalf("state = %s, want the viewer\n%s", viewStateNames[m.state], m.View())
+	}
+	v := m.View()
+	for _, want := range []string{"kb concept suggest", "--limit 5", "equivalent:"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("the result lacks %q:\n%s", want, v)
+		}
+	}
+}
+
+func TestBrowse_SuggestRefusesALimitThatIsNotANumber(t *testing.T) {
+	m, _, _ := layoutModel(t)
+	m = openLeaf(t, m, "Concepts", "Suggest…")
+	m, _ = press(t, m, keyEnter)
+	back := tea.KeyMsg{Type: tea.KeyBackspace}
+	m, _ = press(t, m, append([]tea.Msg{back, back}, append(typed("many"), keyEnter)...)...)
+	if m.state != viewForm {
+		t.Fatalf("state = %s; a bad limit should keep the form open", viewStateNames[m.state])
+	}
+	if v := m.View(); !strings.Contains(v, "number") {
+		t.Errorf("the field does not say why it was refused:\n%s", v)
+	}
+}
+
+// Check retractions sends each registered DOI to a service and marks hits as
+// retracted: a write that reaches the network. It asks before it runs, and the
+// class is changing, so `:` asks too (DR-0067).
+
+func TestBrowse_CheckRetractionsIsAChangingWrite(t *testing.T) {
+	class, ok := commandClass([]string{"source", "check-retractions"})
+	if !ok || class != classChanging {
+		t.Errorf("class = %v (found %v), want classChanging: it marks sources retracted and uses the network", class, ok)
+	}
+}
+
+func TestBrowse_CheckRetractionsAsksBeforeAnyLookup(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	id, err := kb.AddSource(knowledge.Source{Title: "A Source With A DOI", IdentifierType: "doi", IdentifierValue: "10.1234/zebra"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Sources", "Check retractions…")
+	if m.state != viewPlan {
+		t.Fatalf("state = %s, want the confirmation before anything is looked up\n%s", viewStateNames[m.state], m.View())
+	}
+	v := m.View()
+	for _, want := range []string{"Watch service", "network access", "kb source check-retractions", "y runs"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("the confirmation lacks %q:\n%s", want, v)
+		}
+	}
+	m, _ = press(t, m, ch('n'))
+	if m.state != viewGroup {
+		t.Errorf("n gave %s, want the Sources menu", viewStateNames[m.state])
+	}
+	src, err := kb.ShowSource(id)
+	if err != nil || src == nil {
+		t.Fatalf("source %d: %v", id, err)
+	}
+	if src.Retracted {
+		t.Error("a cancelled check marked the source retracted")
+	}
+}
+
+// With no DOI source there is nothing to look up and no network use, so y can run
+// in a test and shows the command's own counts.
+func TestBrowse_CheckRetractionsRunsOnYAndShowsTheResult(t *testing.T) {
+	m, _, _ := layoutModel(t)
+	m = openLeaf(t, m, "Sources", "Check retractions…")
+	m, _ = press(t, m, ch('y'))
+	if strings.Contains(m.View(), "has not been run yet") {
+		t.Errorf("y did not run the command:\n%s", m.View())
 	}
 }

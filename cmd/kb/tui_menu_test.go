@@ -153,12 +153,12 @@ func TestMenu_AGroupOpensItsMenuAndBrowseOpensTheProjects(t *testing.T) {
 // A row that is not built is dimmed with its release, and choosing it explains
 // itself and shows the command that does the same, without leaving the screen.
 func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
-	m := openRow(t, menuModel(t), "Concepts")
-	if v := m.View(); !strings.Contains(v, "Recall") || !strings.Contains(v, "(v0.0.22)") {
-		t.Errorf("the Concepts menu does not mark Recall as coming:\n%s", v)
+	m := openRow(t, menuModel(t), "Documents")
+	if v := m.View(); !strings.Contains(v, "Frontmatter") || !strings.Contains(v, "(v0.0.22)") {
+		t.Errorf("the Documents menu does not mark Frontmatter as coming:\n%s", v)
 	}
-	for i, it := range groupMenu("concept") {
-		if it.Label == "Recall…" {
+	for i, it := range groupMenu("document") {
+		if it.Label == "Frontmatter…" {
 			for j := 0; j < i; j++ {
 				m, _ = press(t, m, ch('j'))
 			}
@@ -170,7 +170,7 @@ func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
 		t.Errorf("choosing an unbuilt row left the menu for %s", viewStateNames[m.state])
 	}
 	v := m.View()
-	for _, want := range []string{"not in the TUI yet", "v0.0.22", "kb concept recall"} {
+	for _, want := range []string{"not in the TUI yet", "v0.0.22", "kb document frontmatter"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the explanation lacks %q:\n%s", want, v)
 		}

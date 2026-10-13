@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -71,6 +72,10 @@ type formFlow struct {
 	// plan-then-apply screen (DR-0068) and apply is not used.
 	plan    func([]string) (*planFlow, error)
 	heading string // the screen title; "New — TITLE" when empty
+	// read, when set, makes this a form for a read verb: the answers become the
+	// command's arguments, which run at once with no confirmation and are shown in
+	// the viewer. An error is a notice on the screen the form began on.
+	read func([]string) ([]string, error)
 }
 
 // beginForm opens a form on the current screen at its first field.
@@ -88,6 +93,16 @@ func (m *tuiModel) enterField(i int) {
 	f := m.form
 	f.step, f.chooser, f.edit = i, nil, nil
 	if i >= len(f.fields) {
+		if f.read != nil {
+			args, err := f.read(f.values)
+			m.setState(f.back)
+			if err != nil {
+				m.notice = err.Error()
+				return
+			}
+			m.showRead(args)
+			return
+		}
 		if f.plan != nil {
 			p, err := f.plan(f.values)
 			if err != nil {
@@ -478,6 +493,64 @@ func (m *tuiModel) newRecordForm(scope string) *formFlow {
 				return "", err
 			}
 			return strings.TrimSpace(out.String()), nil
+		},
+	}
+}
+
+// newRecallForm is concept recall: the text to find concepts in, or concept names
+// given directly, and optionally one project. A line starting with a dash is the
+// text, not a flag, so it is given after "--".
+func (m *tuiModel) newRecallForm() *formFlow {
+	return &formFlow{
+		title:   "recall",
+		heading: "Recall — what is linked to the concepts in some text",
+		fields: []formField{
+			{label: "text", help: "words to find concepts in; leave empty to give concept names instead"},
+			{label: "concept names", help: "comma-separated, case-insensitive; an unknown name is skipped"},
+			{label: "project", help: "restrict the hits to one project"},
+		},
+		read: func(v []string) ([]string, error) {
+			if v[0] == "" && v[1] == "" {
+				return nil, fmt.Errorf("recall needs text or concept names to look for")
+			}
+			args := []string{"concept", "recall"}
+			if v[1] != "" {
+				args = append(args, "--concept", v[1])
+			}
+			if v[2] != "" {
+				args = append(args, "--project", v[2])
+			}
+			if v[0] != "" {
+				args = append(args, "--", v[0])
+			}
+			return args, nil
+		},
+	}
+}
+
+// newSuggestForm is concept suggest: an optional project and a limit.
+func (m *tuiModel) newSuggestForm() *formFlow {
+	return &formFlow{
+		title:   "suggest",
+		heading: "Suggest — candidate concepts from the corpus",
+		fields: []formField{
+			{label: "project", help: "scan one project only; empty scans every record and document"},
+			{label: "limit", help: "how many candidates to print", prefill: "20", check: func(s string) error {
+				if n, err := strconv.Atoi(strings.TrimSpace(s)); err != nil || n < 1 {
+					return fmt.Errorf("the limit must be a number, 1 or more")
+				}
+				return nil
+			}},
+		},
+		read: func(v []string) ([]string, error) {
+			args := []string{"concept", "suggest"}
+			if v[0] != "" {
+				args = append(args, "--project", v[0])
+			}
+			if lim := strings.TrimSpace(v[1]); lim != "" {
+				args = append(args, "--limit", lim)
+			}
+			return args, nil
 		},
 	}
 }

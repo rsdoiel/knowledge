@@ -12,6 +12,18 @@ release notes; maintained going forward.
   the command that does the same. Observations → Browse opens the project list, where Enter and `o` reach a
   project's observations.
 
+- **Concepts → Recall… and Suggest… ask for their arguments in a form** (text, concept names and project for
+  Recall; project and limit for Suggest) and show the command's own output with the command that does the same.
+  A text that starts with a dash is passed after `--`, so it is read as text.
+- **Sources → Check retractions… asks before it runs.** It sends every registered DOI to the Retraction Watch
+  service and marks hits as retracted, so a confirmation shows what it will do and `y` runs it.
+
+### Changed
+
+- **`source check-retractions` is a changing write, not a read** (knowledge DR-0067's classes). It changes the
+  database and uses the network, so in the interface's `:` command line it asks first, as other changing
+  writes do. On the command line nothing changes.
+
 ### Fixed
 
 - **Dimmed menu rows named v0.0.20, a release that had shipped.** They now name v0.0.22, and a test fails when a

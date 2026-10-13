@@ -105,6 +105,10 @@ func (m *tuiModel) showRead(args []string) (tea.Model, tea.Cmd) {
 	if text == "" && err == nil {
 		text = "(nothing to list)"
 	}
-	text += "\n\nequivalent:  kb " + strings.Join(args, " ")
+	words := make([]string, len(args))
+	for i, a := range args {
+		words[i] = shellWord(a)
+	}
+	text += "\n\nequivalent:  kb " + strings.Join(words, " ")
 	return m.showCommandResult(args, text, err, m.state, false)
 }
