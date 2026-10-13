@@ -14,7 +14,7 @@
   is what both machines run.
 
 - [x] **`kb help ingest` showed `kb ingest clasm/decisions`, which does not work: a documentation bug.**
-  Fixed 2026-10-13 (uncommitted). `PATH` is a directory taken relative to the current directory, so from the
+  Fixed 2026-10-13, released in v0.0.21. `PATH` is a directory taken relative to the current directory, so from the
   workspace root a project's records are `agents/projects/clasm/decisions` (the layout of
   `PROJECT_CYCLE.md`), and `clasm/decisions` exits 66 "is not a directory". The `kb-ingest(1)` text now says
   what `PATH` is (a directory, cwd-relative, one only; a file is refused), that the walk is recursive (unlike
@@ -24,10 +24,31 @@
   filing under the old layout. Regenerated `kb-ingest.1.md`, `kb-index.1.md`, `kb-record.1.md`; the `.html`
   pages are `make website` output and not rebuilt. Reported 2026-10-13.
 
+- [x] **Enter on a record in the terminal interface returned straight to the list, so a record could not be
+  read there.** Fixed 2026-10-13, released in v0.0.21 (DR-0071, accepted). When `bat` was installed it was the
+  pager, and its default quits at once when the text fits one screen, so the interface repainted over it.
+  (`batcat` on Debian was never found at all.) kb now shows a record itself with Markdown highlighting;
+  `$KB_PAGER` is the only external pager, run exactly as written. The built-in viewer gained `/`, `n`, `N`,
+  `g` and `G`. Tests: `markdownhl_test.go`, `tui_viewfind_test.go`, `recordreview_test.go`. Reported 2026-10-13.
+  Not reproduced here: this machine has only `batcat`, so the `bat` branch was diagnosed from the symptom and
+  the `bat` default.
+
+- [x] **Two smaller documentation and message bugs, fixed in v0.0.21.** `kb ingest`'s "missing" line said kb had
+  no verb to remove the row, and now names `kb record delete REF`; the `kb-index(1)` man page pointed at
+  `TODO.md`, a developers' file, and no longer does. `manpages_test.go` now fails if any help topic mentions
+  `TODO.md`.
+
 ## Requested features
 
+- [ ] **TUI rows still dimmed, and `kb verbs --json` without the menu fields: v0.0.22 candidates.** Not in the
+  interface: Documents → Browse and Frontmatter (frontmatter runs through `:`; it needs a field picker),
+  Concepts → Recall and Suggest, Check, Enter on search results and observations, and the removing writes
+  `source remove`, `unlink` and `document delete` (no screen to select from yet). `kb verbs --json` does not
+  carry the menu fields (label, built, release). The viewer has no horizontal scroll and the find does not
+  mark the match inside the line; `KB_PAGER=less -R` is the escape hatch. Listed in the v0.0.20 and v0.0.21
+  release notes and the hand-off.
 
-- [x] **DONE 2026-10-06 (uncommitted).** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
+- [x] **DONE 2026-10-06, released in v0.0.16.** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
   following `antennaApp/completion.go` (shipped 2026-10-05; `InstallCompletion` is the install half).
   Specifics for kb: the verb table must not be hand-maintained a second time. `cmd/kb/help_dispatch_test.go`
   already ties `KB_TOPICS` to the verbs, so derive completion from that source, or add a test that
@@ -168,7 +189,7 @@
 
 - [x] **Verbs that remove, unlink or retire, so a mistake is fixable without raw SQL.** Filed
   2026-09-25 at RSDOIEL's request, who wanted it resolved in the v0.0.14 release. **DONE 2026-09-25**
-  (DR-0050, `proposed`, design `removal-verbs-design.md`, plan `removal-verbs-plan.md`, uncommitted):
+  (DR-0050, `accepted`, design `removal-verbs-design.md`, plan `removal-verbs-plan.md`; released in v0.0.14):
   `project delete`, `observation delete`, `document delete`, `record delete` (only once the file is gone) and
   a new `unlink` verb (`project`, `observation`, `source`), all as the shapes the user chose: project never
   cascades, a reviewed summary gates a document, `--force` and `--dry-run` as `concept delete`. Tested red
