@@ -1,4 +1,4 @@
-%kb-unlink(1) user manual | version 0.0.21 dbab219
+%kb-unlink(1) user manual | version 0.0.21 b91d365
 % R. S. Doiel
 % 2026-10-09
 
