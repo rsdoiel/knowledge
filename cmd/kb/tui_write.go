@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -13,6 +14,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
+
+// ansiPattern matches the colour escapes the highlighter writes, so the find
+// searches the text a person sees.
+var ansiPattern = regexp.MustCompile(`\x1b\\[[0-9;]*m`)
 
 // pagerDoneMsg says the pager (or the built-in viewer) has finished showing a
 // record. purpose is "read" or "status": a status review goes on to the chooser.
@@ -139,29 +144,108 @@ func (m *tuiModel) openViewer(purpose string) {
 		h = 20
 	}
 	vp := viewport.New(m.cols()-4, h)
-	content := string(m.reviewRaw)
+	width := m.cols() - 4
+	var wrapped string
 	if (purpose == "read" || purpose == "status") && lipgloss.ColorProfile() != termenv.Ascii && os.Getenv("NO_COLOR") == "" {
-		content = highlightMarkdown(content)
+		wrapped = wrapHighlighted(string(m.reviewRaw), width)
+	} else {
+		wrapped = lipgloss.NewStyle().Width(width).Render(string(m.reviewRaw))
 	}
-	wrapped := lipgloss.NewStyle().Width(m.cols() - 4).Render(content)
 	vp.SetContent(wrapped)
 	m.text = vp
+	m.textPlain = strings.Split(ansiPattern.ReplaceAllString(wrapped, ""), "\n")
+	m.finding, m.findQuery, m.findHits, m.findCur = false, "", nil, 0
 	m.textPurpose = purpose
 	m.setState(viewText)
 }
 
 // updateText handles a key in the built-in viewer. The arrows, j and k, and the
-// page keys scroll; q finishes (and continues to the chooser for a status review).
+// page keys scroll; g and G jump to the ends; / finds text and n and N move
+// between the matches; q finishes (and continues to the chooser for a status
+// review). While a term is being typed every key is text, and Esc abandons it.
 func (m *tuiModel) updateText(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.finding {
+		switch msg.Type {
+		case tea.KeyEsc:
+			m.finding = false
+			m.findInput.Blur()
+		case tea.KeyEnter:
+			m.finding = false
+			m.findInput.Blur()
+			m.findQuery = m.findInput.Value()
+			m.findHits = findLines(m.textPlain, m.findQuery)
+			m.findCur = 0
+			switch {
+			case m.findQuery == "":
+			case len(m.findHits) == 0:
+				m.notice = fmt.Sprintf("no match for %q", m.findQuery)
+			default:
+				// The first match at or below the top of the screen.
+				for i, h := range m.findHits {
+					if h >= m.text.YOffset {
+						m.findCur = i
+						break
+					}
+				}
+				m.text.SetYOffset(m.findHits[m.findCur])
+			}
+		default:
+			var cmd tea.Cmd
+			m.findInput, cmd = m.findInput.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "q":
 		return m.afterPager(m.textPurpose)
 	case "esc":
 		return m, nil
+	case "g":
+		m.text.GotoTop()
+		return m, nil
+	case "G":
+		m.text.GotoBottom()
+		return m, nil
+	case "/":
+		m.finding = true
+		m.findInput.SetValue("")
+		m.findInput.Focus()
+		return m, nil
+	case "n", "N":
+		if len(m.findHits) == 0 {
+			if m.findQuery != "" {
+				m.notice = fmt.Sprintf("no match for %q", m.findQuery)
+			}
+			return m, nil
+		}
+		step := 1
+		if msg.String() == "N" {
+			step = len(m.findHits) - 1
+		}
+		m.findCur = (m.findCur + step) % len(m.findHits)
+		m.text.SetYOffset(m.findHits[m.findCur])
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.text, cmd = m.text.Update(msg)
 	return m, cmd
+}
+
+// findLines returns the indexes of the lines that contain term, ignoring case.
+// An empty term matches nothing.
+func findLines(lines []string, term string) []int {
+	if term == "" {
+		return nil
+	}
+	term = strings.ToLower(term)
+	var hits []int
+	for i, l := range lines {
+		if strings.Contains(strings.ToLower(l), term) {
+			hits = append(hits, i)
+		}
+	}
+	return hits
 }
 
 // updateReview hands a key to the embedded chooser and confirmation (T3) and
@@ -237,12 +321,20 @@ func (m *tuiModel) reviewLegend() string {
 	return "press a status key   q Esc cancel   Ctrl-C quit"
 }
 
-// textLegend names the keys of the built-in viewer.
+// textLegend names the keys of the built-in viewer, or shows the find prompt
+// while a term is being typed.
 func (m *tuiModel) textLegend() string {
-	if m.textPurpose == "status" {
-		return "↑/↓ j/k scroll   space page   q continue to choose a status"
+	if m.finding {
+		return "Find: " + m.findInput.View() + "   Enter find   Esc cancel"
 	}
-	return "↑/↓ j/k scroll   space page   q back"
+	keys := "↑/↓ j/k scroll   space page   g G ends   / find"
+	if len(m.findHits) > 0 {
+		keys += fmt.Sprintf("   n N next/prev (%d/%d)", m.findCur+1, len(m.findHits))
+	}
+	if m.textPurpose == "status" {
+		return keys + "   q continue to choose a status"
+	}
+	return keys + "   q back"
 }
 
 // textScreen is the built-in viewer's screen.

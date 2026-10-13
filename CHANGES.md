@@ -10,8 +10,18 @@ release notes; maintained going forward.
 - **Enter on a record in the interface returned straight to the list.** `bat` was chosen as the pager when
   installed, and its default quits at once when the record fits one screen, so the interface repainted over it.
 
+- **`kb ingest`'s "missing" line said kb had no verb to remove the row.** It now names the command:
+  `kb record delete clasm/DR-0002`.
+- **The `kb-index(1)` man page pointed at `TODO.md`**, a developers' file; the sentence now says what the
+  flags do.
+- **`kb help ingest` showed `kb ingest clasm/decisions`**, which exits 66 from the workspace root. `PATH` is a
+  directory relative to the current directory, one only, walked recursively; the examples now work and the
+  text says where the project and tier come from. The `kb index` and `kb record fmt` examples are corrected too.
+
 ### Changed
 
+- **The built-in record viewer can find text:** `/` finds (case-insensitive), `n` and `N` move between
+  matches, `g` and `G` jump to the ends. Esc abandons a find.
 - **kb highlights Markdown itself** when showing a record, in the interface's viewer and in `kb record
   set-status REF` on a terminal. `bat` and `less` are no longer looked for; `$KB_PAGER` is the override and is
   used exactly as written (give `bat` `--paging=always`). `NO_COLOR` turns the colour off.

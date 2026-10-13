@@ -137,6 +137,12 @@ type tuiModel struct {
 	queueList       list.Model   // the review queue
 	unit            *summaryUnit // the summary unit in progress, in viewSummary
 	textPurpose     string
+	textPlain       []string        // the viewer's lines without colour, for the find
+	finding         bool            // a find term is being typed in the viewer
+	findInput       textinput.Model // the viewer's find prompt
+	findQuery       string
+	findHits        []int  // the viewer lines that match findQuery
+	findCur         int    // which of findHits the viewer is at
 	notice          string // lines under the screen: a dimmed choice's explanation, or what just happened
 	workspaceDir    string // the workspace directory, for the header
 	dbRel           string // the database path inside it
@@ -189,6 +195,7 @@ func newTUIModelAt(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) (*
 		searchList:      newBrowserList(nil, "", 0, 0),
 		scopeList:       newBrowserList(nil, "", 0, 0),
 		searchInput:     ti,
+		findInput:       newFindInput(),
 	}
 	m.workspaceDir, m.dbRel = workspaceLabel(kb.Path())
 	if recs, err := kb.ListRecords(knowledge.RecordFilter{}); err == nil {
@@ -354,6 +361,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// While text is being typed every printable key is text, so this is
 		// asked before any letter is bound (DR-0064, amendment).
 		if m.capturingText() {
+			if m.state == viewText {
+				return m.updateText(msg)
+			}
 			if m.state == viewRemove && !m.searching {
 				return m.updateRemove(msg)
 			}
@@ -461,6 +471,9 @@ func (m *tuiModel) capturingText() bool {
 	}
 	if m.state == viewSummary && m.unit != nil {
 		return !m.unit.reviewing
+	}
+	if m.state == viewText {
+		return m.finding
 	}
 	return m.searching || m.state == viewRemove
 }
@@ -1298,4 +1311,12 @@ func (m *tuiModel) projectName() string {
 		return m.selectedProject.Name
 	}
 	return ""
+}
+
+// newFindInput is the prompt of the viewer's find.
+func newFindInput() textinput.Model {
+	ti := textinput.New()
+	ti.Prompt = ""
+	ti.CharLimit = 200
+	return ti
 }

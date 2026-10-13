@@ -70,9 +70,9 @@ pre-commit hook can gate on the whole workspace in one call rather than
 naming each corpus by hand: 1 if the only trouble is stale indexes, and the
 class of the first failure (65 for a malformed record, 77 for a file it may
 not write) if any corpus could not be indexed at all, since a failure is more
-serious than drift. --all and --stdout cannot be combined. See
-TODO.md's index-regeneration item (index --check and the auto-refresh on
-set-status/supersede) for the single-corpus half this completes.
+serious than drift. --all and --stdout cannot be combined. --check on one
+PATH is the single-corpus form of the same test, and record set-status and
+record supersede refresh a corpus's index.md themselves.
 
 Hidden directories are not descended into. A git worktree keeps a whole
 second copy of the tree under .claude/worktrees/<name>/, corpus and

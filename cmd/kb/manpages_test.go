@@ -55,3 +55,17 @@ func makefileTopics(t *testing.T) []string {
 	t.Fatal("no KB_TOPICS assignment found in the Makefile")
 	return nil
 }
+
+// A man page is for a person who installed kb; TODO.md is the developers' file
+// and is not shipped with it.
+func TestManPages_DoNotPointAtTODO(t *testing.T) {
+	for _, topic := range append(makefileTopics(t), "kb") {
+		var out bytes.Buffer
+		if !printHelp(&out, topic) {
+			continue
+		}
+		if strings.Contains(out.String(), "TODO.md") {
+			t.Errorf("kb help %s refers to TODO.md, which a user of kb does not have", topic)
+		}
+	}
+}

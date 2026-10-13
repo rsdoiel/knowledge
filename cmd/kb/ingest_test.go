@@ -1042,3 +1042,27 @@ func TestCmdIngest_ControlCharacterWikilinkIsSkipped(t *testing.T) {
 		t.Errorf("RecordConcepts = %+v, want only Keeper", concepts)
 	}
 }
+
+// The advice on a row whose file is gone names the verb that removes it, and
+// does not claim there is none: kb record delete is that verb.
+func TestCmdIngest_MissingRowNamesRecordDelete(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+	path := testRecord{ID: "0002", Project: "clasm"}.write(t, dir)
+	runIngest(t, kb, dir)
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	s := runIngest(t, kb, dir)
+	if len(s.Missing) != 1 {
+		t.Fatalf("Missing = %v, want one entry", s.Missing)
+	}
+	got := s.Missing[0]
+	if strings.Contains(got, "no verb") {
+		t.Errorf("the advice says kb has no verb to remove the row: %q", got)
+	}
+	if !strings.Contains(got, "kb record delete clasm/DR-0002") {
+		t.Errorf("the advice does not give the command that removes the row: %q", got)
+	}
+}

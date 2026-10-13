@@ -3,6 +3,8 @@ package main
 import (
 	"regexp"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // SGR sequences used by highlightMarkdown. Kept to the 16 basic colours so they
@@ -81,4 +83,22 @@ func highlightInline(line string) string {
 	line = mdCode.ReplaceAllStringFunc(line, func(s string) string { return sgrCode + s + sgrReset })
 	line = mdBold.ReplaceAllStringFunc(line, func(s string) string { return sgrBold + s + sgrReset })
 	return mdLink.ReplaceAllString(line, "["+sgrLink+"$1"+sgrReset+"]"+sgrDim+"($2)"+sgrReset)
+}
+
+/** wrapHighlighted highlights Markdown and wraps it to a width in one step. The
+ * text is highlighted before it is wrapped, so a fence or a frontmatter block is
+ * seen whole, and the wrapper carries a style across the break it makes.
+ *
+ * Parameters:
+ *   text (string) — the Markdown
+ *   width (int) — the column width to wrap to
+ *
+ * Returns:
+ *   string — the highlighted text, wrapped, lines joined by newlines
+ *
+ * Example:
+ *   vp.SetContent(wrapHighlighted(string(raw), vp.Width))
+ */
+func wrapHighlighted(text string, width int) string {
+	return lipgloss.NewStyle().Width(width).Render(highlightMarkdown(text))
 }
