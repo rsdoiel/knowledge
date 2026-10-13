@@ -96,7 +96,7 @@ directory as ROOT still finds the corpora inside it.
 # EXAMPLES
 
 ~~~shell
-kb index clasm/decisions
+kb index agents/projects/clasm/decisions
 kb index agents/decisions --stdout | head
 kb index agents/decisions --check
 kb index . --all

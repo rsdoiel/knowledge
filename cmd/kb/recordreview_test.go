@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,7 +202,7 @@ func TestSetStatus_ArgumentCounts(t *testing.T) {
 }
 
 // With no pager at all the record is printed straight through and the flow
-// goes on; a person without bat or less is not locked out.
+// goes on; a person with no KB_PAGER set gets the built-in display.
 func TestReview_WithoutAPagerPrintsTheRecord(t *testing.T) {
 	t.Setenv("KB_PAGER", "")
 	t.Setenv("PATH", t.TempDir())
@@ -239,31 +238,18 @@ func TestReview_APagerFailureDoesNotAbort(t *testing.T) {
 }
 
 func TestPagerCommand(t *testing.T) {
-	has := func(names ...string) func(string) (string, error) {
-		return func(n string) (string, error) {
-			for _, x := range names {
-				if x == n {
-					return "/usr/bin/" + n, nil
-				}
-			}
-			return "", errors.New("not found")
-		}
-	}
 	env := func(kv map[string]string) func(string) string { return func(k string) string { return kv[k] } }
 	for _, c := range []struct {
 		name string
 		env  map[string]string
-		path func(string) (string, error)
 		want []string
 	}{
-		{"KB_PAGER wins", map[string]string{"KB_PAGER": "most -w"}, has("bat", "less"), []string{"most", "-w"}},
-		{"bat when installed", nil, has("bat", "less"), []string{"bat", "-l", "markdown"}},
-		{"less otherwise", nil, has("less"), []string{"less", "-R"}},
-		{"nothing", nil, has(), nil},
-		{"blank KB_PAGER is unset", map[string]string{"KB_PAGER": "  "}, has("less"), []string{"less", "-R"}},
+		{"KB_PAGER wins", map[string]string{"KB_PAGER": "most -w"}, []string{"most", "-w"}},
+		{"unset is the built-in display", nil, nil},
+		{"blank KB_PAGER is unset", map[string]string{"KB_PAGER": "  "}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := pagerCommand(env(c.env), c.path)
+			got := pagerCommand(env(c.env))
 			if strings.Join(got, " ") != strings.Join(c.want, " ") {
 				t.Errorf("pagerCommand = %v, want %v", got, c.want)
 			}

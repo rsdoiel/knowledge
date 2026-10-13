@@ -18,31 +18,41 @@ import (
 // acts at once; anything else is read as a stream of keys and its end cancels.
 var reviewStdin io.Reader = os.Stdin
 
-/** pagerCommand chooses the program that shows a record for review: $KB_PAGER
- * when set (split on spaces), else bat with the Markdown language when bat is
- * installed, else less with raw control characters passed through.
+/** pagerCommand returns the external pager named by $KB_PAGER (split on spaces),
+ * or nil when it is unset or blank. kb shows records itself, with Markdown
+ * highlighting, so no pager is looked for on the path; KB_PAGER is the override
+ * for a person who wants bat, less or another program instead.
  *
  * Parameters:
  *   getenv (func(string) string) — environment lookup, os.Getenv in production
- *   lookPath (func(string) (string, error)) — executable lookup, exec.LookPath in production
  *
  * Returns:
- *   []string — the command and its arguments, or nil when there is no pager
+ *   []string — the command and its arguments, or nil to use the built-in display
  *
  * Example:
- *   cmd := pagerCommand(os.Getenv, exec.LookPath) // ["bat" "-l" "markdown"]
+ *   argv := pagerCommand(os.Getenv) // ["bat" "--paging=always"] for KB_PAGER="bat --paging=always"
  */
-func pagerCommand(getenv func(string) string, lookPath func(string) (string, error)) []string {
+func pagerCommand(getenv func(string) string) []string {
 	if fields := strings.Fields(getenv("KB_PAGER")); len(fields) > 0 {
 		return fields
 	}
-	if _, err := lookPath("bat"); err == nil {
-		return []string{"bat", "-l", "markdown"}
-	}
-	if _, err := lookPath("less"); err == nil {
-		return []string{"less", "-R"}
-	}
 	return nil
+}
+
+/** colorEnabled reports whether highlighted output suits a destination: it is a
+ * terminal and NO_COLOR is not set (no-color.org).
+ *
+ * Parameters:
+ *   w (any) — the destination, usually an io.Writer
+ *
+ * Returns:
+ *   bool — true when escape sequences may be written to w
+ *
+ * Example:
+ *   if colorEnabled(os.Stdout) { text = highlightMarkdown(text) }
+ */
+func colorEnabled(w any) bool {
+	return os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb" && isTerminalStream(w)
 }
 
 /** statusKey returns the letter that chooses a status in the review prompt: the
@@ -76,11 +86,11 @@ func reviewOptions(from string, hasSupersededBy bool) []string {
 	return knowledge.AllowedTransitions(from, hasSupersededBy)
 }
 
-// showRecord puts the record in front of the person: through the pager when
-// there is one and it starts, else straight to out. A pager that exits non-zero
+// showRecord puts the record in front of the person: through $KB_PAGER when
+// it is set and starts, else straight to out, highlighted on a terminal. A pager that exits non-zero
 // (a person quitting it, a closed pipe) is not an error; the review goes on.
 func showRecord(out io.Writer, raw []byte) {
-	if argv := pagerCommand(os.Getenv, exec.LookPath); argv != nil {
+	if argv := pagerCommand(os.Getenv); argv != nil {
 		cmd := exec.Command(argv[0], argv[1:]...)
 		cmd.Stdin = bytes.NewReader(raw)
 		cmd.Stdout = out
@@ -90,7 +100,11 @@ func showRecord(out io.Writer, raw []byte) {
 			return
 		}
 	}
-	out.Write(raw)
+	if colorEnabled(out) {
+		out.Write([]byte(highlightMarkdown(string(raw))))
+	} else {
+		out.Write(raw)
+	}
 	if len(raw) > 0 && raw[len(raw)-1] != '\n' {
 		fmt.Fprintln(out)
 	}

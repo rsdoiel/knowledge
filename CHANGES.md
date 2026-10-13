@@ -3,6 +3,19 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+### Fixed
+
+- **Enter on a record in the interface returned straight to the list.** `bat` was chosen as the pager when
+  installed, and its default quits at once when the record fits one screen, so the interface repainted over it.
+
+### Changed
+
+- **kb highlights Markdown itself** when showing a record, in the interface's viewer and in `kb record
+  set-status REF` on a terminal. `bat` and `less` are no longer looked for; `$KB_PAGER` is the override and is
+  used exactly as written (give `bat` `--paging=always`). `NO_COLOR` turns the colour off.
+
 ## v0.0.20 — 2026-10-09
 
 The rest of the TUI writes behind the same gates (knowledge DR-0066 to DR-0070 and the plan,

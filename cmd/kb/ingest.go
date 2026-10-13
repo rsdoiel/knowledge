@@ -139,7 +139,7 @@ func (ing *ingester) noteFailure(err error) {
  *           reported in the summary, not returned.
  *
  * Example:
- *   err := cmdIngest(kb, nil, false, []string{"clasm/decisions"}, os.Stdout)
+ *   err := cmdIngest(kb, nil, false, []string{"agents/projects/clasm/decisions"}, os.Stdout)
  */
 func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	path, root, dryRun, err := parseIngestFlags(args)

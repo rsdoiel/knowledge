@@ -297,6 +297,6 @@ Start a new record, and bring a corpus into canonical form:
 kb record new --project clasm --title "Retry the profile attach" --trigger live-test
 kb record new --title "Run from inside the project" --trigger design
 kb record new --project clasm --title "Filed under the old layout" --trigger request --dir clasm/decisions
-kb record fmt clasm/decisions --dry-run
+kb record fmt agents/projects/clasm/decisions --dry-run
 ~~~
 

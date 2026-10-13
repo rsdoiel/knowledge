@@ -13,8 +13,21 @@
   `agents/skills/wrap-up-session/SKILL.md` ("Reading check 4 correctly") can be dropped once v0.0.15
   is what both machines run.
 
+- [x] **`kb help ingest` showed `kb ingest clasm/decisions`, which does not work: a documentation bug.**
+  Fixed 2026-10-13 (uncommitted). `PATH` is a directory taken relative to the current directory, so from the
+  workspace root a project's records are `agents/projects/clasm/decisions` (the layout of
+  `PROJECT_CYCLE.md`), and `clasm/decisions` exits 66 "is not a directory". The `kb-ingest(1)` text now says
+  what `PATH` is (a directory, cwd-relative, one only; a file is refused), that the walk is recursive (unlike
+  `kb index`), that the project and tier come from each record's `project:` frontmatter and not from the path,
+  what `--root` is, and gives working examples. The same stale `clasm/decisions` is corrected in the
+  `kb index` and `kb record fmt` examples; `record new --dir clasm/decisions` is left, it is the example of
+  filing under the old layout. Regenerated `kb-ingest.1.md`, `kb-index.1.md`, `kb-record.1.md`; the `.html`
+  pages are `make website` output and not rebuilt. Reported 2026-10-13.
+
 ## Requested features
 
+
+- [ ] Their needs to be a way of reviewing items in the agents/projects/<project_name> directory tree (like decisions) that haven't been ingest. It should simply be a list of those items in the directory tree that haven't been ingested with an example command(s) for ingesting them for review. This would make sense in the TUI as well as the CLI. This needs to be explored before setting on an approach
 - [x] **DONE 2026-10-06 (uncommitted).** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
   following `antennaApp/completion.go` (shipped 2026-10-05; `InstallCompletion` is the install half).
   Specifics for kb: the verb table must not be hand-maintained a second time. `cmd/kb/help_dispatch_test.go`

@@ -254,10 +254,11 @@ KB_QUIET
   workspace note, and a deprecated flag's). It never silences an error
 
 KB_PAGER
-: the program that shows a record for review in record set-status with no
-  status, with its arguments (KB_PAGER="bat -l markdown"). Unset, kb uses bat
-  with the Markdown language if bat is installed, then less -R, and with
-  neither prints the record straight through
+: an external program to show a record for review, with its arguments
+  (KB_PAGER="bat --paging=always -l markdown"). Unset, kb shows the record
+  itself with Markdown highlighting, in the interface's viewer or, for
+  record set-status with no status, on the terminal. NO_COLOR turns the
+  highlighting off
 
 # VERBS
 
@@ -1467,6 +1468,26 @@ Walks PATH for decision record files named NNNN-slug.md, parses each one's
 YAML frontmatter, and upserts it into the records table and the full-text
 index. The generated index.md is not a record and is skipped.
 
+PATH is a directory, and is taken as written relative to the current
+directory, not to the workspace root. A project's records live under
+agents/projects/NAME/decisions and the workspace tier's under agents/decisions,
+so from the workspace root those are the paths to give; from inside a project's
+directory, decisions is enough. A file is refused ("is not a directory", exit
+66), as is a directory that does not exist. Exactly one PATH is taken (a missing
+or surplus one is a usage error, exit 2).
+
+The walk descends into every subdirectory, so agents/projects/NAME ingests the
+project's decisions directory and anything else under it that holds record
+files, and agents/projects ingests every project at once. (kb index, by
+contrast, takes one directory and does not descend.)
+
+Which project a record belongs to, and whether it is at the workspace tier, is
+read from the record's own "project:" frontmatter, never from where the file
+sits. A record with an empty project is workspace tier; a project name the
+database does not know yet is created. Ingesting the wrong directory therefore
+files records under whatever their frontmatter says, which is why --dry-run is
+worth running first.
+
 A record's identity is its (project, scope, id) triple. Re-ingesting a tree
 is cheap and safe to repeat: a file whose checksum is unchanged is skipped.
 
@@ -1532,24 +1553,33 @@ canonical. This does not change kb concept add, which stays exact-match.
 : report the same counts and write nothing
 
 --root DIR
-: treat DIR as the workspace root that stored paths are relative to.
+: treat DIR as the workspace root that stored paths are relative to, and
+  whose base name is the workspace name recorded with each record.
   Defaults to the parent of the directory holding the database, so
   --db agents/knowledge.db gives a root of the workspace itself. Paths are
   stored relative because absolute ones do not survive merge between machines.
+  A file outside DIR is stored under its base name only.
 
 # EXAMPLES
 
-Index one project's records, then the workspace tier:
+From the workspace root, index one project's records, then the workspace tier:
 
 ~~~shell
-{app_name} ingest clasm/decisions
+{app_name} ingest agents/projects/clasm/decisions
 {app_name} ingest agents/decisions
 ~~~
 
 Preview without writing:
 
 ~~~shell
-{app_name} ingest clasm/decisions --dry-run
+{app_name} ingest agents/projects/clasm/decisions --dry-run
+~~~
+
+Every project's records at once, or from inside a project's directory:
+
+~~~shell
+{app_name} ingest agents/projects
+cd agents/projects/clasm && {app_name} ingest decisions
 ~~~
 
 `
@@ -1854,7 +1884,7 @@ Start a new record, and bring a corpus into canonical form:
 {app_name} record new --project clasm --title "Retry the profile attach" --trigger live-test
 {app_name} record new --title "Run from inside the project" --trigger design
 {app_name} record new --project clasm --title "Filed under the old layout" --trigger request --dir clasm/decisions
-{app_name} record fmt clasm/decisions --dry-run
+{app_name} record fmt agents/projects/clasm/decisions --dry-run
 ~~~
 
 `
@@ -1958,7 +1988,7 @@ directory as ROOT still finds the corpora inside it.
 # EXAMPLES
 
 ~~~shell
-{app_name} index clasm/decisions
+{app_name} index agents/projects/clasm/decisions
 {app_name} index agents/decisions --stdout | head
 {app_name} index agents/decisions --check
 {app_name} index . --all

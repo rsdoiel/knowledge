@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // pagerDoneMsg says the pager (or the built-in viewer) has finished showing a
@@ -77,7 +78,7 @@ func (m *tuiModel) showSelected(purpose string) (tea.Model, tea.Cmd) {
 }
 
 // showRecord shows the record with that reference for reading or for a status
-// review: in the pager when there is one, else in the built-in viewer.
+// review: in $KB_PAGER when it is set, else in the built-in viewer, highlighted.
 func (m *tuiModel) showRecord(ref, purpose string) (tea.Model, tea.Cmd) {
 	rec, err := resolveRecordForWrite(m.kb, ref, recordFlags{})
 	if err != nil {
@@ -96,7 +97,7 @@ func (m *tuiModel) showRecord(ref, purpose string) (tea.Model, tea.Cmd) {
 		m.notice = fmt.Sprintf("%s is %s, which is final; there is no move to make", ref, rf.Record.Status)
 		return m, nil
 	}
-	if argv := pagerCommand(os.Getenv, exec.LookPath); argv != nil {
+	if argv := pagerCommand(os.Getenv); argv != nil {
 		return m, execPager(argv, raw, purpose)
 	}
 	m.openViewer(purpose)
@@ -138,7 +139,11 @@ func (m *tuiModel) openViewer(purpose string) {
 		h = 20
 	}
 	vp := viewport.New(m.cols()-4, h)
-	wrapped := lipgloss.NewStyle().Width(m.cols() - 4).Render(string(m.reviewRaw))
+	content := string(m.reviewRaw)
+	if (purpose == "read" || purpose == "status") && lipgloss.ColorProfile() != termenv.Ascii && os.Getenv("NO_COLOR") == "" {
+		content = highlightMarkdown(content)
+	}
+	wrapped := lipgloss.NewStyle().Width(m.cols() - 4).Render(content)
 	vp.SetContent(wrapped)
 	m.text = vp
 	m.textPurpose = purpose
