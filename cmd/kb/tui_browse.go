@@ -22,6 +22,7 @@ import (
 type browseItem struct {
 	title, desc string
 	show        []string
+	id          int64 // the row's id, for a source or document; 0 for a concept
 }
 
 func (i browseItem) Title() string       { return i.title }
@@ -42,44 +43,9 @@ func (i browseItem) FilterValue() string { return i.title + " " + i.desc }
  *   return m.openBrowse("source")
  */
 func (m *tuiModel) openBrowse(kind string) (tea.Model, tea.Cmd) {
-	var items []list.Item
-	switch kind {
-	case "concept":
-		cs, err := m.kb.Concepts()
-		if err != nil {
-			m.notice = err.Error()
-			return m, nil
-		}
-		for _, c := range cs {
-			items = append(items, browseItem{c.Name, c.Description, []string{"concept", "show", "--", c.Name}})
-		}
-	case "source":
-		ss, err := m.kb.ListSources()
-		if err != nil {
-			m.notice = err.Error()
-			return m, nil
-		}
-		for _, s := range ss {
-			desc := s.Authors
-			if s.IdentifierValue != "" {
-				desc = strings.TrimSpace(desc + "  " + s.IdentifierType + ":" + s.IdentifierValue)
-			}
-			if s.Retracted {
-				desc = "RETRACTED  " + desc
-			}
-			items = append(items, browseItem{s.Title, desc, []string{"source", "show", strconv.FormatInt(s.ID, 10)}})
-		}
-	case "document":
-		ds, err := m.kb.Documents(0)
-		if err != nil {
-			m.notice = err.Error()
-			return m, nil
-		}
-		for _, d := range ds {
-			items = append(items, browseItem{d.Title, d.Format + "  " + d.Path, []string{"document", "show", strconv.FormatInt(d.ID, 10)}})
-		}
-	default:
-		m.notice = fmt.Sprintf("no list for %q", kind)
+	items, err := m.browseItems(kind)
+	if err != nil {
+		m.notice = err.Error()
 		return m, nil
 	}
 	if len(items) == 0 {
@@ -90,6 +56,47 @@ func (m *tuiModel) openBrowse(kind string) (tea.Model, tea.Cmd) {
 	m.browseList = newBrowserList(items, strings.ToUpper(kind[:1])+kind[1:]+"s", m.cols()-4, m.listHeight())
 	m.setState(viewBrowse)
 	return m, nil
+}
+
+// browseItems loads the rows of a Browse list.
+func (m *tuiModel) browseItems(kind string) ([]list.Item, error) {
+	var items []list.Item
+	switch kind {
+	case "concept":
+		cs, err := m.kb.Concepts()
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range cs {
+			items = append(items, browseItem{title: c.Name, desc: c.Description, show: []string{"concept", "show", "--", c.Name}})
+		}
+	case "source":
+		ss, err := m.kb.ListSources()
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range ss {
+			desc := s.Authors
+			if s.IdentifierValue != "" {
+				desc = strings.TrimSpace(desc + "  " + s.IdentifierType + ":" + s.IdentifierValue)
+			}
+			if s.Retracted {
+				desc = "RETRACTED  " + desc
+			}
+			items = append(items, browseItem{title: s.Title, desc: desc, show: []string{"source", "show", strconv.FormatInt(s.ID, 10)}, id: s.ID})
+		}
+	case "document":
+		ds, err := m.kb.Documents(0)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range ds {
+			items = append(items, browseItem{title: d.Title, desc: d.Format + "  " + d.Path, show: []string{"document", "show", strconv.FormatInt(d.ID, 10)}, id: d.ID})
+		}
+	default:
+		return nil, fmt.Errorf("no list for %q", kind)
+	}
+	return items, nil
 }
 
 // updateBrowse handles a key on a Browse list: Enter shows the item, q goes back to
@@ -104,6 +111,8 @@ func (m *tuiModel) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.startSearch()
 		return m, nil
+	case "d":
+		return m.removeSelected()
 	case "enter":
 		if it, ok := m.browseList.SelectedItem().(browseItem); ok {
 			return m.showReadFrom(it.show, viewBrowse)

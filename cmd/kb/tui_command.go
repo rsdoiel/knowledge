@@ -403,10 +403,37 @@ func (m *tuiModel) removingFromCommand(args []string) (tea.Model, tea.Cmd) {
 	later := func() (tea.Model, tea.Cmd) {
 		return m.refuse("%s has no confirmation screen here; run it from the command line: %s", strings.Join(args[:min(len(args), 2)], " "), cmdWords(args))
 	}
-	if len(args) != 3 || args[1] != "delete" {
+	if len(args) != 3 || (args[1] != "delete" && args[1] != "remove") {
+		return later()
+	}
+	// source's verb is remove; the others' is delete.
+	if (args[0] == "source") != (args[1] == "remove") {
 		return later()
 	}
 	switch args[0] {
+	case "source", "document":
+		id, err := strconv.ParseInt(args[2], 10, 64)
+		if err != nil {
+			return m.refuse("%s %s takes the %s's number, not %q", args[0], args[1], args[0], args[2])
+		}
+		if args[0] == "source" {
+			s, err := m.kb.ShowSource(id)
+			if err != nil || s == nil {
+				return m.refuse("no source %d", id)
+			}
+			p, err := planSourceRemove(m.kb, id, s.Title)
+			return m.beginRemoval(p, err)
+		}
+		title := ""
+		if docs, err := m.kb.Documents(0); err == nil {
+			for _, d := range docs {
+				if d.ID == id {
+					title = d.Title
+				}
+			}
+		}
+		p, err := planDocumentDelete(m.kb, id, title)
+		return m.beginRemoval(p, err)
 	case "project":
 		p, err := planProjectDelete(m.kb, args[2])
 		return m.beginRemoval(p, err)

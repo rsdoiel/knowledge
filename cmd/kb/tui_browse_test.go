@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -309,5 +310,138 @@ func TestBrowse_EnterOnAnObservationInAProjectShowsIt(t *testing.T) {
 	m, _ = press(t, m, ch('q'))
 	if m.state != viewObservations {
 		t.Errorf("q gave %s, want the observations tab", viewStateNames[m.state])
+	}
+}
+
+// d on a Browse list opens the removing gate for the item (DR-0067): the id typed
+// exactly, what goes with it named, and a refusal where the command would refuse.
+
+func TestBrowse_DeleteASourceNeedsItsIDTyped(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	id, err := kb.AddSource(knowledge.Source{Title: "A Source To Delete"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Sources", "Browse")
+	m, _ = press(t, m, ch('d'))
+	if m.state != viewRemove {
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
+	}
+	if v := m.View(); !strings.Contains(v, "A Source To Delete") || !strings.Contains(v, "linked to no observation") {
+		t.Errorf("the gate does not say what is being deleted:\n%s", v)
+	}
+	m, _ = press(t, m, keyEsc)
+	if s, err := kb.ShowSource(id); err != nil || s == nil {
+		t.Fatalf("a cancelled delete removed the source: %v", err)
+	}
+	m, _ = press(t, m, ch('d'))
+	m, _ = press(t, m, append(typed(strconv.FormatInt(id, 10)), keyEnter)...)
+	if _, err := kb.ShowSource(id); err == nil {
+		t.Error("the source is still there after the id was typed")
+	}
+	if m.state != viewGroup {
+		t.Errorf("state = %s, want the Sources menu once the list is empty", viewStateNames[m.state])
+	}
+	if v := m.View(); !strings.Contains(v, "kb source remove "+strconv.FormatInt(id, 10)) {
+		t.Errorf("the result does not show the equivalent command:\n%s", v)
+	}
+}
+
+func TestBrowse_DeleteALinkedSourceIsRefused(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	p, _ := kb.ProjectByName("clasm")
+	oid, err := kb.AddObservation(p.ID, "note", "cites a source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid, err := kb.AddSource(knowledge.Source{Title: "A Linked Source"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := kb.LinkObservationSource(oid, sid, "cites"); err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Sources", "Browse")
+	m, _ = press(t, m, ch('d'))
+	if m.state != viewBrowse {
+		t.Fatalf("state = %s, want to stay on the list with a refusal", viewStateNames[m.state])
+	}
+	if v := m.View(); !strings.Contains(v, "linked to 1 observation") || !strings.Contains(v, "unlink") {
+		t.Errorf("the refusal does not say what points at the source:\n%s", v)
+	}
+}
+
+func TestBrowse_DeleteADocumentNeedsItsIDTyped(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	p, _ := kb.ProjectByName("clasm")
+	id, err := kb.AddDocument(knowledge.Document{ProjectID: p.ID, Title: "A Document To Delete", Format: "markdown", Path: "d.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Documents", "Browse")
+	m, _ = press(t, m, ch('d'))
+	if m.state != viewRemove {
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
+	}
+	if v := m.View(); !strings.Contains(v, "re-ingest") || !strings.Contains(v, "A Document To Delete") {
+		t.Errorf("the gate lacks what goes and what recreates it:\n%s", v)
+	}
+	m, _ = press(t, m, append(typed(strconv.FormatInt(id, 10)), keyEnter)...)
+	if v := m.View(); !strings.Contains(v, "kb document delete "+strconv.FormatInt(id, 10)) {
+		t.Errorf("the result does not show the equivalent command:\n%s", v)
+	}
+	if docs, _ := kb.Documents(0); len(docs) != 0 {
+		t.Errorf("the document is still there: %+v", docs)
+	}
+}
+
+func TestBrowse_DeleteAConceptNeedsItsNameTyped(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	if _, err := kb.AddConcept("Zebra", "striped"); err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Concepts", "Browse")
+	// Concept names in the fixture may include others; move to Zebra
+	for i := 0; i < 20 && !strings.Contains(m.browseList.SelectedItem().(browseItem).title, "Zebra"); i++ {
+		m, _ = press(t, m, ch('j'))
+	}
+	m, _ = press(t, m, ch('d'))
+	if m.state != viewRemove {
+		t.Fatalf("state = %s, want the removing gate", viewStateNames[m.state])
+	}
+	m, _ = press(t, m, append(typed("Zebra"), keyEnter)...)
+	if has, _ := kb.HasConcept("Zebra"); has {
+		t.Error("the concept is still there")
+	}
+}
+
+// The `:` command line reaches the same gates for source remove and document
+// delete, which had no screen to select from before the Browse lists.
+
+func TestBrowse_ColonSourceRemoveOpensTheGate(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	id, err := kb.AddSource(knowledge.Source{Title: "Typed At The Colon"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = runCommand(t, m, "source remove "+strconv.FormatInt(id, 10))
+	if m.state != viewRemove {
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
+	}
+	if v := m.View(); !strings.Contains(v, "Typed At The Colon") {
+		t.Errorf("the gate does not name the source:\n%s", v)
+	}
+}
+
+func TestBrowse_ColonDocumentDeleteOpensTheGate(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	p, _ := kb.ProjectByName("clasm")
+	id, err := kb.AddDocument(knowledge.Document{ProjectID: p.ID, Title: "Typed Document", Format: "markdown", Path: "t.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = runCommand(t, m, "document delete "+strconv.FormatInt(id, 10))
+	if m.state != viewRemove {
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
 	}
 }

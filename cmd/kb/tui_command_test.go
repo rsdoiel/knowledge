@@ -178,8 +178,8 @@ func TestCommand_ARemovingWriteMeetsTheTypedGate(t *testing.T) {
 	if ok, _ := kb.HasConcept("streaming"); ok {
 		t.Error("the typed name did not delete")
 	}
-	m = runCommand(t, m, "source remove 10.1000/x")
-	if m.state != viewMenu || !strings.Contains(m.View(), "command line") {
+	m = runCommand(t, m, "unlink project alpha streaming") // unlink still has no screen
+	if m.state != viewMenu || !strings.Contains(m.View(), "no confirmation screen") {
 		t.Errorf("a removing verb with no gate here should say so:\n%s", m.View())
 	}
 }

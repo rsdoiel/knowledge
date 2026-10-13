@@ -2176,6 +2176,26 @@ func (kb *KnowledgeBase) RemoveSource(id int64) error {
 	return nil
 }
 
+/** SourceObservationCount returns how many observations are linked to a source,
+ * which is what stops RemoveSource: a caller can say so before asking for a
+ * delete.
+ *
+ * Parameters:
+ *   id (int64) — source primary key.
+ *
+ * Returns:
+ *   int   — the number of observation_sources rows for the source.
+ *   error — on database failure.
+ *
+ * Example:
+ *   n, err := kb.SourceObservationCount(1)
+ */
+func (kb *KnowledgeBase) SourceObservationCount(id int64) (int, error) {
+	var n int
+	err := kb.db.QueryRow(`SELECT COUNT(*) FROM observation_sources WHERE source_id = ?`, id).Scan(&n)
+	return n, err
+}
+
 /** RetractSource sets retracted=1 and records a retraction note on the source
  * with the given id.
  *

@@ -154,6 +154,53 @@ func planRecordDelete(kb *knowledge.KnowledgeBase, rec *knowledge.Record, ref st
 	return p, nil
 }
 
+// planSourceRemove plans `kb source remove ID`. A source that observations cite is
+// refused, as the command refuses it, naming what to do first.
+func planSourceRemove(kb *knowledge.KnowledgeBase, id int64, title string) (removalPlan, error) {
+	n, err := kb.SourceObservationCount(id)
+	if err != nil {
+		return removalPlan{}, err
+	}
+	idText := strconv.FormatInt(id, 10)
+	p := removalPlan{Title: fmt.Sprintf("source %d", id), Confirm: idText, Equivalent: "kb source remove " + idText}
+	if n > 0 {
+		p.Refusal = fmt.Sprintf("source %d is linked to %s; nothing was deleted: unlink it first (kb unlink observation OBS SOURCE)", id, plural(n, "observation(s)"))
+		return p, nil
+	}
+	if title = strings.TrimSpace(title); title != "" {
+		p.Lines = append(p.Lines, "“"+title+"”")
+	}
+	p.Lines = append(p.Lines, "it is linked to no observation")
+	p.Apply = func() error { return kb.RemoveSource(id) }
+	return p, nil
+}
+
+// planDocumentDelete plans `kb document delete ID`. A document with a reviewed
+// summary, which is human-written and human-gated, is refused here: the command
+// needs --force for it, and it is not a thing to do from a single typed id.
+func planDocumentDelete(kb *knowledge.KnowledgeBase, id int64, title string) (removalPlan, error) {
+	u, err := kb.DocumentUsage(id)
+	if err != nil {
+		return removalPlan{}, err
+	}
+	idText := strconv.FormatInt(id, 10)
+	p := removalPlan{Title: fmt.Sprintf("document %d", id), Confirm: idText, Equivalent: "kb document delete " + idText}
+	if u.ReviewedSections > 0 {
+		p.Refusal = fmt.Sprintf("document %d has %s, which is human-gated data; nothing was deleted: kb document delete %d --dry-run shows what would go, --force deletes it anyway",
+			id, plural(u.ReviewedSections, "reviewed summary(ies)"), id)
+		return p, nil
+	}
+	if title = strings.TrimSpace(title); title != "" {
+		p.Lines = append(p.Lines, "“"+title+"”")
+	}
+	p.Lines = append(p.Lines, fmt.Sprintf("its %s and %s will be removed", plural(u.Sections, "section(s)"), plural(u.ConceptLinks, "concept link(s)")))
+	if u.Path != "" {
+		p.Lines = append(p.Lines, "a re-ingest of "+u.Path+" recreates the document, without any reviewed summary")
+	}
+	p.Apply = func() error { _, err := kb.DeleteDocument(id, false); return err }
+	return p, nil
+}
+
 // beginRemoval opens the gate for a plan, or shows why there is none.
 func (m *tuiModel) beginRemoval(p removalPlan, err error) (tea.Model, tea.Cmd) {
 	if err != nil {
@@ -187,6 +234,22 @@ func (m *tuiModel) removeSelected() (tea.Model, tea.Cmd) {
 	case viewConcepts:
 		if it, ok := m.conceptList.SelectedItem().(conceptItem); ok {
 			p, err := planConceptDelete(m.kb, it.c.Name)
+			return m.beginRemoval(p, err)
+		}
+	case viewBrowse:
+		if it, ok := m.browseList.SelectedItem().(browseItem); ok {
+			var p removalPlan
+			var err error
+			switch m.browseKind {
+			case "source":
+				p, err = planSourceRemove(m.kb, it.id, it.title)
+			case "document":
+				p, err = planDocumentDelete(m.kb, it.id, it.title)
+			case "concept":
+				p, err = planConceptDelete(m.kb, it.title)
+			default:
+				return m, nil
+			}
 			return m.beginRemoval(p, err)
 		}
 	case viewRecords, viewRecordScope:
@@ -275,6 +338,19 @@ func (m *tuiModel) reloadAfterRemoval() {
 			return
 		}
 		keep(&m.conceptList, at)
+	case viewBrowse:
+		at := m.browseList.Index()
+		items, err := m.browseItems(m.browseKind)
+		if err != nil {
+			m.setErr(err)
+			return
+		}
+		if len(items) == 0 {
+			m.setState(viewGroup)
+			return
+		}
+		m.browseList.SetItems(items)
+		keep(&m.browseList, at)
 	case viewRecords:
 		at := m.recordList.Index()
 		if err := m.loadRecords(); err != nil {

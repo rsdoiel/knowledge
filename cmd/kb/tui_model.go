@@ -1111,7 +1111,7 @@ func (m *tuiModel) legendFull() string {
 	case viewSummary:
 		return m.summaryLegend()
 	case viewBrowse:
-		return move + "   Enter show   / search   q back"
+		return move + "   Enter show   d delete   / search   q back"
 	case viewReviewQueue:
 		return move + "   Enter summarise   " + m.scopeKey() + "   / search   : command   q back"
 	case viewPlan:

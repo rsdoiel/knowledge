@@ -12,6 +12,11 @@ release notes; maintained going forward.
   Browse are lists to choose from: Enter shows the item through the command's own `show`, `q` returns to the
   list, and an empty list says so on the menu. Observations → Browse opens the project list, where Enter and
   `o` reach a project's observations.
+- **`d` on a Browse list deletes the item behind the removing gate** (DR-0067): `source remove` and `document
+  delete` get their screen, and Concepts → Browse deletes a concept as the project tab does. The gate names what
+  goes and the id (or name) is typed; a source that observations cite, and a document with a reviewed summary,
+  are refused there as the command refuses them, with what to do. `:` reaches the same gates for
+  `source remove ID` and `document delete ID`. Library: `(*KnowledgeBase).SourceObservationCount`.
 - **Enter shows the item** on a search result (an observation, concept, project or record, through the
   command's own `show`) and on an observation in a project's tab. `q` returns to the list it came from.
 - **Library: `KBSearchResult` carries `SourceID` and `ProjectID`**, the row's id and its project's, as the
