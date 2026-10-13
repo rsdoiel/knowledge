@@ -154,7 +154,7 @@ func TestMenu_AGroupOpensItsMenuAndBrowseOpensTheProjects(t *testing.T) {
 // itself and shows the command that does the same, without leaving the screen.
 func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
 	m := menuModel(t)
-	if v := m.View(); !strings.Contains(v, "Check") || !strings.Contains(v, "(v0.0.20)") {
+	if v := m.View(); !strings.Contains(v, "Check") || !strings.Contains(v, "(v0.0.22)") {
 		t.Errorf("the top menu does not mark Check as coming:\n%s", v)
 	}
 	m = openRow(t, m, "Check")
@@ -162,7 +162,7 @@ func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
 		t.Errorf("choosing an unbuilt row left the menu for %s", viewStateNames[m.state])
 	}
 	v := m.View()
-	for _, want := range []string{"not in the TUI yet", "v0.0.20", "kb check-db"} {
+	for _, want := range []string{"not in the TUI yet", "v0.0.22", "kb check-db"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the explanation lacks %q:\n%s", want, v)
 		}

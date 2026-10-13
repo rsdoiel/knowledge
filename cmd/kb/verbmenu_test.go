@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/rsdoiel/knowledge"
 )
 
 // The TUI's menus are derived from the verb table (knowledge DR-0066 and its
@@ -141,4 +144,43 @@ func TestMenu_RowsAreInOrderWithNoTies(t *testing.T) {
 			pos[s.Menu.Order] = s.Name
 		}
 	}
+}
+
+// A row that is not built says which release brings it. That must not be a
+// release that has already shipped: the table's own version is the floor.
+func TestVerbTable_NoUnbuiltRowPromisesAShippedRelease(t *testing.T) {
+	shipped := "v" + knowledge.Version
+	var check func(prefix string, spec subverbSpec)
+	check = func(prefix string, spec subverbSpec) {
+		if spec.Menu != nil && !spec.Menu.Built && spec.Menu.Since != "" && versionLess(spec.Menu.Since, shipped) {
+			t.Errorf("%s%s is dimmed with %s, which has shipped (this is %s)", prefix, spec.Name, spec.Menu.Since, shipped)
+		}
+		for _, s := range spec.Subverbs {
+			check(prefix+spec.Name+" ", s)
+		}
+	}
+	for _, v := range verbTable {
+		if v.Menu != nil && !v.Menu.Built && v.Menu.Since != "" && versionLess(v.Menu.Since, shipped) {
+			t.Errorf("%s is dimmed with %s, which has shipped (this is %s)", v.Name, v.Menu.Since, shipped)
+		}
+		for _, s := range v.Subverbs {
+			check(v.Name+" ", s)
+		}
+	}
+}
+
+// versionLess reports whether the vX.Y.Z release a is earlier than b, or is b.
+func versionLess(a, b string) bool {
+	parse := func(s string) [3]int {
+		var n [3]int
+		fmt.Sscanf(strings.TrimPrefix(s, "v"), "%d.%d.%d", &n[0], &n[1], &n[2])
+		return n
+	}
+	pa, pb := parse(a), parse(b)
+	for i := range pa {
+		if pa[i] != pb[i] {
+			return pa[i] < pb[i]
+		}
+	}
+	return true
 }

@@ -131,19 +131,19 @@ func sub(name string, class writeClass) subverbSpec { return subverbSpec{Name: n
 // verbs, of each verb's subverbs and of its flags is the order completion and
 // help list them, and completion_golden_test.go holds that order still.
 var verbTable = []verbSpec{
-	{Name: "check-db", Summary: "compare the database with its JSON-L dump", Menu: mi("Check", "compare the database with its JSONL dump", 10, "v0.0.20", "kb check-db"), Class: classRead,
+	{Name: "check-db", Summary: "compare the database with its JSON-L dump", Menu: mi("Check", "compare the database with its JSONL dump", 10, "v0.0.22", "kb check-db"), Class: classRead,
 		Flags: []string{"--jsonl"}},
 	{Name: "completion", Summary: "write or install a shell completion script", Class: classCLIOnly,
 		Flags: []string{"--install"}},
 	{Name: "concept", Summary: "manage concepts", Menu: mi("Concepts", "named ideas that span projects", 4, "", "kb concept"), Subverbs: []subverbSpec{
-		leaf("add", classAdditive, mi("New concept…", "add a concept", 2, "", "kb concept add NAME DESCRIPTION")), leaf("list", classRead, mi("Browse", "every concept", 1, "v0.0.20", "kb concept list")), sub("show", classRead), leaf("recall", classRead, mi("Recall…", "what is known about the concepts in some text", 4, "v0.0.20", "kb concept recall TEXT")),
-		sub("rename", classChanging), sub("delete", classRemoving), leaf("suggest", classRead, mi("Suggest…", "propose new concepts from the corpus", 3, "v0.0.20", "kb concept suggest")),
+		leaf("add", classAdditive, mi("New concept…", "add a concept", 2, "", "kb concept add NAME DESCRIPTION")), leaf("list", classRead, mi("Browse", "every concept", 1, "v0.0.22", "kb concept list")), sub("show", classRead), leaf("recall", classRead, mi("Recall…", "what is known about the concepts in some text", 4, "v0.0.22", "kb concept recall TEXT")),
+		sub("rename", classChanging), sub("delete", classRemoving), leaf("suggest", classRead, mi("Suggest…", "propose new concepts from the corpus", 3, "v0.0.22", "kb concept suggest")),
 	}, Flags: []string{"--identifier-type", "--identifier-value", "--project", "--limit", "--force", "--dry-run"}},
 	{Name: "document", Summary: "ingest and review narrative documents at graduated abstraction levels", Menu: mi("Documents", "narratives, their summaries and review", 6, "", "kb document"), Subverbs: []subverbSpec{
 		leaf("ingest", classGuided, mi("Ingest a document…", "bring a narrative in and summarise it", 2, "", "kb document ingest PATH --project P")), sub("draft", classGuided),
 		{Name: "review", Subverbs: []subverbSpec{leaf("list", classRead, mi("Review queue", "summaries waiting for a person", 3, "", "kb document review list")), sub("promote", classGuided)}},
-		leaf("list", classRead, mi("Browse", "every document", 1, "v0.0.20", "kb document list")), sub("show", classRead), leaf("tag", classPlanApply, mi("Tag…", "insert explicit concept links", 4, "", "kb document tag --project P")), leaf("fuzzy-tag", classPlanApply, mi("Fuzzy-tag…", "footnote near-miss concept names", 5, "", "kb document fuzzy-tag --project P")),
-		leaf("frontmatter", classPlanApply, mi("Frontmatter…", "propose frontmatter for a file", 6, "v0.0.20", "kb document frontmatter PATH")), sub("delete", classRemoving),
+		leaf("list", classRead, mi("Browse", "every document", 1, "v0.0.22", "kb document list")), sub("show", classRead), leaf("tag", classPlanApply, mi("Tag…", "insert explicit concept links", 4, "", "kb document tag --project P")), leaf("fuzzy-tag", classPlanApply, mi("Fuzzy-tag…", "footnote near-miss concept names", 5, "", "kb document fuzzy-tag --project P")),
+		leaf("frontmatter", classPlanApply, mi("Frontmatter…", "propose frontmatter for a file", 6, "v0.0.22", "kb document frontmatter PATH")), sub("delete", classRemoving),
 	}, Flags: []string{"--project", "--concept", "--dry-run", "--accept", "--accept-keywords", "--set", "--by",
 		"--confidence", "--status", "--title", "--format"}},
 	{Name: "export", Summary: "write a portable JSON-L snapshot of the database", Class: classCLIOnly,
@@ -163,7 +163,7 @@ var verbTable = []verbSpec{
 	{Name: "merge", Summary: "reconcile two knowledge.db files that drifted independently", Class: classCLIOnly,
 		Flags: []string{"--a", "--b", "--out", "--force"}},
 	{Name: "observation", Summary: "manage observations", Menu: mi("Observations", "notes, findings, decisions, questions", 3, "", "kb observation"), Subverbs: []subverbSpec{
-		leaf("add", classAdditive, mi("New observation…", "record a note, finding or decision", 2, "", "kb observation add --project P KIND BODY")), leaf("list", classRead, mi("Browse", "a project's observations", 1, "v0.0.20", "kb observation list --project P")), sub("show", classRead), sub("update", classChanging),
+		leaf("add", classAdditive, mi("New observation…", "record a note, finding or decision", 2, "", "kb observation add --project P KIND BODY")), leaf("list", classRead, mi("Browse", "a project's observations", 1, "v0.0.22", "kb observation list --project P")), sub("show", classRead), sub("update", classChanging),
 		sub("sources", classRead), sub("delete", classRemoving),
 	}, Flags: []string{"--project", "--source-doi"}},
 	{Name: "project", Summary: "manage projects", Menu: mi("Projects", "browse projects, their notes, concepts, records", 1, "", "kb project"), Subverbs: []subverbSpec{
@@ -190,8 +190,8 @@ var verbTable = []verbSpec{
 	{Name: "search", Summary: "full-text search across observations, projects, concepts and records", Menu: mi("Search", "full-text search across everything", 7, "", "kb search TERM"), Class: classRead,
 		Flags: []string{"--project"}},
 	{Name: "source", Summary: "manage cited sources and retraction checking", Menu: mi("Sources", "cited works and retraction checks", 5, "", "kb source"), Subverbs: []subverbSpec{
-		leaf("add", classAdditive, mi("New source…", "add a cited work", 2, "", "kb source add TITLE")), leaf("list", classRead, mi("Browse", "every source", 1, "v0.0.20", "kb source list")), sub("show", classRead), sub("remove", classRemoving),
-		sub("retract", classChanging), sub("link", classAdditive), leaf("check-retractions", classRead, mi("Check retractions…", "look sources up for retractions", 3, "v0.0.20", "kb source check-retractions")),
+		leaf("add", classAdditive, mi("New source…", "add a cited work", 2, "", "kb source add TITLE")), leaf("list", classRead, mi("Browse", "every source", 1, "v0.0.22", "kb source list")), sub("show", classRead), sub("remove", classRemoving),
+		sub("retract", classChanging), sub("link", classAdditive), leaf("check-retractions", classRead, mi("Check retractions…", "look sources up for retractions", 3, "v0.0.22", "kb source check-retractions")),
 	}, Flags: []string{"--doi", "--url", "--authors", "--published", "--publisher", "--rights", "--version", "--relationship"}},
 	{Name: "summary", Summary: "a formatted overview of every project and its most recent observations", Class: classRead,
 		Flags: []string{"--project"}},

@@ -345,7 +345,7 @@ func TestBinary_TUIWalksDownAndUpWithEscDoingNothing(t *testing.T) {
 	}
 
 	screen.waitFor(t, "kb — knowledge") // the top menu
-	for _, want := range []string{"agents/knowledge.db", "q quit", "(v0.0.20)"} {
+	for _, want := range []string{"agents/knowledge.db", "q quit", "(v0.0.22)"} {
 		if !strings.Contains(screen.text(), want) {
 			t.Errorf("the top menu lacks %q:\n%s", want, screen.text())
 		}
