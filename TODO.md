@@ -27,7 +27,6 @@
 ## Requested features
 
 
-- [ ] Their needs to be a way of reviewing items in the agents/projects/<project_name> directory tree (like decisions) that haven't been ingest. It should simply be a list of those items in the directory tree that haven't been ingested with an example command(s) for ingesting them for review. This would make sense in the TUI as well as the CLI. This needs to be explored before setting on an approach
 - [x] **DONE 2026-10-06 (uncommitted).** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
   following `antennaApp/completion.go` (shipped 2026-10-05; `InstallCompletion` is the install half).
   Specifics for kb: the verb table must not be hand-maintained a second time. `cmd/kb/help_dispatch_test.go`
