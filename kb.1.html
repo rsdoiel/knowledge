@@ -276,10 +276,11 @@ an error
 </dd>
 <dt>KB_PAGER</dt>
 <dd>
-the program that shows a record for review in record set-status with no
-status, with its arguments (KB_PAGER=“bat -l markdown”). Unset, kb uses
-bat with the Markdown language if bat is installed, then less -R, and
-with neither prints the record straight through
+an external program to show a record for review, with its arguments
+(KB_PAGER=“bat –paging=always -l markdown”). Unset, kb shows the record
+itself with Markdown highlighting, in the interface’s viewer or, for
+record set-status with no status, on the terminal. NO_COLOR turns the
+highlighting off
 </dd>
 </dl>
 <h1 id="verbs">VERBS</h1>

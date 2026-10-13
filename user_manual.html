@@ -179,10 +179,10 @@ enters or passes (like git’s <code>GIT_CEILING_DIRECTORIES</code>); set
 it to a scratch directory that sits inside a real workspace</li>
 <li><code>KB_QUIET</code> — silence advisory notes on standard error;
 never an error</li>
-<li><code>KB_PAGER</code> — the program that shows a record for
-<code>kb record set-status REF</code> (no status):
-<code>bat -l markdown</code>, else <code>less -R</code>, else the record
-is printed</li>
+<li><code>KB_PAGER</code> — an external program to show a record, in the
+interface and for <code>kb record set-status REF</code> (no status).
+Unset, kb shows the record itself with Markdown highlighting
+(<code>NO_COLOR</code> turns the colour off)</li>
 </ul>
 <p>See <a href="kb.1.html">kb(1)</a>, § WORKSPACE AND ENVIRONMENT.</p>
 <h3 id="naming-records">Naming records</h3>
@@ -213,14 +213,18 @@ that apply. Typing in the search prompt takes every key as text,
 <code>q</code> included.</p>
 <p>On a record (the Records screens and a project’s Records tab)
 <code>Enter</code> reads it and <code>s</code> sets its status. Both
-show the record file in your pager (<code>$KB_PAGER</code>, else
-<code>bat</code>, else <code>less -R</code>) with the interface
-suspended, or in a built-in viewer when there is no pager.
-<code>s</code> then offers the moves the record’s status allows, each on
-one key, asks for <code>y</code>, and writes by the same function as
-<code>kb record set-status REF</code>. <code>Esc</code> or
-<code>q</code> backs out at either step with nothing written. When it
-writes, the screen shows the equivalent command line.</p>
+show the record file in a built-in viewer with Markdown highlighting
+(<code>NO_COLOR</code> turns the colour off), or in
+<code>$KB_PAGER</code> with the interface suspended when you set it. The
+viewer scrolls with the arrows, <code>j</code> and <code>k</code> and
+the page keys, <code>g</code> and <code>G</code> jump to the ends,
+<code>/</code> finds text, and <code>n</code> and <code>N</code> move
+between matches. <code>s</code> then offers the moves the record’s
+status allows, each on one key, asks for <code>y</code>, and writes by
+the same function as <code>kb record set-status REF</code>.
+<code>Esc</code> or <code>q</code> backs out at either step with nothing
+written. When it writes, the screen shows the equivalent command
+line.</p>
 <p><code>d</code> deletes the selected project, observation, concept or
 record. It is not a y/n: a screen shows what will be removed and what
 points at it, and you type the thing’s name (a record’s reference, an

@@ -77,9 +77,9 @@ call rather than naming each corpus by hand: 1 if the only trouble is
 stale indexes, and the class of the first failure (65 for a malformed
 record, 77 for a file it may not write) if any corpus could not be
 indexed at all, since a failure is more serious than drift. –all and
-–stdout cannot be combined. See TODO.md’s index-regeneration item (index
-–check and the auto-refresh on set-status/supersede) for the
-single-corpus half this completes.</p>
+–stdout cannot be combined. –check on one PATH is the single-corpus form
+of the same test, and record set-status and record supersede refresh a
+corpus’s index.md themselves.</p>
 <p>Hidden directories are not descended into. A git worktree keeps a
 whole second copy of the tree under .claude/worktrees/<name>/, corpus
 and generated index.md included, so without this it is reported as a
@@ -103,7 +103,7 @@ process every already-indexed corpus under ROOT instead of one PATH
 </dd>
 </dl>
 <h1 id="examples">EXAMPLES</h1>
-<pre class="shell"><code>kb index clasm/decisions
+<pre class="shell"><code>kb index agents/projects/clasm/decisions
 kb index agents/decisions --stdout | head
 kb index agents/decisions --check
 kb index . --all

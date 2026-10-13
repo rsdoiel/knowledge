@@ -19,65 +19,46 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.20">knowledge 0.0.20</h2>
-<p>The terminal interface can now do everything the command line does to
-what you are looking at, behind the same gates. The decisions are
-DR-0066 to DR-0070 (the menu tree and <code>:</code>, the shared
-chooser, the write classes and the removing gate, plan then apply for
-ingest, the document summary workflow, and the terminal rule for
-promote), from the design brief
-<code>tui-keys-and-write-flows-design.md</code> and its plan. Everything
-was written and tested red first, including the built binary on a
-pseudo-terminal with real bytes. The race detector passed on
-darwin/arm64 at the last code commit, and the interface was tried by
-hand on Linux (Raspberry Pi OS) and macOS. It has not been run on
-Windows.</p>
-<p>Writes. <code>n</code> on the project list, an observation or concept
-tab and the Records screens, and the New rows of the menus, open a form
-that asks the fields one at a time and ends with the command that does
-the same and <code>y</code>. <code>s</code>, <code>e</code> and
-<code>r</code> on the project list change a project’s status,
-description and name; <code>e</code> on an observation writes a
-correction (a new observation that supersedes it, as
-<code>kb observation update</code> does) and on a concept renames it;
-<code>u</code> on a record makes it supersede another. <code>d</code>
-deletes a project, observation, concept or record behind a gate that
-shows what points at it and asks for its name to be typed. Each write is
-the command’s own function, so its rules and refusals are the same, and
-the screen ends by showing the command that does the same.</p>
-<p>Plans and the command line. Ingest, Records, Fuzzy-tag and Documents
-(Ingest a document, Tag, Fuzzy-tag) show the command’s own
-<code>--dry-run</code> output first and apply on <code>y</code>; Index
-and Format files run at once. <code>:</code> opens a command line on the
-menus and browsing screens: any verb, run by the command line’s own
-code, with the gate its write class calls for (reads and direct verbs
-run, additive and changing writes ask <code>y</code>, a delete meets the
-typed-name gate, plan verbs show their dry run, <code>merge</code>,
-<code>import</code>, <code>init</code>, <code>export</code> and
-<code>completion</code> are refused).</p>
-<p>Documents. Documents, Review queue lists the sections waiting for a
-person; <code>Enter</code> writes the summary in <code>$VISUAL</code> or
-<code>$EDITOR</code> (the interface is suspended) or in a built-in text
-area, then shows it above its source, and <code>y</code> saves it as
-written by a person and promotes it. A section that already has a draft
-starts at that review, so a model’s draft is read beside its source, and
-promoted as it is it keeps its author.</p>
-<p><code>kb ingest</code> now says which concepts it created, or with
-<code>--dry-run</code> would create, so a typo in a
-<code>[[wikilink]]</code> no longer adds a concept silently
-(<code>concepts_created</code> in <code>-json</code>;
-<code>(*KnowledgeBase).HasConcept</code> in the library).</p>
-<p>Building: <code>cmt</code> is no longer part of <code>make</code>.
-<code>make generate</code> regenerates <code>version.go</code>,
-<code>about.md</code>, <code>CITATION.cff</code> and the installers from
-<code>codemeta.json</code>, and <code>make release</code> runs it, so
-the version and release hash change only when asked for.</p>
-<p>Not in the interface yet: Documents Browse, Documents Frontmatter
-(<code>document frontmatter</code> is reachable through <code>:</code>),
-Concepts Recall and Suggest, Check, and the removing writes
-<code>source remove</code>, <code>unlink</code> and
-<code>document delete</code>; <code>kb verbs --json</code> does not yet
-carry the menu fields.</p>
+<h2 id="knowledge-0.0.21">knowledge 0.0.21</h2>
+<p>Records are now read in kb’s own viewer, with Markdown highlighting,
+and the pager no longer depends on which programs happen to be
+installed. The decision is DR-0071 (a partial supersede of DR-0066 point
+5).</p>
+<p>Reading. Enter on a record in the terminal interface used to return
+straight to the list when <code>bat</code> was installed:
+<code>bat</code> quits at once when the text fits one screen and the
+interface repainted over it. kb now shows a record itself. YAML
+frontmatter, headings, fenced code, list markers, quotes, inline code,
+bold and links are coloured with the terminal’s own 16 colours;
+<code>NO_COLOR</code> or <code>TERM=dumb</code> turns it off. In the
+viewer <code>/</code> finds text (case-insensitive), <code>n</code> and
+<code>N</code> move between matches, <code>g</code> and <code>G</code>
+jump to the ends. <code>kb record set-status REF</code> with no status
+prints the same highlighted record on a terminal. <code>bat</code>,
+<code>batcat</code> and <code>less</code> are no longer looked for;
+<code>$KB_PAGER</code> is the override and is run exactly as written
+(give <code>bat</code> <code>--paging=always</code>).</p>
+<p>Fixed. <code>kb help ingest</code> showed
+<code>kb ingest clasm/decisions</code>, which exits 66 from the
+workspace root: <code>PATH</code> is a directory relative to the current
+directory, one only, walked recursively, and the project and tier come
+from each record’s <code>project:</code> frontmatter. The text now says
+so and the examples work; the <code>kb index</code> and
+<code>kb record fmt</code> examples are corrected too.
+<code>kb ingest</code>‘s “missing” line said kb had no verb to remove a
+row; it now names <code>kb record delete REF</code>. The
+<code>kb-index(1)</code> page no longer points at the developers’
+<code>TODO.md</code>.</p>
+<p>For packagers: <code>github.com/muesli/termenv</code> is now a direct
+dependency (it was already built in). The race detector passed on
+darwin/arm64 at the last code commit. The viewer was driven on a
+pseudo-terminal against the built binary on Linux (Raspberry Pi OS), and
+tried by hand on macOS and Windows, where it worked.</p>
+<p>Not in the interface yet: Documents Browse and Frontmatter
+(frontmatter is reachable through <code>:</code>), Concepts Recall and
+Suggest, Check, and the removing writes <code>source remove</code>,
+<code>unlink</code> and <code>document delete</code>;
+<code>kb verbs --json</code> does not yet carry the menu fields.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

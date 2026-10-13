@@ -28,6 +28,25 @@ base</p>
 one’s YAML frontmatter, and upserts it into the records table and the
 full-text index. The generated index.md is not a record and is
 skipped.</p>
+<p>PATH is a directory, and is taken as written relative to the current
+directory, not to the workspace root. A project’s records live under
+agents/projects/NAME/decisions and the workspace tier’s under
+agents/decisions, so from the workspace root those are the paths to
+give; from inside a project’s directory, decisions is enough. A file is
+refused (“is not a directory”, exit 66), as is a directory that does not
+exist. Exactly one PATH is taken (a missing or surplus one is a usage
+error, exit 2).</p>
+<p>The walk descends into every subdirectory, so agents/projects/NAME
+ingests the project’s decisions directory and anything else under it
+that holds record files, and agents/projects ingests every project at
+once. (kb index, by contrast, takes one directory and does not
+descend.)</p>
+<p>Which project a record belongs to, and whether it is at the workspace
+tier, is read from the record’s own “project:” frontmatter, never from
+where the file sits. A record with an empty project is workspace tier; a
+project name the database does not know yet is created. Ingesting the
+wrong directory therefore files records under whatever their frontmatter
+says, which is why –dry-run is worth running first.</p>
 <p>A record’s identity is its (project, scope, id) triple. Re-ingesting
 a tree is cheap and safe to repeat: a file whose checksum is unchanged
 is skipped.</p>
@@ -96,19 +115,25 @@ report the same counts and write nothing
 </dd>
 <dt>–root DIR</dt>
 <dd>
-treat DIR as the workspace root that stored paths are relative to.
+treat DIR as the workspace root that stored paths are relative to, and
+whose base name is the workspace name recorded with each record.
 Defaults to the parent of the directory holding the database, so –db
 agents/knowledge.db gives a root of the workspace itself. Paths are
 stored relative because absolute ones do not survive merge between
-machines.
+machines. A file outside DIR is stored under its base name only.
 </dd>
 </dl>
 <h1 id="examples">EXAMPLES</h1>
-<p>Index one project’s records, then the workspace tier:</p>
-<pre class="shell"><code>kb ingest clasm/decisions
+<p>From the workspace root, index one project’s records, then the
+workspace tier:</p>
+<pre class="shell"><code>kb ingest agents/projects/clasm/decisions
 kb ingest agents/decisions</code></pre>
 <p>Preview without writing:</p>
-<pre class="shell"><code>kb ingest clasm/decisions --dry-run</code></pre>
+<pre class="shell"><code>kb ingest agents/projects/clasm/decisions --dry-run</code></pre>
+<p>Every project’s records at once, or from inside a project’s
+directory:</p>
+<pre class="shell"><code>kb ingest agents/projects
+cd agents/projects/clasm &amp;&amp; kb ingest decisions</code></pre>
 </section>
 <footer>
 <p>knowledge</p>
