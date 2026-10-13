@@ -1,4 +1,4 @@
-%kb-index(1) user manual | version 0.0.21 13c96bf
+%kb-index(1) user manual | version 0.0.21 dbab219
 % R. S. Doiel
 % 2026-10-09
 

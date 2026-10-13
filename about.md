@@ -47,7 +47,7 @@ Reading. Enter on a record in the terminal interface used to return straight to 
 
 Fixed. `kb help ingest` showed `kb ingest clasm/decisions`, which exits 66 from the workspace root: `PATH` is a directory relative to the current directory, one only, walked recursively, and the project and tier come from each record's `project:` frontmatter. The text now says so and the examples work; the `kb index` and `kb record fmt` examples are corrected too. `kb ingest`'s "missing" line said kb had no verb to remove a row; it now names `kb record delete REF`. The `kb-index(1)` page no longer points at the developers' `TODO.md`.
 
-For packagers: `github.com/muesli/termenv` is now a direct dependency (it was already built in). The race detector passed on darwin/arm64 at the last code commit. The interface has been run by hand on Linux (Raspberry Pi OS), macOS and Windows.
+For packagers: `github.com/muesli/termenv` is now a direct dependency (it was already built in). The race detector passed on darwin/arm64 at the last code commit. The viewer was driven on a pseudo-terminal against the built binary on Linux (Raspberry Pi OS), and tried by hand on macOS and Windows, where it worked.
 
 Not in the interface yet: Documents Browse and Frontmatter (frontmatter is reachable through `:`), Concepts Recall and Suggest, Check, and the removing writes `source remove`, `unlink` and `document delete`; `kb verbs --json` does not yet carry the menu fields.
 
