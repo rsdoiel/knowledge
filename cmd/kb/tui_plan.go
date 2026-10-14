@@ -40,7 +40,7 @@ type planFlow struct {
 func (m *tuiModel) beginPlan(p *planFlow, back viewState) {
 	p.back = back
 	m.plan = p
-	h := m.bodyHeight() - 3
+	h := m.bodyHeight() - 2 - len(m.planCommandLines(p))
 	if m.bodyHeight() <= 0 {
 		h = 17
 	}
@@ -100,12 +100,32 @@ func (m *tuiModel) planScreen() (string, []string) {
 	if note == "" {
 		note = "dry run — nothing has been written"
 	}
-	lines := []string{
-		note,
-		"y runs:  " + m.plan.equivalent,
-		"",
-	}
+	lines := append([]string{note}, m.planCommandLines(m.plan)...)
+	lines = append(lines, "")
 	return m.plan.title, append(lines, strings.Split(strings.TrimRight(m.planView.View(), "\n"), "\n")...)
+}
+
+// planCommandLines is the "y runs:" line of a plan, wrapped at spaces so a long
+// path does not push the end of the command off the screen.
+func (m *tuiModel) planCommandLines(p *planFlow) []string {
+	const prefix = "y runs:  "
+	width := m.cols() - 6
+	if width < 20 {
+		width = 20
+	}
+	var lines []string
+	cur := prefix
+	for _, w := range strings.Fields(p.equivalent) {
+		if cur != prefix && cur != strings.Repeat(" ", len(prefix)) && len([]rune(cur))+1+len([]rune(w)) > width {
+			lines = append(lines, cur)
+			cur = strings.Repeat(" ", len(prefix))
+		}
+		if cur != prefix && strings.TrimSpace(cur) != "" {
+			cur += " "
+		}
+		cur += w
+	}
+	return append(lines, cur)
 }
 
 // runCapture runs a command function with a buffer for its output.

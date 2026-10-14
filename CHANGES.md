@@ -7,6 +7,12 @@ release notes; maintained going forward.
 
 ### Added
 
+- **Documents → Frontmatter… is built; no row of the menus is dimmed any more.** It asks for the file and
+  shows what `kb document frontmatter` proposes as a checklist with nothing selected (title, author,
+  dateCreated, dateModified, and the keywords: known concepts the text mentions, and new candidate terms).
+  Space selects a row, `a` all, Enter shows the selection as a dry run with the command that does the same,
+  and only `y` writes the file. The plan's command now wraps at spaces, so a long path no longer hides the
+  end of it. `--set FIELD=VALUE` stays on the command line (`:` reaches it).
 - **`u` cuts a link in the terminal interface** (`kb unlink`, DR-0067). On a project's Concepts tab it
   unlinks the selected concept from the project; on an observation it lists the observation's concept and
   source links to pick one. Each ends in a typed confirmation like a delete, names what stays, and shows the

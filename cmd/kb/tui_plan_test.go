@@ -253,12 +253,12 @@ func TestPlan_DocumentIngestIsAFormThenAPlan(t *testing.T) {
 
 // ─── the table and the legend ────────────────────────────────────────────────
 
-func TestPlan_TheRowsAreBuiltAndFrontmatterIsNot(t *testing.T) {
+func TestPlan_TheDocumentRowsAreAllBuilt(t *testing.T) {
 	built := map[string]bool{}
 	for _, it := range groupMenu("document") {
 		built[it.Label] = it.Built
 	}
-	for label, want := range map[string]bool{"Ingest a document…": true, "Tag…": true, "Fuzzy-tag…": true, "Frontmatter…": false} {
+	for label, want := range map[string]bool{"Ingest a document…": true, "Tag…": true, "Fuzzy-tag…": true, "Frontmatter…": true} {
 		if built[label] != want {
 			t.Errorf("Documents → %s built = %v, want %v", label, built[label], want)
 		}

@@ -76,6 +76,10 @@ type formFlow struct {
 	// command's arguments, which run at once with no confirmation and are shown in
 	// the viewer. An error is a notice on the screen the form began on.
 	read func([]string) ([]string, error)
+	// then, when set, hands the answers to a screen of its own, in place of the
+	// confirmation, the plan and the read: it sets the state itself. An error is
+	// a notice on the screen the form began on.
+	then func([]string) error
 }
 
 // beginForm opens a form on the current screen at its first field.
@@ -93,6 +97,13 @@ func (m *tuiModel) enterField(i int) {
 	f := m.form
 	f.step, f.chooser, f.edit = i, nil, nil
 	if i >= len(f.fields) {
+		if f.then != nil {
+			if err := f.then(f.values); err != nil {
+				m.setState(f.back)
+				m.notice = err.Error()
+			}
+			return
+		}
 		if f.read != nil {
 			args, err := f.read(f.values)
 			m.setState(f.back)

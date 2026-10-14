@@ -144,7 +144,7 @@ var verbTable = []verbSpec{
 		leaf("ingest", classGuided, mi("Ingest a document…", "bring a narrative in and summarise it", 2, "", "kb document ingest PATH --project P")), sub("draft", classGuided),
 		{Name: "review", Subverbs: []subverbSpec{leaf("list", classRead, mi("Review queue", "summaries waiting for a person", 3, "", "kb document review list")), sub("promote", classGuided)}},
 		leaf("list", classRead, mi("Browse", "every document", 1, "", "kb document list")), sub("show", classRead), leaf("tag", classPlanApply, mi("Tag…", "insert explicit concept links", 4, "", "kb document tag --project P")), leaf("fuzzy-tag", classPlanApply, mi("Fuzzy-tag…", "footnote near-miss concept names", 5, "", "kb document fuzzy-tag --project P")),
-		leaf("frontmatter", classPlanApply, mi("Frontmatter…", "propose frontmatter for a file", 6, "v0.0.22", "kb document frontmatter PATH")), sub("delete", classRemoving),
+		leaf("frontmatter", classPlanApply, mi("Frontmatter…", "propose frontmatter for a file", 6, "", "kb document frontmatter PATH")), sub("delete", classRemoving),
 	}, Flags: []string{"--project", "--concept", "--dry-run", "--accept", "--accept-keywords", "--set", "--by",
 		"--confidence", "--status", "--title", "--format"}},
 	{Name: "export", Summary: "write a portable JSON-L snapshot of the database", Class: classCLIOnly,

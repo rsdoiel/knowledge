@@ -153,6 +153,7 @@ func TestMenu_AGroupOpensItsMenuAndBrowseOpensTheProjects(t *testing.T) {
 // A row that is not built is dimmed with its release, and choosing it explains
 // itself and shows the command that does the same, without leaving the screen.
 func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
+	asUnbuilt(t, "document", "frontmatter", "v0.0.22")
 	m := openRow(t, menuModel(t), "Documents")
 	if v := m.View(); !strings.Contains(v, "Frontmatter") || !strings.Contains(v, "(v0.0.22)") {
 		t.Errorf("the Documents menu does not mark Frontmatter as coming:\n%s", v)
@@ -184,6 +185,7 @@ func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
 // A group whose rows are not all built still opens, and an unbuilt row in it shows
 // its command.
 func TestMenu_AGroupWithAnUnbuiltRowStillOpens(t *testing.T) {
+	asUnbuilt(t, "document", "frontmatter", "v0.0.22")
 	m := openLeaf(t, menuModel(t), "Documents", "Frontmatter…")
 	if m.state != viewGroup || m.group != "document" {
 		t.Fatalf("state %s group %q, want the document group menu", viewStateNames[m.state], m.group)
@@ -290,4 +292,26 @@ func TestMenu_TheLegendsNameTheKeys(t *testing.T) {
 			t.Errorf("the group legend lacks %q:\n%s", w, g.View())
 		}
 	}
+}
+
+// asUnbuilt makes one row of the verb table unbuilt for the length of a test. The
+// table has no unbuilt row once everything is on a screen, and the dimming and the
+// explanation are still how the next row that is not yet built will behave.
+func asUnbuilt(t *testing.T, verb, sub, since string) {
+	t.Helper()
+	for i := range verbTable {
+		if verbTable[i].Name != verb {
+			continue
+		}
+		for j := range verbTable[i].Subverbs {
+			sv := &verbTable[i].Subverbs[j]
+			if sv.Name == sub && sv.Menu != nil {
+				saved := *sv.Menu
+				sv.Menu.Built, sv.Menu.Since = false, since
+				t.Cleanup(func() { *sv.Menu = saved })
+				return
+			}
+		}
+	}
+	t.Fatalf("no row %s %s in the verb table", verb, sub)
 }

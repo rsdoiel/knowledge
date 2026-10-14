@@ -40,15 +40,15 @@
 
 ## Requested features
 
-- [ ] **TUI: one row still dimmed (v0.0.22).** Built since v0.0.21
-  (unreleased): Check, Concepts → Browse, Recall and Suggest, Documents → Browse, Sources → Browse and Check
-  retractions, Observations → Browse (the project list), Enter on search results and observations. Still not in the interface: Documents →
-  Frontmatter (frontmatter runs through `:`; it needs a field picker). `unlink` is built (2026-10-14: `u` on a
-  project's Concepts tab and on an observation).
-  `source remove` and `document delete` have the gate from the Browse lists (`d`) and from `:`. `kb verbs --json` carries the menu fields (done, unreleased). The Browse rows are
-  a selectable list, and Enter runs the verb's `show`; `/` filters those lists and `S` is the global search there (done, unreleased; every list now, step E2 of
-  `design/scoped-search-design.md`; the summary screen still uses `/` for the search). The viewer has no horizontal scroll and the find does not mark the match inside the line;
-  `KB_PAGER=less -R` is the escape hatch.
+- [x] **DONE 2026-10-14, unreleased (for v0.0.22): every row of the menus is built.** Built since v0.0.21:
+  Check, Concepts → Browse, Recall and Suggest, Documents → Browse, Sources → Browse and Check retractions,
+  Observations → Browse (the project list), Enter on search results and observations, `d` on a Browse list,
+  `u` to unlink (a project's Concepts tab, and an observation's links), Documents → Frontmatter… (a
+  checklist; `--set` stays on the command line), `/` to filter every list and `S` to search, and the Search
+  menu (`design/scoped-search-design.md`, DR-0072 to DR-0074). `kb verbs --json` carries the menu fields.
+  What is left, and optional: the summary screen still uses `/` for the search; the Browse lists filter only
+  what they show; the viewer has no horizontal scroll and its find does not mark the match inside a line
+  (`KB_PAGER=less -R` is the escape hatch).
 
 - [ ] **Provenance as a first-class capability, and two meanings of "source" (raised 2026-10-14, for
   exploration).** Provenance is a distinguishing capability of harvey, and the knowledge base may not have

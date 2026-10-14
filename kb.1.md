@@ -116,6 +116,9 @@ u cuts a link: on a project's Concepts tab it unlinks the selected concept from 
 project, and on an observation it lists the observation's concept and source
 links to pick one. Either asks for the same typed confirmation as a delete,
 keeps both things and shows the kb unlink command that does the same.
+Documents → Frontmatter… asks for a file and lists what kb document frontmatter
+proposes, with nothing selected: space selects a row, Enter shows the selection
+as a dry run, and y writes it.
 
 On a record, on the Records screens and on a project's Records tab, Enter reads
 it and s sets its status. Both show the record file in the pager ($KB_PAGER, else

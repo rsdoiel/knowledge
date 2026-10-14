@@ -40,6 +40,7 @@ const (
 	viewSummary     // one section's summary unit: write it, then review it beside its source
 	viewBrowse      // a Browse list of concepts, sources or documents: Enter shows the item
 	viewUnlink      // the links of one observation, to pick one to cut
+	viewPick        // a checklist of proposals to accept, with nothing selected
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -157,6 +158,7 @@ type tuiModel struct {
 	browseList      list.Model                // a Browse list, in viewBrowse
 	unlinkList      list.Model                // an observation's links, in viewUnlink
 	unlinkObs       int64                     // the observation whose links it lists
+	pick            *pickFlow                 // the checklist in progress, in viewPick
 	browseKind      string                    // what it lists: concept, source or document
 	filters         map[viewState]*listFilter // the filter of each list that has one in force
 	unit            *summaryUnit              // the summary unit in progress, in viewSummary
@@ -303,6 +305,7 @@ var viewStateNames = map[viewState]string{
 	viewSummary:      "viewSummary",
 	viewBrowse:       "viewBrowse",
 	viewUnlink:       "viewUnlink",
+	viewPick:         "viewPick",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -442,6 +445,8 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateBrowse(msg)
 		case viewUnlink:
 			return m.updateUnlink(msg)
+		case viewPick:
+			return m.updatePick(msg)
 		default:
 			return m.updateProjects(msg)
 		}
@@ -789,6 +794,8 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 		return m.goTo(viewReviewQueue, m.loadReviewQueue)
 	case "record fuzzy-tag":
 		return m.planRecordFuzzyTag()
+	case "document frontmatter":
+		return m.beginFrontmatter()
 	case "document ingest":
 		return m.planDocumentIngest()
 	case "document tag":
@@ -1019,7 +1026,7 @@ func (m *tuiModel) canSearchFromHere() bool {
 		return false
 	}
 	switch m.state {
-	case viewText, viewReview, viewPlan, viewRemove, viewForm, viewChange, viewCommand, viewSummary:
+	case viewText, viewReview, viewPlan, viewRemove, viewForm, viewChange, viewCommand, viewSummary, viewPick:
 		return false
 	}
 	return true
@@ -1287,6 +1294,8 @@ func (m *tuiModel) legendFull() string {
 		return move + "   Enter show   d delete   S search   q back"
 	case viewUnlink:
 		return move + "   Enter choose   S search   q back"
+	case viewPick:
+		return m.pickLegend()
 	case viewReviewQueue:
 		return move + "   Enter summarise   " + m.scopeKey() + "   S search   : command   q back"
 	case viewPlan:
@@ -1382,6 +1391,8 @@ func (m *tuiModel) screenBody() (string, []string) {
 		return m.browseList.Title, m.filteredLines(viewBrowse)
 	case viewUnlink:
 		return m.unlinkList.Title, m.filteredLines(viewUnlink)
+	case viewPick:
+		return m.pickScreen()
 	case viewReviewQueue:
 		return m.queueList.Title, m.filteredLines(viewReviewQueue)
 	case viewObservations:
