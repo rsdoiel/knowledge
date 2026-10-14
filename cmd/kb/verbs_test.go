@@ -147,3 +147,67 @@ func TestWriteClass_Names(t *testing.T) {
 		}
 	}
 }
+
+// kb --json verbs carries the menu fields of every verb and subverb that has a
+// menu entry (label, description, order, built, release, equivalent), derived
+// from the same table the TUI reads, so a wrapper can draw the same menu.
+func TestVerbs_JSONCarriesTheMenuFields(t *testing.T) {
+	t.Chdir(t.TempDir())
+	code, out, errOut := runMain(t, "--json", "verbs")
+	if code != 0 {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+	type menu struct {
+		Label      string `json:"label"`
+		Desc       string `json:"desc"`
+		Order      int    `json:"order"`
+		Built      bool   `json:"built"`
+		Since      string `json:"since"`
+		Equivalent string `json:"equivalent"`
+	}
+	var doc struct {
+		Verbs []struct {
+			Name     string `json:"name"`
+			Menu     *menu  `json:"menu"`
+			Subverbs []struct {
+				Name string `json:"name"`
+				Menu *menu  `json:"menu"`
+			} `json:"subverbs"`
+		} `json:"verbs"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	top := map[string]menuItem{}
+	for _, it := range topMenu() {
+		top[it.Verb] = it
+	}
+	for i, v := range verbTable {
+		got := doc.Verbs[i]
+		if v.Menu == nil {
+			if got.Menu != nil {
+				t.Errorf("%s: has a menu in the output, none in the table", v.Name)
+			}
+		} else {
+			want := top[v.Name]
+			if got.Menu == nil {
+				t.Errorf("%s: no menu in the output", v.Name)
+			} else if got.Menu.Label != want.Label || got.Menu.Built != want.Built || got.Menu.Since != want.Since ||
+				got.Menu.Equivalent != want.Equivalent || got.Menu.Desc != want.Desc || got.Menu.Order != v.Menu.Order {
+				t.Errorf("%s: menu = %+v, want %+v (order %d)", v.Name, *got.Menu, want, v.Menu.Order)
+			}
+		}
+		for j, s := range v.Subverbs {
+			g := got.Subverbs[j]
+			if s.Menu == nil {
+				if g.Menu != nil {
+					t.Errorf("%s %s: has a menu in the output, none in the table", v.Name, s.Name)
+				}
+				continue
+			}
+			if g.Menu == nil || *g.Menu != (menu{s.Menu.Label, s.Menu.Desc, s.Menu.Order, s.Menu.Built, s.Menu.Since, s.Menu.Equivalent}) {
+				t.Errorf("%s %s: menu = %+v, want %+v", v.Name, s.Name, g.Menu, *s.Menu)
+			}
+		}
+	}
+}

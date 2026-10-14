@@ -7,6 +7,9 @@ release notes; maintained going forward.
 
 ### Added
 
+- **`kb --json verbs` carries the menu fields.** A verb or subverb with a row in the interactive menus has a
+  `menu` object: `label`, `desc`, `order`, `built`, `equivalent`, and `since` while it is not built (a verb with
+  subverbs is built when any subverb is). A wrapper can draw the same menus from one table.
 - **Five more rows are built in the terminal interface.** Check (`kb check-db`) runs the command's own read and
   shows its output with the command that does the same. Concepts → Browse, Documents → Browse and Sources →
   Browse are lists to choose from: Enter shows the item through the command's own `show`, `q` returns to the

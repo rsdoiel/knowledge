@@ -40,11 +40,11 @@
 
 ## Requested features
 
-- [ ] **TUI: one row still dimmed, and `kb verbs --json` without the menu fields (v0.0.22).** Built since v0.0.21
+- [ ] **TUI: one row still dimmed (v0.0.22).** Built since v0.0.21
   (unreleased): Check, Concepts → Browse, Recall and Suggest, Documents → Browse, Sources → Browse and Check
   retractions, Observations → Browse (the project list), Enter on search results and observations. Still not in the interface: Documents →
   Frontmatter (frontmatter runs through `:`; it needs a field picker), and the removing write `unlink` (it needs a screen that picks a link to cut).
-  `source remove` and `document delete` have the gate from the Browse lists (`d`) and from `:`. `kb verbs --json` does not carry the menu fields (label, built, release). The Browse rows are
+  `source remove` and `document delete` have the gate from the Browse lists (`d`) and from `:`. `kb verbs --json` carries the menu fields (done, unreleased). The Browse rows are
   a selectable list, and Enter runs the verb's `show`; there is no filter on those lists yet (`/` is the global
   search). The viewer has no horizontal scroll and the find does not mark the match inside the line;
   `KB_PAGER=less -R` is the escape hatch.

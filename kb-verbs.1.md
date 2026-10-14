@@ -24,7 +24,12 @@ global -json option it prints a document with a "verbs" array. Each verb has
 "name", "summary" and "tui" (whether the interactive interface offers it); a verb
 with no subverbs has a "class", and one with subverbs lists them, each with its
 own "class" and "tui", and a subverb's own subverbs (document review has list
-and promote). "flags" lists the flags the verb accepts, subverbs included.
+and promote). "flags" lists the flags the verb accepts, subverbs included. A verb
+or subverb that has a row in the interactive menus carries a "menu" object with
+its "label", "desc", "order", "built" (there is a screen for it) and
+"equivalent" (the command line that does the same), and "since", the release
+that brings it, while it is not built. A verb with subverbs is built when any
+of its subverbs is.
 
 The classes say what a verb does to the knowledge base:
 

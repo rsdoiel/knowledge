@@ -12,11 +12,31 @@ func init() {
 	verbs["verbs"] = cmdVerbs
 }
 
+// verbsJSONMenu is the menu entry of a verb or subverb in the output of kb --json
+// verbs: the fields the TUI's menus are drawn from. Since is set only while the
+// entry is not built.
+type verbsJSONMenu struct {
+	Label      string `json:"label"`
+	Desc       string `json:"desc"`
+	Order      int    `json:"order"`
+	Built      bool   `json:"built"`
+	Since      string `json:"since,omitempty"`
+	Equivalent string `json:"equivalent"`
+}
+
+func verbsJSONMenuOf(m *menuEntry) *verbsJSONMenu {
+	if m == nil {
+		return nil
+	}
+	return &verbsJSONMenu{Label: m.Label, Desc: m.Desc, Order: m.Order, Built: m.Built, Since: m.Since, Equivalent: m.Equivalent}
+}
+
 // verbsJSONSub is one subverb in the output of kb --json verbs.
 type verbsJSONSub struct {
 	Name     string         `json:"name"`
 	Class    string         `json:"class,omitempty"`
 	TUI      bool           `json:"tui"`
+	Menu     *verbsJSONMenu `json:"menu,omitempty"`
 	Subverbs []verbsJSONSub `json:"subverbs,omitempty"`
 }
 
@@ -27,6 +47,7 @@ type verbsJSONVerb struct {
 	Class    string         `json:"class,omitempty"`
 	TUI      bool           `json:"tui"`
 	Flags    []string       `json:"flags,omitempty"`
+	Menu     *verbsJSONMenu `json:"menu,omitempty"`
 	Subverbs []verbsJSONSub `json:"subverbs,omitempty"`
 }
 
@@ -34,7 +55,7 @@ func verbsJSONSubs(subs []subverbSpec) []verbsJSONSub {
 	var out []verbsJSONSub
 	for _, s := range subs {
 		out = append(out, verbsJSONSub{Name: s.Name, Class: s.Class.String(), TUI: len(s.Subverbs) > 0 || s.Class != classCLIOnly,
-			Subverbs: verbsJSONSubs(s.Subverbs)})
+			Menu: verbsJSONMenuOf(s.Menu), Subverbs: verbsJSONSubs(s.Subverbs)})
 	}
 	return out
 }
@@ -71,11 +92,23 @@ func cmdVerbs(_ *knowledge.KnowledgeBase, _ *DebugLog, jsonOut bool, args []stri
 		doc := struct {
 			Verbs []verbsJSONVerb `json:"verbs"`
 		}{}
+		// A verb's built state and release are derived from its leaves, as the
+		// top menu derives them, so the output agrees with what the TUI draws.
+		top := map[string]menuItem{}
+		for _, it := range topMenu() {
+			top[it.Verb] = it
+		}
 		for _, v := range verbTable {
+			var menu *verbsJSONMenu
+			if v.Menu != nil {
+				menu = verbsJSONMenuOf(v.Menu)
+				it := top[v.Name]
+				menu.Built, menu.Since = it.Built, it.Since
+			}
 			doc.Verbs = append(doc.Verbs, verbsJSONVerb{
 				Name: v.Name, Summary: v.Summary, Class: v.Class.String(),
 				TUI:   len(v.Subverbs) > 0 || v.Class != classCLIOnly,
-				Flags: v.Flags, Subverbs: verbsJSONSubs(v.Subverbs),
+				Flags: v.Flags, Menu: menu, Subverbs: verbsJSONSubs(v.Subverbs),
 			})
 		}
 		return printJSON(out, doc)
