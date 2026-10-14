@@ -3,93 +3,73 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased
+## v0.0.22 — 2026-10-14
+
+Search is scoped by a path, in the command and in the interface (knowledge DR-0072 to DR-0074,
+`design/scoped-search-design.md`), `/` filters every list, and every row of the interface's menus is built
+(the design is `design/tui-keys-and-write-flows-design.md`).
 
 ### Added
 
-- **Documents → Frontmatter… is built; no row of the menus is dimmed any more.** It asks for the file and
-  shows what `kb document frontmatter` proposes as a checklist with nothing selected (title, author,
-  dateCreated, dateModified, and the keywords: known concepts the text mentions, and new candidate terms).
-  Space selects a row, `a` all, Enter shows the selection as a dry run with the command that does the same,
-  and only `y` writes the file. The plan's command now wraps at spaces, so a long path no longer hides the
-  end of it. `--set FIELD=VALUE` stays on the command line (`:` reaches it).
-- **`u` cuts a link in the terminal interface** (`kb unlink`, DR-0067). On a project's Concepts tab it
-  unlinks the selected concept from the project; on an observation it lists the observation's concept and
-  source links to pick one. Each ends in a typed confirmation like a delete, names what stays, and shows the
-  `kb unlink` command that does the same. The removing gate says Unlink and not Delete for these, and now
-  shows the equivalent command before you confirm. Library: `ObservationConcepts`.
-- **`/` filters the list in front of you, on every list.** The project list, a project's observation,
-  concept and record tabs, the Records screens, the review queue and the search results narrow as you type
-  (every word must appear, ignoring case); Enter keeps the filter, Esc clears it, and a filter that matches
-  nothing says so and names `S`. A tab's count stays the project's own. On a menu `/` does nothing: there is
-  nothing in front of you to find in, and the Search menu and `S` are the way to search. The search prompt
-  is opened by `S` everywhere (DR-0072, point 6). A kept filter is named in the screen's title, and a legend
-  names `S search` too when the window has the room.
-- **Search in the terminal interface is a menu of scopes and a prompt that takes the command line**
-  (DR-0073). Search opens a menu: Everywhere…, Workspace tier…, one row per kind, and This project (NAME)…
-  when a project is open. A row opens the prompt with that scope already typed, and the prompt takes what
-  `kb search` takes, so `harvey/records exit codes` works there as it does in the shell; a scope that does
-  not resolve, or has no term, keeps the prompt open with what is wrong. The results are titled with the
-  command that does the same, name records by their qualified reference and show the projects a concept is
-  in. `S` opens the prompt from any screen with the scope of where you are: a project's tabs search that
-  project, a Browse list its kind, the Records screens records. `kb search` on a terminal with no term opens
-  the Search menu, and `kb search harvey/records` opens the prompt on that scope; without a terminal both are
-  exit 2 as before. The screens' legends name `S search`; `/` still opens the same prompt on the screens
-  that have no list filter yet.
 - **`kb search SCOPE/[KIND] TERM`: search scoped by a path** (DR-0073, DR-0074). `kb search harvey/ "exit
-  codes"` searches one project, `harvey/records` one kind in it, `workspace/` the workspace tier, and
-  `/records` one kind everywhere; `kb search TERM` is unchanged, and a first word with no slash is still part
-  of the term. The scoped form prints its matches grouped by kind with counts, names a record by its
-  qualified reference, shows the projects a concept is in, and says `showing 50 of N` when it cut. An
-  unknown scope or kind is exit 2 and names the choices; `workspace/observations` and `harvey/projects` are
-  exit 1 with the reason. `--json` prints one object. Completion fills in scopes and kinds, and `kb-search(1)`
-  documents it. Text that contains a slash goes after `--`.
-- **Library: `SearchScoped`** (knowledge DR-0073, DR-0074). The full-text search restricted to a project or the
-  workspace tier and to kinds (`SearchKinds`: records, observations, concepts, documents, projects), with the
-  scope applied in the query so a limit cannot hide a match behind a better-ranked one outside it. It returns
-  the results, the total before the limit, a count per kind, and for each concept the projects it is in (the
-  union of those tagged on the project, its observations and its records). New `ErrNoMembers` for a scope and
-  kind that cannot have rows (observations in the workspace tier, projects inside a project). `Search` is
-  unchanged. The command line and the interface come next.
-- **`/` filters a Browse list; `S` is the search there.** In Concepts, Documents and Sources → Browse, `/`
-  narrows the rows as it is typed (every word must appear in the title or description, ignoring case), Enter
-  keeps the filter, Esc abandons it, and Esc on a kept filter clears it. Enter and `d` act on the row
-  selected in the filtered list. A filter that matches nothing says so and names the search: `no concept
-  matches "cache"; S searches the knowledge base for it`. The global search moved from `/` to `S` in these
-  lists; other screens keep `/` for now (`design/scoped-search-design.md`, step A).
-- **`kb --json verbs` carries the menu fields.** A verb or subverb with a row in the interactive menus has a
-  `menu` object: `label`, `desc`, `order`, `built`, `equivalent`, and `since` while it is not built (a verb with
-  subverbs is built when any subverb is). A wrapper can draw the same menus from one table.
-- **Five more rows are built in the terminal interface.** Check (`kb check-db`) runs the command's own read and
-  shows its output with the command that does the same. Concepts → Browse, Documents → Browse and Sources →
-  Browse are lists to choose from: Enter shows the item through the command's own `show`, `q` returns to the
-  list, and an empty list says so on the menu. Observations → Browse opens the project list, where Enter and
-  `o` reach a project's observations.
-- **`d` on a Browse list deletes the item behind the removing gate** (DR-0067): `source remove` and `document
-  delete` get their screen, and Concepts → Browse deletes a concept as the project tab does. The gate names what
-  goes and the id (or name) is typed; a source that observations cite, and a document with a reviewed summary,
-  are refused there as the command refuses them, with what to do. `:` reaches the same gates for
-  `source remove ID` and `document delete ID`. Library: `(*KnowledgeBase).SourceObservationCount`.
-- **Enter shows the item** on a search result (an observation, concept, project or record, through the
-  command's own `show`) and on an observation in a project's tab. `q` returns to the list it came from.
-- **Library: `KBSearchResult` carries `SourceID` and `ProjectID`**, the row's id and its project's, as the
-  index stores them (additive; `Search` is unchanged).
-- **Concepts → Recall… and Suggest… ask for their arguments in a form** (text, concept names and project for
-  Recall; project and limit for Suggest) and show the command's own output with the command that does the same.
-  A text that starts with a dash is passed after `--`, so it is read as text.
-- **Sources → Check retractions… asks before it runs.** It sends every registered DOI to the Retraction Watch
-  service and marks hits as retracted, so a confirmation shows what it will do and `y` runs it.
+  codes"` searches one project, `harvey/records` one kind in it, `workspace/` the workspace tier only, and
+  `/records` one kind everywhere. `kb search TERM` is unchanged, and a first word with no slash is still part
+  of the term. The kinds are records, observations, concepts, documents (reviewed summaries) and projects
+  (everywhere only); a project's concepts are those tagged on the project, on its observations and on its
+  records. The scoped form prints its matches grouped by kind with counts, names a record by its qualified
+  reference, shows the projects a concept is in, and says `showing 50 of N` when it cut. An unknown scope or
+  kind is exit 2 and names the choices; `workspace/observations` and `harvey/projects` are exit 1 with the
+  reason. Text that contains a slash goes after `--`. `--json` prints one object. Completion fills in scopes
+  and kinds, and `kb-search(1)` documents it.
+- **Search in the interface is a menu of scopes and a prompt that takes the command line.** Everywhere…,
+  Workspace tier…, one row per kind, and This project (NAME)… when a project is open. A row opens the prompt
+  with the scope already typed, and the prompt takes what `kb search` takes, so `harvey/records exit codes`
+  works there as in the shell; the results are titled with the command that does the same. `S` opens the
+  prompt from any screen with the scope of where you are (a project's tabs search that project, a Browse list
+  its kind, the Records screens records). `kb search` on a terminal with no term opens the Search menu, and
+  `kb search harvey/records` opens the prompt on that scope; without a terminal both are exit 2, as before.
+- **`/` filters the list in front of you, on every list**: the Browse lists, the project list, a project's
+  observation, concept and record tabs, the Records screens, the review queue and the search results. The
+  list narrows as you type (every word must appear, ignoring case); Enter keeps the filter, Esc clears it, a
+  kept filter is named in the title, and one that matches nothing says so and names `S`. A tab's count stays
+  the project's own. On a menu `/` does nothing: there is nothing in front of you to find in.
+- **Every row of the menus is built.** Check runs `kb check-db`; Concepts, Documents and Sources → Browse are
+  lists to choose from, where Enter shows the item through the command's own `show`; Observations → Browse
+  opens the project list; Concepts → Recall… and Suggest… ask for their arguments in a form; Sources → Check
+  retractions… asks before it runs; and Enter shows the item on a search result and on an observation.
+- **Documents → Frontmatter… is a checklist.** It asks for the file and lists what `kb document frontmatter`
+  proposes (title, author, dateCreated, dateModified, and keywords: known concepts the text mentions, and new
+  candidate terms), with nothing selected. Space selects a row, `a` all, Enter shows the selection as a dry
+  run with the command that does the same, and only `y` writes the file. `--set FIELD=VALUE` stays on the
+  command line.
+- **The removing writes have screens.** `d` on a Browse list deletes a concept, source or document behind the
+  typed confirmation (`source remove` and `document delete`; a source that observations cite and a document
+  with a reviewed summary are refused with what to do first), and `u` unlinks: on a project's Concepts tab
+  the selected concept from the project, and on an observation a list of its concept and source links to
+  pick one. The gate says Unlink and not Delete, names what stays, and now shows the equivalent command
+  before you confirm. `:` reaches the same gates.
+- **`kb --json verbs` carries the menu fields**: a verb or subverb with a row in the menus has a `menu`
+  object (`label`, `desc`, `order`, `built`, `equivalent`, and `since` while it is not built), so a wrapper
+  can draw the same menus from one table.
+- **Library** (additive; `Search` is unchanged): `SearchScoped` with `SearchScope`, `ScopedSearchResult` and
+  `SearchKinds`, and `ErrNoMembers` for a scope and kind that cannot have rows; `ObservationConcepts`;
+  `SourceObservationCount`; and `KBSearchResult` carries `SourceID` and `ProjectID`.
 
 ### Changed
 
-- **`source check-retractions` is a changing write, not a read** (knowledge DR-0067's classes). It changes the
-  database and uses the network, so in the interface's `:` command line it asks first, as other changing
-  writes do. On the command line nothing changes.
+- **`/` no longer starts the search**; `S` does, and the screens' legends name `/ filter` (and `S search`
+  when the window has the room). The summary screen, which has no list, still takes `/` for the search.
+- **`source check-retractions` is a changing write, not a read** (DR-0067's classes). It changes the database
+  and uses the network, so in the interface's `:` command line it asks first, as other changing writes do.
+  On the command line nothing changes.
+- **A plan's command wraps at spaces**, so a long path no longer hides the end of it on the confirmation.
 
 ### Fixed
 
-- **Dimmed menu rows named v0.0.20, a release that had shipped.** They now name v0.0.22, and a test fails when a
-  row that is not built names a release at or below the current version.
+- **Dimmed menu rows named v0.0.20, a release that had shipped.** A test now fails when a row that is not
+  built names a release at or below the current version.
+- **The `Makefile`'s `BRANCH` printed a `cut` error** on every `make save`; it uses
+  `git branch --show-current`.
 
 ## v0.0.21 — 2026-10-13
 
