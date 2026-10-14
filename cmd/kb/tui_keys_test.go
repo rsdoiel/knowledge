@@ -200,11 +200,11 @@ func TestTUIKeys_ASearchTermStartingWithQIsSearched(t *testing.T) {
 
 func TestTUIKeys_EveryScreenShowsItsKeys(t *testing.T) {
 	for state, want := range map[viewState][]string{
-		viewProjects:     {"Enter open", "/ search", "q back"},
-		viewObservations: {"o c r tabs", "/ search", "q back"},
-		viewConcepts:     {"o c r tabs", "/ search", "q back"},
-		viewRecords:      {"o c r tabs", "/ search", "q back"},
-		viewSearch:       {"/ search", "q back"},
+		viewProjects:     {"Enter open", "S search", "q back"},
+		viewObservations: {"o c r tabs", "S search", "q back"},
+		viewConcepts:     {"o c r tabs", "S search", "q back"},
+		viewRecords:      {"o c r tabs", "S search", "q back"},
+		viewSearch:       {"S search", "q back"},
 	} {
 		view := browserAt(t, state).View()
 		for _, w := range want {

@@ -98,9 +98,15 @@ them, and choosing one prints the command that does the same. Projects: Browse
 shows the projects, and opening a project shows its observations, concepts and
 records as tabs with their counts. Records: Browse (newest first) and Pending
 (oldest first) show one line a record, in the scope {app_name} record list would
-use, and a widens it to every scope. Search asks for a term.
+use, and a widens it to every scope. Search opens a menu of scopes (everywhere,
+the workspace tier, one row per kind, and the project you are in); a row opens a
+prompt with that scope already typed, and the prompt takes what
+{app_name} search takes: a scope such as harvey/records and then the term. The
+result list is titled with the command that does the same. {app_name} search with
+no term, or with only a scope, opens this menu or this prompt on a terminal.
 
-Keys: the arrow keys or j and k move; Enter opens; / searches; o, c and r switch
+Keys: the arrow keys or j and k move; Enter opens; S searches, with the scope of
+the screen you are on (a project's tabs search that project); o, c and r switch
 a project's tabs. q goes back to the screen above (the project list to the
 Projects menu, a group menu to the top menu) and quits at the top menu. Esc
 cancels something in progress, such as a search being typed, and does nothing

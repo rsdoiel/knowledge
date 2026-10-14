@@ -151,7 +151,6 @@ func TestVerbs_UsageIsExit2(t *testing.T) {
 	for _, tc := range []verbCase{
 		{name: "search unknown scope", args: []string{"search", "nosuch/", "x"}},
 		{name: "search unknown kind", setup: seedProject(), args: []string{"search", "P/sources", "x"}},
-		{name: "search scope without a term", setup: seedProject(), args: []string{"search", "P/records"}},
 		{name: "unknown observation kind", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "bogus", "b"}},
 		{name: "unknown project status", setup: seedProject(), args: []string{"project", "set-status", "P", "bogus"}},
 		{name: "blank project name", args: []string{"project", "add", ""}},

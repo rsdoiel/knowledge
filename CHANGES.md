@@ -7,6 +7,17 @@ release notes; maintained going forward.
 
 ### Added
 
+- **Search in the terminal interface is a menu of scopes and a prompt that takes the command line**
+  (DR-0073). Search opens a menu: Everywhere…, Workspace tier…, one row per kind, and This project (NAME)…
+  when a project is open. A row opens the prompt with that scope already typed, and the prompt takes what
+  `kb search` takes, so `harvey/records exit codes` works there as it does in the shell; a scope that does
+  not resolve, or has no term, keeps the prompt open with what is wrong. The results are titled with the
+  command that does the same, name records by their qualified reference and show the projects a concept is
+  in. `S` opens the prompt from any screen with the scope of where you are: a project's tabs search that
+  project, a Browse list its kind, the Records screens records. `kb search` on a terminal with no term opens
+  the Search menu, and `kb search harvey/records` opens the prompt on that scope; without a terminal both are
+  exit 2 as before. The screens' legends name `S search`; `/` still opens the same prompt on the screens
+  that have no list filter yet.
 - **`kb search SCOPE/[KIND] TERM`: search scoped by a path** (DR-0073, DR-0074). `kb search harvey/ "exit
   codes"` searches one project, `harvey/records` one kind in it, `workspace/` the workspace tier, and
   `/records` one kind everywhere; `kb search TERM` is unchanged, and a first word with no slash is still part

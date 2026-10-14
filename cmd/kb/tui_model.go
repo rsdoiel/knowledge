@@ -50,6 +50,7 @@ type tuiStart struct {
 	all    bool   // for the Records screen: every scope
 	term   string // for search results: the term, which is run at once
 	ref    string // for the Records screen: the record the cursor starts on
+	prompt string // for the search prompt: the scope it opens on, such as "harvey/records"
 }
 
 // projectItem, observationItem, conceptItem, and searchResultItem each
@@ -92,10 +93,25 @@ func (i conceptItem) Title() string       { return i.c.Name }
 func (i conceptItem) Description() string { return i.c.Description }
 func (i conceptItem) FilterValue() string { return i.c.Name }
 
-type searchResultItem struct{ r knowledge.KBSearchResult }
+type searchResultItem struct {
+	r     knowledge.KBSearchResult
+	ref   string   // a record's qualified reference, from a scoped search
+	spans []string // for a concept from a scoped search, the projects it is in
+}
 
-func (i searchResultItem) Title() string       { return fmt.Sprintf("[%s] %s", i.r.Kind, i.r.Label) }
-func (i searchResultItem) Description() string { return i.r.Snippet }
+func (i searchResultItem) Title() string {
+	label := i.r.Label
+	if i.ref != "" {
+		label = i.ref
+	}
+	return fmt.Sprintf("[%s] %s", i.r.Kind, label)
+}
+func (i searchResultItem) Description() string {
+	if len(i.spans) > 0 {
+		return i.r.Snippet + "   [" + strings.Join(i.spans, ", ") + "]"
+	}
+	return i.r.Snippet
+}
 func (i searchResultItem) FilterValue() string { return i.r.Label + " " + i.r.Snippet }
 
 // tuiModel is the read-mostly browser: project list (root) -> Enter drills
@@ -226,6 +242,11 @@ func newTUIModelAt(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) (*
 		m.searchFrom = viewMenu
 		if err := m.runSearch(start.term); err != nil {
 			return nil, err
+		}
+	case viewMenu:
+		if start.prompt != "" {
+			m.searchFrom = viewMenu
+			m.startSearchWith(start.prompt)
 		}
 	}
 	return m, nil
@@ -381,6 +402,10 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.updateRemove(msg)
 			}
 			return m.updateSearching(msg)
+		}
+		if msg.String() == "S" && m.canSearchFromHere() {
+			m.startSearchWith(m.contextSearchScope())
+			return m, nil
 		}
 		switch m.state {
 		case viewMenu:
@@ -574,7 +599,7 @@ func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateGroup handles a key on a group's menu. q goes back to the top menu.
 func (m *tuiModel) updateGroup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	items := groupMenu(m.group)
+	items := m.groupItems()
 	switch msg.String() {
 	case "q":
 		m.setState(viewMenu)
@@ -722,6 +747,10 @@ func (m *tuiModel) updateRecordScope(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // runLeaf runs a built group leaf: it opens the screen that does what the verb does.
 func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
+	if it.Verb == "search" {
+		m.startSearchWith(it.Sub)
+		return m, nil
+	}
 	switch it.Verb + " " + it.Sub {
 	case "project list":
 		m.setState(viewProjects)
@@ -951,11 +980,18 @@ func (m *tuiModel) updateSearching(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.Blur()
 		return m, nil
 	case "enter":
-		term := m.searchInput.Value()
+		line := strings.TrimSpace(m.searchInput.Value())
+		if hint, bad := m.searchLineProblem(line); bad {
+			// The prompt stays open, with what is wrong, so the line can be corrected.
+			m.notice = hint
+			return m, nil
+		}
 		m.searching = false
 		m.searchInput.Blur()
-		if err := m.runSearch(term); err != nil {
-			m.setErr(err)
+		if err := m.runSearchLine(line); err != nil {
+			m.searching = true
+			m.searchInput.Focus()
+			m.notice = err.Error()
 			return m, nil
 		}
 		m.setState(viewSearch)
@@ -964,6 +1000,89 @@ func (m *tuiModel) updateSearching(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.searchInput, cmd = m.searchInput.Update(msg)
 	return m, cmd
+}
+
+// searchLineProblem says what is wrong with a search line that cannot be run: a
+// scope that does not resolve, a kind that does not exist, or no term.
+func (m *tuiModel) searchLineProblem(line string) (string, bool) {
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return "type a term to search for, or a scope and a term: harvey/records exit codes", true
+	}
+	if fields[0] != "--" && looksLikeSearchScope(fields[0]) {
+		if _, _, err := parseSearchScope(m.kb, fields[0]); err != nil {
+			return err.Error(), true
+		}
+		if len(fields) == 1 {
+			return "type a term after the scope: " + fields[0] + " exit codes", true
+		}
+	}
+	return "", false
+}
+
+// canSearchFromHere says whether S starts a search on this screen: not while
+// text is being typed (a filter, a form, a note), and not on a screen whose keys
+// are a chooser or a confirmation.
+func (m *tuiModel) canSearchFromHere() bool {
+	if m.err != nil || m.searching || m.browseFiltering {
+		return false
+	}
+	switch m.state {
+	case viewText, viewReview, viewPlan, viewRemove, viewForm, viewChange, viewCommand, viewSummary:
+		return false
+	}
+	return true
+}
+
+// contextSearchScope is the scope S opens the prompt on: the project of a
+// project's tabs, the kind of a Browse list, records on the Records screens, and
+// nothing elsewhere. The prompt shows it, so it is never implicit.
+func (m *tuiModel) contextSearchScope() string {
+	switch m.state {
+	case viewObservations, viewConcepts, viewRecords:
+		if m.selectedProject != nil {
+			return m.selectedProject.Name + "/"
+		}
+	case viewBrowse:
+		switch m.browseKind {
+		case "concept":
+			return "/concepts"
+		case "document":
+			return "/documents"
+		}
+	case viewRecordScope:
+		return "/records"
+	}
+	return ""
+}
+
+// groupItems is the rows of the current group menu. The Search menu has a row for
+// the project the person is in, when there is one, first.
+func (m *tuiModel) groupItems() []menuItem {
+	items := groupMenu(m.group)
+	if m.group == "search" && m.selectedProject != nil {
+		name := m.selectedProject.Name
+		row := menuItem{Verb: "search", Sub: name + "/", Label: "This project (" + name + ")…", Desc: "every kind, in " + name,
+			Built: true, Equivalent: "kb search " + name + "/ TERM"}
+		items = append([]menuItem{row}, items...)
+	}
+	return items
+}
+
+// startSearchWith opens the search prompt with a scope already typed, so the line
+// is the command's first argument and the term follows it.
+func (m *tuiModel) startSearchWith(scope string) {
+	if m.state != viewSearch {
+		m.searchFrom = m.state
+	}
+	m.searching = true
+	text := ""
+	if scope != "" && scope != "/" {
+		text = scope + " "
+	}
+	m.searchInput.SetValue(text)
+	m.searchInput.CursorEnd()
+	m.searchInput.Focus()
 }
 
 func (m *tuiModel) startSearch() {
@@ -1042,10 +1161,59 @@ func (m *tuiModel) runSearch(term string) error {
 	}
 	items := make([]list.Item, len(results))
 	for i, r := range results {
-		items[i] = searchResultItem{r}
+		items[i] = searchResultItem{r: r}
 	}
 	l := newBrowserList(items, fmt.Sprintf("Search: %s", term), m.cols()-4, m.listHeight())
 	m.searchList = l
+	return nil
+}
+
+// runSearchLine runs what the search prompt holds: a scope and a term as `kb
+// search` takes them, or just a term. The results list is titled with the
+// command that does the same.
+func (m *tuiModel) runSearchLine(line string) error {
+	fields := strings.Fields(line)
+	if len(fields) == 0 || fields[0] == "--" || !looksLikeSearchScope(fields[0]) {
+		term := strings.Join(fields, " ")
+		if len(fields) > 0 && fields[0] == "--" {
+			term = strings.Join(fields[1:], " ")
+		}
+		return m.runSearch(term)
+	}
+	scope, name, err := parseSearchScope(m.kb, fields[0])
+	if err != nil {
+		return err
+	}
+	term := strings.Join(fields[1:], " ")
+	res, err := logKBCall(m.dl, "SearchScoped", map[string]any{"term": term, "scope": name}, func() (*knowledge.ScopedSearchResult, error) {
+		return m.kb.SearchScoped(term, scope)
+	})
+	if err != nil {
+		return err
+	}
+	names := projectNames(m.kb)
+	items := make([]list.Item, len(res.Results))
+	for i, r := range res.Results {
+		it := searchResultItem{r: r}
+		if r.SourceType == "record" {
+			if rec, rerr := m.kb.RecordByID(r.SourceID); rerr == nil && rec != nil {
+				it.ref = refOf(*rec, names).String()
+			}
+		}
+		if r.SourceType == "concept" {
+			it.spans = res.Spans[r.SourceID]
+		}
+		items[i] = it
+	}
+	noun := "matches"
+	if res.Total == 1 {
+		noun = "match"
+	}
+	title := fmt.Sprintf("kb search %s %s — %d %s", fields[0], term, res.Total, noun)
+	if res.Total > len(items) {
+		title += fmt.Sprintf(", showing %d", len(items))
+	}
+	m.searchList = newBrowserList(items, title, m.cols()-4, m.listHeight())
 	return nil
 }
 
@@ -1097,14 +1265,14 @@ func (m *tuiModel) legendFull() string {
 	move := "↑/↓ j/k move"
 	switch m.state {
 	case viewMenu:
-		return move + "   Enter open   / search   : command   q quit"
+		return move + "   Enter open   S search   : command   q quit"
 	case viewGroup:
 		if m.group == "record" {
-			return move + "   Enter open   " + m.scopeKey() + "   / search   : command   q back"
+			return move + "   Enter open   " + m.scopeKey() + "   S search   : command   q back"
 		}
-		return move + "   Enter open   / search   : command   q back"
+		return move + "   Enter open   S search   : command   q back"
 	case viewRecordScope:
-		return move + "   Enter read   s status   u supersede   d delete   " + m.scopeKey() + "   / search   q back"
+		return move + "   Enter read   s status   u supersede   d delete   " + m.scopeKey() + "   S search   q back"
 	case viewRemove:
 		return "Esc cancel   Enter delete (only when the name matches)   Ctrl-C quit"
 	case viewChange:
@@ -1118,7 +1286,7 @@ func (m *tuiModel) legendFull() string {
 	case viewBrowse:
 		return m.browseLegend(move)
 	case viewReviewQueue:
-		return move + "   Enter summarise   " + m.scopeKey() + "   / search   : command   q back"
+		return move + "   Enter summarise   " + m.scopeKey() + "   S search   : command   q back"
 	case viewPlan:
 		return "↑/↓ j/k scroll   space page   y apply   n q Esc cancel   Ctrl-C quit"
 	case viewReview:
@@ -1126,16 +1294,16 @@ func (m *tuiModel) legendFull() string {
 	case viewText:
 		return m.textLegend()
 	case viewRecords:
-		return move + "   Enter read   s status   u supersede   d delete   o c r tabs   / search   q back"
+		return move + "   Enter read   s status   u supersede   d delete   o c r tabs   S search   q back"
 	case viewObservations, viewConcepts:
 		if m.state == viewObservations {
-			return move + "   Enter show   n new   e edit   d delete   o c r tabs   / search   q back"
+			return move + "   Enter show   n new   e edit   d delete   o c r tabs   S search   q back"
 		}
-		return move + "   n new   e rename   d delete   o c r tabs   / search   q back"
+		return move + "   n new   e rename   d delete   o c r tabs   S search   q back"
 	case viewSearch:
-		return move + "   Enter show   / search   q back"
+		return move + "   Enter show   S search   q back"
 	}
-	return move + "   Enter open   n new   s status   e describe   r rename   d delete   / search   q back"
+	return move + "   Enter open   n new   s status   e describe   r rename   d delete   S search   q back"
 }
 
 // menuRows renders a menu's rows: the cursor, the label, what it does, and for a
@@ -1174,7 +1342,7 @@ func (m *tuiModel) screen() (string, []string) {
 	case viewMenu:
 		return "kb — knowledge", append([]string{m.header(), ""}, m.menuRows(topMenu(), m.menuCursor)...)
 	case viewGroup:
-		rows := m.menuRows(groupMenu(m.group), m.groupCursor)
+		rows := m.menuRows(m.groupItems(), m.groupCursor)
 		if m.group == "record" {
 			hint := "a widens it"
 			if m.scopeAll {
@@ -1212,6 +1380,9 @@ func (m *tuiModel) screen() (string, []string) {
 	case viewRecords:
 		return m.projectTitle(), append(m.tabStrip(), viewLines(m.recordList)...)
 	case viewSearch:
+		if len(m.searchList.Items()) == 0 {
+			return m.searchList.Title, []string{"no results"}
+		}
 		return m.searchList.Title, viewLines(m.searchList)
 	}
 	return "Projects", viewLines(m.projectList)

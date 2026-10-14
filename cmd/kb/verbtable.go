@@ -1,6 +1,7 @@
 package main
 
 import (
+	knowledge "github.com/rsdoiel/knowledge"
 	"sort"
 	"strings"
 )
@@ -365,6 +366,11 @@ func topMenu() []menuItem {
 				it.Since = leaves[0].Since
 			}
 		}
+		if v.Name == "search" {
+			// Search is a group of scopes, not of subverbs: its rows come from
+			// searchGroupMenu, and it is built (DR-0073).
+			it.Group = true
+		}
 		order[v.Name] = v.Menu.Order
 		items = append(items, it)
 	}
@@ -384,6 +390,9 @@ func topMenu() []menuItem {
  *   groupMenu("record") // Browse, Pending, New record…
  */
 func groupMenu(verb string) []menuItem {
+	if verb == "search" {
+		return searchGroupMenu()
+	}
 	var items []menuItem
 	order := map[string]int{}
 	var walk func(prefix string, subs []subverbSpec)
@@ -404,5 +413,29 @@ func groupMenu(verb string) []menuItem {
 		}
 	}
 	sort.SliceStable(items, func(i, j int) bool { return order[items[i].Sub] < order[items[j].Sub] })
+	return items
+}
+
+/** searchGroupMenu returns the rows of the Search menu (knowledge DR-0073, step
+ * E): everywhere, the workspace tier, and one row per kind at the global scope.
+ * A row's Sub is the scope the prompt is prefilled with, which is the first
+ * argument kb search would be given. The kinds come from knowledge.SearchKinds, so
+ * the menu cannot drift from what the command accepts.
+ *
+ * Returns:
+ *   []menuItem — the rows, in menu order; every one built.
+ *
+ * Example:
+ *   for _, it := range searchGroupMenu() { fmt.Println(it.Label, it.Sub) }
+ */
+func searchGroupMenu() []menuItem {
+	items := []menuItem{
+		{Verb: "search", Sub: "/", Label: "Everywhere…", Desc: "every kind, in every scope", Built: true, Equivalent: "kb search TERM"},
+		{Verb: "search", Sub: "workspace/", Label: "Workspace tier…", Desc: "records filed at the workspace tier", Built: true, Equivalent: "kb search workspace/ TERM"},
+	}
+	for _, k := range knowledge.SearchKinds {
+		items = append(items, menuItem{Verb: "search", Sub: "/" + k, Label: strings.ToUpper(k[:1]) + k[1:] + "…",
+			Desc: "only " + k + ", in every scope", Built: true, Equivalent: "kb search /" + k + " TERM"})
+	}
 	return items
 }

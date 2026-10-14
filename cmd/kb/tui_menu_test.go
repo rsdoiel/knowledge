@@ -250,16 +250,20 @@ func TestMenu_EscDoesNothingOnTheMenus(t *testing.T) {
 func TestMenu_SearchStartsFromTheMenuAndQReturnsThere(t *testing.T) {
 	m := menuModel(t)
 	m = openRow(t, m, "Search")
+	if m.state != viewGroup || m.group != "search" {
+		t.Fatalf("the Search row should open the Search menu, got %s", viewStateNames[m.state])
+	}
+	m, _ = press(t, m, keyEnter) // Everywhere…
 	if !m.searching {
-		t.Fatal("the Search row did not open the prompt")
+		t.Fatal("Everywhere… did not open the prompt")
 	}
 	m, _ = press(t, m, append(typed("observation"), keyEnter)...)
 	if m.state != viewSearch {
 		t.Fatalf("state = %s, want the results", viewStateNames[m.state])
 	}
 	m, _ = press(t, m, ch('q'))
-	if m.state != viewMenu {
-		t.Errorf("q from the results gave %s, want the top menu", viewStateNames[m.state])
+	if m.state != viewGroup {
+		t.Errorf("q from the results gave %s, want the Search menu it began from", viewStateNames[m.state])
 	}
 }
 
@@ -275,7 +279,7 @@ func TestMenu_CommandLettersAreTextInTheSearchPromptFromAMenu(t *testing.T) {
 
 func TestMenu_TheLegendsNameTheKeys(t *testing.T) {
 	m := menuModel(t)
-	for _, w := range []string{"Enter open", "/ search", "q quit"} {
+	for _, w := range []string{"Enter open", "S search", "q quit"} {
 		if !strings.Contains(m.View(), w) {
 			t.Errorf("the top-menu legend lacks %q:\n%s", w, m.View())
 		}

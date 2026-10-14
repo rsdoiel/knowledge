@@ -67,6 +67,8 @@ func deepLink(rest []string, forced, terminal bool) (start tuiStart, open bool, 
 	switch {
 	case len(rest) == 1 && groups[rest[0]]:
 		return tuiStart{state: viewGroup, group: rest[0]}, true, nil
+	case len(rest) == 2 && rest[0] == "search" && looksLikeSearchScope(rest[1]):
+		return tuiStart{state: viewMenu, prompt: rest[1]}, true, nil
 	case len(rest) == 2 && rest[0] == "record" && rest[1] == "show":
 		return tuiStart{state: viewRecordScope, all: true}, true, nil
 	case len(rest) == 2 && rest[0] == "project" && rest[1] == "show":
