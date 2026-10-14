@@ -18,22 +18,34 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 │   Concepts         named ideas that span projects                          │
 │   …                                                                        │
 ├────────────────────────────────────────────────────────────────────────────┤
-│ ↑/↓ j/k move   Enter open   / search   : command   q quit                  │
+│ ↑/↓ j/k move   Enter open   S search   : command   q quit                  │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Rows that are not built yet are dimmed with the release that brings them, and choosing one prints the command that does the same. A project opens to its observations, concepts and records as tabs (`o`, `c`, `r`); Records → Browse and Pending list records in the scope `kb record list` would use, and `a` widens it. `q` goes back one screen (and quits at the top menu), `Esc` cancels only something in progress and never closes a screen, `Ctrl-C` quits from anywhere, and a line at the bottom of every screen lists the keys that apply. While you type, every key is text, `q` included.
+Every row is built; one that was not would be dimmed with the release that brings it, and choosing it would print the command that does the same. A project opens to its observations, concepts and records as tabs (`o`, `c`, `r`); Records → Browse and Pending list records in the scope `kb record list` would use, and `a` widens it. `q` goes back one screen (and quits at the top menu), `Esc` cancels only something in progress and never closes a screen, `Ctrl-C` quits from anywhere, and a line at the bottom of every screen lists the keys that apply. While you type, every key is text, `q` included.
+
+**Finding things.** `/` filters the list in front of you as you type (every word must appear; Enter keeps the filter, Esc clears it), on every list. `S` searches the knowledge base from any screen, with the scope of where you are: a project's tabs search that project, a Browse list its kind. The Search row of the top menu offers the scopes, and the prompt takes what the command takes: `harvey/records exit codes`.
+
+```
+kb search "exit codes"                 every kind, everywhere
+kb search harvey/ "exit codes"         one project
+kb search harvey/records "exit codes"  one kind in it
+kb search workspace/ "exit codes"      the workspace tier only
+kb search /records "exit codes"        records in every scope
+```
+
+A first word with no slash is part of the term, so `kb search harvey memory` is still *harvey AND memory*; text that contains a slash goes after `--`. The kinds are `records`, `observations`, `concepts`, `documents` and `projects` (`/projects` only). Results are grouped by kind with counts, and a concept shows the projects it is in. See [kb-search(1)](kb-search.1.md).
 
 **What it can write** (the gate depends on the kind of write, and every write is the command's own function, so the rules and refusals are the same as on the command line; the screen ends by showing the command that does the same):
 
 - *Adding* (`n`, or the New rows): a form asks the fields one at a time and ends with `y`.
 - *Changing* (`s`, `e`, `r` on a project; `e` on an observation or concept; `u` on a record to supersede another): the old and new values are shown and `y` confirms.
-- *Removing* (`d` on a project, observation, concept or record): a screen shows what points at it and asks for its name to be typed exactly.
-- *Plans* (Ingest, Records → Fuzzy-tag, Documents → Ingest, Tag, Fuzzy-tag): the command's `--dry-run` output is shown first and `y` applies it. Index and Format files run at once.
+- *Removing* (`d` on a project, observation, concept, record, or a source or document in a Browse list; `u` to cut a link, from a project's Concepts tab or from an observation): a screen shows what points at it and asks for its name or id to be typed exactly.
+- *Plans* (Ingest, Records → Fuzzy-tag, Documents → Ingest, Tag, Fuzzy-tag, Frontmatter): the command's `--dry-run` output is shown first and `y` applies it. Index and Format files run at once. Frontmatter lists what it proposes as a checklist with nothing selected, and plans only what you select.
 - *Summaries* (Documents → Review queue): write the summary in `$VISUAL` or `$EDITOR`, or a built-in text area; it is shown beside its source and `y` saves it as written by a person and promotes it.
 - *Anything else*: `:` opens a command line; type any verb, and it meets the gate its class calls for.
 
-A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group (`kb record`), and `kb record show` or `kb project show` with no argument. `kb -i record pending` (also `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. `kb verbs` prints the table every menu, completion script and help flag is built from; `kb -json verbs` gives it to a script or a model.
+A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group (`kb record`), and `kb record show` or `kb project show` with no argument, and `kb search` with no term or with only a scope (`kb search harvey/records`). `kb -i record pending` (also `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. `kb verbs` prints the table every menu, completion script and help flag is built from; `kb -json verbs` gives it to a script or a model.
 
 ## Deciding on a record
 
@@ -50,19 +62,24 @@ The moves are a table: `proposed` to `accepted`, `rejected`, `cancelled` or `sup
 
 ## Release Notes
 
-- version: 0.0.21
+- version: 0.0.22
 - status: active
-- released: 2026-10-13
+- released: 2026-10-14
 
-Records are now read in kb's own viewer, with Markdown highlighting, and the pager no longer depends on which programs happen to be installed. The decision is DR-0071 (a partial supersede of DR-0066 point 5).
+Search is scoped by a path, in the command and in the interface, `/` now filters every list, and every row of the interface's menus is built. The decisions are DR-0072 to DR-0074.
 
-Reading. Enter on a record in the terminal interface used to return straight to the list when `bat` was installed: `bat` quits at once when the text fits one screen and the interface repainted over it. kb now shows a record itself. YAML frontmatter, headings, fenced code, list markers, quotes, inline code, bold and links are coloured with the terminal's own 16 colours; `NO_COLOR` or `TERM=dumb` turns it off. In the viewer `/` finds text (case-insensitive), `n` and `N` move between matches, `g` and `G` jump to the ends. `kb record set-status REF` with no status prints the same highlighted record on a terminal. `bat`, `batcat` and `less` are no longer looked for; `$KB_PAGER` is the override and is run exactly as written (give `bat` `--paging=always`).
+Searching. `kb search harvey/ "exit codes"` searches one project, `harvey/records` one kind in it, `workspace/` the workspace tier only and `/records` one kind everywhere; `kb search TERM` is unchanged, and a first word with no slash is still part of the term. Results are grouped by kind with counts, name a record by its qualified reference, show the projects a concept is in, and say `showing 50 of N` when they were cut. An unknown scope or kind is exit 2; `workspace/observations` and `harvey/projects` are exit 1 with the reason. In the interface, Search is a menu of scopes and a prompt that takes the same line, `S` opens it from any screen with the scope of where you are, and `kb search` on a terminal opens it.
 
-Fixed. `kb help ingest` showed `kb ingest clasm/decisions`, which exits 66 from the workspace root: `PATH` is a directory relative to the current directory, one only, walked recursively, and the project and tier come from each record's `project:` frontmatter. The text now says so and the examples work; the `kb index` and `kb record fmt` examples are corrected too. `kb ingest`'s "missing" line said kb had no verb to remove a row; it now names `kb record delete REF`. The `kb-index(1)` page no longer points at the developers' `TODO.md`.
+Filtering. `/` narrows the list in front of you as you type, on every list; Enter keeps the filter and Esc clears it. `/` no longer starts the search, `S` does.
 
-For packagers: `github.com/muesli/termenv` is now a direct dependency (it was already built in). The race detector passed on darwin/arm64 at the last code commit. The viewer was driven on a pseudo-terminal against the built binary on Linux (Raspberry Pi OS), and tried by hand on macOS and Windows, where it worked.
+The interface. Check, the Browse lists, Recall, Suggest, Check retractions, Frontmatter (a checklist, written only on `y`), Enter on a search result, `d` to delete a concept, source or document, and `u` to unlink a concept from a project or cut one link of an observation are all on screens now, each with the typed or keyed confirmation its class needs and the command that does the same. `kb --json verbs` carries the menu fields.
 
-Not in the interface yet: Documents Browse and Frontmatter (frontmatter is reachable through `:`), Concepts Recall and Suggest, Check, and the removing writes `source remove`, `unlink` and `document delete`; `kb verbs --json` does not yet carry the menu fields.
+Changed. `source check-retractions` is classed as a changing write, so `:` asks first; on the command line nothing changes.
+
+For packagers and harvey: the library gains `SearchScoped`, `SearchKinds`, `ErrNoMembers` and `ObservationConcepts`, and `KBSearchResult` carries `SourceID` and `ProjectID`; `Search` is unchanged.
+
+Not checked in this release: the race detector was not run (the machine it runs on was not available), and the new screens were not tried by hand on macOS or Windows. The test suite passes on Linux (Raspberry Pi OS, arm64), and the built binary was driven on a pseudo-terminal there for the filter and the search prompt.
+
 
 ## Software Requirements
 

@@ -57,18 +57,38 @@ row per verb group, so using it teaches the command line:</p>
 │   Concepts         named ideas that span projects                          │
 │   …                                                                        │
 ├────────────────────────────────────────────────────────────────────────────┤
-│ ↑/↓ j/k move   Enter open   / search   : command   q quit                  │
+│ ↑/↓ j/k move   Enter open   S search   : command   q quit                  │
 └────────────────────────────────────────────────────────────────────────────┘</code></pre>
-<p>Rows that are not built yet are dimmed with the release that brings
-them, and choosing one prints the command that does the same. A project
-opens to its observations, concepts and records as tabs (<code>o</code>,
-<code>c</code>, <code>r</code>); Records → Browse and Pending list
-records in the scope <code>kb record list</code> would use, and
-<code>a</code> widens it. <code>q</code> goes back one screen (and quits
-at the top menu), <code>Esc</code> cancels only something in progress
-and never closes a screen, <code>Ctrl-C</code> quits from anywhere, and
-a line at the bottom of every screen lists the keys that apply. While
-you type, every key is text, <code>q</code> included.</p>
+<p>Every row is built; one that was not would be dimmed with the release
+that brings it, and choosing it would print the command that does the
+same. A project opens to its observations, concepts and records as tabs
+(<code>o</code>, <code>c</code>, <code>r</code>); Records → Browse and
+Pending list records in the scope <code>kb record list</code> would use,
+and <code>a</code> widens it. <code>q</code> goes back one screen (and
+quits at the top menu), <code>Esc</code> cancels only something in
+progress and never closes a screen, <code>Ctrl-C</code> quits from
+anywhere, and a line at the bottom of every screen lists the keys that
+apply. While you type, every key is text, <code>q</code> included.</p>
+<p><strong>Finding things.</strong> <code>/</code> filters the list in
+front of you as you type (every word must appear; Enter keeps the
+filter, Esc clears it), on every list. <code>S</code> searches the
+knowledge base from any screen, with the scope of where you are: a
+project’s tabs search that project, a Browse list its kind. The Search
+row of the top menu offers the scopes, and the prompt takes what the
+command takes: <code>harvey/records exit codes</code>.</p>
+<pre><code>kb search &quot;exit codes&quot;                 every kind, everywhere
+kb search harvey/ &quot;exit codes&quot;         one project
+kb search harvey/records &quot;exit codes&quot;  one kind in it
+kb search workspace/ &quot;exit codes&quot;      the workspace tier only
+kb search /records &quot;exit codes&quot;        records in every scope</code></pre>
+<p>A first word with no slash is part of the term, so
+<code>kb search harvey memory</code> is still <em>harvey AND
+memory</em>; text that contains a slash goes after <code>--</code>. The
+kinds are <code>records</code>, <code>observations</code>,
+<code>concepts</code>, <code>documents</code> and <code>projects</code>
+(<code>/projects</code> only). Results are grouped by kind with counts,
+and a concept shows the projects it is in. See <a
+href="kb-search.1.html">kb-search(1)</a>.</p>
 <p><strong>What it can write</strong> (the gate depends on the kind of
 write, and every write is the command’s own function, so the rules and
 refusals are the same as on the command line; the screen ends by showing
@@ -80,13 +100,16 @@ fields one at a time and ends with <code>y</code>.</li>
 a project; <code>e</code> on an observation or concept; <code>u</code>
 on a record to supersede another): the old and new values are shown and
 <code>y</code> confirms.</li>
-<li><em>Removing</em> (<code>d</code> on a project, observation, concept
-or record): a screen shows what points at it and asks for its name to be
-typed exactly.</li>
+<li><em>Removing</em> (<code>d</code> on a project, observation,
+concept, record, or a source or document in a Browse list;
+<code>u</code> to cut a link, from a project’s Concepts tab or from an
+observation): a screen shows what points at it and asks for its name or
+id to be typed exactly.</li>
 <li><em>Plans</em> (Ingest, Records → Fuzzy-tag, Documents → Ingest,
-Tag, Fuzzy-tag): the command’s <code>--dry-run</code> output is shown
-first and <code>y</code> applies it. Index and Format files run at
-once.</li>
+Tag, Fuzzy-tag, Frontmatter): the command’s <code>--dry-run</code>
+output is shown first and <code>y</code> applies it. Index and Format
+files run at once. Frontmatter lists what it proposes as a checklist
+with nothing selected, and plans only what you select.</li>
 <li><em>Summaries</em> (Documents → Review queue): write the summary in
 <code>$VISUAL</code> or <code>$EDITOR</code>, or a built-in text area;
 it is shown beside its source and <code>y</code> saves it as written by
@@ -98,12 +121,14 @@ any verb, and it meets the gate its class calls for.</li>
 Only an incomplete one opens the interface, and only on a terminal: bare
 <code>kb</code>, a bare group (<code>kb record</code>), and
 <code>kb record show</code> or <code>kb project show</code> with no
-argument. <code>kb -i record pending</code> (also
-<code>-i record list</code>, <code>-i record show REF</code>,
-<code>-i project list</code>, <code>-i search TERM</code>) opens the
-interface at that command. <code>kb verbs</code> prints the table every
-menu, completion script and help flag is built from;
-<code>kb -json verbs</code> gives it to a script or a model.</p>
+argument, and <code>kb search</code> with no term or with only a scope
+(<code>kb search harvey/records</code>).
+<code>kb -i record pending</code> (also <code>-i record list</code>,
+<code>-i record show REF</code>, <code>-i project list</code>,
+<code>-i search TERM</code>) opens the interface at that command.
+<code>kb verbs</code> prints the table every menu, completion script and
+help flag is built from; <code>kb -json verbs</code> gives it to a
+script or a model.</p>
 <h2 id="deciding-on-a-record">Deciding on a record</h2>
 <p>A decision record is written <code>proposed</code> and a person
 decides it. <code>kb</code> enforces that: accepting needs a
@@ -145,49 +170,49 @@ a status that arrives through a file edit, so that route is visible too.
 See <a href="kb-record.1.html">kb-record(1)</a>.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.21</li>
+<li>version: 0.0.22</li>
 <li>status: active</li>
-<li>released: 2026-10-13</li>
+<li>released: 2026-10-14</li>
 </ul>
-<p>Records are now read in kb’s own viewer, with Markdown highlighting,
-and the pager no longer depends on which programs happen to be
-installed. The decision is DR-0071 (a partial supersede of DR-0066 point
-5).</p>
-<p>Reading. Enter on a record in the terminal interface used to return
-straight to the list when <code>bat</code> was installed:
-<code>bat</code> quits at once when the text fits one screen and the
-interface repainted over it. kb now shows a record itself. YAML
-frontmatter, headings, fenced code, list markers, quotes, inline code,
-bold and links are coloured with the terminal’s own 16 colours;
-<code>NO_COLOR</code> or <code>TERM=dumb</code> turns it off. In the
-viewer <code>/</code> finds text (case-insensitive), <code>n</code> and
-<code>N</code> move between matches, <code>g</code> and <code>G</code>
-jump to the ends. <code>kb record set-status REF</code> with no status
-prints the same highlighted record on a terminal. <code>bat</code>,
-<code>batcat</code> and <code>less</code> are no longer looked for;
-<code>$KB_PAGER</code> is the override and is run exactly as written
-(give <code>bat</code> <code>--paging=always</code>).</p>
-<p>Fixed. <code>kb help ingest</code> showed
-<code>kb ingest clasm/decisions</code>, which exits 66 from the
-workspace root: <code>PATH</code> is a directory relative to the current
-directory, one only, walked recursively, and the project and tier come
-from each record’s <code>project:</code> frontmatter. The text now says
-so and the examples work; the <code>kb index</code> and
-<code>kb record fmt</code> examples are corrected too.
-<code>kb ingest</code>‘s “missing” line said kb had no verb to remove a
-row; it now names <code>kb record delete REF</code>. The
-<code>kb-index(1)</code> page no longer points at the developers’
-<code>TODO.md</code>.</p>
-<p>For packagers: <code>github.com/muesli/termenv</code> is now a direct
-dependency (it was already built in). The race detector passed on
-darwin/arm64 at the last code commit. The viewer was driven on a
-pseudo-terminal against the built binary on Linux (Raspberry Pi OS), and
-tried by hand on macOS and Windows, where it worked.</p>
-<p>Not in the interface yet: Documents Browse and Frontmatter
-(frontmatter is reachable through <code>:</code>), Concepts Recall and
-Suggest, Check, and the removing writes <code>source remove</code>,
-<code>unlink</code> and <code>document delete</code>;
-<code>kb verbs --json</code> does not yet carry the menu fields.</p>
+<p>Search is scoped by a path, in the command and in the interface,
+<code>/</code> now filters every list, and every row of the interface’s
+menus is built. The decisions are DR-0072 to DR-0074.</p>
+<p>Searching. <code>kb search harvey/ "exit codes"</code> searches one
+project, <code>harvey/records</code> one kind in it,
+<code>workspace/</code> the workspace tier only and
+<code>/records</code> one kind everywhere; <code>kb search TERM</code>
+is unchanged, and a first word with no slash is still part of the term.
+Results are grouped by kind with counts, name a record by its qualified
+reference, show the projects a concept is in, and say
+<code>showing 50 of N</code> when they were cut. An unknown scope or
+kind is exit 2; <code>workspace/observations</code> and
+<code>harvey/projects</code> are exit 1 with the reason. In the
+interface, Search is a menu of scopes and a prompt that takes the same
+line, <code>S</code> opens it from any screen with the scope of where
+you are, and <code>kb search</code> on a terminal opens it.</p>
+<p>Filtering. <code>/</code> narrows the list in front of you as you
+type, on every list; Enter keeps the filter and Esc clears it.
+<code>/</code> no longer starts the search, <code>S</code> does.</p>
+<p>The interface. Check, the Browse lists, Recall, Suggest, Check
+retractions, Frontmatter (a checklist, written only on <code>y</code>),
+Enter on a search result, <code>d</code> to delete a concept, source or
+document, and <code>u</code> to unlink a concept from a project or cut
+one link of an observation are all on screens now, each with the typed
+or keyed confirmation its class needs and the command that does the
+same. <code>kb --json verbs</code> carries the menu fields.</p>
+<p>Changed. <code>source check-retractions</code> is classed as a
+changing write, so <code>:</code> asks first; on the command line
+nothing changes.</p>
+<p>For packagers and harvey: the library gains
+<code>SearchScoped</code>, <code>SearchKinds</code>,
+<code>ErrNoMembers</code> and <code>ObservationConcepts</code>, and
+<code>KBSearchResult</code> carries <code>SourceID</code> and
+<code>ProjectID</code>; <code>Search</code> is unchanged.</p>
+<p>Not checked in this release: the race detector was not run (the
+machine it runs on was not available), and the new screens were not
+tried by hand on macOS or Windows. The test suite passes on Linux
+(Raspberry Pi OS, arm64), and the built binary was driven on a
+pseudo-terminal there for the filter and the search prompt.</p>
 <h2 id="software-requirements">Software Requirements</h2>
 <ul>
 <li>Go &gt;= 1.26.4</li>
