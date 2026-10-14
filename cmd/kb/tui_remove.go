@@ -322,6 +322,7 @@ func (m *tuiModel) reloadAfterRemoval() {
 		for i, p := range projects {
 			items[i] = projectItem{p}
 		}
+		m.clearFilter(viewProjects)
 		m.projectList.SetItems(items)
 		keep(&m.projectList, at)
 	case viewObservations:

@@ -129,10 +129,10 @@ func TestTUIModel_QFromTheProjectListGoesToTheProjectsMenu(t *testing.T) {
 func TestTUIModel_SlashThenEnterRunsSearchAndShowsResults(t *testing.T) {
 	m := newTestTUIModel(t)
 
-	updated, _ := m.Update(runeKey("/"))
+	updated, _ := m.Update(runeKey("S"))
 	m = updated.(*tuiModel)
 	if !m.searching {
-		t.Fatal("expected searching=true after '/'")
+		t.Fatal("expected searching=true after 'S'")
 	}
 
 	for _, r := range "specific" {
@@ -155,7 +155,7 @@ func TestTUIModel_SlashThenEnterRunsSearchAndShowsResults(t *testing.T) {
 
 func TestTUIModel_EscCancelsSearchInput(t *testing.T) {
 	m := newTestTUIModel(t)
-	updated, _ := m.Update(runeKey("/"))
+	updated, _ := m.Update(runeKey("S"))
 	m = updated.(*tuiModel)
 
 	updated, _ = m.Update(key(tea.KeyEsc))
@@ -225,7 +225,7 @@ func TestTUIModel_LogsKBCallsFromSearch(t *testing.T) {
 	}
 	m := newTestTUIModelWithDebugLog(t, dl)
 
-	updated, _ := m.Update(runeKey("/"))
+	updated, _ := m.Update(runeKey("S"))
 	m = updated.(*tuiModel)
 	for _, r := range "specific" {
 		updated, _ = m.Update(runeKey(string(r)))

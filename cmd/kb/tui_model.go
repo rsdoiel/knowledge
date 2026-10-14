@@ -151,15 +151,12 @@ type tuiModel struct {
 	form            *formFlow   // the additive form in progress, in viewForm
 	plan            *planFlow   // the plan-then-apply write in progress, in viewPlan
 	planView        viewport.Model
-	command         *commandFlow // the `:` prompt, in viewCommand
-	queueList       list.Model   // the review queue
-	browseList      list.Model   // a Browse list, in viewBrowse
-	browseKind      string       // what it lists: concept, source or document
-	browseAll       []list.Item  // every row of the Browse list, before its filter
-	browseFilter    string       // the accepted filter, "" for none
-	browseFiltering bool         // a filter is being typed
-	browseInput     textinput.Model
-	unit            *summaryUnit // the summary unit in progress, in viewSummary
+	command         *commandFlow              // the `:` prompt, in viewCommand
+	queueList       list.Model                // the review queue
+	browseList      list.Model                // a Browse list, in viewBrowse
+	browseKind      string                    // what it lists: concept, source or document
+	filters         map[viewState]*listFilter // the filter of each list that has one in force
+	unit            *summaryUnit              // the summary unit in progress, in viewSummary
 	textPurpose     string
 	textPlain       []string        // the viewer's lines without colour, for the find
 	finding         bool            // a find term is being typed in the viewer
@@ -220,7 +217,6 @@ func newTUIModelAt(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) (*
 		scopeList:       newBrowserList(nil, "", 0, 0),
 		searchInput:     ti,
 		findInput:       newFindInput(),
-		browseInput:     newFindInput(),
 	}
 	m.workspaceDir, m.dbRel = workspaceLabel(kb.Path())
 	if recs, err := kb.ListRecords(knowledge.RecordFilter{}); err == nil {
@@ -388,6 +384,11 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.state == viewSummary {
 			return m.updateSummary(msg)
+		}
+		// `/` filters the list that has focus, and while a filter is typed every
+		// key is text, so this is asked before any letter is bound (DR-0072).
+		if cmd, took := m.filterKey(msg); took {
+			return m, cmd
 		}
 		if msg.String() == ":" && m.canOpenCommand() {
 			return m.openCommand()
@@ -571,9 +572,6 @@ func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc":
 		return m, nil
-	case "/":
-		m.startSearch()
-		return m, nil
 	case "j", "down", "k", "up":
 		m.menuCursor = moveCursor(m.menuCursor, len(items), msg)
 		return m, nil
@@ -605,9 +603,6 @@ func (m *tuiModel) updateGroup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setState(viewMenu)
 		return m, nil
 	case "esc":
-		return m, nil
-	case "/":
-		m.startSearch()
 		return m, nil
 	case "j", "down", "k", "up":
 		m.groupCursor = moveCursor(m.groupCursor, len(items), msg)
@@ -703,6 +698,7 @@ func (m *tuiModel) loadRecordScope() error {
 	l := newCompactList(items, fmt.Sprintf("%s — %s  (%d)", name, m.recordScopeName(), len(items)), m.cols()-4, m.listHeight())
 	l.SetStatusBarItemName(noun, noun+"s")
 	m.scopeList = l
+	m.clearFilter(viewRecordScope)
 	return nil
 }
 
@@ -719,9 +715,6 @@ func (m *tuiModel) updateRecordScope(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return m.openGroup("record")
 	case "esc":
-		return m, nil
-	case "/":
-		m.startSearch()
 		return m, nil
 	case "a":
 		m.scopeAll = !m.scopeAll
@@ -816,9 +809,6 @@ func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openGroup("project")
 	case "esc":
 		return m, nil
-	case "/":
-		m.startSearch()
-		return m, nil
 	case "d":
 		return m.removeSelected()
 	case "n":
@@ -881,9 +871,6 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.goTo(viewProjects, nil)
 	case "esc":
 		return m, nil
-	case "/":
-		m.startSearch()
-		return m, nil
 	case "c":
 		return m.goTo(viewConcepts, nil)
 	case "r":
@@ -910,9 +897,6 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.goTo(viewObservations, nil)
 	case "r":
 		return m.goTo(viewRecords, nil)
-	case "/":
-		m.startSearch()
-		return m, nil
 	}
 	var cmd tea.Cmd
 	m.conceptList, cmd = m.conceptList.Update(msg)
@@ -941,9 +925,6 @@ func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.goTo(viewObservations, nil)
 	case "c":
 		return m.goTo(viewConcepts, nil)
-	case "/":
-		m.startSearch()
-		return m, nil
 	}
 	var cmd tea.Cmd
 	m.recordList, cmd = m.recordList.Update(msg)
@@ -956,9 +937,6 @@ func (m *tuiModel) updateSearchResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return m.goTo(m.searchFrom, nil)
 	case "esc":
-		return m, nil
-	case "/":
-		m.startSearch()
 		return m, nil
 	case "enter":
 		if it, ok := m.searchList.SelectedItem().(searchResultItem); ok {
@@ -1024,7 +1002,7 @@ func (m *tuiModel) searchLineProblem(line string) (string, bool) {
 // text is being typed (a filter, a form, a note), and not on a screen whose keys
 // are a chooser or a confirmation.
 func (m *tuiModel) canSearchFromHere() bool {
-	if m.err != nil || m.searching || m.browseFiltering {
+	if m.err != nil || m.searching || m.filterTyping() {
 		return false
 	}
 	switch m.state {
@@ -1110,6 +1088,7 @@ func (m *tuiModel) loadObservations() error {
 	}
 	l := newBrowserList(items, fmt.Sprintf("Observations — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.observationList = l
+	m.clearFilter(viewObservations)
 	return nil
 }
 
@@ -1132,6 +1111,7 @@ func (m *tuiModel) loadRecords() error {
 	}
 	l := newBrowserList(items, fmt.Sprintf("Records — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.recordList = l
+	m.clearFilter(viewRecords)
 	return nil
 }
 
@@ -1149,6 +1129,7 @@ func (m *tuiModel) loadConcepts() error {
 	}
 	l := newBrowserList(items, fmt.Sprintf("Concepts — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.conceptList = l
+	m.clearFilter(viewConcepts)
 	return nil
 }
 
@@ -1165,6 +1146,7 @@ func (m *tuiModel) runSearch(term string) error {
 	}
 	l := newBrowserList(items, fmt.Sprintf("Search: %s", term), m.cols()-4, m.listHeight())
 	m.searchList = l
+	m.clearFilter(viewSearch)
 	return nil
 }
 
@@ -1214,13 +1196,14 @@ func (m *tuiModel) runSearchLine(line string) error {
 		title += fmt.Sprintf(", showing %d", len(items))
 	}
 	m.searchList = newBrowserList(items, title, m.cols()-4, m.listHeight())
+	m.clearFilter(viewSearch)
 	return nil
 }
 
 // legend is the line of keys that apply on the current screen. It changes with
 // the mode: while typing, q is text and is not offered.
 func (m *tuiModel) legend() string {
-	return fitLegend(m.legendFull(), m.cols()-4)
+	return fitLegend(m.filterLegend(m.legendFull(), m.cols()-4), m.cols()-4)
 }
 
 /** fitLegend shortens a legend that is wider than the room it has, so the frame
@@ -1246,12 +1229,16 @@ func fitLegend(legend string, width int) string {
 	}
 	// In order of how little is lost: the spacing, then the movement hint (every
 	// screen shares it and a person already knows it), then long words shortened.
-	for _, candidate := range []string{legend, tight, noMove, short} {
+	shorter := short
+	for _, r := range [][2]string{{"d delete", "d del"}, {"r rename", "r ren"}, {"s status", "s stat"}} {
+		shorter = strings.Replace(shorter, r[0], r[1], 1)
+	}
+	for _, candidate := range []string{legend, tight, noMove, short, shorter} {
 		if lipgloss.Width(candidate) <= width {
 			return candidate
 		}
 	}
-	return short
+	return shorter
 }
 
 // legendFull is the legend before it is fitted to the window.
@@ -1284,7 +1271,7 @@ func (m *tuiModel) legendFull() string {
 	case viewSummary:
 		return m.summaryLegend()
 	case viewBrowse:
-		return m.browseLegend(move)
+		return move + "   Enter show   d delete   S search   q back"
 	case viewReviewQueue:
 		return move + "   Enter summarise   " + m.scopeKey() + "   S search   : command   q back"
 	case viewPlan:
@@ -1330,8 +1317,15 @@ func viewLines(l list.Model) []string {
 	return strings.Split(strings.TrimRight(l.View(), "\n"), "\n")
 }
 
-// screen returns the title and body lines of the current screen.
+// screen returns the title and body lines of the current screen, with a kept
+// list filter named in the title.
 func (m *tuiModel) screen() (string, []string) {
+	title, lines := m.screenBody()
+	return m.filterTitle(title), lines
+}
+
+// screenBody is screen before the filter is added to the title.
+func (m *tuiModel) screenBody() (string, []string) {
 	if m.err != nil {
 		return "Error", []string{fmt.Sprintf("error: %v", m.err)}
 	}
@@ -1352,7 +1346,7 @@ func (m *tuiModel) screen() (string, []string) {
 		}
 		return groupTitle(m.group), rows
 	case viewRecordScope:
-		return m.scopeList.Title, viewLines(m.scopeList)
+		return m.scopeList.Title, m.filteredLines(viewRecordScope)
 	case viewReview:
 		return m.reviewScreen()
 	case viewText:
@@ -1370,22 +1364,22 @@ func (m *tuiModel) screen() (string, []string) {
 	case viewSummary:
 		return m.summaryScreen()
 	case viewBrowse:
-		return m.browseList.Title, m.browseLines()
+		return m.browseList.Title, m.filteredLines(viewBrowse)
 	case viewReviewQueue:
-		return m.queueList.Title, viewLines(m.queueList)
+		return m.queueList.Title, m.filteredLines(viewReviewQueue)
 	case viewObservations:
-		return m.projectTitle(), append(m.tabStrip(), viewLines(m.observationList)...)
+		return m.projectTitle(), append(m.tabStrip(), m.filteredLines(viewObservations)...)
 	case viewConcepts:
-		return m.projectTitle(), append(m.tabStrip(), viewLines(m.conceptList)...)
+		return m.projectTitle(), append(m.tabStrip(), m.filteredLines(viewConcepts)...)
 	case viewRecords:
-		return m.projectTitle(), append(m.tabStrip(), viewLines(m.recordList)...)
+		return m.projectTitle(), append(m.tabStrip(), m.filteredLines(viewRecords)...)
 	case viewSearch:
-		if len(m.searchList.Items()) == 0 {
+		if len(m.searchList.Items()) == 0 && m.filterOf(viewSearch) == nil {
 			return m.searchList.Title, []string{"no results"}
 		}
-		return m.searchList.Title, viewLines(m.searchList)
+		return m.searchList.Title, m.filteredLines(viewSearch)
 	}
-	return "Projects", viewLines(m.projectList)
+	return "Projects", m.filteredLines(viewProjects)
 }
 
 // header names the workspace on the top menu: its directory, its database and
@@ -1416,9 +1410,9 @@ func (m *tuiModel) tabStrip() []string {
 		label  string
 		active bool
 	}{
-		{fmt.Sprintf("Observations (%d)", len(m.observationList.Items())), m.state == viewObservations},
-		{fmt.Sprintf("Concepts (%d)", len(m.conceptList.Items())), m.state == viewConcepts},
-		{fmt.Sprintf("Records (%d)", len(m.recordList.Items())), m.state == viewRecords},
+		{fmt.Sprintf("Observations (%d)", m.totalRows(viewObservations)), m.state == viewObservations},
+		{fmt.Sprintf("Concepts (%d)", m.totalRows(viewConcepts)), m.state == viewConcepts},
+		{fmt.Sprintf("Records (%d)", m.totalRows(viewRecords)), m.state == viewRecords},
 	}
 	const sep = "  │  "
 	strip, rule := "  ", "  "

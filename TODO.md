@@ -45,8 +45,8 @@
   retractions, Observations → Browse (the project list), Enter on search results and observations. Still not in the interface: Documents →
   Frontmatter (frontmatter runs through `:`; it needs a field picker), and the removing write `unlink` (it needs a screen that picks a link to cut).
   `source remove` and `document delete` have the gate from the Browse lists (`d`) and from `:`. `kb verbs --json` carries the menu fields (done, unreleased). The Browse rows are
-  a selectable list, and Enter runs the verb's `show`; `/` filters those lists and `S` is the global search there (done, unreleased; the project, record and
-  review-queue lists still use `/` for the search, step A of `design/scoped-search-design.md`). The viewer has no horizontal scroll and the find does not mark the match inside the line;
+  a selectable list, and Enter runs the verb's `show`; `/` filters those lists and `S` is the global search there (done, unreleased; every list now, step E2 of
+  `design/scoped-search-design.md`; the summary screen still uses `/` for the search). The viewer has no horizontal scroll and the find does not mark the match inside the line;
   `KB_PAGER=less -R` is the escape hatch.
 
 - [ ] **Provenance as a first-class capability, and two meanings of "source" (raised 2026-10-14, for

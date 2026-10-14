@@ -269,7 +269,7 @@ func TestMenu_SearchStartsFromTheMenuAndQReturnsThere(t *testing.T) {
 
 func TestMenu_CommandLettersAreTextInTheSearchPromptFromAMenu(t *testing.T) {
 	for _, m := range []*tuiModel{menuModel(t), openRow(t, menuModel(t), "Records")} {
-		m, _ = press(t, m, ch('/'))
+		m, _ = press(t, m, ch('S'))
 		m, cmd := press(t, m, typed("qjkaynocr:")...)
 		if isQuit(cmd) || !m.searching || m.searchInput.Value() != "qjkaynocr:" {
 			t.Errorf("typing acted as a command (quit %v, searching %v, value %q)", isQuit(cmd), m.searching, m.searchInput.Value())

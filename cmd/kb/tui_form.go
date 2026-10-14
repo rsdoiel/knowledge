@@ -195,6 +195,7 @@ func (m *tuiModel) finishForm() (tea.Model, tea.Cmd) {
 			items[i] = projectItem{p}
 		}
 		at := m.projectList.Index()
+		m.clearFilter(viewProjects)
 		m.projectList.SetItems(items)
 		if at < len(items) {
 			m.projectList.Select(at)

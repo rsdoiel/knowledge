@@ -105,8 +105,9 @@ prompt with that scope already typed, and the prompt takes what
 result list is titled with the command that does the same. {app_name} search with
 no term, or with only a scope, opens this menu or this prompt on a terminal.
 
-Keys: the arrow keys or j and k move; Enter opens; S searches, with the scope of
-the screen you are on (a project's tabs search that project); o, c and r switch
+Keys: the arrow keys or j and k move; Enter opens; / filters the list in front of
+you as you type (Enter keeps the filter, Esc clears it); S searches, with the
+scope of the screen you are on (a project's tabs search that project); o, c and r switch
 a project's tabs. q goes back to the screen above (the project list to the
 Projects menu, a group menu to the top menu) and quits at the top menu. Esc
 cancels something in progress, such as a search being typed, and does nothing

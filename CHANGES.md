@@ -7,6 +7,13 @@ release notes; maintained going forward.
 
 ### Added
 
+- **`/` filters the list in front of you, on every list.** The project list, a project's observation,
+  concept and record tabs, the Records screens, the review queue and the search results narrow as you type
+  (every word must appear, ignoring case); Enter keeps the filter, Esc clears it, and a filter that matches
+  nothing says so and names `S`. A tab's count stays the project's own. On a menu `/` does nothing: there is
+  nothing in front of you to find in, and the Search menu and `S` are the way to search. The search prompt
+  is opened by `S` everywhere (DR-0072, point 6). A kept filter is named in the screen's title, and a legend
+  names `S search` too when the window has the room.
 - **Search in the terminal interface is a menu of scopes and a prompt that takes the command line**
   (DR-0073). Search opens a menu: Everywhere…, Workspace tier…, one row per kind, and This project (NAME)…
   when a project is open. A row opens the prompt with that scope already typed, and the prompt takes what

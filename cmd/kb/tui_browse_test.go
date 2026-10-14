@@ -255,7 +255,7 @@ func TestBrowse_CheckRetractionsRunsOnYAndShowsTheResult(t *testing.T) {
 
 func searchFor(t *testing.T, m *tuiModel, term string) *tuiModel {
 	t.Helper()
-	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed(term)...), keyEnter)...)
+	m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed(term)...), keyEnter)...)
 	if m.state != viewSearch {
 		t.Fatalf("state = %s, want the search results\n%s", viewStateNames[m.state], m.View())
 	}

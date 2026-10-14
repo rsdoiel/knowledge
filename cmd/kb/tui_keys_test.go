@@ -51,7 +51,7 @@ func browserAt(t *testing.T, state viewState) *tuiModel {
 	case viewRecords:
 		m, _ = press(t, m, keyEnter, ch('r'))
 	case viewSearch:
-		m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("observation")...), keyEnter)...)
+		m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed("observation")...), keyEnter)...)
 	}
 	if m.state != state {
 		t.Fatalf("could not reach %v, ended on %v", viewStateNames[state], viewStateNames[m.state])
@@ -91,7 +91,7 @@ func TestTUIKeys_QWalksUpToTheTopMenuAndQuitsThere(t *testing.T) {
 func TestTUIKeys_QFromSearchResultsGoesBackToWhereTheSearchStarted(t *testing.T) {
 	for _, from := range []viewState{viewProjects, viewObservations, viewConcepts, viewRecords} {
 		m := browserAt(t, from)
-		m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("observation")...), keyEnter)...)
+		m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed("observation")...), keyEnter)...)
 		if m.state != viewSearch {
 			t.Fatalf("from %s: search did not show results", viewStateNames[from])
 		}
@@ -105,8 +105,8 @@ func TestTUIKeys_QFromSearchResultsGoesBackToWhereTheSearchStarted(t *testing.T)
 // A second search from the results still returns to where the first began.
 func TestTUIKeys_ASecondSearchKeepsTheWayBack(t *testing.T) {
 	m := browserAt(t, viewObservations)
-	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("observation")...), keyEnter)...)
-	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("streaming")...), keyEnter)...)
+	m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed("observation")...), keyEnter)...)
+	m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed("streaming")...), keyEnter)...)
 	if m, _ = press(t, m, ch('q')); m.state != viewObservations {
 		t.Errorf("q after two searches gave %s, want viewObservations", viewStateNames[m.state])
 	}
@@ -135,7 +135,7 @@ func TestTUIKeys_CtrlCQuitsFromEverywhere(t *testing.T) {
 			t.Errorf("%s: Ctrl-C did not quit", viewStateNames[state])
 		}
 		m = browserAt(t, state)
-		m, _ = press(t, m, ch('/'))
+		m, _ = press(t, m, ch('S'))
 		if _, cmd := press(t, m, keyCtrlC); !isQuit(cmd) {
 			t.Errorf("%s while typing a search: Ctrl-C did not quit", viewStateNames[state])
 		}
@@ -155,7 +155,7 @@ func TestTUIKeys_OnlyTheSearchPromptCapturesText(t *testing.T) {
 		if m.capturingText() {
 			t.Errorf("%s: capturing text while browsing", viewStateNames[state])
 		}
-		m, _ = press(t, m, ch('/'))
+		m, _ = press(t, m, ch('S'))
 		if !m.capturingText() {
 			t.Errorf("%s: not capturing text in the search prompt", viewStateNames[state])
 		}
@@ -168,12 +168,14 @@ func TestTUIKeys_OnlyTheSearchPromptCapturesText(t *testing.T) {
 func TestTUIKeys_CommandLettersAreTextInTheSearchPrompt(t *testing.T) {
 	for _, state := range allStates {
 		m := browserAt(t, state)
-		m, _ = press(t, m, ch('/'))
+		m, _ = press(t, m, ch('S'))
 		m, cmd := press(t, m, typed("qjkaynocr:")...)
 		if isQuit(cmd) || !m.searching || m.state != state {
 			t.Fatalf("%s: typing acted as a command (quit %v, searching %v, state %s)", viewStateNames[state], isQuit(cmd), m.searching, viewStateNames[m.state])
 		}
-		if got := m.searchInput.Value(); got != "qjkaynocr:" {
+		// A project's tabs and the Records screens open the prompt with their scope
+		// typed; what was typed after it is every key.
+		if got := m.searchInput.Value(); !strings.HasSuffix(got, "qjkaynocr:") {
 			t.Errorf("%s: the prompt holds %q, want every typed key", viewStateNames[state], got)
 		}
 		m, cmd = press(t, m, keyEsc)
@@ -190,7 +192,7 @@ func TestTUIKeys_CommandLettersAreTextInTheSearchPrompt(t *testing.T) {
 // A search term that starts with q reaches the search.
 func TestTUIKeys_ASearchTermStartingWithQIsSearched(t *testing.T) {
 	m := browserAt(t, viewProjects)
-	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("quux")...), keyEnter)...)
+	m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed("quux")...), keyEnter)...)
 	if m.state != viewSearch || !strings.Contains(m.searchList.Title, "quux") {
 		t.Errorf("state %s, title %q; want a search for quux", viewStateNames[m.state], m.searchList.Title)
 	}
@@ -200,11 +202,11 @@ func TestTUIKeys_ASearchTermStartingWithQIsSearched(t *testing.T) {
 
 func TestTUIKeys_EveryScreenShowsItsKeys(t *testing.T) {
 	for state, want := range map[viewState][]string{
-		viewProjects:     {"Enter open", "S search", "q back"},
-		viewObservations: {"o c r tabs", "S search", "q back"},
-		viewConcepts:     {"o c r tabs", "S search", "q back"},
-		viewRecords:      {"o c r tabs", "S search", "q back"},
-		viewSearch:       {"S search", "q back"},
+		viewProjects:     {"Enter open", "/ filter", "q back"},
+		viewObservations: {"o c r tabs", "/ filter", "q back"},
+		viewConcepts:     {"o c r tabs", "/ filter", "q back"},
+		viewRecords:      {"o c r tabs", "/ filter", "q back"},
+		viewSearch:       {"/ filter", "q back"},
 	} {
 		view := browserAt(t, state).View()
 		for _, w := range want {
@@ -217,7 +219,7 @@ func TestTUIKeys_EveryScreenShowsItsKeys(t *testing.T) {
 
 // While typing, the legend says what Esc and Enter do, and does not offer q.
 func TestTUIKeys_TheLegendChangesWithTheMode(t *testing.T) {
-	m, _ := press(t, browserAt(t, viewObservations), ch('/'))
+	m, _ := press(t, browserAt(t, viewObservations), ch('S'))
 	view := m.View()
 	for _, want := range []string{"Esc cancel", "Enter search"} {
 		if !strings.Contains(view, want) {
@@ -396,16 +398,16 @@ func TestTUIKeys_SeveralKeysInOneMessageAreTakenInTurn(t *testing.T) {
 }
 
 // A command key that starts the search prompt hands the rest of the message to it as text.
-func TestTUIKeys_TheKeysAfterASlashAreTextEvenInTheSameMessage(t *testing.T) {
-	m, cmd := press(t, menuModel(t), runeKey("/qjk"))
+func TestTUIKeys_TheKeysAfterSAreTextEvenInTheSameMessage(t *testing.T) {
+	m, cmd := press(t, menuModel(t), runeKey("Sqjk"))
 	if isQuit(cmd) || !m.searching || m.searchInput.Value() != "qjk" {
-		t.Errorf("/qjk: quit %v, searching %v, value %q; want the prompt open holding qjk", isQuit(cmd), m.searching, m.searchInput.Value())
+		t.Errorf("Sqjk: quit %v, searching %v, value %q; want the prompt open holding qjk", isQuit(cmd), m.searching, m.searchInput.Value())
 	}
 }
 
 // Typed into the prompt, a run of characters is text and is not split.
 func TestTUIKeys_ARunOfCharactersInThePromptIsOneInput(t *testing.T) {
-	m, _ := press(t, menuModel(t), ch('/'))
+	m, _ := press(t, menuModel(t), ch('S'))
 	m, cmd := press(t, m, runeKey("quokka"))
 	if isQuit(cmd) || m.searchInput.Value() != "quokka" {
 		t.Errorf("quit %v, value %q; want quokka typed", isQuit(cmd), m.searchInput.Value())

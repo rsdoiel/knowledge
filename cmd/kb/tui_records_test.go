@@ -141,7 +141,7 @@ func TestRecords_QGoesBackToTheRecordsMenuAndEscDoesNothing(t *testing.T) {
 
 func TestRecords_SearchFromHereReturnsHere(t *testing.T) {
 	m := openRecords(t, recordsModel(t), 0)
-	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("decision")...), keyEnter)...)
+	m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed("decision")...), keyEnter)...)
 	if m.state != viewSearch {
 		t.Fatalf("state = %s", viewStateNames[m.state])
 	}
@@ -152,7 +152,7 @@ func TestRecords_SearchFromHereReturnsHere(t *testing.T) {
 
 func TestRecords_TheLegendOffersReadAndStatus(t *testing.T) {
 	v := openRecords(t, recordsModel(t), 0).View()
-	for _, want := range []string{"Enter read", "s status", "a all scopes", "S search", "q back"} {
+	for _, want := range []string{"Enter read", "s status", "a all scopes", "/ filter", "q back"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the legend lacks %q:\n%s", want, v)
 		}

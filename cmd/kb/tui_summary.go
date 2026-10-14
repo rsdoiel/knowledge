@@ -93,6 +93,7 @@ func (m *tuiModel) loadReviewQueue() error {
 	l := newCompactList(items, fmt.Sprintf("Review queue — %s  (%d)", m.recordScopeName(), len(items)), m.cols()-4, m.listHeight())
 	l.SetStatusBarItemName("section", "sections")
 	m.queueList = l
+	m.clearFilter(viewReviewQueue)
 	return nil
 }
 
