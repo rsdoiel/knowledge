@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.21
+version: 0.0.22
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,23 +33,27 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-10-09
+date_released: 2026-10-14
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.21
+## knowledge 0.0.22
 
-Records are now read in kb's own viewer, with Markdown highlighting, and the pager no longer depends on which programs happen to be installed. The decision is DR-0071 (a partial supersede of DR-0066 point 5).
+Search is scoped by a path, in the command and in the interface, `/` now filters every list, and every row of the interface's menus is built. The decisions are DR-0072 to DR-0074.
 
-Reading. Enter on a record in the terminal interface used to return straight to the list when `bat` was installed: `bat` quits at once when the text fits one screen and the interface repainted over it. kb now shows a record itself. YAML frontmatter, headings, fenced code, list markers, quotes, inline code, bold and links are coloured with the terminal's own 16 colours; `NO_COLOR` or `TERM=dumb` turns it off. In the viewer `/` finds text (case-insensitive), `n` and `N` move between matches, `g` and `G` jump to the ends. `kb record set-status REF` with no status prints the same highlighted record on a terminal. `bat`, `batcat` and `less` are no longer looked for; `$KB_PAGER` is the override and is run exactly as written (give `bat` `--paging=always`).
+Searching. `kb search harvey/ "exit codes"` searches one project, `harvey/records` one kind in it, `workspace/` the workspace tier only and `/records` one kind everywhere; `kb search TERM` is unchanged, and a first word with no slash is still part of the term. Results are grouped by kind with counts, name a record by its qualified reference, show the projects a concept is in, and say `showing 50 of N` when they were cut. An unknown scope or kind is exit 2; `workspace/observations` and `harvey/projects` are exit 1 with the reason. In the interface, Search is a menu of scopes and a prompt that takes the same line, `S` opens it from any screen with the scope of where you are, and `kb search` on a terminal opens it.
 
-Fixed. `kb help ingest` showed `kb ingest clasm/decisions`, which exits 66 from the workspace root: `PATH` is a directory relative to the current directory, one only, walked recursively, and the project and tier come from each record's `project:` frontmatter. The text now says so and the examples work; the `kb index` and `kb record fmt` examples are corrected too. `kb ingest`'s "missing" line said kb had no verb to remove a row; it now names `kb record delete REF`. The `kb-index(1)` page no longer points at the developers' `TODO.md`.
+Filtering. `/` narrows the list in front of you as you type, on every list; Enter keeps the filter and Esc clears it. `/` no longer starts the search, `S` does.
 
-For packagers: `github.com/muesli/termenv` is now a direct dependency (it was already built in). The race detector passed on darwin/arm64 at the last code commit. The viewer was driven on a pseudo-terminal against the built binary on Linux (Raspberry Pi OS), and tried by hand on macOS and Windows, where it worked.
+The interface. Check, the Browse lists, Recall, Suggest, Check retractions, Frontmatter (a checklist, written only on `y`), Enter on a search result, `d` to delete a concept, source or document, and `u` to unlink a concept from a project or cut one link of an observation are all on screens now, each with the typed or keyed confirmation its class needs and the command that does the same. `kb --json verbs` carries the menu fields.
 
-Not in the interface yet: Documents Browse and Frontmatter (frontmatter is reachable through `:`), Concepts Recall and Suggest, Check, and the removing writes `source remove`, `unlink` and `document delete`; `kb verbs --json` does not yet carry the menu fields.
+Changed. `source check-retractions` is classed as a changing write, so `:` asks first; on the command line nothing changes.
+
+For packagers and harvey: the library gains `SearchScoped`, `SearchKinds`, `ErrNoMembers` and `ObservationConcepts`, and `KBSearchResult` carries `SourceID` and `ProjectID`; `Search` is unchanged.
+
+Not checked in this release: the race detector was not run (the machine it runs on was not available), and the new screens were not tried by hand on macOS or Windows. The test suite passes on Linux (Raspberry Pi OS, arm64), and the built binary was driven on a pseudo-terminal there for the filter and the search prompt.
 
 ## Authors
 

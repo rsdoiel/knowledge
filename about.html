@@ -19,46 +19,46 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.21">knowledge 0.0.21</h2>
-<p>Records are now read in kb’s own viewer, with Markdown highlighting,
-and the pager no longer depends on which programs happen to be
-installed. The decision is DR-0071 (a partial supersede of DR-0066 point
-5).</p>
-<p>Reading. Enter on a record in the terminal interface used to return
-straight to the list when <code>bat</code> was installed:
-<code>bat</code> quits at once when the text fits one screen and the
-interface repainted over it. kb now shows a record itself. YAML
-frontmatter, headings, fenced code, list markers, quotes, inline code,
-bold and links are coloured with the terminal’s own 16 colours;
-<code>NO_COLOR</code> or <code>TERM=dumb</code> turns it off. In the
-viewer <code>/</code> finds text (case-insensitive), <code>n</code> and
-<code>N</code> move between matches, <code>g</code> and <code>G</code>
-jump to the ends. <code>kb record set-status REF</code> with no status
-prints the same highlighted record on a terminal. <code>bat</code>,
-<code>batcat</code> and <code>less</code> are no longer looked for;
-<code>$KB_PAGER</code> is the override and is run exactly as written
-(give <code>bat</code> <code>--paging=always</code>).</p>
-<p>Fixed. <code>kb help ingest</code> showed
-<code>kb ingest clasm/decisions</code>, which exits 66 from the
-workspace root: <code>PATH</code> is a directory relative to the current
-directory, one only, walked recursively, and the project and tier come
-from each record’s <code>project:</code> frontmatter. The text now says
-so and the examples work; the <code>kb index</code> and
-<code>kb record fmt</code> examples are corrected too.
-<code>kb ingest</code>‘s “missing” line said kb had no verb to remove a
-row; it now names <code>kb record delete REF</code>. The
-<code>kb-index(1)</code> page no longer points at the developers’
-<code>TODO.md</code>.</p>
-<p>For packagers: <code>github.com/muesli/termenv</code> is now a direct
-dependency (it was already built in). The race detector passed on
-darwin/arm64 at the last code commit. The viewer was driven on a
-pseudo-terminal against the built binary on Linux (Raspberry Pi OS), and
-tried by hand on macOS and Windows, where it worked.</p>
-<p>Not in the interface yet: Documents Browse and Frontmatter
-(frontmatter is reachable through <code>:</code>), Concepts Recall and
-Suggest, Check, and the removing writes <code>source remove</code>,
-<code>unlink</code> and <code>document delete</code>;
-<code>kb verbs --json</code> does not yet carry the menu fields.</p>
+<h2 id="knowledge-0.0.22">knowledge 0.0.22</h2>
+<p>Search is scoped by a path, in the command and in the interface,
+<code>/</code> now filters every list, and every row of the interface’s
+menus is built. The decisions are DR-0072 to DR-0074.</p>
+<p>Searching. <code>kb search harvey/ "exit codes"</code> searches one
+project, <code>harvey/records</code> one kind in it,
+<code>workspace/</code> the workspace tier only and
+<code>/records</code> one kind everywhere; <code>kb search TERM</code>
+is unchanged, and a first word with no slash is still part of the term.
+Results are grouped by kind with counts, name a record by its qualified
+reference, show the projects a concept is in, and say
+<code>showing 50 of N</code> when they were cut. An unknown scope or
+kind is exit 2; <code>workspace/observations</code> and
+<code>harvey/projects</code> are exit 1 with the reason. In the
+interface, Search is a menu of scopes and a prompt that takes the same
+line, <code>S</code> opens it from any screen with the scope of where
+you are, and <code>kb search</code> on a terminal opens it.</p>
+<p>Filtering. <code>/</code> narrows the list in front of you as you
+type, on every list; Enter keeps the filter and Esc clears it.
+<code>/</code> no longer starts the search, <code>S</code> does.</p>
+<p>The interface. Check, the Browse lists, Recall, Suggest, Check
+retractions, Frontmatter (a checklist, written only on <code>y</code>),
+Enter on a search result, <code>d</code> to delete a concept, source or
+document, and <code>u</code> to unlink a concept from a project or cut
+one link of an observation are all on screens now, each with the typed
+or keyed confirmation its class needs and the command that does the
+same. <code>kb --json verbs</code> carries the menu fields.</p>
+<p>Changed. <code>source check-retractions</code> is classed as a
+changing write, so <code>:</code> asks first; on the command line
+nothing changes.</p>
+<p>For packagers and harvey: the library gains
+<code>SearchScoped</code>, <code>SearchKinds</code>,
+<code>ErrNoMembers</code> and <code>ObservationConcepts</code>, and
+<code>KBSearchResult</code> carries <code>SourceID</code> and
+<code>ProjectID</code>; <code>Search</code> is unchanged.</p>
+<p>Not checked in this release: the race detector was not run (the
+machine it runs on was not available), and the new screens were not
+tried by hand on macOS or Windows. The test suite passes on Linux
+(Raspberry Pi OS, arm64), and the built binary was driven on a
+pseudo-terminal there for the filter and the search prompt.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

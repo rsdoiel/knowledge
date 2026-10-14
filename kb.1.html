@@ -107,17 +107,32 @@ prints the command that does the same. Projects: Browse shows the
 projects, and opening a project shows its observations, concepts and
 records as tabs with their counts. Records: Browse (newest first) and
 Pending (oldest first) show one line a record, in the scope kb record
-list would use, and a widens it to every scope. Search asks for a
-term.</p>
-<p>Keys: the arrow keys or j and k move; Enter opens; / searches; o, c
-and r switch a project’s tabs. q goes back to the screen above (the
-project list to the Projects menu, a group menu to the top menu) and
-quits at the top menu. Esc cancels something in progress, such as a
-search being typed, and does nothing otherwise, so it never closes a
-screen. Ctrl-C quits from anywhere. A line at the bottom of every screen
-lists the keys that apply. While you type in the search prompt every key
-is text, q included, so a term that starts with q works; Esc leaves the
-prompt, and q is a command again afterwards.</p>
+list would use, and a widens it to every scope. Search opens a menu of
+scopes (everywhere, the workspace tier, one row per kind, and the
+project you are in); a row opens a prompt with that scope already typed,
+and the prompt takes what kb search takes: a scope such as
+harvey/records and then the term. The result list is titled with the
+command that does the same. kb search with no term, or with only a
+scope, opens this menu or this prompt on a terminal.</p>
+<p>Keys: the arrow keys or j and k move; Enter opens; / filters the list
+in front of you as you type (Enter keeps the filter, Esc clears it); S
+searches, with the scope of the screen you are on (a project’s tabs
+search that project); o, c and r switch a project’s tabs. q goes back to
+the screen above (the project list to the Projects menu, a group menu to
+the top menu) and quits at the top menu. Esc cancels something in
+progress, such as a search being typed, and does nothing otherwise, so
+it never closes a screen. Ctrl-C quits from anywhere. A line at the
+bottom of every screen lists the keys that apply. While you type in the
+search prompt every key is text, q included, so a term that starts with
+q works; Esc leaves the prompt, and q is a command again afterwards.</p>
+<p>u cuts a link: on a project’s Concepts tab it unlinks the selected
+concept from the project, and on an observation it lists the
+observation’s concept and source links to pick one. Either asks for the
+same typed confirmation as a delete, keeps both things and shows the kb
+unlink command that does the same. Documents → Frontmatter… asks for a
+file and lists what kb document frontmatter proposes, with nothing
+selected: space selects a row, Enter shows the selection as a dry run,
+and y writes it.</p>
 <p>On a record, on the Records screens and on a project’s Records tab,
 Enter reads it and s sets its status. Both show the record file in the
 pager ($KB_PAGER, else bat, else less -R), with the interface suspended
