@@ -445,3 +445,136 @@ func TestBrowse_ColonDocumentDeleteOpensTheGate(t *testing.T) {
 		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
 	}
 }
+
+// `/` in a Browse list filters the rows (design/scoped-search-design.md, step A):
+// it finds in what is in front of the person, as it does in the viewer. The global
+// search is `S` there. A filter that matches nothing says so and names the search.
+
+func typeKeys(t *testing.T, m *tuiModel, s string) *tuiModel {
+	t.Helper()
+	for _, r := range s {
+		m, _ = press(t, m, ch(r))
+	}
+	return m
+}
+
+func browseConcepts(t *testing.T) *tuiModel {
+	t.Helper()
+	m, _, kb := layoutModel(t)
+	for _, n := range []string{"Zebra crossing", "Aardvark", "Cache invalidation"} {
+		if _, err := kb.AddConcept(n, "about "+n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return openLeaf(t, m, "Concepts", "Browse")
+}
+
+func TestBrowse_SlashFiltersTheList(t *testing.T) {
+	m := browseConcepts(t)
+	m, _ = press(t, m, ch('/'))
+	if m.searching {
+		t.Fatalf("/ started the global search; in a list it filters")
+	}
+	m = typeKeys(t, m, "cache")
+	m, _ = press(t, m, keyEnter)
+	browseList(t, m, "Cache invalidation")
+	v := m.View()
+	for _, gone := range []string{"Aardvark", "Zebra crossing"} {
+		if strings.Contains(v, gone) {
+			t.Errorf("the filter left %q in the list:\n%s", gone, v)
+		}
+	}
+	// Enter on the filtered list shows the item that is selected, not the first of all.
+	m, _ = press(t, m, keyEnter)
+	browseResult(t, m, "Cache invalidation")
+	m, _ = press(t, m, ch('q'))
+	browseList(t, m, "Cache invalidation") // back to the filtered list
+}
+
+func TestBrowse_FilterIsCaseInsensitiveAndMatchesDescription(t *testing.T) {
+	m := browseConcepts(t)
+	m, _ = press(t, m, ch('/'))
+	m = typeKeys(t, m, "ABOUT ZEB")
+	m, _ = press(t, m, keyEnter)
+	browseList(t, m, "Zebra crossing")
+	if strings.Contains(m.View(), "Aardvark") {
+		t.Errorf("Aardvark matched 'ABOUT ZEB':\n%s", m.View())
+	}
+}
+
+func TestBrowse_TypingTakesEveryKeyAsText(t *testing.T) {
+	m := browseConcepts(t)
+	m, _ = press(t, m, ch('/'))
+	// q, d and S are commands in the list and text in the prompt.
+	m = typeKeys(t, m, "qdS")
+	if m.state != viewBrowse {
+		t.Fatalf("a typed q left the list: state %s", viewStateNames[m.state])
+	}
+	if m.searching {
+		t.Errorf("a typed S started the search")
+	}
+	if !strings.Contains(m.View(), "qdS") {
+		t.Errorf("the prompt does not show what was typed:\n%s", m.View())
+	}
+}
+
+func TestBrowse_EscAbandonsTheFilter(t *testing.T) {
+	m := browseConcepts(t)
+	m, _ = press(t, m, ch('/'))
+	m = typeKeys(t, m, "cache")
+	m, _ = press(t, m, keyEsc) // abandons what is being typed
+	browseList(t, m, "Aardvark", "Zebra crossing", "Cache invalidation")
+	// An accepted filter is cleared by Esc as well, and q still goes back.
+	m, _ = press(t, m, ch('/'))
+	m = typeKeys(t, m, "cache")
+	m, _ = press(t, m, keyEnter)
+	m, _ = press(t, m, keyEsc)
+	browseList(t, m, "Aardvark", "Zebra crossing", "Cache invalidation")
+	m, _ = press(t, m, ch('q'))
+	if m.state != viewGroup {
+		t.Errorf("q gave %s, want the Concepts menu", viewStateNames[m.state])
+	}
+}
+
+func TestBrowse_NoMatchSaysSoAndNamesTheSearch(t *testing.T) {
+	m := browseConcepts(t)
+	m, _ = press(t, m, ch('/'))
+	m = typeKeys(t, m, "nonesuch")
+	m, _ = press(t, m, keyEnter)
+	v := m.View()
+	if !strings.Contains(v, `no concept matches "nonesuch"`) || !strings.Contains(v, "S searches") {
+		t.Errorf("an empty filter should say so and name S:\n%s", v)
+	}
+	// Enter on an empty list does nothing and does not panic.
+	m, _ = press(t, m, keyEnter)
+	if m.state != viewBrowse {
+		t.Errorf("Enter on the empty list left it: %s", viewStateNames[m.state])
+	}
+}
+
+func TestBrowse_CapitalSIsTheGlobalSearch(t *testing.T) {
+	m := browseConcepts(t)
+	m, _ = press(t, m, ch('S'))
+	if !m.searching {
+		t.Fatalf("S in a Browse list did not start the search\n%s", m.View())
+	}
+}
+
+func TestBrowse_LegendNamesTheFilterAndTheSearch(t *testing.T) {
+	m := browseConcepts(t)
+	v := m.View()
+	if !strings.Contains(v, "/ filter") || !strings.Contains(v, "S search") || strings.Contains(v, "/ search") {
+		t.Errorf("legend should say '/ filter' and 'S search':\n%s", v)
+	}
+}
+
+func TestBrowse_DeleteActsOnTheFilteredSelection(t *testing.T) {
+	m := browseConcepts(t)
+	m, _ = press(t, m, ch('/'))
+	m = typeKeys(t, m, "zebra")
+	m, _ = press(t, m, keyEnter)
+	m, _ = press(t, m, ch('d'))
+	if v := m.View(); !strings.Contains(v, "Zebra crossing") || strings.Contains(v, "Aardvark") {
+		t.Errorf("the gate should name the filtered row, Zebra crossing:\n%s", v)
+	}
+}

@@ -139,6 +139,10 @@ type tuiModel struct {
 	queueList       list.Model   // the review queue
 	browseList      list.Model   // a Browse list, in viewBrowse
 	browseKind      string       // what it lists: concept, source or document
+	browseAll       []list.Item  // every row of the Browse list, before its filter
+	browseFilter    string       // the accepted filter, "" for none
+	browseFiltering bool         // a filter is being typed
+	browseInput     textinput.Model
 	unit            *summaryUnit // the summary unit in progress, in viewSummary
 	textPurpose     string
 	textPlain       []string        // the viewer's lines without colour, for the find
@@ -200,6 +204,7 @@ func newTUIModelAt(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) (*
 		scopeList:       newBrowserList(nil, "", 0, 0),
 		searchInput:     ti,
 		findInput:       newFindInput(),
+		browseInput:     newFindInput(),
 	}
 	m.workspaceDir, m.dbRel = workspaceLabel(kb.Path())
 	if recs, err := kb.ListRecords(knowledge.RecordFilter{}); err == nil {
@@ -1111,7 +1116,7 @@ func (m *tuiModel) legendFull() string {
 	case viewSummary:
 		return m.summaryLegend()
 	case viewBrowse:
-		return move + "   Enter show   d delete   / search   q back"
+		return m.browseLegend(move)
 	case viewReviewQueue:
 		return move + "   Enter summarise   " + m.scopeKey() + "   / search   : command   q back"
 	case viewPlan:
@@ -1197,7 +1202,7 @@ func (m *tuiModel) screen() (string, []string) {
 	case viewSummary:
 		return m.summaryScreen()
 	case viewBrowse:
-		return m.browseList.Title, viewLines(m.browseList)
+		return m.browseList.Title, m.browseLines()
 	case viewReviewQueue:
 		return m.queueList.Title, viewLines(m.queueList)
 	case viewObservations:

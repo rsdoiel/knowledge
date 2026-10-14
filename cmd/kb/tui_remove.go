@@ -349,7 +349,7 @@ func (m *tuiModel) reloadAfterRemoval() {
 			m.setState(viewGroup)
 			return
 		}
-		m.browseList.SetItems(items)
+		m.setBrowseItems(items)
 		keep(&m.browseList, at)
 	case viewRecords:
 		at := m.recordList.Index()

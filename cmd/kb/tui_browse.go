@@ -53,6 +53,7 @@ func (m *tuiModel) openBrowse(kind string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.browseKind = kind
+	m.browseAll, m.browseFilter, m.browseFiltering = items, "", false
 	m.browseList = newBrowserList(items, strings.ToUpper(kind[:1])+kind[1:]+"s", m.cols()-4, m.listHeight())
 	m.setState(viewBrowse)
 	return m, nil
@@ -99,16 +100,124 @@ func (m *tuiModel) browseItems(kind string) ([]list.Item, error) {
 	return items, nil
 }
 
+/** filterItems returns the rows whose title and description contain every word of
+ * filter, ignoring case. An empty filter keeps every row. This is the filter of a
+ * Browse list: it narrows the rows on screen and does not touch the index.
+ *
+ * Parameters:
+ *   items ([]list.Item) — the rows
+ *   filter (string) — the words to find, separated by spaces
+ *
+ * Returns:
+ *   []list.Item — the rows that match, in their order
+ *
+ * Example:
+ *   shown := filterItems(all, "cache inval")
+ */
+func filterItems(items []list.Item, filter string) []list.Item {
+	words := strings.Fields(strings.ToLower(filter))
+	if len(words) == 0 {
+		return items
+	}
+	var out []list.Item
+	for _, it := range items {
+		v := strings.ToLower(it.FilterValue())
+		ok := true
+		for _, w := range words {
+			if !strings.Contains(v, w) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// setBrowseItems replaces the rows of the Browse list and shows those that match
+// the filter in force.
+func (m *tuiModel) setBrowseItems(items []list.Item) {
+	m.browseAll = items
+	m.applyBrowseFilter(m.browseFilter)
+}
+
+// applyBrowseFilter shows the rows that match filter and puts the cursor on the
+// first of them.
+func (m *tuiModel) applyBrowseFilter(filter string) {
+	m.browseList.SetItems(filterItems(m.browseAll, filter))
+	m.browseList.Select(0)
+}
+
+// browseLegend names the keys of a Browse list, or shows the filter prompt while
+// one is being typed.
+func (m *tuiModel) browseLegend(move string) string {
+	if m.browseFiltering {
+		return "Filter: " + m.browseInput.View() + "   Enter keep   Esc cancel"
+	}
+	keys := move + "   Enter show   d delete   / filter   S search"
+	if m.browseFilter != "" {
+		keys += "   Esc clear filter"
+	}
+	return keys + "   q back"
+}
+
+// browseLines is the body of a Browse list: the rows, or, when a filter matches
+// none, a line that says so and names the search.
+func (m *tuiModel) browseLines() []string {
+	f := m.browseFilter
+	if m.browseFiltering {
+		f = strings.TrimSpace(m.browseInput.Value())
+	}
+	if len(m.browseList.Items()) == 0 && f != "" {
+		return []string{fmt.Sprintf("no %s matches %q; S searches the knowledge base for it", m.browseKind, f)}
+	}
+	return viewLines(m.browseList)
+}
+
 // updateBrowse handles a key on a Browse list: Enter shows the item, q goes back to
-// the group menu, / searches.
+// the group menu, / filters the rows and S searches the knowledge base. While a
+// filter is being typed every key is text, the list narrows as it is typed, Enter
+// keeps the filter and Esc abandons it; Esc on a kept filter clears it.
 func (m *tuiModel) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.browseFiltering {
+		switch msg.Type {
+		case tea.KeyEsc:
+			m.browseFiltering = false
+			m.browseInput.Blur()
+			m.browseFilter = ""
+			m.applyBrowseFilter("")
+		case tea.KeyEnter:
+			m.browseFiltering = false
+			m.browseInput.Blur()
+			m.browseFilter = strings.TrimSpace(m.browseInput.Value())
+			m.applyBrowseFilter(m.browseFilter)
+		default:
+			var cmd tea.Cmd
+			m.browseInput, cmd = m.browseInput.Update(msg)
+			m.applyBrowseFilter(m.browseInput.Value())
+			return m, cmd
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "q":
 		m.setState(viewGroup)
 		return m, nil
 	case "esc":
+		if m.browseFilter != "" {
+			m.browseFilter = ""
+			m.applyBrowseFilter("")
+		}
 		return m, nil
 	case "/":
+		m.browseFiltering = true
+		m.browseInput.SetValue(m.browseFilter)
+		m.browseInput.CursorEnd()
+		m.browseInput.Focus()
+		return m, nil
+	case "S":
 		m.startSearch()
 		return m, nil
 	case "d":

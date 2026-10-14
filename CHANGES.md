@@ -7,6 +7,12 @@ release notes; maintained going forward.
 
 ### Added
 
+- **`/` filters a Browse list; `S` is the search there.** In Concepts, Documents and Sources → Browse, `/`
+  narrows the rows as it is typed (every word must appear in the title or description, ignoring case), Enter
+  keeps the filter, Esc abandons it, and Esc on a kept filter clears it. Enter and `d` act on the row
+  selected in the filtered list. A filter that matches nothing says so and names the search: `no concept
+  matches "cache"; S searches the knowledge base for it`. The global search moved from `/` to `S` in these
+  lists; other screens keep `/` for now (`design/scoped-search-design.md`, step A).
 - **`kb --json verbs` carries the menu fields.** A verb or subverb with a row in the interactive menus has a
   `menu` object: `label`, `desc`, `order`, `built`, `equivalent`, and `since` while it is not built (a verb with
   subverbs is built when any subverb is). A wrapper can draw the same menus from one table.
