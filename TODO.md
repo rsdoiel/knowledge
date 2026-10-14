@@ -49,6 +49,25 @@
   search). The viewer has no horizontal scroll and the find does not mark the match inside the line;
   `KB_PAGER=less -R` is the escape hatch.
 
+- [ ] **Search results should say where a hit is and carry enough to act on (raised 2026-10-14).** A
+  `kb search` hit is one line (kind, label, snippet), and the shape differs by kind: an observation shows
+  its body, a record only its title, so a person with a question about the decisions reaches for `grep -n`
+  to see which section matched and the lines around it. A hit should carry its qualified reference
+  (`knowledge/DR-0057`), the record's status, and the matching passage, so the next step (`kb record
+  show`) is obvious. Fits step D of `design/scoped-search-design.md` (grouped results with counts, every
+  row carrying its qualified identity); decide there whether the snippet is a per-kind rule or a common
+  one. Library: `KBSearchResult` has `SourceID` and `ProjectID` since v0.0.22 but no qualified reference
+  or status.
+
+- [ ] **No verb shows how things are linked: counts of concept, source and record links (raised
+  2026-10-14).** To learn that a database has 67 project-concept, 213 observation-concept and 181
+  record-concept links, or that no observation has a null `project_id`, a person writes SQL, and CLAUDE.md
+  says raw `sqlite3` is for what `kb` does not cover. This is that case. Candidates: counts under `kb
+  summary`, or a `kb stats` verb in the style of `kb check-db` (read class, `--json`, exit codes per
+  DR-0003). It would also let `kb concept show` say which projects a concept spans, which the scoped
+  search wants to show on a result (`design/scoped-search-design.md`, section 5). Settle which verb
+  before building.
+
 - [x] **DONE 2026-10-06, released in v0.0.16.** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
   following `antennaApp/completion.go` (shipped 2026-10-05; `InstallCompletion` is the install half).
   Specifics for kb: the verb table must not be hand-maintained a second time. `cmd/kb/help_dispatch_test.go`
