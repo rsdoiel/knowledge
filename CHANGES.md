@@ -7,6 +7,13 @@ release notes; maintained going forward.
 
 ### Added
 
+- **Library: `SearchScoped`** (knowledge DR-0073, DR-0074). The full-text search restricted to a project or the
+  workspace tier and to kinds (`SearchKinds`: records, observations, concepts, documents, projects), with the
+  scope applied in the query so a limit cannot hide a match behind a better-ranked one outside it. It returns
+  the results, the total before the limit, a count per kind, and for each concept the projects it is in (the
+  union of those tagged on the project, its observations and its records). New `ErrNoMembers` for a scope and
+  kind that cannot have rows (observations in the workspace tier, projects inside a project). `Search` is
+  unchanged. The command line and the interface come next.
 - **`/` filters a Browse list; `S` is the search there.** In Concepts, Documents and Sources → Browse, `/`
   narrows the rows as it is typed (every word must appear in the title or description, ignoring case), Enter
   keeps the filter, Esc abandons it, and Esc on a kept filter clears it. Enter and `d` act on the row

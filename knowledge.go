@@ -1712,8 +1712,9 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
  *   Snippet    (string) — observation body; title for records; description for
  *                        projects and concepts.
  *   SourceType (string) — which table the hit came from: "observation",
- *                        "project", "concept" or "record". Kind alone cannot
- *                        say, since a record's kind is its own vocabulary.
+ *                        "project", "concept", "record" or "document_summary".
+ *                        Kind alone cannot say, since a record's kind is its
+ *                        own vocabulary.
  *
  * Example:
  *   results, _ := kb.Search("WAL mode")

@@ -90,3 +90,21 @@ func inUsef(format string, a ...any) error { return markedf(ErrInUse, format, a.
 
 // notFoundf is fmt.Errorf whose result matches ErrNotFound.
 func notFoundf(format string, a ...any) error { return markedf(ErrNotFound, format, a...) }
+
+/** ErrNoMembers marks a search whose scope and kind cannot have any rows by the
+ * shape of the knowledge base: observations always belong to a project, so the
+ * workspace tier has none, and a project has no projects inside it. It is not an
+ * empty result and not a bad argument: the question was well formed and the
+ * answer is no (knowledge DR-0074). kb exits 1 for it, with the message as the
+ * reason. Match it with errors.Is.
+ *
+ * Example:
+ *   _, err := kb.SearchScoped("cache", knowledge.SearchScope{Workspace: true, Kinds: []string{"observations"}})
+ *   if errors.Is(err, knowledge.ErrNoMembers) {
+ *       // say why, exit 1
+ *   }
+ */
+var ErrNoMembers = errors.New("no members")
+
+// noMembersf is an ErrNoMembers with a reason.
+func noMembersf(format string, a ...any) error { return markedf(ErrNoMembers, format, a...) }
