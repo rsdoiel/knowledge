@@ -217,6 +217,8 @@ func WriteCompletion(w io.Writer, appName, shell string) error {
 		"{file_flags}", strings.Join(completionFileFlags, "|"),
 		"{bash_subverb_cases}", bashSubverbCases("_"+nonIdent.ReplaceAllString(name, "_")+"_projects"),
 		"{bash_flag_cases}", bashFlagCases(),
+		"{search_kinds}", strings.Join(knowledge.SearchKinds, " "),
+		"{ps_search_kinds}", psList(knowledge.SearchKinds),
 		"{ps_verbs}", psList(completionVerbs()),
 		"{ps_global_flags}", psList(completionGlobalFlags),
 		"{ps_topics}", psList(completionHelpTopics()),
@@ -244,6 +246,17 @@ const bashCompletion = `# bash completion for {app_name}
 # Or install: {app_name} completion bash -install
 _{app_func}_projects() {
     {app_name} "${dbarg[@]}" project list 2>/dev/null | awk '$1 ~ /^[0-9]+$/ { print $2 }'
+}
+_{app_func}_search_scopes() {
+    local p k
+    for p in "" workspace $(_{app_func}_projects); do
+        echo "$p/"
+        for k in {search_kinds}; do
+            # projects is searched at the global scope only (DR-0073).
+            [[ -n "$p" && "$k" == projects ]] && continue
+            echo "$p/$k"
+        done
+    done
 }
 _{app_func}() {
     local cur prev i w n verb
@@ -286,6 +299,7 @@ _{app_func}() {
     case "$verb" in
         help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "{topics}" -- "$cur") ) ;;
         completion) [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "{shells}" -- "$cur") ) ;;
+        search)     [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "$(_{app_func}_search_scopes)" -- "$cur") ) ;;
 {bash_subverb_cases}    esac
     return 0
 }
@@ -307,6 +321,14 @@ Register-ArgumentCompleter -Native -CommandName {app_name},{app_name}.exe -Scrip
     function Get-KbProjects {
         & {app_name} @script:dbArgs project list 2>$null | ForEach-Object {
             if ($_ -match '^\s*\d+\s+(\S+)') { $Matches[1] }
+        }
+    }
+    function Get-KbSearchScopes {
+        $kinds = @({ps_search_kinds})
+        foreach ($p in @('', 'workspace') + @(Get-KbProjects)) {
+            "$p/"
+            # projects is searched at the global scope only (DR-0073).
+            foreach ($k in $kinds) { if ($p -ne '' -and $k -eq 'projects') { continue }; "$p/$k" }
         }
     }
     function Get-Files {
@@ -348,6 +370,7 @@ Register-ArgumentCompleter -Native -CommandName {app_name},{app_name}.exe -Scrip
         $candidates = switch ($pos[0]) {
             'help'       { if ($n -eq 1) { $topics } }
             'completion' { if ($n -eq 1) { $shells } }
+            'search'     { if ($n -eq 1) { Get-KbSearchScopes } }
 {ps_subverb_cases}            default      { $null }
         }
     }

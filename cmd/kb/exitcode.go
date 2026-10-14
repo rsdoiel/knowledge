@@ -249,7 +249,7 @@ func classify(err error) (exitClass, bool) {
 	var inUse *knowledge.ConceptInUseError
 	switch {
 	case errors.Is(err, knowledge.ErrNotFound), errors.Is(err, knowledge.ErrInUse),
-		errors.Is(err, knowledge.ErrConflict), errors.As(err, &inUse):
+		errors.Is(err, knowledge.ErrConflict), errors.Is(err, knowledge.ErrNoMembers), errors.As(err, &inUse):
 		return classNegative, true
 	case errors.Is(err, knowledge.ErrInvalid):
 		return classUsage, true

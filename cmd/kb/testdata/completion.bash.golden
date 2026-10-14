@@ -4,6 +4,17 @@
 _kb_projects() {
     kb "${dbarg[@]}" project list 2>/dev/null | awk '$1 ~ /^[0-9]+$/ { print $2 }'
 }
+_kb_search_scopes() {
+    local p k
+    for p in "" workspace $(_kb_projects); do
+        echo "$p/"
+        for k in records observations concepts documents projects; do
+            # projects is searched at the global scope only (DR-0073).
+            [[ -n "$p" && "$k" == projects ]] && continue
+            echo "$p/$k"
+        done
+    done
+}
 _kb() {
     local cur prev i w n verb
     local -a pos=() dbarg=()
@@ -61,6 +72,7 @@ _kb() {
     case "$verb" in
         help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge observation project record search source summary unlink verbs topics" -- "$cur") ) ;;
         completion) [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "bash powershell" -- "$cur") ) ;;
+        search)     [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "$(_kb_search_scopes)" -- "$cur") ) ;;
         concept)
             if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show recall rename delete suggest" -- "$cur") )
             fi ;;

@@ -124,6 +124,9 @@ func TestVerbs_NegativeIsExit1(t *testing.T) {
 		{name: "link project", setup: seedProject(), args: []string{"link", "project", "nosuch", "C"}},
 		{name: "link observation unknown concept", setup: seedLinked(), args: []string{"link", "observation", "1", "nosuch"}},
 		{name: "search finds nothing", args: []string{"search", "zzznotfound"}},
+		{name: "scoped search finds nothing", setup: seedProject(), args: []string{"search", "P/", "zzznotfound"}},
+		{name: "workspace observations have no members", setup: seedProject(), args: []string{"search", "workspace/observations", "x"}},
+		{name: "a project has no projects", setup: seedProject(), args: []string{"search", "P/projects", "x"}},
 		{name: "record show", args: []string{"record", "show", "9999"}},
 		{name: "record list unknown project", args: []string{"record", "list", "--project", "nosuch"}},
 		{name: "record list unknown status", args: []string{"record", "list", "--status", "acepted"}},
@@ -146,6 +149,9 @@ func TestVerbs_NegativeIsExit1(t *testing.T) {
 
 func TestVerbs_UsageIsExit2(t *testing.T) {
 	for _, tc := range []verbCase{
+		{name: "search unknown scope", args: []string{"search", "nosuch/", "x"}},
+		{name: "search unknown kind", setup: seedProject(), args: []string{"search", "P/sources", "x"}},
+		{name: "search scope without a term", setup: seedProject(), args: []string{"search", "P/records"}},
 		{name: "unknown observation kind", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "bogus", "b"}},
 		{name: "unknown project status", setup: seedProject(), args: []string{"project", "set-status", "P", "bogus"}},
 		{name: "blank project name", args: []string{"project", "add", ""}},

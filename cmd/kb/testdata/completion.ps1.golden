@@ -15,6 +15,14 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
             if ($_ -match '^\s*\d+\s+(\S+)') { $Matches[1] }
         }
     }
+    function Get-KbSearchScopes {
+        $kinds = @('records', 'observations', 'concepts', 'documents', 'projects')
+        foreach ($p in @('', 'workspace') + @(Get-KbProjects)) {
+            "$p/"
+            # projects is searched at the global scope only (DR-0073).
+            foreach ($k in $kinds) { if ($p -ne '' -and $k -eq 'projects') { continue }; "$p/$k" }
+        }
+    }
     function Get-Files {
         Get-ChildItem -Path "$wordToComplete*" -ErrorAction SilentlyContinue | ForEach-Object {
             [System.Management.Automation.CompletionResult]::new($_.Name, $_.Name, 'ProviderItem', $_.Name)
@@ -70,6 +78,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
         $candidates = switch ($pos[0]) {
             'help'       { if ($n -eq 1) { $topics } }
             'completion' { if ($n -eq 1) { $shells } }
+            'search'     { if ($n -eq 1) { Get-KbSearchScopes } }
             'concept' {
                 if ($n -eq 1) { @('add', 'list', 'show', 'recall', 'rename', 'delete', 'suggest') }
                 else { $null }

@@ -77,8 +77,8 @@
   `kb search` hit is one line (kind, label, snippet), and the shape differs by kind: an observation shows
   its body, a record only its title, so a person with a question about the decisions reaches for `grep -n`
   to see which section matched and the lines around it. A hit should carry its qualified reference
-  (`knowledge/DR-0057`), the record's status, and the matching passage, so the next step (`kb record
-  show`) is obvious. Fits step D of `design/scoped-search-design.md` (grouped results with counts, every
+  (`knowledge/DR-0057`; the scoped form `kb search SCOPE/ TERM` does, since 2026-10-14), the record's
+  status, and the matching passage, so the next step (`kb record show`) is obvious. Fits step D of `design/scoped-search-design.md` (grouped results with counts, every
   row carrying its qualified identity); decide there whether the snippet is a per-kind rule or a common
   one. Library: `KBSearchResult` has `SourceID` and `ProjectID` since v0.0.22 but no qualified reference
   or status.

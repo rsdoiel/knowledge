@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	knowledge "github.com/rsdoiel/knowledge"
 )
 
 func completionScript(t *testing.T, shell string) string {
@@ -394,5 +396,32 @@ $r.CompletionMatches.CompletionText -join ' '`
 	}
 	if !strings.Contains(string(b), "project") {
 		t.Errorf("kb pro<TAB> in pwsh gave %q", b)
+	}
+}
+
+// `kb search` completes its first argument as a scope path: workspace/, a
+// project name and a slash, and each of those followed by a kind, plus the
+// leading-slash forms (knowledge DR-0073). The kinds come from the library's
+// own list, so completion cannot drift from what the command accepts.
+func TestCompletion_SearchCompletesScopePaths(t *testing.T) {
+	for _, shell := range []string{"bash", "powershell"} {
+		var out bytes.Buffer
+		if err := WriteCompletion(&out, "kb", shell); err != nil {
+			t.Fatal(err)
+		}
+		script := out.String()
+		if !strings.Contains(script, "search") {
+			t.Fatalf("%s: no search arm", shell)
+		}
+		for _, k := range knowledge.SearchKinds {
+			if !strings.Contains(script, k) {
+				t.Errorf("%s: the kind %q is not in the script", shell, k)
+			}
+		}
+		for _, want := range []string{"workspace"} {
+			if !strings.Contains(script, want) {
+				t.Errorf("%s lacks %q", shell, want)
+			}
+		}
 	}
 }

@@ -7,6 +7,14 @@ release notes; maintained going forward.
 
 ### Added
 
+- **`kb search SCOPE/[KIND] TERM`: search scoped by a path** (DR-0073, DR-0074). `kb search harvey/ "exit
+  codes"` searches one project, `harvey/records` one kind in it, `workspace/` the workspace tier, and
+  `/records` one kind everywhere; `kb search TERM` is unchanged, and a first word with no slash is still part
+  of the term. The scoped form prints its matches grouped by kind with counts, names a record by its
+  qualified reference, shows the projects a concept is in, and says `showing 50 of N` when it cut. An
+  unknown scope or kind is exit 2 and names the choices; `workspace/observations` and `harvey/projects` are
+  exit 1 with the reason. `--json` prints one object. Completion fills in scopes and kinds, and `kb-search(1)`
+  documents it. Text that contains a slash goes after `--`.
 - **Library: `SearchScoped`** (knowledge DR-0073, DR-0074). The full-text search restricted to a project or the
   workspace tier and to kinds (`SearchKinds`: records, observations, concepts, documents, projects), with the
   scope applied in the query so a limit cannot hide a match behind a better-ranked one outside it. It returns
