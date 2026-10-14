@@ -49,6 +49,30 @@
   review-queue lists still use `/` for the search, step A of `design/scoped-search-design.md`). The viewer has no horizontal scroll and the find does not mark the match inside the line;
   `KB_PAGER=less -R` is the escape hatch.
 
+- [ ] **Provenance as a first-class capability, and two meanings of "source" (raised 2026-10-14, for
+  exploration).** Provenance is a distinguishing capability of harvey, and the knowledge base may not have
+  been designed with it as one. The word "source" has been used for two different things, and the design
+  should keep them apart:
+  1. **Source as material.** The code, text or document (a blog post, a design brief, a source file) that is
+     integrated into the knowledge base: where it came from, what version, what its checksum was when read,
+     and which rows were derived from it. Today `documents` carries `path`, `checksum`, `format` and a
+     project, records carry `path` and `checksum`, and `kb document frontmatter` has git and filesystem
+     provenance primitives; observations carry no pointer to the material they were drawn from.
+  2. **Source as citation.** A cited work: the `sources` table (identifier, authors, publisher, rights,
+     version, retraction flag), linked to observations through `observation_sources`. There is also an
+     `observations.source_doi` column, unused (0 of 407 rows).
+
+  Known pieces: the `scholarly-provenance` concept records the minimum payload for inference-time
+  provenance (persistent identifier, `indexed_at`, content hash, source version, rights, retraction flag);
+  sources are deliberately not in `kb_fts` (DR-0013), so a result cannot say what supports it; documents and
+  records have no link to a citation at all; and nothing ties an observation to the file it came from.
+  Questions to settle first: what a retrieval result must carry for harvey to show its provenance; whether
+  the two senses are one table or two; whether `source_doi` is kept or retired; whether sources should be
+  indexed (this amends DR-0013, and decides the `sources` search kind of
+  `design/scoped-search-design.md`); and what merge and import must preserve. Start with a design brief
+  under `agents/projects/knowledge/design/`, with harvey's retrieval path (`UnifiedMemory.Recall`) as the
+  consumer to design against.
+
 - [ ] **Search results should say where a hit is and carry enough to act on (raised 2026-10-14).** A
   `kb search` hit is one line (kind, label, snippet), and the shape differs by kind: an observation shows
   its body, a record only its title, so a person with a question about the decisions reaches for `grep -n`
