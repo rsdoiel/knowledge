@@ -49,6 +49,8 @@ func (m *tuiModel) listOf(state viewState) *list.Model {
 		return &m.searchList
 	case viewBrowse:
 		return &m.browseList
+	case viewUnlink:
+		return &m.unlinkList
 	}
 	return nil
 }
@@ -70,6 +72,8 @@ func (m *tuiModel) filterNoun(state viewState) string {
 		return "result"
 	case viewBrowse:
 		return m.browseKind
+	case viewUnlink:
+		return "link"
 	}
 	return "row"
 }

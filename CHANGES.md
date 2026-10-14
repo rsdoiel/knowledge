@@ -7,6 +7,11 @@ release notes; maintained going forward.
 
 ### Added
 
+- **`u` cuts a link in the terminal interface** (`kb unlink`, DR-0067). On a project's Concepts tab it
+  unlinks the selected concept from the project; on an observation it lists the observation's concept and
+  source links to pick one. Each ends in a typed confirmation like a delete, names what stays, and shows the
+  `kb unlink` command that does the same. The removing gate says Unlink and not Delete for these, and now
+  shows the equivalent command before you confirm. Library: `ObservationConcepts`.
 - **`/` filters the list in front of you, on every list.** The project list, a project's observation,
   concept and record tabs, the Records screens, the review queue and the search results narrow as you type
   (every word must appear, ignoring case); Enter keeps the filter, Esc clears it, and a filter that matches

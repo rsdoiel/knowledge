@@ -43,7 +43,8 @@
 - [ ] **TUI: one row still dimmed (v0.0.22).** Built since v0.0.21
   (unreleased): Check, Concepts → Browse, Recall and Suggest, Documents → Browse, Sources → Browse and Check
   retractions, Observations → Browse (the project list), Enter on search results and observations. Still not in the interface: Documents →
-  Frontmatter (frontmatter runs through `:`; it needs a field picker), and the removing write `unlink` (it needs a screen that picks a link to cut).
+  Frontmatter (frontmatter runs through `:`; it needs a field picker). `unlink` is built (2026-10-14: `u` on a
+  project's Concepts tab and on an observation).
   `source remove` and `document delete` have the gate from the Browse lists (`d`) and from `:`. `kb verbs --json` carries the menu fields (done, unreleased). The Browse rows are
   a selectable list, and Enter runs the verb's `show`; `/` filters those lists and `S` is the global search there (done, unreleased; every list now, step E2 of
   `design/scoped-search-design.md`; the summary screen still uses `/` for the search). The viewer has no horizontal scroll and the find does not mark the match inside the line;

@@ -116,6 +116,11 @@ the bottom of every screen lists the keys that apply. While you type in the
 search prompt every key is text, q included, so a term that starts with q works;
 Esc leaves the prompt, and q is a command again afterwards.
 
+u cuts a link: on a project's Concepts tab it unlinks the selected concept from the
+project, and on an observation it lists the observation's concept and source
+links to pick one. Either asks for the same typed confirmation as a delete,
+keeps both things and shows the {app_name} unlink command that does the same.
+
 On a record, on the Records screens and on a project's Records tab, Enter reads
 it and s sets its status. Both show the record file in the pager ($KB_PAGER, else
 bat, else less -R), with the interface suspended while it runs and restored when

@@ -1504,6 +1504,44 @@ func (kb *KnowledgeBase) RecordConcepts(recordID int64) ([]Concept, error) {
 	return out, rows.Err()
 }
 
+/** ObservationConcepts returns the concepts linked to one observation, in id
+ * order. An observation with no links, or one that does not exist, gives an
+ * empty list.
+ *
+ * Parameters:
+ *   observationID (int64) — the observation's id.
+ *
+ * Returns:
+ *   []Concept — the linked concepts.
+ *   error     — on database failure.
+ *
+ * Example:
+ *   cs, err := kb.ObservationConcepts(7)
+ */
+func (kb *KnowledgeBase) ObservationConcepts(observationID int64) ([]Concept, error) {
+	rows, err := kb.db.Query(
+		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value
+		 FROM concepts c
+		 JOIN observation_concepts oc ON oc.concept_id = c.id
+		 WHERE oc.observation_id = ?
+		 ORDER BY c.id`,
+		observationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Concept
+	for rows.Next() {
+		var c Concept
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 /** Summary returns a human-readable text summary of all projects and their

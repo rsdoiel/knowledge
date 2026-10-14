@@ -25,6 +25,7 @@ import (
  *   Refusal    (string)   — why it cannot be deleted; empty when it can.
  *   Equivalent (string)   — the command that does the same.
  *   Apply      (func() error) — the delete, through the same library call the command uses.
+ *   Verb       (string)   — what the gate calls the act: "Delete" when empty, or "Unlink".
  */
 type removalPlan struct {
 	Title      string
@@ -33,6 +34,23 @@ type removalPlan struct {
 	Refusal    string
 	Equivalent string
 	Apply      func() error
+	Verb       string
+}
+
+// verbName is "Delete" unless the plan says otherwise.
+func (p *removalPlan) verbName() string {
+	if p.Verb == "" {
+		return "Delete"
+	}
+	return p.Verb
+}
+
+// pastTense is what was done, for the line after it: "deleted" or "unlinked".
+func (p *removalPlan) pastTense() string {
+	if p.Verb == "Unlink" {
+		return "unlinked"
+	}
+	return "deleted"
 }
 
 // maxNamedPointers is how many records that point at a record the gate names.
@@ -292,7 +310,8 @@ func (m *tuiModel) finishRemoval() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.reloadAfterRemoval()
-	m.notice = fmt.Sprintf("✓ deleted %s\nequivalent:  %s\n%s", p.Title, p.Equivalent, "(a delete is local: "+localDeleteNote+")")
+	m.notice = fmt.Sprintf("✓ %s %s\nequivalent:  %s\n%s", p.pastTense(), p.Title, p.Equivalent,
+		"(a "+strings.ToLower(p.verbName())+" is local: "+localDeleteNote+")")
 	return m, nil
 }
 
@@ -371,7 +390,8 @@ func (m *tuiModel) reloadAfterRemoval() {
 
 // removeScreen is the gate's screen: the plan, then the typed confirmation.
 func (m *tuiModel) removeScreen() (string, []string) {
-	body := []string{"Delete " + m.removal.Title, ""}
+	verb := m.removal.verbName()
+	body := []string{verb + " " + m.removal.Title, ""}
 	if len(m.removal.Lines) > 0 {
 		body = append(body, "This will remove, or is pointed at by:")
 		for _, l := range m.removal.Lines {
@@ -379,7 +399,10 @@ func (m *tuiModel) removeScreen() (string, []string) {
 		}
 		body = append(body, "")
 	}
-	body = append(body, "A delete is local: "+localDeleteNote+".", "")
+	if m.removal.Equivalent != "" {
+		body = append(body, "equivalent:  "+m.removal.Equivalent, "")
+	}
+	body = append(body, "A "+strings.ToLower(verb)+" is local: "+localDeleteNote+".", "")
 	body = append(body, strings.Split(m.removeInput.View(), "\n")...)
-	return "Delete — " + m.removal.Title, body
+	return verb + " — " + m.removal.Title, body
 }

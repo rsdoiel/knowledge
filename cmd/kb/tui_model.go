@@ -39,6 +39,7 @@ const (
 	viewReviewQueue // document sections waiting for a person
 	viewSummary     // one section's summary unit: write it, then review it beside its source
 	viewBrowse      // a Browse list of concepts, sources or documents: Enter shows the item
+	viewUnlink      // the links of one observation, to pick one to cut
 )
 
 // tuiStart says where the TUI opens: the top menu by default, or deep in the
@@ -154,6 +155,8 @@ type tuiModel struct {
 	command         *commandFlow              // the `:` prompt, in viewCommand
 	queueList       list.Model                // the review queue
 	browseList      list.Model                // a Browse list, in viewBrowse
+	unlinkList      list.Model                // an observation's links, in viewUnlink
+	unlinkObs       int64                     // the observation whose links it lists
 	browseKind      string                    // what it lists: concept, source or document
 	filters         map[viewState]*listFilter // the filter of each list that has one in force
 	unit            *summaryUnit              // the summary unit in progress, in viewSummary
@@ -299,6 +302,7 @@ var viewStateNames = map[viewState]string{
 	viewReviewQueue:  "viewReviewQueue",
 	viewSummary:      "viewSummary",
 	viewBrowse:       "viewBrowse",
+	viewUnlink:       "viewUnlink",
 }
 
 // setState logs the transition (if it's an actual change) before applying
@@ -337,6 +341,9 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.browseKind != "" { // the list exists once a Browse row has been opened
 			m.browseList.SetSize(m.cols()-4, m.listHeight())
+		}
+		if m.unlinkObs != 0 {
+			m.unlinkList.SetSize(m.cols()-4, m.listHeight())
 		}
 		for _, l := range []*list.Model{&m.observationList, &m.conceptList, &m.recordList} {
 			l.SetSize(m.cols()-4, m.tabHeight())
@@ -433,6 +440,8 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateReviewQueue(msg)
 		case viewBrowse:
 			return m.updateBrowse(msg)
+		case viewUnlink:
+			return m.updateUnlink(msg)
 		default:
 			return m.updateProjects(msg)
 		}
@@ -863,6 +872,8 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "d":
 		return m.removeSelected()
+	case "u":
+		return m.openUnlink()
 	case "n":
 		return m.beginForm(m.newObservationForm(m.projectName()))
 	case "e":
@@ -885,6 +896,8 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "d":
 		return m.removeSelected()
+	case "u":
+		return m.unlinkConceptFromProject()
 	case "n":
 		return m.beginForm(m.newConceptForm())
 	case "e":
@@ -1272,6 +1285,8 @@ func (m *tuiModel) legendFull() string {
 		return m.summaryLegend()
 	case viewBrowse:
 		return move + "   Enter show   d delete   S search   q back"
+	case viewUnlink:
+		return move + "   Enter choose   S search   q back"
 	case viewReviewQueue:
 		return move + "   Enter summarise   " + m.scopeKey() + "   S search   : command   q back"
 	case viewPlan:
@@ -1284,9 +1299,9 @@ func (m *tuiModel) legendFull() string {
 		return move + "   Enter read   s status   u supersede   d delete   o c r tabs   S search   q back"
 	case viewObservations, viewConcepts:
 		if m.state == viewObservations {
-			return move + "   Enter show   n new   e edit   d delete   o c r tabs   S search   q back"
+			return move + "   Enter show   n new   e edit   u unlink   d delete   o c r tabs   S search   q back"
 		}
-		return move + "   n new   e rename   d delete   o c r tabs   S search   q back"
+		return move + "   n new   e rename   u unlink   d delete   o c r tabs   S search   q back"
 	case viewSearch:
 		return move + "   Enter show   S search   q back"
 	}
@@ -1365,6 +1380,8 @@ func (m *tuiModel) screenBody() (string, []string) {
 		return m.summaryScreen()
 	case viewBrowse:
 		return m.browseList.Title, m.filteredLines(viewBrowse)
+	case viewUnlink:
+		return m.unlinkList.Title, m.filteredLines(viewUnlink)
 	case viewReviewQueue:
 		return m.queueList.Title, m.filteredLines(viewReviewQueue)
 	case viewObservations:

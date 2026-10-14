@@ -2569,3 +2569,31 @@ func TestSearch_ResultsCarryTheRowAndProjectIDs(t *testing.T) {
 		t.Errorf("results %+v lack the observation or the concept", results)
 	}
 }
+
+// ObservationConcepts lists the concepts linked to one observation, so a screen
+// can offer each link to cut (kb unlink observation).
+func TestObservationConcepts_ListsTheLinkedConceptsInIDOrder(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("p", "")
+	obs, _ := kb.AddObservation(pid, "note", "body")
+	other, _ := kb.AddObservation(pid, "note", "another")
+	a, _ := kb.AddConcept("alpha", "first")
+	b, _ := kb.AddConcept("beta", "second")
+	c, _ := kb.AddConcept("gamma", "third")
+	for _, l := range [][2]int64{{obs, b}, {obs, a}, {other, c}} {
+		if err := kb.LinkObservationConcept(l[0], l[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := kb.ObservationConcepts(obs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Name != "alpha" || got[1].Name != "beta" {
+		t.Errorf("got %+v, want alpha then beta", got)
+	}
+	none, err := kb.ObservationConcepts(9999)
+	if err != nil || len(none) != 0 {
+		t.Errorf("an observation with no links: %v, %v; want an empty list", none, err)
+	}
+}
