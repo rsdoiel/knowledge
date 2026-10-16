@@ -1520,7 +1520,9 @@ const IngestHelpText = `%{app_name}-ingest(1) user manual | version {version} {r
 
 Walks PATH for decision record files named NNNN-slug.md, parses each one's
 YAML frontmatter, and upserts it into the records table and the full-text
-index. The generated index.md is not a record and is skipped.
+index. The generated index.md is not a record and is skipped. So is a file whose name begins with a
+date (2026-09-29-worklog.md), which is a note: notes need no frontmatter and are
+not records.
 
 PATH is a directory, and is taken as written relative to the current
 directory, not to the workspace root. A project's records live under
@@ -1532,7 +1534,10 @@ or surplus one is a usage error, exit 2).
 
 The walk descends into every subdirectory, so agents/projects/NAME ingests the
 project's decisions directory and anything else under it that holds record
-files, and agents/projects ingests every project at once. (kb index, by
+files, and agents/projects ingests every project at once. Below PATH the walk
+skips the project layout's directories that never hold records: design, plans,
+feature_requests, notes and hand-off. A directory given as PATH is read whatever
+it is called. (kb index, by
 contrast, takes one directory and does not descend.)
 
 Which project a record belongs to, and whether it is at the workspace tier, is

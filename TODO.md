@@ -11,10 +11,12 @@
   need no frontmatter. Tests: `TestCmdIngest_DatedNotesAreNotRecords` (a project directory with `decisions/`
   and `notes/`, the shape of the report) and `TestRecordFilePattern`; both failed first. Checked on the
   real data: a dry run of the new build on macmini-rd over `agents/projects/clasm` gives 190 skipped, 0
-  failed, exit 0, where v0.0.21 gave 4 failed. Not done: a walk still reads `0001-x.md` files under `design/`
-  or `plans/` if a project directory has any; restricting the walk to `decisions/` directories was left out
-  because a custom corpus directory can have any name. Also open: the `error:` lines and the closing `kb:`
-  line repeat the first error.
+  failed, exit 0, where v0.0.21 gave 4 failed. Two leftovers fixed the same day, also unreleased: the closing `kb: ingest: N
+  error(s)` line no longer repeats the first error (it keeps the count and the class), and the walk skips
+  `design`, `plans`, `feature_requests`, `notes` and `hand-off` below the directory it was given (a directory named on the
+  command line is read whatever it is called; a custom corpus directory keeps any name). Tests:
+  `TestCmdIngest_ClosingErrorDoesNotRepeatTheListedFailure`,
+  `TestCmdIngest_SkipsTheProjectLayoutsNonRecordDirectories`.
 
 - [x] **`kb import` silently rewrote an observation `kind` outside the vocabulary to `note`, which
   made `kb check-db` report a false "diverged".** Fixed 2026-09-29 (DR-0054, accepted): import keeps

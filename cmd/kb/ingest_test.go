@@ -1108,3 +1108,49 @@ func TestRecordFilePattern(t *testing.T) {
 		}
 	}
 }
+
+// Reported 2026-10-16: the closing "kb: ingest: ..." line repeated the first
+// error that the summary had just listed. The closing error says how many and
+// carries the class; the listing is the report.
+func TestCmdIngest_ClosingErrorDoesNotRepeatTheListedFailure(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+	os.WriteFile(filepath.Join(dir, "0002-broken.md"), []byte("no frontmatter here\n"), 0o644)
+
+	s, err := runIngestExpectingFailure(t, kb, dir)
+	if len(s.Errors) != 1 || !strings.Contains(s.Errors[0], "no frontmatter") {
+		t.Fatalf("summary errors = %v, want the listed failure", s.Errors)
+	}
+	if strings.Contains(err.Error(), "no frontmatter") || strings.Contains(err.Error(), "0002-broken") {
+		t.Errorf("closing error repeats the listed failure: %v", err)
+	}
+	if !strings.Contains(err.Error(), "1 error") {
+		t.Errorf("closing error does not count the failures: %v", err)
+	}
+	if got := exitCodeFor(err); got != classData {
+		t.Errorf("class = %v, want data (the first failure's class)", got)
+	}
+}
+
+// The walk is recursive, so ingesting a project directory reaches its design,
+// plans, feature_requests, notes and hand-off directories, which never hold
+// decision records. A file there named NNNN-... is not one.
+func TestCmdIngest_SkipsTheProjectLayoutsNonRecordDirectories(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	proj := filepath.Join(root, "clasm")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, filepath.Join(proj, "decisions"))
+	for _, d := range []string{"design", "plans", "feature_requests", "notes", "hand-off"} {
+		sub := filepath.Join(proj, d)
+		os.MkdirAll(sub, 0o755)
+		os.WriteFile(filepath.Join(sub, "0001-not-a-record.md"), []byte("# plain\n"), 0o644)
+	}
+	if s := runIngest(t, kb, proj); s.Added != 1 || s.Failed != 0 {
+		t.Errorf("summary = %+v, want 1 added and no failures", s)
+	}
+	// Pointed at one of them directly, the user asked for it: it is read.
+	s, _ := runIngestExpectingFailure(t, kb, filepath.Join(proj, "design"))
+	if s.Failed != 1 {
+		t.Errorf("pointing at design/ directly: summary = %+v, want the file read and refused", s)
+	}
+}

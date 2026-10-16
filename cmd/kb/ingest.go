@@ -25,6 +25,13 @@ var recordFilePattern = regexp.MustCompile(`^[0-9]{4}-.*\.md$`)
 // note (notes/2026-09-29-worklog.md) would otherwise pass for record 2026.
 var datedNamePattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}([-.]|$)`)
 
+// nonRecordDirs are the directories of the project layout (PROJECT_CYCLE.md)
+// that never hold decision records. The walk skips them below the directory it
+// was given; a directory named on the command line is read whatever it is called.
+var nonRecordDirs = map[string]bool{
+	"design": true, "plans": true, "feature_requests": true, "notes": true, "hand-off": true,
+}
+
 /** isRecordFileName reports whether a file name is a decision record's:
  * NNNN-slug.md, and not a name that begins with a date.
  *
@@ -216,8 +223,11 @@ func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	// The summary above is the report; a failure still exits non-zero, with the
 	// class of the first one, after every record that could be ingested was.
 	if ing.firstFail != nil {
-		return fmt.Errorf("ingest: %d error(s), listed above; the records that could be ingested were: %w",
-			len(ing.summary.Errors), ing.firstFail)
+		// The listing above has the text; this line has the count and the class, and
+		// does not say the first failure a second time.
+		return classedAs(exitCodeFor(ing.firstFail), fmt.Errorf(
+			"ingest: %d error(s), listed above; every record that could be ingested was",
+			len(ing.summary.Errors)))
 	}
 	return nil
 }
@@ -280,6 +290,9 @@ func collectRecordFiles(dir string) ([]string, error) {
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.IsDir() && p != dir && nonRecordDirs[d.Name()] {
+			return fs.SkipDir
 		}
 		if d.IsDir() || !isRecordFileName(d.Name()) {
 			return nil
