@@ -46,8 +46,12 @@ show
   does; a miss is exit 1, and when a name differing only in case exists it is
   offered ("did you mean"). A NAME that looks like a flag is passed after --.
   `--json` gives one object: name, description, identifier_type,
-  identifier_value, counts, and a list per kind. This is how to judge whether
-  a kb concept suggest candidate is already covered, without raw SQL.
+  identifier_value, counts, spans, and a list per kind. A "spans" section
+  names every project the concept reaches, with how: tagged on the project
+  itself, and how many of its observations, records and document sections link
+  it (workspace-tier records have no project and are not a span). With --limit 0
+  there are no spans. This is how to judge whether a kb concept suggest
+  candidate is already covered, without raw SQL.
   See DR-0051 (knowledge/decisions/).
 
 recall

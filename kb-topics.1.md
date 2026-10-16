@@ -44,6 +44,9 @@ check-db
 : compare the database with its JSONL dump by content and recommend import,
   export or both
 
+stats
+: row, link and check counts, and a line per project
+
 export
 : write a portable JSON-L snapshot. import shares this page
 

@@ -115,14 +115,16 @@
   one. Library: `KBSearchResult` has `SourceID` and `ProjectID` since v0.0.22 but no qualified reference
   or status.
 
-- [ ] **No verb shows how things are linked: counts of concept, source and record links (raised
-  2026-10-14).** **Target v0.0.23, first.** To learn that a database has 67 project-concept, 213 observation-concept and 181
-  record-concept links, or that no observation has a null `project_id`, a person writes SQL, and CLAUDE.md
-  says raw `sqlite3` is for what `kb` does not cover. This is that case. Candidates: counts under `kb
-  summary`, or a `kb stats` verb in the style of `kb check-db` (read class, `--json`, exit codes per
-  DR-0003). It would also let `kb concept show` say which projects a concept spans, which the scoped
-  search wants to show on a result (`design/scoped-search-design.md`, section 5). Settle which verb
-  before building.
+- [x] **No verb showed how things are linked: counts of concept, source and record links.** Done 2026-10-16,
+  unreleased (for v0.0.23). `kb stats` (a read verb, `--json`, exit 0 whatever it counts) reports rows per table,
+  links per join table, five checks (`observations_without_project`, `concepts_without_links`,
+  `sources_without_links`, `records_without_project`, `documents_without_project`) and a line per project, with a
+  project's concepts as the union of project, observation and record tags. `kb concept show` gained a "spans"
+  section (and `spans` in `--json`): every project the concept reaches, tagged directly or through observations,
+  records and document sections. Library: `Stats()` and `ConceptDetailResult.Spans`. Tests: `stats_test.go`,
+  `cmd/kb/stats_test.go`. Checked on `~/Laboratory/agents/knowledge.db`: it gives the 213 observation-concept and
+  181 record-concept links the request quoted, and no null `project_id`. The scoped search's "projects a concept
+  is in" (`design/scoped-search-design.md`, section 5) can use `Spans`.
 
 - [x] **DONE 2026-10-06, released in v0.0.16.** *Original request:* **Shell completion with an install option, as in antenna.** `kb completion bash|powershell [-install]`,
   following `antennaApp/completion.go` (shipped 2026-10-05; `InstallCompletion` is the install half).

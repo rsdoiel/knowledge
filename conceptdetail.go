@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -30,6 +31,27 @@ type ConceptDetailItem struct {
 	CreatedAt time.Time
 }
 
+/** ConceptSpan is one project a concept reaches, with how it reaches it.
+ *
+ * Fields:
+ *   Project          (string) — the project's name.
+ *   Tagged           (bool)   — the concept is linked to the project itself.
+ *   Observations     (int)    — the project's observations that link it.
+ *   Records          (int)    — the project's records that link it.
+ *   DocumentSections (int)    — sections of the project's documents that link it.
+ *
+ * Example:
+ *   d, _ := kb.ConceptDetail("toast", 10)
+ *   for _, s := range d.Spans { fmt.Println(s.Project, s.Tagged, s.Observations) }
+ */
+type ConceptSpan struct {
+	Project          string
+	Tagged           bool
+	Observations     int
+	Records          int
+	DocumentSections int
+}
+
 /** ConceptDetailResult is everything ConceptDetail knows about one concept.
  *
  * Fields:
@@ -39,10 +61,12 @@ type ConceptDetailItem struct {
  *   Observations     ([]ConceptDetailItem) — up to limit observations, newest first.
  *   Records          ([]ConceptDetailItem) — up to limit records, newest first.
  *   DocumentSections ([]ConceptDetailItem) — up to limit document sections, newest first.
+ *   Spans            ([]ConceptSpan)       — every project the concept reaches, by name; empty
+ *                                            when limit is zero.
  *
  * Example:
  *   d, _ := kb.ConceptDetail("toast", 10)
- *   fmt.Println(d.Usage.Total(), len(d.Records))
+ *   fmt.Println(d.Usage.Total(), len(d.Records), len(d.Spans))
  */
 type ConceptDetailResult struct {
 	Concept          Concept
@@ -51,6 +75,7 @@ type ConceptDetailResult struct {
 	Observations     []ConceptDetailItem
 	Records          []ConceptDetailItem
 	DocumentSections []ConceptDetailItem
+	Spans            []ConceptSpan
 }
 
 /** ConceptDetail reports one concept's description, link counts and up to
@@ -136,7 +161,67 @@ func (kb *KnowledgeBase) ConceptDetail(name string, limit int) (ConceptDetailRes
 			return d, err
 		}
 	}
-	return d, nil
+	d.Spans, err = kb.conceptSpans(id)
+	return d, err
+}
+
+// conceptSpans lists the projects a concept reaches, by name, with how many of
+// each kind of item gets it there. Workspace-tier records have no project and
+// are not a span.
+func (kb *KnowledgeBase) conceptSpans(id int64) ([]ConceptSpan, error) {
+	byName := map[string]*ConceptSpan{}
+	span := func(name string) *ConceptSpan {
+		if byName[name] == nil {
+			byName[name] = &ConceptSpan{Project: name}
+		}
+		return byName[name]
+	}
+	for _, q := range []struct {
+		query string
+		set   func(s *ConceptSpan, n int)
+	}{
+		{`SELECT p.name, 1 FROM projects p JOIN project_concepts x ON x.project_id = p.id WHERE x.concept_id = ?`,
+			func(s *ConceptSpan, n int) { s.Tagged = true }},
+		{`SELECT p.name, COUNT(*) FROM observations o JOIN observation_concepts x ON x.observation_id = o.id
+			JOIN projects p ON p.id = o.project_id WHERE x.concept_id = ? GROUP BY p.name`,
+			func(s *ConceptSpan, n int) { s.Observations = n }},
+		{`SELECT p.name, COUNT(*) FROM records r JOIN record_concepts x ON x.record_id = r.id
+			JOIN projects p ON p.id = r.project_id WHERE x.concept_id = ? GROUP BY p.name`,
+			func(s *ConceptSpan, n int) { s.Records = n }},
+		{`SELECT p.name, COUNT(*) FROM document_sections sec JOIN document_section_concepts x ON x.section_id = sec.id
+			JOIN documents doc ON doc.id = sec.document_id JOIN projects p ON p.id = doc.project_id
+			WHERE x.concept_id = ? GROUP BY p.name`,
+			func(s *ConceptSpan, n int) { s.DocumentSections = n }},
+	} {
+		rows, err := kb.db.Query(q.query, id)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: concept spans: %w", err)
+		}
+		for rows.Next() {
+			var name string
+			var n int
+			if err := rows.Scan(&name, &n); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			q.set(span(name), n)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	names := make([]string, 0, len(byName))
+	for n := range byName {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var out []ConceptSpan
+	for _, n := range names {
+		out = append(out, *byName[n])
+	}
+	return out, nil
 }
 
 // conceptNotFoundHint wraps a not-found error for name with the concept names

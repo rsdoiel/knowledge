@@ -172,6 +172,8 @@ func TestVerbs_UsageIsExit2(t *testing.T) {
 		{name: "record list refuses --write", args: []string{"record", "list", "--write"}},
 		{name: "check-db surplus argument", setup: seedProject(), args: []string{"check-db", "extra"}},
 		{name: "check-db bad flag", setup: seedProject(), args: []string{"check-db", "--bogus"}},
+		{name: "stats surplus argument", setup: seedProject(), args: []string{"stats", "extra"}},
+		{name: "stats bad flag", setup: seedProject(), args: []string{"stats", "--bogus"}},
 		{name: "concept show without a name", args: []string{"concept", "show"}},
 		{name: "concept show surplus argument", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "extra"}},
 		{name: "concept show negative limit", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "--limit", "-1"}},

@@ -300,6 +300,10 @@ check-db
 : compare the database with the JSONL dump beside it by full content, and say
   whether to import, export or both — see kb-check-db(1)
 
+stats
+: row, link and check counts for the database, and a line per project — see
+  kb-stats(1)
+
 export, import
 : write/read a portable JSON-L snapshot of the database — the no-file-access
   alternative to merge, for syncing over a channel that can only move plain

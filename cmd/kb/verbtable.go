@@ -194,6 +194,7 @@ var verbTable = []verbSpec{
 		leaf("add", classAdditive, mi("New source…", "add a cited work", 2, "", "kb source add TITLE")), leaf("list", classRead, mi("Browse", "every source", 1, "", "kb source list")), sub("show", classRead), sub("remove", classRemoving),
 		sub("retract", classChanging), sub("link", classAdditive), leaf("check-retractions", classChanging, mi("Check retractions…", "look sources up for retractions", 3, "", "kb source check-retractions")),
 	}, Flags: []string{"--doi", "--url", "--authors", "--published", "--publisher", "--rights", "--version", "--relationship"}},
+	{Name: "stats", Summary: "row, link and check counts for the database, and a line per project", Class: classRead},
 	{Name: "summary", Summary: "a formatted overview of every project and its most recent observations", Class: classRead,
 		Flags: []string{"--project"}},
 	{Name: "verbs", Summary: "print the verb table: every verb, subverb, flag and write class", Class: classCLIOnly},

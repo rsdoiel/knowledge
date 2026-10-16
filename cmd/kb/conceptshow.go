@@ -112,6 +112,18 @@ func cmdConceptShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 			result[k.key] = items
 		}
 		result["counts"] = counts
+		type span struct {
+			Project          string `json:"project"`
+			Tagged           bool   `json:"tagged"`
+			Observations     int    `json:"observations"`
+			Records          int    `json:"records"`
+			DocumentSections int    `json:"document_sections"`
+		}
+		spans := make([]span, 0, len(d.Spans))
+		for _, sp := range d.Spans {
+			spans = append(spans, span{sp.Project, sp.Tagged, sp.Observations, sp.Records, sp.DocumentSections})
+		}
+		result["spans"] = spans
 		return printJSON(out, result)
 	}
 
@@ -121,6 +133,28 @@ func cmdConceptShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 	}
 	if d.Concept.IdentifierType != "" || d.Concept.IdentifierValue != "" {
 		fmt.Fprintf(out, "identifier: %s %s\n", d.Concept.IdentifierType, d.Concept.IdentifierValue)
+	}
+	if len(d.Spans) > 0 {
+		noun := "projects"
+		if len(d.Spans) == 1 {
+			noun = "project"
+		}
+		fmt.Fprintf(out, "\nspans %d %s:\n", len(d.Spans), noun)
+		for _, sp := range d.Spans {
+			var parts []string
+			if sp.Tagged {
+				parts = append(parts, "tagged")
+			}
+			for _, c := range []struct {
+				n     int
+				label string
+			}{{sp.Observations, "observations"}, {sp.Records, "records"}, {sp.DocumentSections, "document sections"}} {
+				if c.n > 0 {
+					parts = append(parts, fmt.Sprintf("%d %s", c.n, c.label))
+				}
+			}
+			fmt.Fprintf(out, "  %s  %s\n", sp.Project, strings.Join(parts, ", "))
+		}
 	}
 	for _, k := range kinds {
 		if len(k.items) < k.count && limit > 0 {
