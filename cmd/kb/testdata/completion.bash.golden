@@ -1,6 +1,7 @@
 # bash completion for kb
-# Load with:  source <(kb completion bash)
+# Load with:  eval "$(kb completion bash)"
 # Or install: kb completion bash -install
+# (Plain "source" of a process substitution does nothing, silently, in macOS bash 3.2.)
 _kb_projects() {
     kb "${dbarg[@]}" project list 2>/dev/null | awk '$1 ~ /^[0-9]+$/ { print $2 }'
 }
@@ -51,7 +52,7 @@ _kb() {
     if [[ "$cur" == -* ]]; then
         case "$verb" in
         check-db) COMPREPLY=( $(compgen -W "--jsonl" -- "$cur") ) ;;
-        completion) COMPREPLY=( $(compgen -W "--install" -- "$cur") ) ;;
+        completion) COMPREPLY=( $(compgen -W "--install --uninstall --check" -- "$cur") ) ;;
         concept) COMPREPLY=( $(compgen -W "--identifier-type --identifier-value --project --limit --force --dry-run" -- "$cur") ) ;;
         document) COMPREPLY=( $(compgen -W "--project --concept --dry-run --accept --accept-keywords --set --by --confidence --status --title --format" -- "$cur") ) ;;
         export) COMPREPLY=( $(compgen -W "--project --out" -- "$cur") ) ;;

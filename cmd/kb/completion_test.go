@@ -138,7 +138,7 @@ func TestCompletion_FlagsMatchTheSource(t *testing.T) {
 		}
 	}
 	for name := range listed {
-		if _, ok := src[name]; !ok && name != "--install" {
+		if _, ok := src[name]; !ok && name != "--install" && name != "--uninstall" {
 			t.Errorf("completionVerbFlags lists %s but no verb source declares it", name)
 		}
 	}

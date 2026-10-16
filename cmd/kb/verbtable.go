@@ -135,7 +135,7 @@ var verbTable = []verbSpec{
 	{Name: "check-db", Summary: "compare the database with its JSON-L dump", Menu: mi("Check", "compare the database with its JSONL dump", 10, "", "kb check-db"), Class: classRead,
 		Flags: []string{"--jsonl"}},
 	{Name: "completion", Summary: "write or install a shell completion script", Class: classCLIOnly,
-		Flags: []string{"--install"}},
+		Flags: []string{"--install", "--uninstall", "--check"}},
 	{Name: "concept", Summary: "manage concepts", Menu: mi("Concepts", "named ideas that span projects", 4, "", "kb concept"), Subverbs: []subverbSpec{
 		leaf("add", classAdditive, mi("New concept…", "add a concept", 2, "", "kb concept add NAME DESCRIPTION")), leaf("list", classRead, mi("Browse", "every concept", 1, "", "kb concept list")), sub("show", classRead), leaf("recall", classRead, mi("Recall…", "what is known about the concepts in some text", 4, "", "kb concept recall TEXT")),
 		sub("rename", classChanging), sub("delete", classRemoving), leaf("suggest", classRead, mi("Suggest…", "propose new concepts from the corpus", 3, "", "kb concept suggest")),

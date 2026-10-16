@@ -57,7 +57,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
     } elseif ($wordToComplete.StartsWith('-')) {
         $candidates = switch ($pos[0]) {
             'check-db' { @('--jsonl') }
-            'completion' { @('--install') }
+            'completion' { @('--install', '--uninstall', '--check') }
             'concept' { @('--identifier-type', '--identifier-value', '--project', '--limit', '--force', '--dry-run') }
             'document' { @('--project', '--concept', '--dry-run', '--accept', '--accept-keywords', '--set', '--by', '--confidence', '--status', '--title', '--format') }
             'export' { @('--project', '--out') }

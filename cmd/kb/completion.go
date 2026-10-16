@@ -47,6 +47,7 @@ var completionGlobalFlags = []string{"--db", "--debug", "--help", "-i", "--json"
 var completionBoolFlags = map[string]bool{
 	"--dry-run": true, "--force": true, "--stdout": true, "--check": true, "--all": true,
 	"--workspace": true, "--partial": true, "--write": true, "--install": true,
+	"--uninstall": true,
 }
 
 // completionFileFlags take a path.
@@ -242,8 +243,9 @@ func normalizeShell(shell string) string {
 }
 
 const bashCompletion = `# bash completion for {app_name}
-# Load with:  source <({app_name} completion bash)
+# Load with:  eval "$({app_name} completion bash)"
 # Or install: {app_name} completion bash -install
+# (Plain "source" of a process substitution does nothing, silently, in macOS bash 3.2.)
 _{app_func}_projects() {
     {app_name} "${dbarg[@]}" project list 2>/dev/null | awk '$1 ~ /^[0-9]+$/ { print $2 }'
 }
@@ -382,23 +384,111 @@ Register-ArgumentCompleter -Native -CommandName {app_name},{app_name}.exe -Scrip
 }
 `
 
+/** bashStartupFile returns the file a new bash session reads that kb adds its
+ * completion line to. On Linux that is ~/.bashrc. On macOS Terminal starts a
+ * login shell, which reads the first of ~/.bash_profile, ~/.bash_login and
+ * ~/.profile that exists, so the line goes there: creating ~/.bash_profile
+ * beside an existing ~/.profile would hide the .profile from bash.
+ *
+ * Parameters:
+ *   home (string) — the user's home directory.
+ *   goos (string) — runtime.GOOS.
+ *
+ * Returns:
+ *   string — the startup file's path, which may not exist yet.
+ *
+ * Example:
+ *   rc := bashStartupFile(home, "darwin") // ~/.bash_profile
+ */
+func bashStartupFile(home, goos string) string {
+	if goos != "darwin" {
+		return filepath.Join(home, ".bashrc")
+	}
+	for _, name := range []string{".bash_profile", ".bash_login", ".profile"} {
+		if _, err := os.Stat(filepath.Join(home, name)); err == nil {
+			return filepath.Join(home, name)
+		}
+	}
+	return filepath.Join(home, ".bash_profile")
+}
+
+// completionTargets returns where the completion script for a shell lives and
+// which startup file refers to it, and the line that file carries.
+func completionTargets(name, shell, home, dataHome, goos string) (script, startup, line string) {
+	if normalizeShell(shell) == "bash" {
+		if dataHome == "" {
+			dataHome = filepath.Join(home, ".local", "share")
+		}
+		script = filepath.Join(dataHome, "bash-completion", "completions", name)
+		return script, bashStartupFile(home, goos), fmt.Sprintf("[ -f '%s' ] && . '%s' # %s completion", script, script, name)
+	}
+	dir := filepath.Join(home, ".config", "powershell")
+	if goos == "windows" {
+		dir = filepath.Join(home, "Documents", "PowerShell")
+	}
+	script = filepath.Join(dir, name+"-completion.ps1")
+	return script, filepath.Join(dir, "Microsoft.PowerShell_profile.ps1"), fmt.Sprintf(". '%s' # %s completion", script, name)
+}
+
+// addStartupLine appends line to the startup file unless a line mentioning the
+// script is already there. A missing file is created.
+func addStartupLine(startup, script, line string) error {
+	cur, err := os.ReadFile(startup)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if strings.Contains(string(cur), script) {
+		return nil
+	}
+	if len(cur) > 0 && !bytes.HasSuffix(cur, []byte("\n")) {
+		cur = append(cur, '\n')
+	}
+	return writeFileIn(startup, append(cur, line+"\n"...))
+}
+
+// removeStartupLines deletes the lines kb added to the startup file for the
+// script, reporting whether any were there. Other lines are kept as they are.
+func removeStartupLines(startup, script, name string) (bool, error) {
+	cur, err := os.ReadFile(startup)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	marker := "# " + name + " completion"
+	var kept []string
+	removed := false
+	for _, l := range strings.SplitAfter(string(cur), "\n") {
+		if strings.Contains(l, "'"+script+"'") && strings.HasSuffix(strings.TrimRight(l, "\r\n"), marker) {
+			removed = true
+			continue
+		}
+		kept = append(kept, l)
+	}
+	if !removed {
+		return false, nil
+	}
+	return true, os.WriteFile(startup, []byte(strings.Join(kept, "")), 0o644)
+}
+
 /** InstallCompletion installs the completion script for a shell so it loads in
  * every new session, and returns the path of the script it wrote.
  *
- * For bash the script goes in the bash-completion user directory
+ * The script goes in the bash-completion user directory
  * ($XDG_DATA_HOME/bash-completion/completions/NAME, or the same under
- * ~/.local/share), which bash-completion loads on demand. An existing file
- * there is replaced only if kb wrote it.
- *
- * For PowerShell the script is written beside the profile and the profile gets
- * one line that dot-sources it, added once.
+ * ~/.local/share) for bash and beside the profile for PowerShell. An existing
+ * bash file there is replaced only if kb wrote it. The shell's startup file
+ * (bashStartupFile, or the PowerShell profile) gets one line that sources the
+ * script, added once. The line is what makes it work where no bash-completion
+ * loader reads the directory, as with macOS's /bin/bash 3.2.
  *
  * Parameters:
  *   appName  (string) — binary name to register; a .exe suffix is ignored.
  *   shell    (string) — "bash" or "powershell" ("pwsh" is accepted).
  *   home     (string) — the user's home directory.
  *   dataHome (string) — $XDG_DATA_HOME, or "" for the default.
- *   goos     (string) — runtime.GOOS, which picks the PowerShell profile location.
+ *   goos     (string) — runtime.GOOS, which picks the startup file and PowerShell profile.
  *
  * Returns:
  *   (string, error) — the installed script path; a usage error for an
@@ -414,11 +504,8 @@ func InstallCompletion(appName, shell, home, dataHome, goos string) (string, err
 	if err := WriteCompletion(&script, appName, shell); err != nil {
 		return "", err
 	}
+	path, startup, line := completionTargets(name, shell, home, dataHome, goos)
 	if normalizeShell(shell) == "bash" {
-		if dataHome == "" {
-			dataHome = filepath.Join(home, ".local", "share")
-		}
-		path := filepath.Join(dataHome, "bash-completion", "completions", name)
 		if old, err := os.ReadFile(path); err == nil {
 			if !strings.HasPrefix(string(old), "# bash completion for "+name+"\n") {
 				return "", cantCreatef("%s exists and was not written by %s; not overwriting it", path, name)
@@ -426,29 +513,141 @@ func InstallCompletion(appName, shell, home, dataHome, goos string) (string, err
 		} else if !os.IsNotExist(err) {
 			return "", err
 		}
-		return path, writeFileIn(path, script.Bytes())
 	}
-	profileDir := filepath.Join(home, ".config", "powershell")
-	if goos == "windows" {
-		profileDir = filepath.Join(home, "Documents", "PowerShell")
-	}
-	path := filepath.Join(profileDir, name+"-completion.ps1")
 	if err := writeFileIn(path, script.Bytes()); err != nil {
 		return "", err
 	}
-	profile := filepath.Join(profileDir, "Microsoft.PowerShell_profile.ps1")
-	cur, err := os.ReadFile(profile)
-	if err != nil && !os.IsNotExist(err) {
-		return "", err
+	return path, addStartupLine(startup, path, line)
+}
+
+/** UninstallCompletion undoes InstallCompletion: it removes the script if kb
+ * wrote it and the line kb added to the startup file. A file kb did not write
+ * is left alone.
+ *
+ * Parameters:
+ *   appName, shell, home, dataHome, goos — as for InstallCompletion.
+ *
+ * Returns:
+ *   ([]string, error) — what was removed, one description per item, empty when
+ *   nothing of kb's was found; a usage error for an unsupported shell, or the
+ *   failed read or write's error.
+ *
+ * Example:
+ *   removed, err := UninstallCompletion("kb", "bash", home, "", "linux")
+ */
+func UninstallCompletion(appName, shell, home, dataHome, goos string) ([]string, error) {
+	name := strings.TrimSuffix(appName, ".exe")
+	if s := normalizeShell(shell); s != "bash" && s != "powershell" {
+		return nil, usageErrorf("unsupported shell %q; use one of: %s", shell, strings.Join(completionShells, ", "))
 	}
-	if strings.Contains(string(cur), path) {
-		return path, nil
+	path, startup, _ := completionTargets(name, shell, home, dataHome, goos)
+	var removed []string
+	if old, err := os.ReadFile(path); err == nil {
+		if strings.HasPrefix(string(old), completionHeader(shell, name)) {
+			if err := os.Remove(path); err != nil {
+				return removed, err
+			}
+			removed = append(removed, "script "+path)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
-	if len(cur) > 0 && !bytes.HasSuffix(cur, []byte("\n")) {
-		cur = append(cur, '\n')
+	// The line may be in a startup file other than the one install would pick
+	// today (a ~/.bash_profile created since), so look in all of them.
+	files := []string{startup}
+	if normalizeShell(shell) == "bash" {
+		for _, n := range []string{".bashrc", ".bash_profile", ".bash_login", ".profile"} {
+			files = append(files, filepath.Join(home, n))
+		}
 	}
-	line := fmt.Sprintf(". '%s' # %s completion\n", path, name)
-	return path, os.WriteFile(profile, append(cur, line...), 0o644)
+	seen := map[string]bool{}
+	for _, f := range files {
+		if seen[f] {
+			continue
+		}
+		seen[f] = true
+		if ok, err := removeStartupLines(f, path, name); err != nil {
+			return removed, err
+		} else if ok {
+			removed = append(removed, "line in "+f)
+		}
+	}
+	return removed, nil
+}
+
+// completionHeader is the first line of a script kb wrote, which is how kb
+// knows a file is its own.
+func completionHeader(shell, name string) string {
+	if normalizeShell(shell) == "bash" {
+		return "# bash completion for " + name + "\n"
+	}
+	return "# PowerShell completion for " + name + "\n"
+}
+
+/** CheckCompletion reports, one line per finding, whether completion is set up
+ * for a shell and what to do about it. It looks at the files only: it cannot see
+ * inside the shell a Terminal window is running, so the report ends with the
+ * command that does.
+ *
+ * Parameters:
+ *   w, appName, shell, home, dataHome, goos — as for InstallCompletion.
+ *
+ * Returns:
+ *   (bool, error) — true when every check passed; a usage error for an
+ *   unsupported shell, or a failed read.
+ *
+ * Example:
+ *   ok, err := CheckCompletion(os.Stdout, "kb", "bash", home, "", "darwin")
+ */
+func CheckCompletion(w io.Writer, appName, shell, home, dataHome, goos string) (bool, error) {
+	name := strings.TrimSuffix(appName, ".exe")
+	var want bytes.Buffer
+	if err := WriteCompletion(&want, appName, shell); err != nil {
+		return false, err
+	}
+	path, startup, _ := completionTargets(name, shell, home, dataHome, goos)
+	ok := true
+	report := func(good bool, format string, a ...any) {
+		mark := "ok     "
+		if !good {
+			mark, ok = "PROBLEM", false
+		}
+		fmt.Fprintf(w, "%s %s\n", mark, fmt.Sprintf(format, a...))
+	}
+	old, err := os.ReadFile(path)
+	switch {
+	case os.IsNotExist(err):
+		report(false, "not installed: no script at %s; run: %s completion %s -install", path, name, normalizeShell(shell))
+	case err != nil:
+		return false, err
+	case !strings.HasPrefix(string(old), completionHeader(shell, name)):
+		report(false, "%s exists but %s did not write it", path, name)
+	case string(old) != want.String():
+		report(false, "script at %s is out of date; run: %s completion %s -install", path, name, normalizeShell(shell))
+	default:
+		report(true, "script is installed and current: %s", path)
+	}
+	files := []string{startup}
+	if normalizeShell(shell) == "bash" {
+		files = []string{bashStartupFile(home, goos)}
+	}
+	found := false
+	for _, f := range files {
+		if b, err := os.ReadFile(f); err == nil && strings.Contains(string(b), "'"+path+"'") {
+			found = true
+			report(true, "%s sources it", f)
+		}
+	}
+	if !found {
+		report(false, "%s does not source the script; run: %s completion %s -install", files[0], name, normalizeShell(shell))
+	}
+	if normalizeShell(shell) == "bash" {
+		fmt.Fprintf(w, "\nA window opened before the install has not read the new line: open a new one, or run: . %s\n", path)
+		fmt.Fprintf(w, "To see what the running shell has, type:\n  echo $BASH_VERSION; complete -p %s\n", name)
+		fmt.Fprintf(w, "It should print: complete -o default -F _%s %s\n", nonIdent.ReplaceAllString(name, "_"), name)
+		fmt.Fprintf(w, "If it prints nothing, add the line shown by:  %s completion bash -install\nor trace a new shell's startup with:  bash -lixc exit 2>&1 | grep -n %s\n", name, name)
+	}
+	return ok, nil
 }
 
 // writeFileIn writes data to path, creating its directory first.
@@ -459,27 +658,88 @@ func writeFileIn(path string, data []byte) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-// cmdCompletion is `kb completion SHELL [-install]`. It never touches a
-// database: mainRun routes it past the open.
+// cmdCompletion is `kb completion SHELL [-install|-uninstall|-check]`. It never
+// touches a database: mainRun routes it past the open.
 func cmdCompletion(_ *knowledge.KnowledgeBase, _ *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	var install bool
-	positional, err := splitFlags(args, nil, map[string]*bool{"--install": &install, "-install": &install})
+	var install, uninstall, check bool
+	positional, err := splitFlags(args, nil, map[string]*bool{
+		"--install": &install, "-install": &install,
+		"--uninstall": &uninstall, "-uninstall": &uninstall,
+		"--check": &check, "-check": &check,
+	})
 	if err != nil {
 		return err
 	}
-	const usage = "usage: completion bash|powershell [-install]"
+	const usage = "usage: completion bash|powershell [-install|-uninstall|-check]"
 	if len(positional) != 1 {
 		return usageErrorf("%s", usage)
 	}
+	n := 0
+	for _, b := range []bool{install, uninstall, check} {
+		if b {
+			n++
+		}
+	}
+	if n > 1 {
+		return usageErrorf("-install, -uninstall and -check are exclusive; %s", usage)
+	}
 	shell := positional[0]
-	if !install {
+	if n == 0 {
 		return WriteCompletion(out, appName, shell)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return noInputf("cannot find your home directory: %v", err)
 	}
-	path, err := InstallCompletion(appName, shell, home, os.Getenv("XDG_DATA_HOME"), runtime.GOOS)
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	switch {
+	case uninstall:
+		removed, err := UninstallCompletion(appName, shell, home, dataHome, runtime.GOOS)
+		if err != nil {
+			return err
+		}
+		if jsonOut {
+			if removed == nil {
+				removed = []string{}
+			}
+			if err := printJSON(out, struct {
+				Shell   string   `json:"shell"`
+				Removed []string `json:"removed"`
+			}{normalizeShell(shell), removed}); err != nil {
+				return err
+			}
+		} else {
+			for _, r := range removed {
+				fmt.Fprintf(out, "removed %s\n", r)
+			}
+		}
+		if len(removed) == 0 {
+			return negativef("nothing to uninstall: no %s completion written by %s was found", normalizeShell(shell), appName)
+		}
+		return nil
+	case check:
+		var report io.Writer = out
+		if jsonOut {
+			report = io.Discard
+		}
+		ok, err := CheckCompletion(report, appName, shell, home, dataHome, runtime.GOOS)
+		if err != nil {
+			return err
+		}
+		if jsonOut {
+			if err := printJSON(out, struct {
+				Shell string `json:"shell"`
+				OK    bool   `json:"ok"`
+			}{normalizeShell(shell), ok}); err != nil {
+				return err
+			}
+		}
+		if !ok {
+			return negativef("completion for %s is not set up correctly (see above)", normalizeShell(shell))
+		}
+		return nil
+	}
+	path, err := InstallCompletion(appName, shell, home, dataHome, runtime.GOOS)
 	if err != nil {
 		return err
 	}
@@ -490,5 +750,8 @@ func cmdCompletion(_ *knowledge.KnowledgeBase, _ *DebugLog, jsonOut bool, args [
 		}{normalizeShell(shell), path})
 	}
 	fmt.Fprintf(out, "installed %s completion: %s\n", normalizeShell(shell), path)
+	if normalizeShell(shell) == "bash" {
+		fmt.Fprintf(out, "open a new terminal window, or run: . %s\n", path)
+	}
 	return nil
 }
