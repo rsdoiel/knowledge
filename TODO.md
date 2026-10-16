@@ -55,7 +55,12 @@
 
 ## Requested features
 
-- [ ] **An interactive frontmatter editor for notes, offered at ingest (requested 2026-10-16).** Notes
+- [ ] **Foul Papers asks of knowledge: the story foundation (knowledge DR-0075, accepted), target v0.0.24.**
+  Story front matter, concept kinds, `story_events`, `kb story timeline` and `check`, and the library calls
+  exported. Steps S0 to S5 and the four open questions are in
+  `agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md`, with the v0.0.23 order.
+
+- [ ] **An interactive frontmatter editor for notes, offered at ingest (requested 2026-10-16).** **Target v0.0.23.** Notes
   (`agents/projects/<project>/notes/`) carry no required frontmatter and `kb ingest` does not read them as
   records (see the bug above). When a note is brought into the knowledge base as a document (`kb document
   ingest`), a note without frontmatter is accepted as plain prose and gets no title, date, project or
@@ -77,7 +82,7 @@
   (`KB_PAGER=less -R` is the escape hatch).
 
 - [ ] **Provenance as a first-class capability, and two meanings of "source" (raised 2026-10-14, for
-  exploration).** Provenance is a distinguishing capability of harvey, and the knowledge base may not have
+  exploration).** **Target v0.0.24, design brief only.** Provenance is a distinguishing capability of harvey, and the knowledge base may not have
   been designed with it as one. The word "source" has been used for two different things, and the design
   should keep them apart:
   1. **Source as material.** The code, text or document (a blog post, a design brief, a source file) that is
@@ -100,7 +105,7 @@
   under `agents/projects/knowledge/design/`, with harvey's retrieval path (`UnifiedMemory.Recall`) as the
   consumer to design against.
 
-- [ ] **Search results should say where a hit is and carry enough to act on (raised 2026-10-14).** A
+- [ ] **Search results should say where a hit is and carry enough to act on (raised 2026-10-14).** **Target v0.0.23, after the link counts.** A
   `kb search` hit is one line (kind, label, snippet), and the shape differs by kind: an observation shows
   its body, a record only its title, so a person with a question about the decisions reaches for `grep -n`
   to see which section matched and the lines around it. A hit should carry its qualified reference
@@ -111,7 +116,7 @@
   or status.
 
 - [ ] **No verb shows how things are linked: counts of concept, source and record links (raised
-  2026-10-14).** To learn that a database has 67 project-concept, 213 observation-concept and 181
+  2026-10-14).** **Target v0.0.23, first.** To learn that a database has 67 project-concept, 213 observation-concept and 181
   record-concept links, or that no observation has a null `project_id`, a person writes SQL, and CLAUDE.md
   says raw `sqlite3` is for what `kb` does not cover. This is that case. Candidates: counts under `kb
   summary`, or a `kb stats` verb in the style of `kb check-db` (read class, `--json`, exit codes per
@@ -230,7 +235,7 @@
   works and both sides are written, but it is the second bullet above and
   should be revisited once `cancelled` exists.
 
-- [ ] **Ship the knowledge skills and an agent document in this repository**, so a
+- [ ] **Ship the knowledge skills and an agent document in this repository** **Target v0.0.23, last.**, so a
   language-model harness or a system like Claude Code can use `kb` after installing it,
   without hand-copying files out of the Laboratory workspace. Filed 2026-09-25 at
   RSDOIEL's request. State today, so the item starts from facts:
@@ -676,7 +681,7 @@ trip was also checked and is clean: 14 tables' row counts identical.
   `source add` title still may hold a newline; `document tag` does not recognise a
   wrapped existing link. Breaking for scripts: needs an upgrade note.
 
-- [ ] **Programmatic corpus-improvement techniques, as the corpus grows.**
+- [ ] **Programmatic corpus-improvement techniques, as the corpus grows.** **No target; after manuscripts are in the corpus.**
   Raised 2026-09-18 while discussing the MADR item below: decision records
   already benefit from being surfaced through multiple routes (frontmatter,
   `[[wikilinks]]`, `relates_to`), and documents are new and still being
