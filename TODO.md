@@ -235,7 +235,7 @@
   works and both sides are written, but it is the second bullet above and
   should be revisited once `cancelled` exists.
 
-- [ ] **Ship the knowledge skills and an agent document in this repository** **Target v0.0.23, last.**, so a
+- [ ] **Ship the knowledge skills and an agent document in this repository** (**target v0.0.23, last**), so a
   language-model harness or a system like Claude Code can use `kb` after installing it,
   without hand-copying files out of the Laboratory workspace. Filed 2026-09-25 at
   RSDOIEL's request. State today, so the item starts from facts:
