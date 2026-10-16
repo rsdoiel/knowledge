@@ -247,17 +247,8 @@ func (kb *KnowledgeBase) runScoped(term, where string, args []any, limit int) (*
 	crows.Close()
 
 	rows, err := kb.db.Query(`
-		SELECT kb_fts.kind,
-		       CASE WHEN kb_fts.source_type = 'observation'
-		            THEN COALESCE(p.name, '') ELSE kb_fts.label END,
-		       CASE WHEN kb_fts.source_type = 'observation'
-		            THEN kb_fts.body ELSE kb_fts.descr END,
-		       kb_fts.source_type,
-		       CAST(COALESCE(NULLIF(kb_fts.source_id, ''), 0) AS INTEGER),
-		       `+pidExpr+`
-		FROM   kb_fts
-		LEFT JOIN projects p ON kb_fts.source_type = 'observation'
-		                     AND p.id = kb_fts.project_id
+		SELECT `+searchColumns+pidExpr+`
+		FROM   kb_fts`+searchJoins+`
 		WHERE  kb_fts MATCH ?`+where+`
 		ORDER  BY bm25(kb_fts)
 		LIMIT  ?`, append(append([]any{term}, args...), limit)...)
@@ -267,12 +258,20 @@ func (kb *KnowledgeBase) runScoped(term, where string, args []any, limit int) (*
 	defer rows.Close()
 	for rows.Next() {
 		var r KBSearchResult
-		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet, &r.SourceType, &r.SourceID, &r.ProjectID); err != nil {
+		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet, &r.SourceType, &r.SourceID,
+			&r.Passage, &r.Status, &r.Ref, &r.ProjectID); err != nil {
 			return nil, err
 		}
 		out.Results = append(out.Results, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	for i := range out.Results {
+		kb.finishHit(&out.Results[i])
+	}
+	return out, nil
 }
 
 // fillConceptSpans sets Spans: for each concept result, the names of the projects

@@ -52,6 +52,16 @@ search
   N" says when more matched. With the global -json option it prints one
   object: scope, term, total, counts and results.
 
+  Every search, scoped or not, shows where a hit is. A record hit carries its
+  qualified reference and status ("harvey/DR-0004 (accepted)"), so the next
+  step is kb record show REF. Under a hit, when part of the text
+  matched, a line shows that passage with the matched words between « and »;
+  for a record it starts with the section the match is in, the bold label of
+  the paragraph ("Decision:"), or "title:" when it is in the title. In -json
+  the fields are ref, status, passage and section (the unscoped list uses the
+  library's names: Ref, Status, Passage, Section). Observations, concepts and
+  projects have no reference or status, and a concept or project has no passage.
+
   A project's concepts are those tagged on the project, on any of its
   observations and on any of its records. Projects are searched at the global
   scope only: workspace/observations and harvey/projects are exit 1 with the

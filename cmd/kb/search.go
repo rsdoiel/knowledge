@@ -107,12 +107,29 @@ func snippetOf(s string, max int) string {
 	return s
 }
 
+// passageLine is the line under a hit that shows the part that matched, with the
+// matched words between « and », and for a record the section it is in. "" when
+// there is no passage.
+func passageLine(section, passage string) string {
+	p := snippetOf(passage, 200)
+	if p == "" {
+		return ""
+	}
+	if section != "" {
+		return "    " + section + ": " + p
+	}
+	return "    " + p
+}
+
 // scopedHit is one result of a scoped search as the command prints it.
 type scopedHit struct {
 	Kind      string   `json:"kind"`
 	Ref       string   `json:"ref,omitempty"`
 	Label     string   `json:"label"`
 	Snippet   string   `json:"snippet"`
+	Status    string   `json:"status,omitempty"`
+	Passage   string   `json:"passage,omitempty"`
+	Section   string   `json:"section,omitempty"`
 	Type      string   `json:"source_type"`
 	ID        int64    `json:"source_id"`
 	ProjectID int64    `json:"project_id,omitempty"`
@@ -130,16 +147,10 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 	if res.Total == 0 {
 		return negativef("no results for %q in %s", term, scopeName)
 	}
-	names := projectNames(kb)
 	var hits []scopedHit
 	for _, r := range res.Results {
-		h := scopedHit{Kind: r.Kind, Label: r.Label, Snippet: r.Snippet, Type: r.SourceType, ID: r.SourceID, ProjectID: r.ProjectID,
-			Projects: res.Spans[r.SourceID]}
-		if r.SourceType == "record" {
-			if rec, rerr := kb.RecordByID(r.SourceID); rerr == nil && rec != nil {
-				h.Ref = refOf(*rec, names).String()
-			}
-		}
+		h := scopedHit{Kind: r.Kind, Ref: r.Ref, Label: r.Label, Snippet: r.Snippet, Status: r.Status, Passage: r.Passage,
+			Section: r.Section, Type: r.SourceType, ID: r.SourceID, ProjectID: r.ProjectID, Projects: res.Spans[r.SourceID]}
 		if r.SourceType != "concept" {
 			h.Projects = nil
 		}
@@ -185,6 +196,9 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 				who = fmt.Sprintf("%s #%d", h.Label, h.ID)
 			}
 			line := "  " + who
+			if h.Status != "" {
+				line += " (" + h.Status + ")"
+			}
 			if s := snippetOf(h.Snippet, 100); s != "" {
 				line += " — " + s
 			}
@@ -192,6 +206,9 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 				line += "   [" + strings.Join(h.Projects, ", ") + "]"
 			}
 			fmt.Fprintln(out, line)
+			if pl := passageLine(h.Section, h.Passage); pl != "" {
+				fmt.Fprintln(out, "  "+pl)
+			}
 		}
 	}
 	if res.Total > len(hits) {
@@ -250,13 +267,23 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		if label == "" {
 			label = r.Kind
 		}
+		who := r.Label
+		if r.Ref != "" {
+			who = r.Ref
+		}
+		if r.Status != "" {
+			who += " (" + r.Status + ")"
+		}
 		switch {
-		case r.Label != "" && r.Snippet != "":
-			fmt.Fprintf(out, "[%-10s] %s — %s\n", label, r.Label, r.Snippet)
-		case r.Label != "":
-			fmt.Fprintf(out, "[%-10s] %s\n", label, r.Label)
+		case who != "" && r.Snippet != "":
+			fmt.Fprintf(out, "[%-10s] %s — %s\n", label, who, r.Snippet)
+		case who != "":
+			fmt.Fprintf(out, "[%-10s] %s\n", label, who)
 		default:
 			fmt.Fprintf(out, "[%-10s] %s\n", label, r.Snippet)
+		}
+		if pl := passageLine(r.Section, r.Passage); pl != "" && r.SourceType != "observation" {
+			fmt.Fprintln(out, pl)
 		}
 	}
 	return nil

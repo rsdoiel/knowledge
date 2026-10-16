@@ -1753,6 +1753,17 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
  *                        "project", "concept", "record" or "document_summary".
  *                        Kind alone cannot say, since a record's kind is its
  *                        own vocabulary.
+ *   SourceID   (int64)  — the row's id in its own table; 0 when unknown.
+ *   ProjectID  (int64)  — the owning project's id; 0 for a concept or a workspace-tier record.
+ *   Ref        (string) — a record's qualified reference, "harvey/DR-0004" or
+ *                        "workspace/DR-0003"; "" for every other kind.
+ *   Status     (string) — a record's status; "" for every other kind.
+ *   Passage    (string) — the passage that matched, with the matched words
+ *                        between « and »; "" for a concept or project, or when
+ *                        only the label matched.
+ *   Section    (string) — for a record, the bold label of the part the match is
+ *                        in ("Decision"), or "title" when the title matched
+ *                        and the body did not; "" otherwise.
  *
  * Example:
  *   results, _ := kb.Search("WAL mode")
@@ -1765,8 +1776,12 @@ type KBSearchResult struct {
 	Label      string
 	Snippet    string
 	SourceType string
-	SourceID   int64 // the row's id in its own table, as the index stores it; 0 when unknown
-	ProjectID  int64 // the owning project's id; 0 for a concept or a workspace-tier record
+	SourceID   int64  // the row's id in its own table, as the index stores it; 0 when unknown
+	ProjectID  int64  // the owning project's id; 0 for a concept or a workspace-tier record
+	Ref        string // a record's qualified reference ("harvey/DR-0004", "workspace/DR-0003"); "" for other kinds
+	Status     string // a record's status; "" for other kinds
+	Passage    string // the part of an observation, record or document summary that matched, the matched words between « and »; "" when only the label matched
+	Section    string // for a record, the bold label ("Decision") of the part that matched, or "title"; "" otherwise
 }
 
 /** Search performs a full-text search across observations, projects, and concepts
@@ -1840,17 +1855,8 @@ func quotedPhrase(term string) string {
 // must be observed via rows.Err() before Search can decide whether to retry.
 func (kb *KnowledgeBase) runSearch(term string) ([]KBSearchResult, error) {
 	rows, err := kb.db.Query(`
-		SELECT kb_fts.kind,
-		       CASE WHEN kb_fts.source_type = 'observation'
-		            THEN COALESCE(p.name, '') ELSE kb_fts.label END,
-		       CASE WHEN kb_fts.source_type = 'observation'
-		            THEN kb_fts.body ELSE kb_fts.descr END,
-		       kb_fts.source_type,
-		       CAST(COALESCE(NULLIF(kb_fts.source_id, ''), 0) AS INTEGER),
-		       CAST(COALESCE(NULLIF(kb_fts.project_id, ''), 0) AS INTEGER)
-		FROM   kb_fts
-		LEFT JOIN projects p ON kb_fts.source_type = 'observation'
-		                     AND p.id = kb_fts.project_id
+		SELECT `+searchColumns+pidExpr+`
+		FROM   kb_fts`+searchJoins+`
 		WHERE  kb_fts MATCH ?
 		ORDER  BY bm25(kb_fts)
 		LIMIT  50
@@ -1862,12 +1868,20 @@ func (kb *KnowledgeBase) runSearch(term string) ([]KBSearchResult, error) {
 	var out []KBSearchResult
 	for rows.Next() {
 		var r KBSearchResult
-		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet, &r.SourceType, &r.SourceID, &r.ProjectID); err != nil {
+		if err := rows.Scan(&r.Kind, &r.Label, &r.Snippet, &r.SourceType, &r.SourceID,
+			&r.Passage, &r.Status, &r.Ref, &r.ProjectID); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	for i := range out {
+		kb.finishHit(&out[i])
+	}
+	return out, nil
 }
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────

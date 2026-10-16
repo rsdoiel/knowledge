@@ -105,15 +105,15 @@
   under `agents/projects/knowledge/design/`, with harvey's retrieval path (`UnifiedMemory.Recall`) as the
   consumer to design against.
 
-- [ ] **Search results should say where a hit is and carry enough to act on (raised 2026-10-14).** **Target v0.0.23, after the link counts.** A
-  `kb search` hit is one line (kind, label, snippet), and the shape differs by kind: an observation shows
-  its body, a record only its title, so a person with a question about the decisions reaches for `grep -n`
-  to see which section matched and the lines around it. A hit should carry its qualified reference
-  (`knowledge/DR-0057`; the scoped form `kb search SCOPE/ TERM` does, since 2026-10-14), the record's
-  status, and the matching passage, so the next step (`kb record show`) is obvious. Fits step D of `design/scoped-search-design.md` (grouped results with counts, every
-  row carrying its qualified identity); decide there whether the snippet is a per-kind rule or a common
-  one. Library: `KBSearchResult` has `SourceID` and `ProjectID` since v0.0.22 but no qualified reference
-  or status.
+- [x] **Search results should say where a hit is and carry enough to act on.** Done 2026-10-16, unreleased (for
+  v0.0.23). A hit, scoped or not, now carries a record's qualified reference and status and the passage that
+  matched (FTS5 `snippet()`, the matched words between « and »), and for a record the section it is in: the
+  bold label of the paragraph (`Decision:`), or `title:`. `KBSearchResult` gained `Ref`, `Status`, `Passage`
+  and `Section`; the scoped command no longer looks each record up one at a time for its reference. The
+  rule is per kind, not common: observations, concepts and projects have no reference, status or section, and
+  a concept or project has no passage. Tests: `searchhit_test.go`, `cmd/kb/searchhit_test.go`. Not done: the
+  passage for a short record includes the title and the start of the body (the whole text fits in the
+  snippet's 24 tokens), and a `kb search` hit has no line number in the file.
 
 - [x] **No verb showed how things are linked: counts of concept, source and record links.** Done 2026-10-16,
   unreleased (for v0.0.23). `kb stats` (a read verb, `--json`, exit 0 whatever it counts) reports rows per table,
