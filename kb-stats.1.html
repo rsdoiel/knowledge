@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-stats — row, link and check counts for the database</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb stats</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Reports the shape of the database without changing it, so a question
+such as “how many concept links are there” or “does any observation have
+no project” needs no SQL. It takes no arguments.</p>
+<p>The report has four parts.</p>
+<dl>
+<dt>rows</dt>
+<dd>
+how many rows each table has: projects, observations, concepts, sources,
+records, documents and document_sections.
+</dd>
+<dt>links</dt>
+<dd>
+how many rows each join table has: project_concepts,
+observation_concepts, record_concepts, document_section_concepts,
+observation_sources, observation_relations and record_relations.
+</dd>
+<dt>checks</dt>
+<dd>
+facts worth knowing, with a count. observations_without_project is
+normally 0. concepts_without_links counts concepts nothing links to,
+which is not an error (a concept can be added before it is used);
+kb-concept(1) delete removes one. sources_without_links counts sources
+no observation cites. records_without_project counts project-scope
+records with no project row, and documents_without_project counts
+documents with none; workspace-tier records have no project by design
+and are not counted.
+</dd>
+<dt>projects</dt>
+<dd>
+one line per project, by name: observations, records, documents and
+concepts. A project’s concepts are those tagged on the project, on its
+observations and on its records, each counted once, as kb-search(1)
+scopes them.
+</dd>
+</dl>
+<p>The counts are the answer, so the exit status is 0 whatever they say.
+Use kb-check-db(1) to ask whether the database has drifted from its
+dump. kb-concept(1) show says which projects one concept reaches.</p>
+<p>With –json the report is one object: rows, links and checks (each a
+map from name to count) and projects (a list of name, observations,
+records, documents and concepts).</p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1).</p>
+<dl>
+<dt>0</dt>
+<dd>
+the report was written
+</dd>
+<dt>2</dt>
+<dd>
+a flag or a surplus argument
+</dd>
+<dt>66</dt>
+<dd>
+no workspace or database found
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1), kb-check-db(1), kb-concept(1), kb-search(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>

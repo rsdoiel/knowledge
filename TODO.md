@@ -239,33 +239,18 @@
   works and both sides are written, but it is the second bullet above and
   should be revisited once `cancelled` exists.
 
-- [ ] **Ship the knowledge skills and an agent document in this repository** (**target v0.0.23, last**), so a
-  language-model harness or a system like Claude Code can use `kb` after installing it,
-  without hand-copying files out of the Laboratory workspace. Filed 2026-09-25 at
-  RSDOIEL's request. State today, so the item starts from facts:
-  - Three skills exist, `setup-knowledge-base`, `update-knowledge-base` and
-    `review-knowledge-base`, each a `SKILL.md` plus `scripts/compiled.bash` and
-    `compiled.ps1` (`compatibility: claude-code, harvey`). They live in the
-    Laboratory root's `agents/skills/` and again in `harvey/agents/skills/`; **every file
-    differs between the two copies**, and their `kb_version` pins disagree
-    (`setup` says 0.0.10; `update` and `review` say 0.0.12). Nothing states which copy is
-    canonical. This repository has neither skills nor an agent document.
-  - Wanted: (1) the three skills in this repository, made canonical, with the Laboratory
-    and `harvey` copies becoming consumers; (2) an agent document that tells a harness what
-    `kb` is and how to use it safely: the verbs, `--json`, the exit-code table (workspace
-    DR-0003), that writes go through `kb` and never raw SQL (it keeps the search index in
-    step), the decision-record workflow, and the standing rule that a model may write a
-    record but never accept one.
-  - To decide: the layout (`skills/` or `agents/skills/`); one agent document or an
-    `AGENTS.md` plus a `CLAUDE.md` that points at it, since harnesses look for different
-    names; how they are distributed (in the release zips, and whether `make install`
-    places them for Claude Code); how they are kept from drifting (a test that each
-    skill's `kb_version` matches `codemeta.json`, and the four-field release-prep check
-    extended to cover it); whether the Windows `.ps1` scripts stay.
-  - **Sequence:** after the exit-code work (X6), because the skill scripts currently read
-    `kb`'s exit status and the agent document should describe the new codes. `harvey`'s
-    own skills sync (H2 of its learning-mode plan, skills 0.6.1) should be checked so this
-    does not undo it. Wants a design note and a DR, since it fixes a canonical location.
+- [x] **Ship the knowledge skills and an agent document in this repository.** Done 2026-10-16, unreleased (for
+  v0.0.23; knowledge DR-0077, proposed). The three skills are in `agents/skills/` here, canonical, with their
+  `kb_version` at 0.0.23; `AGENTS.md` (what kb is, six rules, the verbs, the exit-code table, the record
+  workflow) and a one-line `CLAUDE.md` pointing at it are at the root. The release zips include `agents/`;
+  `make install-skills` (`SKILLS_DIR`, default `~/.claude/skills`) and `make check-skills` are opt-in, and
+  `make install` does not install skills. `cmd/kb/skills_test.go` fails when a skill's `kb_version` is not
+  `codemeta.json`'s version, a skill lacks a file, `AGENTS.md` misses a verb or an exit code, or a zip leaves out
+  `agents`. The review skill's script was run against the new kb on macOS; this machine has no `sqlite3`.
+  Still open: the Laboratory workspace's copies under `agents/skills/` are the old ones until someone runs
+  `make install-skills SKILLS_DIR=../agents/skills`; harvey's repository copies, if any, were not found
+  locally; the skills do not yet use `kb stats`, and a `stats` focus for the review skill is the obvious
+  addition.
 
 - [x] **Verbs that remove, unlink or retire, so a mistake is fixable without raw SQL.** Filed
   2026-09-25 at RSDOIEL's request, who wanted it resolved in the v0.0.14 release. **DONE 2026-09-25**

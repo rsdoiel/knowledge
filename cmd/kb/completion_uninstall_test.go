@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -27,7 +28,7 @@ func TestCompletion_InstallBashIsFoundByAPlainNewShell(t *testing.T) {
 		t.Fatalf("exit %d, stderr %q", code, errOut.String())
 	}
 	// A new interactive shell with no bash-completion package: just the startup file.
-	cmd := exec.Command(bash, "--noprofile", "--norc", "-c", `. "$HOME/.bashrc"; complete -p kb`)
+	cmd := exec.Command(bash, "--noprofile", "--norc", "-c", `. "$1"; complete -p kb`, "bash", bashStartupFile(home, runtime.GOOS))
 	cmd.Env = append(os.Environ(), "HOME="+home)
 	b, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(b), "-F _kb kb") {
@@ -77,7 +78,7 @@ func TestCompletion_UninstallBashRemovesScriptAndLine(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_DATA_HOME", "")
-	rc := filepath.Join(home, ".bashrc")
+	rc := bashStartupFile(home, runtime.GOOS)
 	os.WriteFile(rc, []byte("export A=1\nexport B=2\n"), 0o644)
 	var out, errOut bytes.Buffer
 	if code := mainRun([]string{"completion", "bash", "-install"}, &out, &errOut); code != 0 {

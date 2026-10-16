@@ -159,6 +159,18 @@ install: build
 	@echo ""
 	@echo "Make sure $(PREFIX)/man is in your MANPATH"
 
+# Skills go in the user's agent configuration, so they are not part of install:
+# make install-skills, or make install-skills SKILLS_DIR=agents/skills for a workspace.
+SKILLS_DIR ?= $(HOME)/.claude/skills
+
+install-skills: .FORCE
+	@mkdir -p "$(SKILLS_DIR)"
+	@for DNAME in agents/skills/*; do cp -vR "$$DNAME" "$(SKILLS_DIR)/"; done
+
+# check-skills says whether the installed skills match this repository's, which are canonical.
+check-skills: .FORCE
+	@for DNAME in agents/skills/*; do diff -r "$$DNAME" "$(SKILLS_DIR)/$$(basename $$DNAME)" >/dev/null 2>&1 && echo "same     $$(basename $$DNAME)" || echo "DIFFERS  $$(basename $$DNAME)"; done
+
 uninstall: .FORCE
 	@echo "Removing programs in $(PREFIX)/bin"
 	@for FNAME in $(PROGRAMS); do if [ -f "$(PREFIX)/bin/$${FNAME}$(EXT)" ]; then rm -v "$(PREFIX)/bin/$${FNAME}$(EXT)"; fi; done
@@ -174,46 +186,46 @@ setup_dist: .FORCE
 dist/Linux-x86_64: $(PROGRAMS)
 	@mkdir -p dist/bin
 	@for FNAME in $(PROGRAMS); do env  GOOS=linux GOARCH=amd64 go build -o "dist/bin/$${FNAME}" cmd/$${FNAME}/*.go; done
-	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Linux-x86_64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* $(DOCS)
+	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Linux-x86_64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
 dist/Linux-aarch64: $(PROGRAMS)
 	@mkdir -p dist/bin
 	@for FNAME in $(PROGRAMS); do env  GOOS=linux GOARCH=arm64 go build -o "dist/bin/$${FNAME}" cmd/$${FNAME}/*.go; done
-	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Linux-aarch64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* $(DOCS)
+	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Linux-aarch64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
 dist/macOS-x86_64: $(PROGRAMS)
 	@mkdir -p dist/bin
 	@for FNAME in $(PROGRAMS); do env GOOS=darwin GOARCH=amd64 go build -o "dist/bin/$${FNAME}" cmd/$${FNAME}/*.go; done
-	@cd dist && zip -r $(PROJECT)-v$(VERSION)-macOS-x86_64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* $(DOCS)
+	@cd dist && zip -r $(PROJECT)-v$(VERSION)-macOS-x86_64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
 
 dist/macOS-arm64: $(PROGRAMS)
 	@mkdir -p dist/bin
 	@for FNAME in $(PROGRAMS); do env GOOS=darwin GOARCH=arm64 go build -o "dist/bin/$${FNAME}" cmd/$${FNAME}/*.go; done
-	@cd dist && zip -r $(PROJECT)-v$(VERSION)-macOS-arm64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* $(DOCS)
+	@cd dist && zip -r $(PROJECT)-v$(VERSION)-macOS-arm64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
 
 dist/Windows-x86_64: $(PROGRAMS)
 	@mkdir -p dist/bin
 	@for FNAME in $(PROGRAMS); do env GOOS=windows GOARCH=amd64 go build -o "dist/bin/$${FNAME}.exe" cmd/$${FNAME}/*.go; done
-	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Windows-x86_64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* $(DOCS)
+	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Windows-x86_64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
 dist/Windows-arm64: $(PROGRAMS)
 	@mkdir -p dist/bin
 	@for FNAME in $(PROGRAMS); do env GOOS=windows GOARCH=arm64 go build -o "dist/bin/$${FNAME}.exe" cmd/$${FNAME}/*.go; done
-	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Windows-arm64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* $(DOCS)
+	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Windows-arm64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
 # Raspberry Pi OS (32 bit) based on report from Raspberry Pi Model 3B+
 dist/Linux-armv7l: $(PROGRAMS)
 	@mkdir -p dist/bin
 	@for FNAME in $(PROGRAMS); do env GOOS=linux GOARCH=arm GOARM=7 go build -o "dist/bin/$${FNAME}" cmd/$${FNAME}/*.go; done
-	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Linux-armv7l.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* $(DOCS)
+	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Linux-armv7l.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
 distribute_docs:
@@ -225,6 +237,7 @@ distribute_docs:
 	@cp -v INSTALL.md dist/
 	@cp -v CHANGES.md dist/
 	@cp -vR man dist/
+	@cp -vR agents dist/
 	@for DNAME in $(DOCS); do cp -vR $$DNAME dist/; done
 
 release: generate build save setup_dist distribute_docs dist/Linux-x86_64 dist/Linux-aarch64 dist/macOS-x86_64 dist/macOS-arm64 dist/Windows-x86_64 dist/Windows-arm64 dist/Linux-armv7l

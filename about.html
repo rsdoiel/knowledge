@@ -19,46 +19,76 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.22">knowledge 0.0.22</h2>
-<p>Search is scoped by a path, in the command and in the interface,
-<code>/</code> now filters every list, and every row of the interface’s
-menus is built. The decisions are DR-0072 to DR-0074.</p>
-<p>Searching. <code>kb search harvey/ "exit codes"</code> searches one
-project, <code>harvey/records</code> one kind in it,
-<code>workspace/</code> the workspace tier only and
-<code>/records</code> one kind everywhere; <code>kb search TERM</code>
-is unchanged, and a first word with no slash is still part of the term.
-Results are grouped by kind with counts, name a record by its qualified
-reference, show the projects a concept is in, and say
-<code>showing 50 of N</code> when they were cut. An unknown scope or
-kind is exit 2; <code>workspace/observations</code> and
-<code>harvey/projects</code> are exit 1 with the reason. In the
-interface, Search is a menu of scopes and a prompt that takes the same
-line, <code>S</code> opens it from any screen with the scope of where
-you are, and <code>kb search</code> on a terminal opens it.</p>
-<p>Filtering. <code>/</code> narrows the list in front of you as you
-type, on every list; Enter keeps the filter and Esc clears it.
-<code>/</code> no longer starts the search, <code>S</code> does.</p>
-<p>The interface. Check, the Browse lists, Recall, Suggest, Check
-retractions, Frontmatter (a checklist, written only on <code>y</code>),
-Enter on a search result, <code>d</code> to delete a concept, source or
-document, and <code>u</code> to unlink a concept from a project or cut
-one link of an observation are all on screens now, each with the typed
-or keyed confirmation its class needs and the command that does the
-same. <code>kb --json verbs</code> carries the menu fields.</p>
-<p>Changed. <code>source check-retractions</code> is classed as a
-changing write, so <code>:</code> asks first; on the command line
-nothing changes.</p>
-<p>For packagers and harvey: the library gains
-<code>SearchScoped</code>, <code>SearchKinds</code>,
-<code>ErrNoMembers</code> and <code>ObservationConcepts</code>, and
-<code>KBSearchResult</code> carries <code>SourceID</code> and
-<code>ProjectID</code>; <code>Search</code> is unchanged.</p>
-<p>Not checked in this release: the race detector was not run (the
-machine it runs on was not available), and the new screens were not
-tried by hand on macOS or Windows. The test suite passes on Linux
-(Raspberry Pi OS, arm64), and the built binary was driven on a
-pseudo-terminal there for the filter and the search prompt.</p>
+<h2 id="knowledge-0.0.23">knowledge 0.0.23</h2>
+<p>Notes get frontmatter at ingest, search hits say where they are,
+<code>kb stats</code> shows a database’s shape, and the knowledge skills
+and an agent document now ship in this repository. The decisions are
+DR-0076 and DR-0077 (both proposed).</p>
+<p>Notes. <code>kb document ingest PATH --project P</code>, on a
+terminal, offers frontmatter for a file that has none:
+<code>title</code>, <code>author</code>, <code>dateCreated</code> and
+the known concepts the text mentions as <code>keywords</code>, one at a
+time (Enter accepts, text replaces, <code>-</code> skips, <code>q</code>
+stops), written only after you confirm. <code>--no-prompt</code>,
+<code>--dry-run</code>, <code>--json</code> and a missing terminal never
+prompt. A date at the start of a file name,
+<code>2026-09-29-worklog.md</code>, is now the first
+<code>dateCreated</code> signal, here and in
+<code>kb document frontmatter</code>.</p>
+<p>Searching. A hit now carries a record’s qualified reference and
+status (<code>harvey/DR-0004 (accepted)</code>) and the passage that
+matched, the matched words between « and », with the section it is in
+for a record (<code>Decision:</code>, or <code>title:</code>). This is
+in <code>kb search TERM</code> as well as the scoped form, and in
+<code>--json</code>.</p>
+<p>Counting. <code>kb stats</code> reports rows per table, links per
+join table, five checks (<code>observations_without_project</code>,
+<code>concepts_without_links</code> and others) and a line per project,
+with no SQL; <code>--json</code> is one object.
+<code>kb concept show</code> says which projects a concept spans, tagged
+directly or through observations, records and document sections.</p>
+<p>Completion. <code>kb completion bash -install</code> now also adds a
+line to the bash startup file (<code>~/.bashrc</code>, or on macOS the
+first of <code>~/.bash_profile</code>, <code>~/.bash_login</code> and
+<code>~/.profile</code> that exists), because macOS’s bash 3.2 never
+reads the bash-completion directory, so completion did nothing in a new
+Terminal window. <code>-uninstall</code> removes what
+<code>-install</code> wrote, and <code>-check</code> says what is
+missing. Use <code>eval "$(kb completion bash)"</code> to try it in a
+session: <code>source &lt;(...)</code> silently does nothing in bash
+3.2.</p>
+<p>Fixed. <code>kb ingest</code> on a project directory failed on dated
+notes (<code>notes/2026-09-29-....md</code>, “no frontmatter”): the year
+read as a record id. A record is <code>NNNN-slug.md</code> and not
+<code>YYYY-MM-DD...</code>, and the walk skips <code>design</code>,
+<code>plans</code>, <code>feature_requests</code>, <code>notes</code>
+and <code>hand-off</code> below the directory you give it. The closing
+<code>kb: ingest: N error(s)</code> line no longer repeats the first
+error.</p>
+<p>Shipping. <code>agents/skills/</code> holds
+<code>setup-knowledge-base</code>, <code>update-knowledge-base</code>
+and <code>review-knowledge-base</code>, and <code>AGENTS.md</code> (with
+a <code>CLAUDE.md</code> that points at it) tells a harness what kb is,
+the rules for using it, the verbs and the exit codes. The release zips
+include them. <code>make install-skills</code> copies the skills to
+<code>~/.claude/skills</code> (<code>SKILLS_DIR</code> changes it) and
+<code>make check-skills</code> compares; <code>make install</code> does
+not install them. A test fails if a skill’s <code>kb_version</code> is
+not the release’s.</p>
+<p>For packagers and harvey: the library gains <code>Stats</code>,
+<code>StatCount</code>, <code>ProjectStats</code>,
+<code>ConceptSpan</code> and <code>ConceptDetailResult.Spans</code>, and
+<code>KBSearchResult</code> carries <code>Ref</code>,
+<code>Status</code>, <code>Passage</code> and <code>Section</code>;
+<code>Search</code> and <code>SearchScoped</code> take what they
+took.</p>
+<p>Checked in this release: the race detector passed on darwin/arm64
+(macOS), and the test suite passes on Linux (Raspberry Pi OS, arm64).
+The built binary was driven on a pseudo-terminal on Linux for the
+frontmatter prompts, and on macOS for <code>completion -install</code>,
+<code>-check</code> and <code>-uninstall</code> under /bin/bash 3.2 and
+for the review skill. Not checked: the frontmatter prompts by hand on
+macOS or Windows, and <code>completion</code> on Windows.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

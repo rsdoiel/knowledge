@@ -60,25 +60,43 @@ In the interface, `Enter` on a record reads it and `s` sets its status; both sho
 
 The moves are a table: `proposed` to `accepted`, `rejected`, `cancelled` or `superseded`; `accepted` to `cancelled` or `superseded`; `rejected` or `cancelled` back to `proposed`; `superseded` is final and needs `superseded_by` (use `kb record supersede`). `rejected` means considered and not pursued; `cancelled` means pursued or explored and then abandoned. Scripts use the direct form, `kb record set-status REF STATUS`, which is held to the same table. `kb record set-status REF accepted` exits 2 unless standard input and output are a terminal, and nothing turns that off, so a script or a model can propose, reject, cancel and supersede but not accept. The same holds for `kb document review promote SECTION_ID`, which makes a document summary trusted and searchable. `kb ingest` reports a status that arrives through a file edit, so that route is visible too. See [kb-record(1)](kb-record.1.md).
 
+## Counting, and notes
+
+```shell
+kb stats                          # rows, links and checks, and a line per project
+kb concept show toast             # what links to it, and the projects it spans
+kb document ingest notes/2026-09-29-worklog.md --project harvey
+```
+
+`kb stats` answers "how many concept links are there" and "does any observation have no project" without SQL. On a terminal, `kb document ingest` offers frontmatter for a note that has none (title, author, date and known concepts, one at a time, written only after you confirm); `--no-prompt` turns that off, and nothing prompts without a terminal. A file named `YYYY-MM-DD-...md` is a note: it needs no frontmatter and `kb ingest` never reads it as a decision record.
+
+## Using kb from an agent
+
+[AGENTS.md](AGENTS.md) tells a language-model harness what `kb` is and the rules for using it safely: write through `kb`, use `--json`, never accept a record, and what each exit code means. `agents/skills/` holds three skills that wrap the verbs (`setup-knowledge-base`, `update-knowledge-base`, `review-knowledge-base`); `make install-skills` copies them to `~/.claude/skills`.
+
 ## Release Notes
 
-- version: 0.0.22
+- version: 0.0.23
 - status: active
-- released: 2026-10-14
+- released: 2026-10-16
 
-Search is scoped by a path, in the command and in the interface, `/` now filters every list, and every row of the interface's menus is built. The decisions are DR-0072 to DR-0074.
+Notes get frontmatter at ingest, search hits say where they are, `kb stats` shows a database's shape, and the knowledge skills and an agent document now ship in this repository. The decisions are DR-0076 and DR-0077 (both proposed).
 
-Searching. `kb search harvey/ "exit codes"` searches one project, `harvey/records` one kind in it, `workspace/` the workspace tier only and `/records` one kind everywhere; `kb search TERM` is unchanged, and a first word with no slash is still part of the term. Results are grouped by kind with counts, name a record by its qualified reference, show the projects a concept is in, and say `showing 50 of N` when they were cut. An unknown scope or kind is exit 2; `workspace/observations` and `harvey/projects` are exit 1 with the reason. In the interface, Search is a menu of scopes and a prompt that takes the same line, `S` opens it from any screen with the scope of where you are, and `kb search` on a terminal opens it.
+Notes. `kb document ingest PATH --project P`, on a terminal, offers frontmatter for a file that has none: `title`, `author`, `dateCreated` and the known concepts the text mentions as `keywords`, one at a time (Enter accepts, text replaces, `-` skips, `q` stops), written only after you confirm. `--no-prompt`, `--dry-run`, `--json` and a missing terminal never prompt. A date at the start of a file name, `2026-09-29-worklog.md`, is now the first `dateCreated` signal, here and in `kb document frontmatter`.
 
-Filtering. `/` narrows the list in front of you as you type, on every list; Enter keeps the filter and Esc clears it. `/` no longer starts the search, `S` does.
+Searching. A hit now carries a record's qualified reference and status (`harvey/DR-0004 (accepted)`) and the passage that matched, the matched words between « and », with the section it is in for a record (`Decision:`, or `title:`). This is in `kb search TERM` as well as the scoped form, and in `--json`.
 
-The interface. Check, the Browse lists, Recall, Suggest, Check retractions, Frontmatter (a checklist, written only on `y`), Enter on a search result, `d` to delete a concept, source or document, and `u` to unlink a concept from a project or cut one link of an observation are all on screens now, each with the typed or keyed confirmation its class needs and the command that does the same. `kb --json verbs` carries the menu fields.
+Counting. `kb stats` reports rows per table, links per join table, five checks (`observations_without_project`, `concepts_without_links` and others) and a line per project, with no SQL; `--json` is one object. `kb concept show` says which projects a concept spans, tagged directly or through observations, records and document sections.
 
-Changed. `source check-retractions` is classed as a changing write, so `:` asks first; on the command line nothing changes.
+Completion. `kb completion bash -install` now also adds a line to the bash startup file (`~/.bashrc`, or on macOS the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists), because macOS's bash 3.2 never reads the bash-completion directory, so completion did nothing in a new Terminal window. `-uninstall` removes what `-install` wrote, and `-check` says what is missing. Use `eval "$(kb completion bash)"` to try it in a session: `source <(...)` silently does nothing in bash 3.2.
 
-For packagers and harvey: the library gains `SearchScoped`, `SearchKinds`, `ErrNoMembers` and `ObservationConcepts`, and `KBSearchResult` carries `SourceID` and `ProjectID`; `Search` is unchanged.
+Fixed. `kb ingest` on a project directory failed on dated notes (`notes/2026-09-29-....md`, "no frontmatter"): the year read as a record id. A record is `NNNN-slug.md` and not `YYYY-MM-DD...`, and the walk skips `design`, `plans`, `feature_requests`, `notes` and `hand-off` below the directory you give it. The closing `kb: ingest: N error(s)` line no longer repeats the first error.
 
-Not checked in this release: the race detector was not run (the machine it runs on was not available), and the new screens were not tried by hand on macOS or Windows. The test suite passes on Linux (Raspberry Pi OS, arm64), and the built binary was driven on a pseudo-terminal there for the filter and the search prompt.
+Shipping. `agents/skills/` holds `setup-knowledge-base`, `update-knowledge-base` and `review-knowledge-base`, and `AGENTS.md` (with a `CLAUDE.md` that points at it) tells a harness what kb is, the rules for using it, the verbs and the exit codes. The release zips include them. `make install-skills` copies the skills to `~/.claude/skills` (`SKILLS_DIR` changes it) and `make check-skills` compares; `make install` does not install them. A test fails if a skill's `kb_version` is not the release's.
+
+For packagers and harvey: the library gains `Stats`, `StatCount`, `ProjectStats`, `ConceptSpan` and `ConceptDetailResult.Spans`, and `KBSearchResult` carries `Ref`, `Status`, `Passage` and `Section`; `Search` and `SearchScoped` take what they took.
+
+Checked in this release: the race detector passed on darwin/arm64 (macOS), and the test suite passes on Linux (Raspberry Pi OS, arm64). The built binary was driven on a pseudo-terminal on Linux for the frontmatter prompts, and on macOS for `completion -install`, `-check` and `-uninstall` under /bin/bash 3.2 and for the review skill. Not checked: the frontmatter prompts by hand on macOS or Windows, and `completion` on Windows.
 
 
 ## Software Requirements

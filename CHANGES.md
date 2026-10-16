@@ -3,6 +3,75 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.23 — 2026-10-16
+
+Notes get frontmatter at ingest, search hits say where they are, `kb stats` shows a database's shape, and the
+knowledge skills and an agent document ship in this repository. Two bugs found on a work machine are fixed
+(completion on macOS, and dated notes read as decision records). The decisions are knowledge DR-0076 and
+DR-0077, both proposed; the plan is `agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md`.
+
+### Added
+
+- **`kb document ingest` offers frontmatter for a note that has none** (DR-0076). On a terminal, a file with no
+  frontmatter block is offered `title`, `author`, `dateCreated` and `keywords` (the known concepts the text
+  mentions) one at a time: Enter accepts the proposal, text replaces it, `-` skips, `q` stops; the file is
+  written only after a final confirmation, then ingested as before. `--no-prompt` turns it off, and it is off
+  with `--dry-run`, with `--json` and without a terminal. It never creates a concept. A date at the start of a
+  file's name (`2026-09-29-worklog.md`) is the first `dateCreated` signal, for `kb document frontmatter` too.
+- **`kb stats`** (a read verb, `--json`): rows per table, links per join table, five checks
+  (`observations_without_project`, `concepts_without_links`, `sources_without_links`,
+  `records_without_project`, `documents_without_project`) and a line per project (a project's concepts are the
+  union of those tagged on the project, its observations and its records). Exit 0 whatever it counts.
+- **`kb concept show` names the projects a concept spans**, tagged directly or through observations, records
+  and document sections (a `spans` section, and `spans` in `--json`).
+- **A search hit carries more.** A record hit names its qualified reference and status
+  (`harvey/DR-0004 (accepted)`), and a hit shows the passage that matched with the matched words between « and »,
+  and for a record the section it is in (`Decision:`, or `title:`). In `kb search TERM` and the scoped form, and
+  in `--json` (`ref`, `status`, `passage`, `section`; the unscoped list uses the library's names).
+- **`kb completion SHELL -uninstall` and `-check`.** `-uninstall` removes the script if kb wrote it and the
+  line kb added; `-check` says whether the script is there and current and the startup file sources it, one
+  line per finding with the command that fixes it, and for bash the two commands that show what a running
+  shell has. Exit 1 when nothing was found to remove, or a check fails.
+- **The knowledge skills and `AGENTS.md` ship here** (DR-0077). `agents/skills/` holds `setup-knowledge-base`,
+  `update-knowledge-base` and `review-knowledge-base`, canonical, each pinned to this release in
+  `metadata.kb_version`; `AGENTS.md` says what kb is, the rules for using it safely, the verbs and the exit
+  codes, and `CLAUDE.md` points at it. The release zips include `agents/`. `make install-skills` copies the
+  skills to `~/.claude/skills` (`SKILLS_DIR` changes it), `make check-skills` compares, and `make install`
+  does not install them. A test fails when a skill's `kb_version` is not `codemeta.json`'s version.
+- **Library** (additive): `Stats`, `StatCount`, `ProjectStats`, `ConceptSpan` and `ConceptDetailResult.Spans`;
+  `KBSearchResult` carries `Ref`, `Status`, `Passage` and `Section`.
+
+### Changed
+
+- **`kb completion bash -install` adds a line to the bash startup file** (`~/.bashrc`; on macOS the first of
+  `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists), as well as writing the script, so it works
+  where no bash-completion loader reads the directory. The script's header and the manual give
+  `eval "$(kb completion bash)"` in place of `source <(...)`.
+- **`kb ingest` and `kb index` read a record only from a name like `NNNN-slug.md`**, not from one that begins
+  with a date, and an ingest walk skips `design`, `plans`, `feature_requests`, `notes` and `hand-off` below the
+  directory it was given (a directory named on the command line is read whatever it is called).
+- **`kb document frontmatter` proposes a different `dateCreated` for a file whose name begins with a date.**
+  It was git's first commit; it is now the date in the name, source `filename`.
+
+### Fixed
+
+- **`kb completion bash -install` left a new Terminal window on macOS without completion.** `/bin/bash` 3.2
+  never reads the bash-completion user directory the script was written to, and nothing else loaded it. The
+  startup line is the fix; `-check` is how to debug it. Found on macOS 26 with a work project.
+- **`kb ingest agents/projects/NAME` failed on dated notes** with "no frontmatter: file does not start with
+  ---" for `notes/2026-09-29-....md`: the year read as a record id. Notes need no frontmatter.
+- **The closing `kb: ingest: N error(s)` line repeated the first error** the summary had just listed; it
+  keeps the count and the exit class.
+
+### Upgrade notes
+
+- `kb document frontmatter` on a dated file name proposes the name's date, not git's. Scripts that read the
+  `dateCreated` proposal's value will see `2026-09-29` and source `filename`.
+- On a terminal, `kb document ingest` on a note with no frontmatter now asks questions. Pass `--no-prompt` to
+  keep it silent; scripts and `--json` are unaffected.
+- The skills in a workspace's `agents/skills/` are not updated by this release: run `make install-skills
+  SKILLS_DIR=agents/skills` (or `~/.claude/skills`) to take the new ones.
+
 ## v0.0.22 — 2026-10-14
 
 Search is scoped by a path, in the command and in the interface (knowledge DR-0072 to DR-0074,

@@ -22,8 +22,8 @@
 <p>kb-document — ingest and review narrative documents at graduated
 abstraction levels</p>
 <h1 id="synopsis">SYNOPSIS</h1>
-<p>kb document ingest PATH –project P [–title T] [–format F]
-[–dry-run]</p>
+<p>kb document ingest PATH –project P [–title T] [–format F] [–dry-run]
+[–no-prompt]</p>
 <p>kb document list [–project P]</p>
 <p>kb document show ID</p>
 <p>kb document review list [–project P] [–status S]</p>
@@ -58,7 +58,20 @@ with no match is reported, never deleted.</p>
 <dt>ingest</dt>
 <dd>
 parse and segment PATH, creating the document and its sections on first
-ingest, or reconciling a changed file against its existing rows
+ingest, or reconciling a changed file against its existing rows. On a
+terminal, a file with no frontmatter block (a note, say) is first
+offered one: <code>title</code>, <code>author</code> and
+<code>dateCreated</code> are proposed one at a time as for the
+frontmatter subverb below (Enter accepts, text replaces, - skips, q
+stops), then the known concepts the text mentions as
+<code>keywords</code>, and the file is written only after a final
+confirmation. A new concept is never created here. Stopping, declining
+or input that ends leaves the file as it was, and the note is ingested
+as before. <code>--no-prompt</code> turns the offer off; it is also off
+with <code>--dry-run</code>, with the global <code>--json</code>, and
+whenever standard input or output is not a terminal, and nothing makes
+it appear in those cases. A file that already has a frontmatter block is
+never offered one.
 </dd>
 <dt>list</dt>
 <dd>
@@ -142,10 +155,13 @@ unlike tag/fuzzy-tag, not scoped by –project, since a human reviews one
 file at a time. A bare invocation (no –accept/–accept-keywords/–set)
 only reports; nothing is ever written without an explicit selection.
 <code>title</code>/<code>author</code>/<code>dateCreated</code> are
-absent-only – never overwritten once present. <code>author</code> is a
-layered signal: a byline in the document’s own prose wins, then git’s
-earliest-commit author, then <code>git config user.name</code> – when
-signals disagree, the report shows all of them, not just the winner.
+absent-only – never overwritten once present. <code>dateCreated</code>
+comes from a YYYY-MM-DD at the start of the file’s name
+(notes/2026-09-29-worklog.md) when there is one, then git’s first
+commit, then the file’s time. <code>author</code> is a layered signal: a
+byline in the document’s own prose wins, then git’s earliest-commit
+author, then <code>git config user.name</code> – when signals disagree,
+the report shows all of them, not just the winner.
 <code>dateModified</code> is the one exception to absent-only: always
 recomputed from git’s most recent commit (filesystem mtime otherwise)
 and rewritten on every accepted run, since a stale value is worse than a

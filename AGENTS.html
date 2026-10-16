@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <!-- <li><a href="search.html">Search</a></li> -->
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="agents.md-using-kb-the-knowledge-base-tool">AGENTS.md — using
+<code>kb</code>, the knowledge base tool</h1>
+<p>This file is for a language-model harness (Claude Code, harvey, or
+another) that has been pointed at a workspace with a
+<code>knowledge.db</code>. It says what <code>kb</code> is and how to
+use it safely. <code>kb help</code> and <code>kb help TOPIC</code> are
+the full manuals; <code>kb verbs --json</code> lists every verb, subverb
+and flag with what it does to the database.</p>
+<h2 id="what-kb-is">What <code>kb</code> is</h2>
+<p><code>kb</code> reads and writes <code>agents/knowledge.db</code>, a
+SQLite3 database kept at the root of a workspace. It holds
+<strong>projects</strong>, <strong>observations</strong> (dated notes:
+<code>note</code>, <code>finding</code>, <code>decision</code>,
+<code>question</code>, <code>hypothesis</code>),
+<strong>concepts</strong> (named ideas that span projects),
+<strong>sources</strong> (cited works), <strong>decision
+records</strong> (one Markdown file each, indexed), and narrative
+<strong>documents</strong> with summaries.
+<code>agents/knowledge.jsonl</code> beside it is the authoritative copy
+that travels through git. <code>kb</code> finds the workspace by walking
+up from the current directory; <code>--db PATH</code> names one.</p>
+<h2 id="rules">Rules</h2>
+<ol type="1">
+<li><strong>Write through <code>kb</code>, never raw SQL.</strong>
+<code>kb</code> keeps the full-text index in step with every write; a
+hand-written <code>INSERT</code> does not. Raw <code>sqlite3</code> is
+for reading what no verb covers.</li>
+<li><strong>Use <code>--json</code> when a program reads the
+output.</strong> It goes before the verb:
+<code>kb --json search    toast</code>. Errors go to standard error, so
+standard output stays parseable.</li>
+<li><strong>Never accept a decision record, and never promote a document
+summary.</strong> A model may write a record (it is created
+<code>proposed</code>) and may draft a summary.
+<code>kb record set-status REF accepted</code> and
+<code>kb document review promote ID</code> exit 2 without a terminal,
+with no flag to change that. Tell the person which record to review;
+they run <code>! kb record set-status REF</code> themselves.</li>
+<li><strong>Preview before you apply.</strong> <code>--dry-run</code> is
+on <code>ingest</code>, <code>document ingest</code>,
+<code>document tag</code>, <code>document fuzzy-tag</code>,
+<code>document frontmatter</code>, <code>record fuzzy-tag</code>,
+<code>concept delete</code>, <code>project    delete</code> and others.
+The verb table calls these <code>plan_apply</code>.</li>
+<li><strong>Do not open the interface.</strong> <code>kb</code> with no
+verb, a bare group (<code>kb record</code>) and <code>kb -i</code> need
+a terminal and exit 2 without one. Give the whole command.</li>
+<li><strong>Ingest one corpus at a time.</strong>
+<code>kb ingest agents/projects/NAME/decisions</code>, or
+<code>agents/decisions</code>. The path is relative to the current
+directory. A file named <code>YYYY-MM-DD-...md</code> is a note, not a
+record, and notes need no frontmatter.</li>
+</ol>
+<h2 id="verbs">Verbs</h2>
+<p>Each is <code>kb VERB</code>; the class is what it does to the
+database.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th scope="col">Verb</th>
+<th scope="col">Class</th>
+<th scope="col">Use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>project</code>
+(<code>add list show concepts set-status set-description rename delete</code>)</td>
+<td>read, additive, changing, removing</td>
+<td>one row per git-repository experiment</td>
+</tr>
+<tr class="even">
+<td><code>observation</code>
+(<code>add list show update sources delete</code>)</td>
+<td>read, additive, changing, removing</td>
+<td><code>kb observation add --project P KIND BODY</code></td>
+</tr>
+<tr class="odd">
+<td><code>concept</code>
+(<code>add list show recall rename delete suggest</code>)</td>
+<td>read, additive, changing, removing</td>
+<td><code>show</code> lists links and the projects a concept spans</td>
+</tr>
+<tr class="even">
+<td><code>link</code>, <code>unlink</code></td>
+<td>additive, removing</td>
+<td>link a project or observation to a concept, or an observation to a
+source</td>
+</tr>
+<tr class="odd">
+<td><code>source</code>
+(<code>add list show remove retract link check-retractions</code>)</td>
+<td>read, additive, changing, removing</td>
+<td>cited works; <code>check-retractions</code> calls the network</td>
+</tr>
+<tr class="even">
+<td><code>search</code></td>
+<td>read</td>
+<td><code>kb search TERM</code>, or scoped:
+<code>kb search harvey/records TERM</code>,
+<code>kb search /concepts TERM</code></td>
+</tr>
+<tr class="odd">
+<td><code>record</code>
+(<code>list pending show set-status supersede fmt new concepts delete fuzzy-tag</code>)</td>
+<td>read, additive, changing, removing</td>
+<td>decision records; refer to one as <code>SCOPE/DR-NNNN</code>,
+<code>harvey/DR-0004</code></td>
+</tr>
+<tr class="even">
+<td><code>ingest</code></td>
+<td>plan_apply</td>
+<td>index a directory of record files</td>
+</tr>
+<tr class="odd">
+<td><code>index</code></td>
+<td>direct</td>
+<td>regenerate a <code>decisions/index.md</code></td>
+</tr>
+<tr class="even">
+<td><code>document</code>
+(<code>ingest draft review list review promote show tag fuzzy-tag frontmatter delete</code>)</td>
+<td>guided, plan_apply</td>
+<td>narrative documents; summaries need a person to promote</td>
+</tr>
+<tr class="odd">
+<td><code>summary</code>, <code>format</code></td>
+<td>read</td>
+<td>formatted overviews</td>
+</tr>
+<tr class="even">
+<td><code>stats</code></td>
+<td>read</td>
+<td>counts of rows, links and checks, and a line per project</td>
+</tr>
+<tr class="odd">
+<td><code>check-db</code></td>
+<td>read</td>
+<td>compare the database with its JSON-L dump</td>
+</tr>
+<tr class="even">
+<td><code>export</code>, <code>import</code>, <code>merge</code></td>
+<td>cli_only</td>
+<td>portable snapshots and reconciling two databases</td>
+</tr>
+<tr class="odd">
+<td><code>init</code>, <code>completion</code>, <code>verbs</code></td>
+<td>cli_only</td>
+<td>create a workspace, shell completion, the verb table</td>
+</tr>
+</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<p>The same table in every command-line tool in the workspace (workspace
+DR-0003). Read the number before the message.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th scope="col">Code</th>
+<th scope="col">Class</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0</td>
+<td>ok</td>
+<td>Success.</td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td>negative</td>
+<td>The command ran and the answer is no: nothing found, a stale index,
+a state that forbids it. Not a failure.</td>
+</tr>
+<tr class="odd">
+<td>2</td>
+<td>usage</td>
+<td>The command line is wrong and nothing was attempted. Also: refused
+without a terminal.</td>
+</tr>
+<tr class="even">
+<td>65</td>
+<td>data</td>
+<td>Content <code>kb</code> read is wrong: a malformed record or
+file.</td>
+</tr>
+<tr class="odd">
+<td>66</td>
+<td>no_input</td>
+<td>A named input or the workspace is missing.</td>
+</tr>
+<tr class="even">
+<td>69</td>
+<td>unavailable</td>
+<td>A service cannot be reached.</td>
+</tr>
+<tr class="odd">
+<td>70</td>
+<td>internal</td>
+<td>A bug. Report it.</td>
+</tr>
+<tr class="even">
+<td>73</td>
+<td>cant_create</td>
+<td>An output cannot be created, or a file kb did not write is in the
+way.</td>
+</tr>
+<tr class="odd">
+<td>74</td>
+<td>io</td>
+<td>A read or write failed part way.</td>
+</tr>
+<tr class="even">
+<td>75</td>
+<td>temp_fail</td>
+<td>Retry later (a locked database).</td>
+</tr>
+<tr class="odd">
+<td>77</td>
+<td>no_permission</td>
+<td>The operating system refused access.</td>
+</tr>
+<tr class="even">
+<td>78</td>
+<td>config</td>
+<td>A configuration file is present but wrong.</td>
+</tr>
+</tbody>
+</table>
+<p>A script treats 1 as an answer and anything above it as a failure to
+pass on.</p>
+<h2 id="decision-records">Decision records</h2>
+<p>A record is
+<code>agents/projects/PROJECT/decisions/NNNN-slug.md</code> (or
+<code>agents/decisions/</code> for the workspace tier), with YAML
+frontmatter, specified in <code>DECISION_RECORD_FORMAT.md</code> at the
+workspace root. Scaffold one with
+<code>kb record new --project P --title T --trigger design</code>, fill
+in the body, then <code>kb ingest</code> the directory. Records are
+<code>proposed</code> until a person accepts them.</p>
+<h2 id="skills">Skills</h2>
+<p><code>agents/skills/</code> in this repository holds three skills
+that wrap the verbs above: <code>setup-knowledge-base</code>,
+<code>update-knowledge-base</code> and
+<code>review-knowledge-base</code>. Install them for Claude Code with
+<code>make install-skills</code>. Each needs <code>kb</code> of the
+version in its <code>kb_version</code> metadata or later, and says so at
+the top.</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
