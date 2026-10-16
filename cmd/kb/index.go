@@ -318,7 +318,7 @@ func discoverIndexedCorpora(root string) ([]string, error) {
 			return err
 		}
 		for _, e := range entries {
-			if !e.IsDir() && recordFilePattern.MatchString(e.Name()) {
+			if !e.IsDir() && isRecordFileName(e.Name()) {
 				dirs = append(dirs, p)
 				break
 			}

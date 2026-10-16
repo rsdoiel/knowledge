@@ -3,6 +3,19 @@
 
 ## Bugs
 
+- [x] **`kb ingest` treated a dated note as a decision record and failed on its missing frontmatter.** Fixed
+  2026-10-16, unreleased (reported the same day on v0.0.21, macmini-rd). `kb ingest agents/projects/clasm`
+  printed `4 failed` for `notes/2026-09-29-....md` and three more. `recordFilePattern` (`^[0-9]{4}-.*\.md$`)
+  took the year of a date-prefixed name for a record id, and the walk is recursive. A record file name is now
+  `NNNN-slug.md` and not `YYYY-MM-DD...` (`isRecordFileName`, used by `kb ingest` and `kb index`). Notes
+  need no frontmatter. Tests: `TestCmdIngest_DatedNotesAreNotRecords` (a project directory with `decisions/`
+  and `notes/`, the shape of the report) and `TestRecordFilePattern`; both failed first. Checked on the
+  real data: a dry run of the new build on macmini-rd over `agents/projects/clasm` gives 190 skipped, 0
+  failed, exit 0, where v0.0.21 gave 4 failed. Not done: a walk still reads `0001-x.md` files under `design/`
+  or `plans/` if a project directory has any; restricting the walk to `decisions/` directories was left out
+  because a custom corpus directory can have any name. Also open: the `error:` lines and the closing `kb:`
+  line repeat the first error.
+
 - [x] **`kb import` silently rewrote an observation `kind` outside the vocabulary to `note`, which
   made `kb check-db` report a false "diverged".** Fixed 2026-09-29 (DR-0054, accepted): import keeps
   the kind and reports a warning, exit 0. Tests: `importkind_test.go` (library and `cmd/kb`).
@@ -39,6 +52,17 @@
   `TODO.md`.
 
 ## Requested features
+
+- [ ] **An interactive frontmatter editor for notes, offered at ingest (requested 2026-10-16).** Notes
+  (`agents/projects/<project>/notes/`) carry no required frontmatter and `kb ingest` does not read them as
+  records (see the bug above). When a note is brought into the knowledge base as a document (`kb document
+  ingest`), a note without frontmatter is accepted as plain prose and gets no title, date, project or
+  concepts. Offer to fill them in: on an interactive terminal, `kb document ingest` (and a `Documents` menu
+  row) opens a small form per note lacking frontmatter, prefilled from what the file already says (the
+  first H1 as `title`, the `YYYY-MM-DD` filename prefix as `date`, the project from the path, concept
+  suggestions from `kb concept suggest`), and writes the block at the top of the file only on confirmation.
+  `--no-prompt` and non-terminal input keep today's behaviour. Builds on `kb document frontmatter`
+  (the generator, which already does the non-interactive case) and the checklist in Documents → Frontmatter….
 
 - [x] **DONE 2026-10-14, unreleased (for v0.0.22): every row of the menus is built.** Built since v0.0.21:
   Check, Concepts → Browse, Recall and Suggest, Documents → Browse, Sources → Browse and Check retractions,

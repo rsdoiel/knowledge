@@ -21,6 +21,27 @@ func init() {
 // dash, a slug. The generated index.md deliberately does not match.
 var recordFilePattern = regexp.MustCompile(`^[0-9]{4}-.*\.md$`)
 
+// datedNamePattern matches a name that starts with a date, YYYY-MM-DD. A dated
+// note (notes/2026-09-29-worklog.md) would otherwise pass for record 2026.
+var datedNamePattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}([-.]|$)`)
+
+/** isRecordFileName reports whether a file name is a decision record's:
+ * NNNN-slug.md, and not a name that begins with a date.
+ *
+ * Parameters:
+ *   name (string) — a file name without its directory.
+ *
+ * Returns:
+ *   bool — true for 0042-use-sqlite.md; false for index.md and for
+ *   2026-09-29-worklog.md.
+ *
+ * Example:
+ *   isRecordFileName("0042-use-sqlite.md") // true
+ */
+func isRecordFileName(name string) bool {
+	return recordFilePattern.MatchString(name) && !datedNamePattern.MatchString(name)
+}
+
 // wikilinkPattern matches a [[Name]] inline concept tag. Simple and
 // non-nested by design decision — see wikilink-tagging-design.md decision 3.
 var wikilinkPattern = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
@@ -243,7 +264,7 @@ func collectRecordFilesIn(dir string) ([]string, error) {
 	}
 	var files []string
 	for _, e := range entries {
-		if e.IsDir() || !recordFilePattern.MatchString(e.Name()) {
+		if e.IsDir() || !isRecordFileName(e.Name()) {
 			continue
 		}
 		files = append(files, filepath.Join(dir, e.Name()))
@@ -260,7 +281,7 @@ func collectRecordFiles(dir string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !recordFilePattern.MatchString(d.Name()) {
+		if d.IsDir() || !isRecordFileName(d.Name()) {
 			return nil
 		}
 		files = append(files, p)

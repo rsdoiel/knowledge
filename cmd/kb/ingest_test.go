@@ -1066,3 +1066,45 @@ func TestCmdIngest_MissingRowNamesRecordDelete(t *testing.T) {
 		t.Errorf("the advice does not give the command that removes the row: %q", got)
 	}
 }
+
+// Reported 2026-10-16: `kb ingest agents/projects/clasm` failed on
+// notes/2026-09-29-....md, "no frontmatter". The year of a dated note's name
+// satisfied the four-digit record id. Notes are not records and need no
+// frontmatter; ingesting a project directory reads only its records.
+func TestCmdIngest_DatedNotesAreNotRecords(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	proj := filepath.Join(root, "clasm")
+	testRecord{ID: "0001", Project: "clasm"}.write(t, filepath.Join(proj, "decisions"))
+	notes := filepath.Join(proj, "notes")
+	if err := os.MkdirAll(notes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"2026-09-29-ownership-verification-steps-0-2.md", "2026-09-30-cli-restore-forms-live-run.md"} {
+		if err := os.WriteFile(filepath.Join(notes, name), []byte("# A note\n\nNo frontmatter.\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s := runIngest(t, kb, proj)
+	if s.Added != 1 || s.Failed != 0 {
+		t.Errorf("summary = %+v, want 1 added and no failures", s)
+	}
+}
+
+func TestRecordFilePattern(t *testing.T) {
+	for name, want := range map[string]bool{
+		"0001-slug.md":                 true,
+		"0160-iam-instance-profile.md": true,
+		"2026-0001-odd-but-fine.md":    true,
+		"2026-09-29-a-note.md":         false,
+		"2026-09-30.md":                false,
+		"2026-09-29-0001-dated-id.md":  false,
+		"index.md":                     false,
+		"0001-slug.txt":                false,
+		"0001.md":                      false,
+	} {
+		if got := isRecordFileName(name); got != want {
+			t.Errorf("%q: matches = %v, want %v", name, got, want)
+		}
+	}
+}
