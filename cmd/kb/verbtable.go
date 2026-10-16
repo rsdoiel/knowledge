@@ -146,7 +146,7 @@ var verbTable = []verbSpec{
 		leaf("list", classRead, mi("Browse", "every document", 1, "", "kb document list")), sub("show", classRead), leaf("tag", classPlanApply, mi("Tag…", "insert explicit concept links", 4, "", "kb document tag --project P")), leaf("fuzzy-tag", classPlanApply, mi("Fuzzy-tag…", "footnote near-miss concept names", 5, "", "kb document fuzzy-tag --project P")),
 		leaf("frontmatter", classPlanApply, mi("Frontmatter…", "propose frontmatter for a file", 6, "", "kb document frontmatter PATH")), sub("delete", classRemoving),
 	}, Flags: []string{"--project", "--concept", "--dry-run", "--accept", "--accept-keywords", "--set", "--by",
-		"--confidence", "--status", "--title", "--format"}},
+		"--confidence", "--status", "--title", "--format", "--no-prompt"}},
 	{Name: "export", Summary: "write a portable JSON-L snapshot of the database", Class: classCLIOnly,
 		Flags: []string{"--project", "--out"}},
 	{Name: "format", Summary: "a fully assembled Markdown view of one project or every project", Class: classRead,

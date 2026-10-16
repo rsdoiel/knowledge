@@ -454,7 +454,7 @@ const DocumentHelpText = `%{app_name}-document(1) user manual | version {version
 
 # SYNOPSIS
 
-{app_name} document ingest PATH --project P [--title T] [--format F] [--dry-run]
+{app_name} document ingest PATH --project P [--title T] [--format F] [--dry-run] [--no-prompt]
 
 {app_name} document list [--project P]
 
@@ -499,7 +499,17 @@ match is reported, never deleted.
 
 ingest
 : parse and segment PATH, creating the document and its sections on first
-  ingest, or reconciling a changed file against its existing rows
+  ingest, or reconciling a changed file against its existing rows. On a
+  terminal, a file with no frontmatter block (a note, say) is first offered
+  one: ` + "`title`" + `, ` + "`author`" + ` and ` + "`dateCreated`" + ` are proposed one at a time as for
+  the frontmatter subverb below (Enter accepts, text replaces, - skips, q
+  stops), then the known concepts the text mentions as ` + "`keywords`" + `, and the
+  file is written only after a final confirmation. A new concept is never
+  created here. Stopping, declining or input that ends leaves the file as it
+  was, and the note is ingested as before. ` + "`--no-prompt`" + ` turns the offer off;
+  it is also off with ` + "`--dry-run`" + `, with the global ` + "`--json`" + `, and whenever
+  standard input or output is not a terminal, and nothing makes it appear in
+  those cases. A file that already has a frontmatter block is never offered one.
 
 list
 : print matching documents, one per line
@@ -574,7 +584,9 @@ frontmatter
   a time. A bare invocation (no --accept/--accept-keywords/--set) only
   reports; nothing is ever written without an explicit selection.
   ` + "`title`" + `/` + "`author`" + `/` + "`dateCreated`" + ` are absent-only -- never
-  overwritten once present. ` + "`author`" + ` is a layered signal: a byline in
+  overwritten once present. ` + "`dateCreated`" + ` comes from a YYYY-MM-DD at the start
+  of the file's name (notes/2026-09-29-worklog.md) when there is one, then
+  git's first commit, then the file's time. ` + "`author`" + ` is a layered signal: a byline in
   the document's own prose wins, then git's earliest-commit author, then
   ` + "`git config user.name`" + ` -- when signals disagree, the report shows all
   of them, not just the winner. ` + "`dateModified`" + ` is the one exception to

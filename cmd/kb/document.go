@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -202,26 +203,38 @@ type documentIngestSummary = knowledge.DocumentIngestResult
 // shared splitFlags (cmd/kb/flagsplit.go) rather than flag.FlagSet, which
 // stops parsing at the first non-flag argument -- the wrong behavior for
 // `document ingest PATH --project P`, where PATH comes first.
-func parseDocumentIngestFlags(args []string) (project, title, format string, dryRun bool, positional []string, err error) {
+func parseDocumentIngestFlags(args []string) (project, title, format string, dryRun, noPrompt bool, positional []string, err error) {
 	strFlags := map[string]*string{"--project": &project, "--title": &title, "--format": &format}
-	boolFlags := map[string]*bool{"--dry-run": &dryRun}
+	boolFlags := map[string]*bool{"--dry-run": &dryRun, "--no-prompt": &noPrompt}
 	positional, err = splitFlags(args, strFlags, boolFlags)
-	return project, title, format, dryRun, positional, err
+	return project, title, format, dryRun, noPrompt, positional, err
 }
 
 func cmdDocumentIngest(kb *knowledge.KnowledgeBase, jsonOut bool, args []string, out io.Writer) error {
-	project, title, format, dryRun, positional, err := parseDocumentIngestFlags(args)
+	project, title, format, dryRun, noPrompt, positional, err := parseDocumentIngestFlags(args)
 	if err != nil {
 		return err
 	}
 	if project == "" || len(positional) != 1 {
-		return usageErrorf("usage: document ingest PATH --project P [--title T] [--format F] [--dry-run]")
+		return usageErrorf("usage: document ingest PATH --project P [--title T] [--format F] [--dry-run] [--no-prompt]")
 	}
 	path := positional[0]
 
 	p, err := kb.ProjectByName(project)
 	if err != nil || p == nil {
 		return notFoundf("unknown project %q", project)
+	}
+
+	// A note with no frontmatter block is offered one, on a terminal only: not
+	// with --no-prompt, --dry-run or --json (the output is for a program), and
+	// never when there is no terminal to ask. Nothing a caller passes can force
+	// the prompt on, as with the accepted record status (DR-0061).
+	if !noPrompt && !dryRun && !jsonOut && atTerminal(out) {
+		if raw, rerr := os.ReadFile(path); rerr == nil && !hasFrontmatterBlock(raw) {
+			if _, eerr := editFrontmatter(kb, promptIn, out, path); eerr != nil {
+				return eerr
+			}
+		}
 	}
 
 	summary, err := kb.IngestDocument(p.ID, path, knowledge.DocumentIngestOptions{

@@ -59,7 +59,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
             'check-db' { @('--jsonl') }
             'completion' { @('--install', '--uninstall', '--check') }
             'concept' { @('--identifier-type', '--identifier-value', '--project', '--limit', '--force', '--dry-run') }
-            'document' { @('--project', '--concept', '--dry-run', '--accept', '--accept-keywords', '--set', '--by', '--confidence', '--status', '--title', '--format') }
+            'document' { @('--project', '--concept', '--dry-run', '--accept', '--accept-keywords', '--set', '--by', '--confidence', '--status', '--title', '--format', '--no-prompt') }
             'export' { @('--project', '--out') }
             'format' { @('--project') }
             'import' { @('--in') }

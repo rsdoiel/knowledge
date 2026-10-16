@@ -75,9 +75,19 @@ func proposeAuthor(prov Provenance, path, body string) (winner string, signals [
 	return signals[0].Value, signals
 }
 
-// proposeDateCreated proposes dateCreated from git's first commit touching
-// path, falling back to filesystem birth/mod time.
+// filenameDatePattern matches a file name that begins with a date: the
+// notes/ convention, 2026-09-29-worklog.md.
+var filenameDatePattern = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})([-_.]|$)`)
+
+// proposeDateCreated proposes dateCreated from a YYYY-MM-DD at the start of the
+// file's name (a note says when it was written, and is often committed days
+// later), then git's first commit touching path, then filesystem birth/mod time.
 func proposeDateCreated(prov Provenance, path string) (value, source string) {
+	if m := filenameDatePattern.FindStringSubmatch(filepath.Base(path)); m != nil {
+		if _, err := time.Parse("2006-01-02", m[1]); err == nil {
+			return m[1], "filename"
+		}
+	}
 	if _, date, ok := prov.FirstCommit(path); ok {
 		return date, "git"
 	}

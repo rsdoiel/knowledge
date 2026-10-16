@@ -60,16 +60,18 @@
   exported. Steps S0 to S5 and the four open questions are in
   `agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md`, with the v0.0.23 order.
 
-- [ ] **An interactive frontmatter editor for notes, offered at ingest (requested 2026-10-16).** **Target v0.0.23.** Notes
-  (`agents/projects/<project>/notes/`) carry no required frontmatter and `kb ingest` does not read them as
-  records (see the bug above). When a note is brought into the knowledge base as a document (`kb document
-  ingest`), a note without frontmatter is accepted as plain prose and gets no title, date, project or
-  concepts. Offer to fill them in: on an interactive terminal, `kb document ingest` (and a `Documents` menu
-  row) opens a small form per note lacking frontmatter, prefilled from what the file already says (the
-  first H1 as `title`, the `YYYY-MM-DD` filename prefix as `date`, the project from the path, concept
-  suggestions from `kb concept suggest`), and writes the block at the top of the file only on confirmation.
-  `--no-prompt` and non-terminal input keep today's behaviour. Builds on `kb document frontmatter`
-  (the generator, which already does the non-interactive case) and the checklist in Documents → Frontmatter….
+- [x] **An interactive frontmatter editor for notes, offered at ingest.** Done 2026-10-16, unreleased (for
+  v0.0.23). On a terminal, `kb document ingest PATH --project P` on a file with no frontmatter block offers
+  `title` (first heading), `author` (byline, git), `dateCreated` and `keywords` (known concepts the text
+  mentions) one at a time (Enter accepts, text replaces, `-` skips, `q` stops) and writes the block only after a
+  final confirmation, then ingests as before. `--no-prompt` turns it off; it is also off with `--dry-run`,
+  `--json` and without a terminal, and nothing turns it on there. It never creates a concept. A YYYY-MM-DD at the start of a
+  file's name is now the first `dateCreated` signal for `kb document frontmatter` too (`2026-09-29-x.md` gives
+  `2026-09-29`, `filename`), ahead of git. Tests: `cmd/kb/documentedit_test.go`, `documentfrontmatter_test.go`;
+  also run on the real binary under a pseudo-terminal. Not done: the TUI's "Ingest a document…" row captures
+  output, so it never prompts (its Frontmatter… checklist is the TUI route); a file that has a block but no title is not
+  offered one; no directory form (one file per command, as ingest is); no ingest of a whole `notes/`
+  directory as documents.
 
 - [x] **DONE 2026-10-14, unreleased (for v0.0.22): every row of the menus is built.** Built since v0.0.21:
   Check, Concepts → Browse, Recall and Suggest, Documents → Browse, Sources → Browse and Check retractions,

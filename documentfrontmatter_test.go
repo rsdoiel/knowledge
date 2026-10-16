@@ -845,3 +845,21 @@ func TestFrontmatterFieldOrderCoversExactlyTheScalarFields(t *testing.T) {
 		t.Errorf("frontmatterFieldOrder has duplicates: %v", frontmatterFieldOrder)
 	}
 }
+
+// A dated note (notes/2026-09-29-worklog.md) says when it was written in its own
+// name, which is a stronger signal than the file's first commit: a note is often
+// committed days later, and a checkout's file time is the checkout's.
+func TestProposeDateCreated_FileNameDateBeatsGit(t *testing.T) {
+	value, source := proposeDateCreated(gitLikeProvenance, "notes/2026-09-29-worklog.md")
+	if value != "2026-09-29" || source != "filename" {
+		t.Errorf("got %q from %q, want 2026-09-29 from filename", value, source)
+	}
+}
+
+func TestProposeDateCreated_FileNameThatIsNotADateIsIgnored(t *testing.T) {
+	for _, name := range []string{"notes/2026-13-45-x.md", "notes/0001-x.md", "notes/2026-9-29-x.md", "notes/worklog.md"} {
+		if _, source := proposeDateCreated(gitLikeProvenance, name); source == "filename" {
+			t.Errorf("%s: a name that is not YYYY-MM-DD gave a filename date", name)
+		}
+	}
+}

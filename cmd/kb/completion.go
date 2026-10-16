@@ -47,7 +47,7 @@ var completionGlobalFlags = []string{"--db", "--debug", "--help", "-i", "--json"
 var completionBoolFlags = map[string]bool{
 	"--dry-run": true, "--force": true, "--stdout": true, "--check": true, "--all": true,
 	"--workspace": true, "--partial": true, "--write": true, "--install": true,
-	"--uninstall": true,
+	"--uninstall": true, "--no-prompt": true,
 }
 
 // completionFileFlags take a path.

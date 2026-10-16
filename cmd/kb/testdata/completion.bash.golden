@@ -54,7 +54,7 @@ _kb() {
         check-db) COMPREPLY=( $(compgen -W "--jsonl" -- "$cur") ) ;;
         completion) COMPREPLY=( $(compgen -W "--install --uninstall --check" -- "$cur") ) ;;
         concept) COMPREPLY=( $(compgen -W "--identifier-type --identifier-value --project --limit --force --dry-run" -- "$cur") ) ;;
-        document) COMPREPLY=( $(compgen -W "--project --concept --dry-run --accept --accept-keywords --set --by --confidence --status --title --format" -- "$cur") ) ;;
+        document) COMPREPLY=( $(compgen -W "--project --concept --dry-run --accept --accept-keywords --set --by --confidence --status --title --format --no-prompt" -- "$cur") ) ;;
         export) COMPREPLY=( $(compgen -W "--project --out" -- "$cur") ) ;;
         format) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
         import) COMPREPLY=( $(compgen -W "--in" -- "$cur") ) ;;
