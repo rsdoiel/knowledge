@@ -49,6 +49,8 @@ func printHelp(out io.Writer, topic string) bool {
 		f(CheckDBHelpText)
 	case "stats":
 		f(StatsHelpText)
+	case "story":
+		f(StoryHelpText)
 	case "ingest":
 		f(IngestHelpText)
 	case "record":

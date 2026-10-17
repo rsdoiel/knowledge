@@ -47,6 +47,9 @@ check-db
 stats
 : row, link and check counts, and a line per project
 
+story
+: a writing project's story timeline and continuity report
+
 export
 : write a portable JSON-L snapshot. import shares this page
 

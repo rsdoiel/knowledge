@@ -304,6 +304,10 @@ stats
 : row, link and check counts for the database, and a line per project — see
   kb-stats(1)
 
+story
+: the events of a writing project in story order or reading order, and a report
+  of continuity problems (it changes nothing) — see kb-story(1)
+
 export, import
 : write/read a portable JSON-L snapshot of the database — the no-file-access
   alternative to merge, for syncing over a channel that can only move plain

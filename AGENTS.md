@@ -41,7 +41,7 @@ Each is `kb VERB`; the class is what it does to the database.
 |---|---|---|
 | `project` (`add list show concepts set-status set-description rename delete`) | read, additive, changing, removing | one row per git-repository experiment |
 | `observation` (`add list show update sources delete`) | read, additive, changing, removing | `kb observation add --project P KIND BODY` |
-| `concept` (`add list show recall rename delete suggest`) | read, additive, changing, removing | `show` lists links and the projects a concept spans |
+| `concept` (`add list show recall rename set-kind delete suggest`) | read, additive, changing, removing | `show` lists links and the projects a concept spans; a concept has a kind (`character`, `place`, `theme`, `other`) |
 | `link`, `unlink` | additive, removing | link a project or observation to a concept, or an observation to a source |
 | `source` (`add list show remove retract link check-retractions`) | read, additive, changing, removing | cited works; `check-retractions` calls the network |
 | `search` | read | `kb search TERM`, or scoped: `kb search harvey/records TERM`, `kb search /concepts TERM` |
@@ -50,6 +50,7 @@ Each is `kb VERB`; the class is what it does to the database.
 | `index` | direct | regenerate a `decisions/index.md` |
 | `document` (`ingest draft review list review promote show tag fuzzy-tag frontmatter delete`) | guided, plan_apply | narrative documents; summaries need a person to promote |
 | `summary`, `format` | read | formatted overviews |
+| `story` (`timeline check`) | read | a writing project's events in story or reading order, and a continuity report that changes nothing; both need `--project` |
 | `stats` | read | counts of rows, links and checks, and a line per project |
 | `check-db` | read | compare the database with its JSON-L dump |
 | `export`, `import`, `merge` | cli_only | portable snapshots and reconciling two databases |

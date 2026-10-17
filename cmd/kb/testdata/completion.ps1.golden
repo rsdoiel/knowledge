@@ -3,11 +3,11 @@
 # Or install: kb completion powershell -install
 Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    $verbs      = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'stats', 'summary', 'unlink', 'verbs')
+    $verbs      = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'stats', 'story', 'summary', 'unlink', 'verbs')
     $globals    = @('--db', '--debug', '--help', '-i', '--json', '--license', '--version')
-    $topics     = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'stats', 'summary', 'unlink', 'verbs', 'topics')
+    $topics     = @('check-db', 'completion', 'concept', 'document', 'export', 'format', 'help', 'import', 'index', 'ingest', 'init', 'link', 'merge', 'observation', 'project', 'record', 'search', 'source', 'stats', 'story', 'summary', 'unlink', 'verbs', 'topics')
     $shells     = @('bash', 'powershell')
-    $valueFlags = @('--a', '--accept', '--accept-keywords', '--authors', '--b', '--by', '--concept', '--confidence', '--db', '--dir', '--doi', '--format', '--identifier-type', '--identifier-value', '--in', '--initiative', '--jsonl', '--kind', '--limit', '--out', '--project', '--published', '--publisher', '--relationship', '--rights', '--root', '--set', '--since', '--source-doi', '--status', '--title', '--trigger', '--url', '--version')
+    $valueFlags = @('--a', '--accept', '--accept-keywords', '--authors', '--b', '--by', '--concept', '--confidence', '--db', '--dir', '--doi', '--format', '--identifier-type', '--identifier-value', '--in', '--initiative', '--jsonl', '--kind', '--limit', '--narrative', '--out', '--project', '--published', '--publisher', '--relationship', '--rights', '--root', '--set', '--since', '--source-doi', '--status', '--strict', '--title', '--trigger', '--url', '--version')
     $fileFlags  = @('--db', '--in', '--out', '--a', '--b', '--jsonl', '--root', '--dir')
 
     function Get-KbProjects {
@@ -71,6 +71,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
             'record' { @('--project', '--status', '--kind', '--trigger', '--initiative', '--since', '--root', '--dir', '--title', '--concept', '--workspace', '--partial', '--dry-run', '--write', '--all') }
             'search' { @('--project') }
             'source' { @('--doi', '--url', '--authors', '--published', '--publisher', '--rights', '--version', '--relationship') }
+            'story' { @('--project', '--narrative', '--strict') }
             'summary' { @('--project') }
             default { $null }
         }
@@ -107,6 +108,10 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
             }
             'source' {
                 if ($n -eq 1) { @('add', 'list', 'show', 'remove', 'retract', 'link', 'check-retractions') }
+                else { $null }
+            }
+            'story' {
+                if ($n -eq 1) { @('timeline', 'check') }
                 else { $null }
             }
             default      { $null }
