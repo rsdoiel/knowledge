@@ -114,6 +114,14 @@ type DocumentSection struct {
 	CreatedAt     time.Time
 	UUID          string
 	OriginHost    string
+
+	// SceneID, Story and StoryWarnings are read from the manuscript at parse
+	// time and are not stored: story_events is derived from them at ingest
+	// (DR-0075). SceneID is the scene number written in a Fountain heading,
+	// "" when there is none; Story is that scene's story metadata.
+	SceneID       string
+	Story         StoryMeta
+	StoryWarnings []string
 }
 
 /** AddDocument inserts a new document row.
@@ -430,21 +438,34 @@ func segmentFountain(src []byte) ([]DocumentSection, map[string]string, error) {
 	heading := ""
 	var body strings.Builder
 	haveContent := false
+	var scene DocumentSection // the scene being read: story fields only
 	flush := func() {
 		if !haveContent {
 			return
 		}
 		sections = append(sections, DocumentSection{
 			Level: "section", Seq: len(sections), Heading: heading, Body: strings.TrimSpace(body.String()),
+			SceneID: scene.SceneID, Story: scene.Story, StoryWarnings: scene.StoryWarnings,
 		})
 	}
 	for _, e := range doc.Elements {
 		if e.Type == fountain.SceneHeadingType {
 			flush()
 			heading = strings.TrimSpace(e.Content)
+			scene = DocumentSection{SceneID: e.SceneNumber}
 			body.Reset()
 			haveContent = true
 			continue
+		}
+		// A story boneyard belongs to the scene it follows and is dropped from
+		// the body (DR-0078). One before the first heading has no scene to
+		// belong to and is left alone.
+		if e.Type == fountain.BoneyardType && heading != "" {
+			if meta, warns, ok := ParseStoryBoneyard(e.Content); ok {
+				scene.Story = meta
+				scene.StoryWarnings = append(scene.StoryWarnings, warns...)
+				continue
+			}
 		}
 		if fountainAnnotationTypes[e.Type] {
 			continue
@@ -538,6 +559,12 @@ type ParsedDocument struct {
 	Sections      []DocumentSection
 	Checksum      string
 	Warning       string
+
+	// Story is the document-level story metadata from front matter (a prose
+	// scene file is one scene). StoryWarnings collects what was not
+	// understood, from front matter and from every scene's boneyard.
+	Story         StoryMeta
+	StoryWarnings []string
 }
 
 /** ParseDocumentFile reads path, determines its format, and segments it per
@@ -589,12 +616,16 @@ func ParseDocumentFile(path, formatOverride string) (*ParsedDocument, error) {
 			pd.Title = firstH1Heading(body)
 		}
 		pd.Sections = segmentMarkdown(body)
+		pd.Story, pd.StoryWarnings = extractStoryFrontmatter(data)
 	case "fountain":
 		sections, titlePage, err := segmentFountain(data)
 		if err != nil {
 			return nil, err
 		}
 		pd.Sections = sections
+		for _, sec := range sections {
+			pd.StoryWarnings = append(pd.StoryWarnings, sec.StoryWarnings...)
+		}
 		pd.Title = titlePage["Title"]
 		pd.Author = titlePage["Author"]
 	default: // text
