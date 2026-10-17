@@ -391,7 +391,7 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		}
 	}
 
-	const conceptCols = "name, description, created_at, identifier_type, identifier_value, uuid, origin_host, updated_at"
+	const conceptCols = "name, description, created_at, identifier_type, identifier_value, kind, uuid, origin_host, updated_at"
 	for _, src := range []string{"a", "b"} {
 		if _, err := db.Exec(fmt.Sprintf(
 			`UPDATE concepts SET
@@ -399,6 +399,7 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 			     description = src.description,
 			     identifier_type = src.identifier_type,
 			     identifier_value = src.identifier_value,
+			     kind = src.kind,
 			     updated_at = src.updated_at,
 			     origin_host = src.origin_host
 			 FROM %s.concepts AS src

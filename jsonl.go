@@ -51,8 +51,11 @@ type conceptRecord struct {
 	Description     string `json:"description"`
 	IdentifierType  string `json:"identifier_type"`
 	IdentifierValue string `json:"identifier_value"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
+	// Kind is absent from an export written before concept kinds (DR-0078);
+	// an absent kind says nothing about the concept and never overwrites one.
+	Kind      string `json:"kind"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // sourceRecord is the JSON-L shape of one sources row.
@@ -538,7 +541,7 @@ func exportDocumentSectionConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped 
 }
 
 func exportConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
-	query := `SELECT id, uuid, origin_host, name, description, identifier_type, identifier_value, created_at, updated_at FROM concepts`
+	query := `SELECT id, uuid, origin_host, name, description, identifier_type, identifier_value, kind, created_at, updated_at FROM concepts`
 	args := []any{}
 	if scoped {
 		query += ` WHERE id IN (
@@ -559,7 +562,7 @@ func exportConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID
 	for rows.Next() {
 		var id int64
 		r := conceptRecord{Type: recConcept}
-		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.Name, &r.Description, &r.IdentifierType, &r.IdentifierValue, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.Name, &r.Description, &r.IdentifierType, &r.IdentifierValue, &r.Kind, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return fmt.Errorf("knowledge: export concepts: %w", err)
 		}
 		if err := enc.Encode(r); err != nil {
@@ -837,6 +840,10 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 			var rec conceptRecord
 			if err := json.Unmarshal(line, &rec); err != nil {
 				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			if rec.Kind != "" && !ValidConceptKind(rec.Kind) {
+				return nil, invalidf("knowledge: import: line %d: concept %q has kind %q, want one of %s",
+					lineNo, rec.Name, rec.Kind, strings.Join(ConceptKinds, ", "))
 			}
 			concepts = append(concepts, rec)
 		case recSource:
@@ -1290,8 +1297,9 @@ func importConcept(kb *KnowledgeBase, rec conceptRecord) (localID int64, isNew b
 	if err == nil {
 		if rec.UpdatedAt > localUpdatedAt {
 			if _, err := kb.db.Exec(
-				`UPDATE concepts SET name = ?, description = ?, identifier_type = ?, identifier_value = ?, updated_at = ?, origin_host = ? WHERE id = ?`,
-				rec.Name, rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.UpdatedAt, rec.OriginHost, localID,
+				`UPDATE concepts SET name = ?, description = ?, identifier_type = ?, identifier_value = ?,
+				     kind = CASE WHEN ? = '' THEN kind ELSE ? END, updated_at = ?, origin_host = ? WHERE id = ?`,
+				rec.Name, rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.Kind, rec.Kind, rec.UpdatedAt, rec.OriginHost, localID,
 			); err != nil {
 				return 0, false, err
 			}
@@ -1306,8 +1314,9 @@ func importConcept(kb *KnowledgeBase, rec conceptRecord) (localID int64, isNew b
 	if err == nil {
 		if rec.UpdatedAt > localUpdatedAt {
 			if _, err := kb.db.Exec(
-				`UPDATE concepts SET description = ?, identifier_type = ?, identifier_value = ?, updated_at = ?, origin_host = ? WHERE id = ?`,
-				rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.UpdatedAt, rec.OriginHost, localID,
+				`UPDATE concepts SET description = ?, identifier_type = ?, identifier_value = ?,
+				     kind = CASE WHEN ? = '' THEN kind ELSE ? END, updated_at = ?, origin_host = ? WHERE id = ?`,
+				rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.Kind, rec.Kind, rec.UpdatedAt, rec.OriginHost, localID,
 			); err != nil {
 				return 0, false, err
 			}
@@ -1319,9 +1328,9 @@ func importConcept(kb *KnowledgeBase, rec conceptRecord) (localID int64, isNew b
 		return 0, false, err
 	}
 	res, err := kb.db.Exec(
-		`INSERT INTO concepts (name, description, identifier_type, identifier_value, created_at, updated_at, uuid, origin_host)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		rec.Name, rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.CreatedAt, rec.UpdatedAt, rec.UUID, rec.OriginHost,
+		`INSERT INTO concepts (name, description, identifier_type, identifier_value, kind, created_at, updated_at, uuid, origin_host)
+		 VALUES (?, ?, ?, ?, CASE WHEN ? = '' THEN 'other' ELSE ? END, ?, ?, ?, ?)`,
+		rec.Name, rec.Description, rec.IdentifierType, rec.IdentifierValue, rec.Kind, rec.Kind, rec.CreatedAt, rec.UpdatedAt, rec.UUID, rec.OriginHost,
 	)
 	if err != nil {
 		return 0, false, err

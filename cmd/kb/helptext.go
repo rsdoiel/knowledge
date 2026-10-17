@@ -838,15 +838,17 @@ const ConceptHelpText = `%{app_name}-concept(1) user manual | version {version} 
 
 # SYNOPSIS
 
-{app_name} concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]
+{app_name} concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V] [--kind K]
 
-{app_name} concept list
+{app_name} concept list [--kind K]
 
 {app_name} concept show NAME [--limit N]
 
 {app_name} concept recall [TEXT... | -] [--concept NAME,...] [--project NAME] [--limit N]
 
 {app_name} concept rename OLD NEW
+
+{app_name} concept set-kind NAME KIND
 
 {app_name} concept delete NAME [--force] [--dry-run]
 
@@ -864,18 +866,30 @@ empty DESCRIPTION preserves the stored one rather than clearing it, so
 running add just to assert a concept exists cannot lose text. The same holds
 for --identifier-type and --identifier-value.
 
+Every concept has a kind: what it names. The kinds are character, place,
+theme and other, and other is the default, including for every concept made
+before kinds existed. add --kind K sets it; set-kind NAME KIND changes it;
+list --kind K lists one kind. An unknown kind is a usage error (exit 2) and
+nothing is written; one in an imported file is exit 65. Re-adding a concept,
+or tagging it from prose, never resets its kind. Kinds travel with the
+concept through export, import, merge and check-db.
+
 A concept may also represent a scholarly entity — a paper, person,
 institution, or funder — by setting --identifier-type (e.g. doi, orcid,
 ror, fundref) and --identifier-value (the normalized identifier).
 
+set-kind
+: change what an existing concept names. NAME must match exactly; a miss is
+  exit 1.
+
 show
-: read-only: one concept's description, identifier if set, and what links to
+: read-only: one concept's description, kind if not other, identifier if set, and what links to
   it. Per kind (projects, observations, records, document sections) it prints
   the full count and up to --limit items, newest first (default 10; --limit 0
   prints counts only). NAME must match exactly, including case, as delete
   does; a miss is exit 1, and when a name differing only in case exists it is
   offered ("did you mean"). A NAME that looks like a flag is passed after --.
-  ` + "`--json`" + ` gives one object: name, description, identifier_type,
+  ` + "`--json`" + ` gives one object: name, description, kind, identifier_type,
   identifier_value, counts, spans, and a list per kind. A "spans" section
   names every project the concept reaches, with how: tagged on the project
   itself, and how many of its observations, records and document sections link
@@ -1305,6 +1319,8 @@ fresh -out file, which must not already exist. It never modifies -a or
 travels — projects, concepts, sources, observations, decision records and
 record relations, plus the four join tables — so a table that would lose
 rows says so in the per-table summary rather than merging quietly short.
+A concept's kind (DR-0078) travels with it and follows the same
+last-writer-wins rule as its description.
 Each side is copied to a scratch file and brought up to the current schema
 before ATTACHing, so a database predating decision records (or any other
 table) still merges instead of failing outright.
@@ -1383,7 +1399,7 @@ concepts, uuid for observations, sources, documents and sections, workspace,
 project, scope and record id for decision records, and the pair of parents for
 links. The report lists rows only in the JSONL, rows only in this database, and
 rows on both sides that differ (a project's description or status, a concept's
-description or identifier, an observation's kind or body, a record's checksum,
+description, identifier or kind, an observation's kind or body, a record's checksum,
 and so on), with per-table counts.
 
 The recommendation is one of: in sync; {app_name} import (the JSONL is ahead);
@@ -1520,6 +1536,8 @@ decision records) as newline-delimited JSON to -out, or to stdout when
 observation_relation, project_concept, observation_source, record,
 record_relation), in dependency order.
 
+A concept line carries its "kind" (character, place, theme or other).
+
 A -project export carries only that project's decision records — a
 workspace-tier record belongs to no project, so it has no principled claim
 on a scoped export, and appears only in an unscoped one. A record relation
@@ -1571,8 +1589,11 @@ directory. In a fresh clone that has only agents/knowledge.jsonl, run
 "{app_name} import -in agents/knowledge.jsonl" from anywhere inside the
 workspace to build agents/knowledge.db there.
 Projects and concepts are matched by uuid first (DR-0026): a match
-reconciles name/description/status by whichever side's updated_at is
-later, the same last-writer-wins rule merge uses. A uuid miss falls back
+reconciles name/description/status (and a concept's kind) by whichever
+side's updated_at is later, the same last-writer-wins rule merge uses. A
+concept line with no "kind", as an older export wrote, leaves a local kind
+alone and is "other" when new; an unknown kind refuses the whole file
+before anything is written (exit 65). A uuid miss falls back
 to matching by name (DR-0003) -- an existing local row under that name
 wins as-is; a genuinely new one keeps its original uuid, for future
 cross-machine merge compatibility. Sources are matched by identifier when

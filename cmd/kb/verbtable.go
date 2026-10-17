@@ -138,8 +138,8 @@ var verbTable = []verbSpec{
 		Flags: []string{"--install", "--uninstall", "--check"}},
 	{Name: "concept", Summary: "manage concepts", Menu: mi("Concepts", "named ideas that span projects", 4, "", "kb concept"), Subverbs: []subverbSpec{
 		leaf("add", classAdditive, mi("New concept…", "add a concept", 2, "", "kb concept add NAME DESCRIPTION")), leaf("list", classRead, mi("Browse", "every concept", 1, "", "kb concept list")), sub("show", classRead), leaf("recall", classRead, mi("Recall…", "what is known about the concepts in some text", 4, "", "kb concept recall TEXT")),
-		sub("rename", classChanging), sub("delete", classRemoving), leaf("suggest", classRead, mi("Suggest…", "propose new concepts from the corpus", 3, "", "kb concept suggest")),
-	}, Flags: []string{"--identifier-type", "--identifier-value", "--project", "--limit", "--force", "--dry-run"}},
+		sub("rename", classChanging), sub("set-kind", classChanging), sub("delete", classRemoving), leaf("suggest", classRead, mi("Suggest…", "propose new concepts from the corpus", 3, "", "kb concept suggest")),
+	}, Flags: []string{"--identifier-type", "--identifier-value", "--kind", "--project", "--limit", "--force", "--dry-run"}},
 	{Name: "document", Summary: "ingest and review narrative documents at graduated abstraction levels", Menu: mi("Documents", "narratives, their summaries and review", 6, "", "kb document"), Subverbs: []subverbSpec{
 		leaf("ingest", classGuided, mi("Ingest a document…", "bring a narrative in and summarise it", 2, "", "kb document ingest PATH --project P")), sub("draft", classGuided),
 		{Name: "review", Subverbs: []subverbSpec{leaf("list", classRead, mi("Review queue", "summaries waiting for a person", 3, "", "kb document review list")), sub("promote", classGuided)}},

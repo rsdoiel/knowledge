@@ -228,6 +228,9 @@ type Concept struct {
 	Description     string
 	IdentifierType  string
 	IdentifierValue string
+	// Kind is what the concept names: one of ConceptKinds. "other" is the
+	// default and the value for every concept that predates kinds (DR-0078).
+	Kind string
 }
 
 // kbAlterStmts are lazy-migration ALTER TABLE statements that add
@@ -255,6 +258,7 @@ var kbAlterStmts = []string{
 	`ALTER TABLE observations ADD COLUMN origin_host TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE concepts ADD COLUMN uuid TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE concepts ADD COLUMN origin_host TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE concepts ADD COLUMN kind TEXT NOT NULL DEFAULT 'other'`,
 }
 
 // kbSourcesAlterStmts are lazy-migration statements for the sources table,
@@ -1297,7 +1301,7 @@ func (kb *KnowledgeBase) RenameConcept(old, new string) error {
  *   }
  */
 func (kb *KnowledgeBase) Concepts() ([]Concept, error) {
-	rows, err := kb.db.Query(`SELECT id, name, description, identifier_type, identifier_value FROM concepts ORDER BY name`)
+	rows, err := kb.db.Query(`SELECT id, name, description, identifier_type, identifier_value, kind FROM concepts ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -1305,7 +1309,7 @@ func (kb *KnowledgeBase) Concepts() ([]Concept, error) {
 	var out []Concept
 	for rows.Next() {
 		var c Concept
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue, &c.Kind); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -1482,7 +1486,7 @@ func (kb *KnowledgeBase) ResolveConceptName(name string) (int64, error) {
  */
 func (kb *KnowledgeBase) RecordConcepts(recordID int64) ([]Concept, error) {
 	rows, err := kb.db.Query(
-		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value
+		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value, c.kind
 		 FROM concepts c
 		 JOIN record_concepts rc ON rc.concept_id = c.id
 		 WHERE rc.record_id = ?
@@ -1496,7 +1500,7 @@ func (kb *KnowledgeBase) RecordConcepts(recordID int64) ([]Concept, error) {
 	var out []Concept
 	for rows.Next() {
 		var c Concept
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue, &c.Kind); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -1520,7 +1524,7 @@ func (kb *KnowledgeBase) RecordConcepts(recordID int64) ([]Concept, error) {
  */
 func (kb *KnowledgeBase) ObservationConcepts(observationID int64) ([]Concept, error) {
 	rows, err := kb.db.Query(
-		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value
+		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value, c.kind
 		 FROM concepts c
 		 JOIN observation_concepts oc ON oc.concept_id = c.id
 		 WHERE oc.observation_id = ?
@@ -1534,7 +1538,7 @@ func (kb *KnowledgeBase) ObservationConcepts(observationID int64) ([]Concept, er
 	var out []Concept
 	for rows.Next() {
 		var c Concept
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue, &c.Kind); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -1945,7 +1949,7 @@ func (kb *KnowledgeBase) projectByID(id int64) (*Project, error) {
  */
 func (kb *KnowledgeBase) ProjectConcepts(projectID int64) ([]Concept, error) {
 	rows, err := kb.db.Query(`
-		SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value
+		SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value, c.kind
 		FROM   concepts c
 		JOIN   project_concepts pc ON pc.concept_id = c.id
 		WHERE  pc.project_id = ?
@@ -1958,7 +1962,7 @@ func (kb *KnowledgeBase) ProjectConcepts(projectID int64) ([]Concept, error) {
 	var out []Concept
 	for rows.Next() {
 		var c Concept
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue, &c.Kind); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

@@ -53,7 +53,7 @@ _kb() {
         case "$verb" in
         check-db) COMPREPLY=( $(compgen -W "--jsonl" -- "$cur") ) ;;
         completion) COMPREPLY=( $(compgen -W "--install --uninstall --check" -- "$cur") ) ;;
-        concept) COMPREPLY=( $(compgen -W "--identifier-type --identifier-value --project --limit --force --dry-run" -- "$cur") ) ;;
+        concept) COMPREPLY=( $(compgen -W "--identifier-type --identifier-value --kind --project --limit --force --dry-run" -- "$cur") ) ;;
         document) COMPREPLY=( $(compgen -W "--project --concept --dry-run --accept --accept-keywords --set --by --confidence --status --title --format --no-prompt" -- "$cur") ) ;;
         export) COMPREPLY=( $(compgen -W "--project --out" -- "$cur") ) ;;
         format) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
@@ -75,7 +75,7 @@ _kb() {
         completion) [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "bash powershell" -- "$cur") ) ;;
         search)     [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "$(_kb_search_scopes)" -- "$cur") ) ;;
         concept)
-            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show recall rename delete suggest" -- "$cur") )
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show recall rename set-kind delete suggest" -- "$cur") )
             fi ;;
         document)
             if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "ingest draft review list show tag fuzzy-tag frontmatter delete" -- "$cur") )

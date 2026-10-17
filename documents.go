@@ -941,7 +941,7 @@ func (kb *KnowledgeBase) ClearDocumentSectionConcepts(sectionID int64) error {
  */
 func (kb *KnowledgeBase) DocumentSectionConcepts(sectionID int64) ([]Concept, error) {
 	rows, err := kb.db.Query(
-		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value
+		`SELECT c.id, c.name, c.description, c.identifier_type, c.identifier_value, c.kind
 		 FROM concepts c
 		 JOIN document_section_concepts dsc ON dsc.concept_id = c.id
 		 WHERE dsc.section_id = ?
@@ -955,7 +955,7 @@ func (kb *KnowledgeBase) DocumentSectionConcepts(sectionID int64) ([]Concept, er
 	var out []Concept
 	for rows.Next() {
 		var c Concept
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.IdentifierType, &c.IdentifierValue, &c.Kind); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

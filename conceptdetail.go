@@ -104,9 +104,9 @@ func (kb *KnowledgeBase) ConceptDetail(name string, limit int) (ConceptDetailRes
 	if limit < 0 {
 		limit = 0
 	}
-	err = kb.db.QueryRow(`SELECT id, name, description, IFNULL(identifier_type, ''), IFNULL(identifier_value, '')
+	err = kb.db.QueryRow(`SELECT id, name, description, IFNULL(identifier_type, ''), IFNULL(identifier_value, ''), IFNULL(kind, 'other')
 		FROM concepts WHERE id = ?`, id).
-		Scan(&d.Concept.ID, &d.Concept.Name, &d.Concept.Description, &d.Concept.IdentifierType, &d.Concept.IdentifierValue)
+		Scan(&d.Concept.ID, &d.Concept.Name, &d.Concept.Description, &d.Concept.IdentifierType, &d.Concept.IdentifierValue, &d.Concept.Kind)
 	if err != nil {
 		return d, fmt.Errorf("knowledge: read concept: %w", err)
 	}

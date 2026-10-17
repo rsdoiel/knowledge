@@ -95,6 +95,7 @@ func cmdConceptShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 		result := map[string]any{
 			"name":             d.Concept.Name,
 			"description":      d.Concept.Description,
+			"kind":             d.Concept.Kind,
 			"identifier_type":  d.Concept.IdentifierType,
 			"identifier_value": d.Concept.IdentifierValue,
 		}
@@ -130,6 +131,9 @@ func cmdConceptShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 	fmt.Fprintf(out, "concept: %s\n", d.Concept.Name)
 	if d.Concept.Description != "" {
 		fmt.Fprintf(out, "description: %s\n", d.Concept.Description)
+	}
+	if d.Concept.Kind != "" && d.Concept.Kind != "other" {
+		fmt.Fprintf(out, "kind: %s\n", d.Concept.Kind)
 	}
 	if d.Concept.IdentifierType != "" || d.Concept.IdentifierValue != "" {
 		fmt.Fprintf(out, "identifier: %s %s\n", d.Concept.IdentifierType, d.Concept.IdentifierValue)

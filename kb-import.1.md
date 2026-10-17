@@ -19,8 +19,11 @@ directory. In a fresh clone that has only agents/knowledge.jsonl, run
 "kb import -in agents/knowledge.jsonl" from anywhere inside the
 workspace to build agents/knowledge.db there.
 Projects and concepts are matched by uuid first (DR-0026): a match
-reconciles name/description/status by whichever side's updated_at is
-later, the same last-writer-wins rule merge uses. A uuid miss falls back
+reconciles name/description/status (and a concept's kind) by whichever
+side's updated_at is later, the same last-writer-wins rule merge uses. A
+concept line with no "kind", as an older export wrote, leaves a local kind
+alone and is "other" when new; an unknown kind refuses the whole file
+before anything is written (exit 65). A uuid miss falls back
 to matching by name (DR-0003) -- an existing local row under that name
 wins as-is; a genuinely new one keeps its original uuid, for future
 cross-machine merge compatibility. Sources are matched by identifier when

@@ -20,6 +20,8 @@ decision records) as newline-delimited JSON to -out, or to stdout when
 observation_relation, project_concept, observation_source, record,
 record_relation), in dependency order.
 
+A concept line carries its "kind" (character, place, theme or other).
+
 A -project export carries only that project's decision records — a
 workspace-tier record belongs to no project, so it has no principled claim
 on a scoped export, and appears only in an unscoped one. A record relation

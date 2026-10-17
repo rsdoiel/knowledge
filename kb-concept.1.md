@@ -8,15 +8,17 @@ kb-concept — manage concepts
 
 # SYNOPSIS
 
-kb concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]
+kb concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V] [--kind K]
 
-kb concept list
+kb concept list [--kind K]
 
 kb concept show NAME [--limit N]
 
 kb concept recall [TEXT... | -] [--concept NAME,...] [--project NAME] [--limit N]
 
 kb concept rename OLD NEW
+
+kb concept set-kind NAME KIND
 
 kb concept delete NAME [--force] [--dry-run]
 
@@ -34,18 +36,30 @@ empty DESCRIPTION preserves the stored one rather than clearing it, so
 running add just to assert a concept exists cannot lose text. The same holds
 for --identifier-type and --identifier-value.
 
+Every concept has a kind: what it names. The kinds are character, place,
+theme and other, and other is the default, including for every concept made
+before kinds existed. add --kind K sets it; set-kind NAME KIND changes it;
+list --kind K lists one kind. An unknown kind is a usage error (exit 2) and
+nothing is written; one in an imported file is exit 65. Re-adding a concept,
+or tagging it from prose, never resets its kind. Kinds travel with the
+concept through export, import, merge and check-db.
+
 A concept may also represent a scholarly entity — a paper, person,
 institution, or funder — by setting --identifier-type (e.g. doi, orcid,
 ror, fundref) and --identifier-value (the normalized identifier).
 
+set-kind
+: change what an existing concept names. NAME must match exactly; a miss is
+  exit 1.
+
 show
-: read-only: one concept's description, identifier if set, and what links to
+: read-only: one concept's description, kind if not other, identifier if set, and what links to
   it. Per kind (projects, observations, records, document sections) it prints
   the full count and up to --limit items, newest first (default 10; --limit 0
   prints counts only). NAME must match exactly, including case, as delete
   does; a miss is exit 1, and when a name differing only in case exists it is
   offered ("did you mean"). A NAME that looks like a flag is passed after --.
-  `--json` gives one object: name, description, identifier_type,
+  `--json` gives one object: name, description, kind, identifier_type,
   identifier_value, counts, spans, and a list per kind. A "spans" section
   names every project the concept reaches, with how: tagged on the project
   itself, and how many of its observations, records and document sections link

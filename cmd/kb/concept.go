@@ -16,7 +16,7 @@ func init() {
 
 func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("usage: concept <add|list|show|recall|rename|delete|suggest> ...")
+		return usageErrorf("usage: concept <add|list|show|recall|rename|set-kind|delete|suggest> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -30,6 +30,8 @@ func cmdConcept(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []
 		return cmdConceptRecall(kb, dl, jsonOut, rest, out)
 	case "rename":
 		return cmdConceptRename(kb, dl, jsonOut, rest, out)
+	case "set-kind":
+		return cmdConceptSetKind(kb, dl, jsonOut, rest, out)
 	case "delete":
 		return cmdConceptDelete(kb, dl, jsonOut, rest, out)
 	case "suggest":
@@ -44,12 +46,17 @@ func cmdConceptAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	fs.SetOutput(io.Discard)
 	identifierType := fs.String("identifier-type", "", "e.g. doi, orcid, ror")
 	identifierValue := fs.String("identifier-value", "", "normalized identifier value")
+	kind := fs.String("kind", "", "what the concept names: "+strings.Join(knowledge.ConceptKinds, ", "))
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	rest := fs.Args()
 	if len(rest) == 0 {
-		return usageErrorf("usage: concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V]")
+		return usageErrorf("usage: concept add NAME [DESCRIPTION] [--identifier-type T --identifier-value V] [--kind K]")
+	}
+	// A bad kind is refused before anything is written.
+	if *kind != "" && !knowledge.ValidConceptKind(*kind) {
+		return usageErrorf("concept kind %q is not one of %s", *kind, strings.Join(knowledge.ConceptKinds, ", "))
 	}
 	name, err := knowledge.CleanName("concept", rest[0])
 	if err != nil {
@@ -68,6 +75,13 @@ func cmdConceptAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	}
 	if err != nil {
 		return err
+	}
+	if *kind != "" {
+		if err := logKBCallErr(dl, "SetConceptKind", map[string]any{"name": name, "kind": *kind}, func() error {
+			return kb.SetConceptKind(name, *kind)
+		}); err != nil {
+			return err
+		}
 	}
 	if jsonOut {
 		return printJSON(out, struct {
@@ -108,12 +122,52 @@ func cmdConceptRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 	return nil
 }
 
-func cmdConceptList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	args, argErr := plainArgs(args, 0, 0, 0, "usage: concept list")
+// cmdConceptSetKind implements `concept set-kind NAME KIND` (DR-0078).
+func cmdConceptSetKind(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	args, argErr := plainArgs(args, 2, 2, 2, "usage: concept set-kind NAME KIND")
 	if argErr != nil {
 		return argErr
 	}
-	concepts, err := logKBCall(dl, "Concepts", nil, kb.Concepts)
+	name, kind := args[0], args[1]
+	err := logKBCallErr(dl, "SetConceptKind", map[string]any{"name": name, "kind": kind}, func() error {
+		return kb.SetConceptKind(name, kind)
+	})
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, struct {
+			Name string `json:"name"`
+			Kind string `json:"kind"`
+		}{Name: name, Kind: kind})
+	}
+	fmt.Fprintf(out, "concept %q is now a %s\n", name, kind)
+	return nil
+}
+
+func cmdConceptList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("concept list", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	kind := fs.String("kind", "", "only concepts of this kind: "+strings.Join(knowledge.ConceptKinds, ", "))
+	if err := parseFlags(fs, args); err != nil {
+		// Keep the wording plainArgs gave an unknown flag before --kind existed.
+		if name, ok := strings.CutPrefix(err.Error(), "flag provided but not defined: "); ok {
+			return withGlobalHint(fmt.Sprintf("unknown flag %q; usage: concept list [--kind K]", name), args)
+		}
+		return err
+	}
+	if _, argErr := plainArgs(fs.Args(), 0, 0, 0, "usage: concept list [--kind K]"); argErr != nil {
+		return argErr
+	}
+	var concepts []knowledge.Concept
+	var err error
+	if *kind != "" {
+		concepts, err = logKBCall(dl, "ConceptsOfKind", map[string]any{"kind": *kind}, func() ([]knowledge.Concept, error) {
+			return kb.ConceptsOfKind(*kind)
+		})
+	} else {
+		concepts, err = logKBCall(dl, "Concepts", nil, kb.Concepts)
+	}
 	if err != nil {
 		return err
 	}
@@ -125,6 +179,10 @@ func cmdConceptList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 		return nil
 	}
 	for _, c := range concepts {
+		if c.Kind != "" && c.Kind != "other" {
+			fmt.Fprintf(out, "%-4d  %s  [%s]\n", c.ID, c.Name, c.Kind)
+			continue
+		}
 		fmt.Fprintf(out, "%-4d  %s\n", c.ID, c.Name)
 	}
 	return nil

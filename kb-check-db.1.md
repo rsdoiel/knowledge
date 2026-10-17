@@ -28,7 +28,7 @@ concepts, uuid for observations, sources, documents and sections, workspace,
 project, scope and record id for decision records, and the pair of parents for
 links. The report lists rows only in the JSONL, rows only in this database, and
 rows on both sides that differ (a project's description or status, a concept's
-description or identifier, an observation's kind or body, a record's checksum,
+description, identifier or kind, an observation's kind or body, a record's checksum,
 and so on), with per-table counts.
 
 The recommendation is one of: in sync; kb import (the JSONL is ahead);

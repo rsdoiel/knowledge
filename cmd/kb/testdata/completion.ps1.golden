@@ -58,7 +58,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
         $candidates = switch ($pos[0]) {
             'check-db' { @('--jsonl') }
             'completion' { @('--install', '--uninstall', '--check') }
-            'concept' { @('--identifier-type', '--identifier-value', '--project', '--limit', '--force', '--dry-run') }
+            'concept' { @('--identifier-type', '--identifier-value', '--kind', '--project', '--limit', '--force', '--dry-run') }
             'document' { @('--project', '--concept', '--dry-run', '--accept', '--accept-keywords', '--set', '--by', '--confidence', '--status', '--title', '--format', '--no-prompt') }
             'export' { @('--project', '--out') }
             'format' { @('--project') }
@@ -80,7 +80,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
             'completion' { if ($n -eq 1) { $shells } }
             'search'     { if ($n -eq 1) { Get-KbSearchScopes } }
             'concept' {
-                if ($n -eq 1) { @('add', 'list', 'show', 'recall', 'rename', 'delete', 'suggest') }
+                if ($n -eq 1) { @('add', 'list', 'show', 'recall', 'rename', 'set-kind', 'delete', 'suggest') }
                 else { $null }
             }
             'document' {
