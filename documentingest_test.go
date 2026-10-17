@@ -432,3 +432,38 @@ func TestIngestDocument_WikilinkBothInAndOutOfCodeStillLinks(t *testing.T) {
 		t.Errorf("concepts = %v, want Both linked by its real mention", cs)
 	}
 }
+
+// ─── a wikilink may carry a display alias (DR-0078) ──────────────────────────
+
+func TestWikilinkTarget(t *testing.T) {
+	for in, want := range map[string]string{
+		"Anna":                    "Anna",
+		"the-long-fire/Anna|Anna": "the-long-fire/Anna",
+		" a | b | c ":             "a",
+		"|display":                "",
+	} {
+		if got := WikilinkTarget(in); got != want {
+			t.Errorf("WikilinkTarget(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestIngestDocument_WikilinkAliasLinksTargetNotDisplay(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	path := writeTempFile(t, "a.md", "## S\n\n[[the-long-fire/Anna|Anna]] opened the door; [[the-long-fire/Anna]] left.\n")
+	if _, err := kb.IngestDocument(pid, path, DocumentIngestOptions{}); err != nil {
+		t.Fatalf("IngestDocument: %v", err)
+	}
+	_, secs, _ := ingestSections(t, kb, path)
+	cs, _ := kb.DocumentSectionConcepts(secs["S"].ID)
+	if len(cs) != 1 || cs[0].Name != "the-long-fire/Anna" {
+		t.Errorf("concepts = %v, want only the-long-fire/Anna", cs)
+	}
+	all, _ := kb.Concepts()
+	for _, c := range all {
+		if strings.Contains(c.Name, "|") {
+			t.Errorf("concept %q was minted with the alias in its name", c.Name)
+		}
+	}
+}

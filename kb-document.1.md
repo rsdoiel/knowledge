@@ -46,6 +46,10 @@ matching case becomes canonical for later mentions. A section's
 tag_density (how many known concepts its text mentions, tagged or not) is
 a mechanical triage signal, not a link -- see review, below.
 
+A wikilink may carry a display alias after a bar: `[[the-long-fire/Anna|Anna]]`
+links the concept before the bar and shows the text after it. Only the part
+before the bar is the concept's name.
+
 Re-ingesting a changed file matches new sections to old ones by heading
 text: an unchanged section is left alone; a changed one updates its body
 and is flagged stale rather than losing its summary; a heading with no

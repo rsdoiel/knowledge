@@ -515,7 +515,7 @@ func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64
 		}
 	}
 	for _, m := range wikilinkPattern.FindAllStringSubmatch(knowledge.StripCodeSpans(rf.Record.Body), -1) {
-		addName(m[1])
+		addName(knowledge.WikilinkTarget(m[1]))
 	}
 	for _, tag := range rf.Tags {
 		addName(tag)

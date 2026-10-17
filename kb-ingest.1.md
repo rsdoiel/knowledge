@@ -100,6 +100,9 @@ resolve to the same concept regardless of where each mention falls in a
 sentence, and the casing of whichever mention is resolved first becomes
 canonical. This does not change kb concept add, which stays exact-match.
 
+A wikilink may carry a display alias after a bar: [[the-long-fire/Anna|Anna]]
+links the concept the-long-fire/Anna. Only the part before the bar is the name.
+
 # OPTIONS
 
 --dry-run

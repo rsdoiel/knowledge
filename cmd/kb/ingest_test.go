@@ -1154,3 +1154,20 @@ func TestCmdIngest_SkipsTheProjectLayoutsNonRecordDirectories(t *testing.T) {
 		t.Errorf("pointing at design/ directly: summary = %+v, want the file read and refused", s)
 	}
 }
+
+// DR-0078: [[target|display]] links the target, not the whole span.
+func TestCmdIngest_WikilinkAliasLinksTarget(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	dir := filepath.Join(root, "clasm", "decisions")
+	testRecord{ID: "0001", Project: "clasm", Body: "\nSee [[the-long-fire/Anna|Anna]].\n"}.write(t, dir)
+
+	runIngest(t, kb, dir)
+
+	concepts, err := kb.RecordConcepts(recordDBID(t, kb, "clasm", "0001"))
+	if err != nil {
+		t.Fatalf("RecordConcepts: %v", err)
+	}
+	if len(concepts) != 1 || concepts[0].Name != "the-long-fire/Anna" {
+		t.Errorf("RecordConcepts = %+v, want one concept the-long-fire/Anna", concepts)
+	}
+}

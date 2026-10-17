@@ -189,7 +189,7 @@ func tagSection(kb *KnowledgeBase, sectionID int64, text string, keywords []stri
 	// is the same concept as [[a b]] (DR-0046). One CleanName refuses, a control
 	// character, is not a tag: it is skipped, not allowed to fail the document.
 	for _, m := range wikilinkPattern.FindAllStringSubmatch(StripCodeSpans(text), -1) {
-		if name, err := CleanName("concept", m[1]); err == nil && !seen[strings.ToLower(name)] {
+		if name, err := CleanName("concept", WikilinkTarget(m[1])); err == nil && !seen[strings.ToLower(name)] {
 			seen[strings.ToLower(name)] = true
 			names = append(names, name)
 		}
@@ -220,6 +220,31 @@ func tagSection(kb *KnowledgeBase, sectionID int64, text string, keywords []stri
 // wikilinkPattern matches a [[Name]] inline concept tag in a section body.
 // cmd/kb keeps its own copy for record ingest until L5 moves that here.
 var wikilinkPattern = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
+
+/** WikilinkTarget returns the concept a wikilink points at, given the text
+ * between its brackets. A link may carry a display alias after the first
+ * "|" -- [[the-long-fire/Anna|Anna]] links the concept before the bar and
+ * displays the text after it (DR-0078). A link with no bar is returned
+ * trimmed and otherwise unchanged. Callers still pass the result through
+ * CleanName.
+ *
+ * Parameters:
+ *   inner (string) — the text between [[ and ]], as captured by the
+ *     wikilink pattern.
+ *
+ * Returns:
+ *   string — the target concept name, without the alias; empty when the
+ *     link has only an alias.
+ *
+ * Example:
+ *   knowledge.WikilinkTarget("the-long-fire/Anna|Anna") // "the-long-fire/Anna"
+ */
+func WikilinkTarget(inner string) string {
+	if i := strings.Index(inner, "|"); i >= 0 {
+		inner = inner[:i]
+	}
+	return strings.TrimSpace(inner)
+}
 
 // fencedCodeBlockPattern and inlineCodeSpanPattern isolate Markdown code,
 // for densityLinkCandidates only -- TagDensity itself is left counting the

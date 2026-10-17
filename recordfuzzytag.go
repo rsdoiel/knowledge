@@ -120,7 +120,7 @@ func recordLinkedConcepts(rf *RecordFile) map[string]bool {
 		linked[strings.ToLower(strings.TrimSpace(t))] = true
 	}
 	for _, m := range wikilinkPattern.FindAllStringSubmatch(StripCodeSpans(rf.Record.Body), -1) {
-		linked[strings.ToLower(strings.TrimSpace(m[1]))] = true
+		linked[strings.ToLower(WikilinkTarget(m[1]))] = true
 	}
 	return linked
 }
