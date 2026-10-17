@@ -23,7 +23,11 @@ reconciles name/description/status (and a concept's kind) by whichever
 side's updated_at is later, the same last-writer-wins rule merge uses. A
 concept line with no "kind", as an older export wrote, leaves a local kind
 alone and is "other" when new; an unknown kind refuses the whole file
-before anything is written (exit 65). A uuid miss falls back
+before anything is written (exit 65).
+
+Story events are not imported, because they are not exported: after an import,
+run kb document ingest on the same paths (an unchanged file is skipped
+but still rebuilds its events). A uuid miss falls back
 to matching by name (DR-0003) -- an existing local row under that name
 wins as-is; a genuinely new one keeps its original uuid, for future
 cross-machine merge compatibility. Sources are matched by identifier when

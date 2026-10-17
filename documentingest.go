@@ -61,6 +61,10 @@ type DocumentIngestResult struct {
 	SectionsStale   int      `json:"sections_stale"`
 	RemovedHeadings []string `json:"removed_headings,omitempty"`
 	Warning         string   `json:"warning,omitempty"`
+	// EventsWritten is how many story events the file yields (DR-0079), and
+	// StoryWarnings what was not understood in its story metadata.
+	EventsWritten int      `json:"events_written,omitempty"`
+	StoryWarnings []string `json:"story_warnings,omitempty"`
 }
 
 /** IngestDocument parses the file at path and creates or reconciles its
@@ -134,6 +138,24 @@ func (kb *KnowledgeBase) IngestDocument(projectID int64, path string, opts Docum
 			if err := reingestChangedDocument(kb, existing, docTitle, parsed, &summary); err != nil {
 				return DocumentIngestResult{}, err
 			}
+		}
+	}
+	drafts := storyEventDrafts(parsed)
+	summary.StoryWarnings = append(summary.StoryWarnings, parsed.StoryWarnings...)
+	summary.EventsWritten = len(drafts)
+	if !opts.DryRun {
+		// Events are derived from the file every time, a skipped one included
+		// (DR-0079 item 5): that is how a second machine rebuilds them.
+		doc, err := kb.DocumentByPath(path)
+		if err != nil {
+			return DocumentIngestResult{}, err
+		}
+		if doc != nil {
+			warnings, err := kb.replaceStoryEvents(projectID, doc.ID, drafts)
+			if err != nil {
+				return DocumentIngestResult{}, err
+			}
+			summary.StoryWarnings = append(summary.StoryWarnings, warnings...)
 		}
 	}
 	return summary, nil

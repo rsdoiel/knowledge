@@ -50,6 +50,20 @@ A wikilink may carry a display alias after a bar: `[[the-long-fire/Anna|Anna]]`
 links the concept before the bar and shows the text after it. Only the part
 before the bar is the concept's name.
 
+Story events (DR-0075, DR-0079). A file whose front matter has a narrative key
+(event, story_time, pov, characters, foreshadows, pays_off or precedes; place
+and status alone are ordinary front matter and do not count, but travel with
+an event) is one story event; a Fountain scene with a scene number (INT. KITCHEN - DAY
+#12A#) is an event too, with its own metadata in a one-line boneyard after the
+heading: /* story: story_time=1969-10-29; pov=Anna */. A scene with no number
+is not an event. story_time is a date (1969-10-29), a month, a year,
+circa YEAR, ordinal: N, or after:/before: LABEL with an optional offset such
+as +3d (units d, w, m, y). The summary says how many events the file yields
+and names every key or value it did not understand. Events are derived from
+the file on every ingest, a skipped one included, so running this again on the
+same paths rebuilds them after an import or merge; they are not exported,
+imported, merged or compared by check-db.
+
 Re-ingesting a changed file matches new sections to old ones by heading
 text: an unchanged section is left alone; a changed one updates its body
 and is flagged stale rather than losing its summary; a heading with no

@@ -19,6 +19,7 @@ import (
  *   fmt.Println(m.IsZero()) // false
  */
 type StoryMeta struct {
+	Event       string
 	StoryTime   string
 	Place       string
 	POV         string
@@ -38,8 +39,16 @@ type StoryMeta struct {
  *   knowledge.StoryMeta{}.IsZero() // true
  */
 func (m StoryMeta) IsZero() bool {
-	return m.StoryTime == "" && m.Place == "" && m.POV == "" && m.Status == "" &&
+	return m.Event == "" && m.StoryTime == "" && m.Place == "" && m.POV == "" && m.Status == "" &&
 		len(m.Characters) == 0 && len(m.Foreshadows) == 0 && len(m.PaysOff) == 0 && len(m.Precedes) == 0
+}
+
+// isNarrative reports whether m carries a key that only a story would have.
+// status and place are everyday front matter keys, so they alone do not make
+// a file an event (DR-0079 item 4).
+func (m StoryMeta) isNarrative() bool {
+	return m.Event != "" || m.StoryTime != "" || m.POV != "" || len(m.Characters) > 0 ||
+		len(m.Foreshadows) > 0 || len(m.PaysOff) > 0 || len(m.Precedes) > 0
 }
 
 // yamlList decodes a YAML sequence, or a single scalar as a one-item list,
@@ -68,6 +77,7 @@ func (l *yamlList) UnmarshalYAML(n *yaml.Node) error {
 // Kept apart from documentFrontmatter so the keys the generic reader drops
 // are read here, once, without widening that struct's contract.
 type storyFrontmatter struct {
+	Event       string   `yaml:"event"`
 	StoryTime   string   `yaml:"story_time"`
 	Place       string   `yaml:"place"`
 	POV         string   `yaml:"pov"`
@@ -92,6 +102,7 @@ func extractStoryFrontmatter(data []byte) (StoryMeta, []string) {
 		return StoryMeta{}, []string{fmt.Sprintf("story front matter: %v", err)}
 	}
 	return StoryMeta{
+		Event:     strings.TrimSpace(fm.Event),
 		StoryTime: strings.TrimSpace(fm.StoryTime), Place: strings.TrimSpace(fm.Place),
 		POV: strings.TrimSpace(fm.POV), Status: strings.TrimSpace(fm.Status),
 		Characters: fm.Characters, Foreshadows: fm.Foreshadows,
@@ -137,6 +148,8 @@ func ParseStoryBoneyard(content string) (StoryMeta, []string, bool) {
 			continue
 		}
 		switch key {
+		case "event":
+			meta.Event = val
 		case "story_time":
 			meta.StoryTime = val
 		case "place":

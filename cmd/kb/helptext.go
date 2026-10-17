@@ -496,6 +496,20 @@ A wikilink may carry a display alias after a bar: ` + "`[[the-long-fire/Anna|Ann
 links the concept before the bar and shows the text after it. Only the part
 before the bar is the concept's name.
 
+Story events (DR-0075, DR-0079). A file whose front matter has a narrative key
+(event, story_time, pov, characters, foreshadows, pays_off or precedes; place
+and status alone are ordinary front matter and do not count, but travel with
+an event) is one story event; a Fountain scene with a scene number (INT. KITCHEN - DAY
+#12A#) is an event too, with its own metadata in a one-line boneyard after the
+heading: /* story: story_time=1969-10-29; pov=Anna */. A scene with no number
+is not an event. story_time is a date (1969-10-29), a month, a year,
+circa YEAR, ordinal: N, or after:/before: LABEL with an optional offset such
+as +3d (units d, w, m, y). The summary says how many events the file yields
+and names every key or value it did not understand. Events are derived from
+the file on every ingest, a skipped one included, so running this again on the
+same paths rebuilds them after an import or merge; they are not exported,
+imported, merged or compared by check-db.
+
 Re-ingesting a changed file matches new sections to old ones by heading
 text: an unchanged section is left alone; a changed one updates its body
 and is flagged stale rather than losing its summary; a heading with no
@@ -1320,7 +1334,9 @@ travels — projects, concepts, sources, observations, decision records and
 record relations, plus the four join tables — so a table that would lose
 rows says so in the per-table summary rather than merging quietly short.
 A concept's kind (DR-0078) travels with it and follows the same
-last-writer-wins rule as its description.
+last-writer-wins rule as its description. Story events do not travel: they are
+derived from manuscript files, so the merged database has none until
+{app_name} document ingest is run on the same paths.
 Each side is copied to a scratch file and brought up to the current schema
 before ATTACHing, so a database predating decision records (or any other
 table) still merges instead of failing outright.
@@ -1400,7 +1416,9 @@ project, scope and record id for decision records, and the pair of parents for
 links. The report lists rows only in the JSONL, rows only in this database, and
 rows on both sides that differ (a project's description or status, a concept's
 description, identifier or kind, an observation's kind or body, a record's checksum,
-and so on), with per-table counts.
+and so on), with per-table counts. Story events (DR-0075) are not compared:
+they are derived from the manuscript files, are not in the JSONL, and are
+rebuilt by {app_name} document ingest.
 
 The recommendation is one of: in sync; {app_name} import (the JSONL is ahead);
 {app_name} export (the database is ahead); or diverged (import, then export).
@@ -1538,6 +1556,9 @@ record_relation), in dependency order.
 
 A concept line carries its "kind" (character, place, theme or other).
 
+Story events (story_events, DR-0075) are not exported: they are derived from
+the manuscript files by {app_name}-document(1) ingest and are rebuilt there.
+
 A -project export carries only that project's decision records — a
 workspace-tier record belongs to no project, so it has no principled claim
 on a scoped export, and appears only in an unscoped one. A record relation
@@ -1593,7 +1614,11 @@ reconciles name/description/status (and a concept's kind) by whichever
 side's updated_at is later, the same last-writer-wins rule merge uses. A
 concept line with no "kind", as an older export wrote, leaves a local kind
 alone and is "other" when new; an unknown kind refuses the whole file
-before anything is written (exit 65). A uuid miss falls back
+before anything is written (exit 65).
+
+Story events are not imported, because they are not exported: after an import,
+run {app_name} document ingest on the same paths (an unchanged file is skipped
+but still rebuilds its events). A uuid miss falls back
 to matching by name (DR-0003) -- an existing local row under that name
 wins as-is; a genuinely new one keeps its original uuid, for future
 cross-machine merge compatibility. Sources are matched by identifier when

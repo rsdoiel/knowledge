@@ -255,6 +255,16 @@ func cmdDocumentIngest(kb *knowledge.KnowledgeBase, jsonOut bool, args []string,
 	for _, h := range summary.RemovedHeadings {
 		fmt.Fprintf(out, "removed (not deleted, may need review): %q\n", h)
 	}
+	if summary.EventsWritten > 0 {
+		noun := "events"
+		if summary.EventsWritten == 1 {
+			noun = "event"
+		}
+		fmt.Fprintf(out, "%d story %s\n", summary.EventsWritten, noun)
+	}
+	for _, w := range summary.StoryWarnings {
+		fmt.Fprintln(out, "story warning:", w)
+	}
 	return nil
 }
 

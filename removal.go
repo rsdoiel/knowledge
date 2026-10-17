@@ -431,6 +431,10 @@ func (kb *KnowledgeBase) DeleteDocument(id int64, force bool) (DocumentUsage, er
 	if err != nil {
 		return DocumentUsage{}, err
 	}
+	var projectID int64
+	if d, derr := kb.DocumentByID(id); derr == nil && d != nil {
+		projectID = d.ProjectID
+	}
 	if u.ReviewedSections > 0 && !force {
 		return u, &InUseError{Entity: "document", Name: fmt.Sprint(id), Counts: []UsageCount{{"reviewed summary(ies)", u.ReviewedSections}}}
 	}
@@ -456,6 +460,7 @@ func (kb *KnowledgeBase) DeleteDocument(id int64, force bool) (DocumentUsage, er
 	defer tx.Rollback()
 	for _, stmt := range []string{
 		`DELETE FROM document_section_concepts WHERE section_id IN (SELECT id FROM document_sections WHERE document_id = ?)`,
+		`DELETE FROM story_events WHERE document_id = ?`,
 		`DELETE FROM document_sections WHERE document_id = ?`,
 		`DELETE FROM documents WHERE id = ?`,
 	} {
@@ -465,6 +470,10 @@ func (kb *KnowledgeBase) DeleteDocument(id int64, force bool) (DocumentUsage, er
 	}
 	if err := tx.Commit(); err != nil {
 		return DocumentUsage{}, fmt.Errorf("knowledge: delete document: %w", err)
+	}
+	// Events anchored to the deleted document's are now dangling.
+	if err := kb.resolveStoryEvents(projectID); err != nil {
+		return DocumentUsage{}, err
 	}
 	if kb.ftsAvailable {
 		for _, sid := range sectionIDs {

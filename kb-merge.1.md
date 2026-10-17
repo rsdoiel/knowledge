@@ -20,7 +20,9 @@ travels — projects, concepts, sources, observations, decision records and
 record relations, plus the four join tables — so a table that would lose
 rows says so in the per-table summary rather than merging quietly short.
 A concept's kind (DR-0078) travels with it and follows the same
-last-writer-wins rule as its description.
+last-writer-wins rule as its description. Story events do not travel: they are
+derived from manuscript files, so the merged database has none until
+kb document ingest is run on the same paths.
 Each side is copied to a scratch file and brought up to the current schema
 before ATTACHing, so a database predating decision records (or any other
 table) still merges instead of failing outright.

@@ -22,6 +22,9 @@ record_relation), in dependency order.
 
 A concept line carries its "kind" (character, place, theme or other).
 
+Story events (story_events, DR-0075) are not exported: they are derived from
+the manuscript files by kb-document(1) ingest and are rebuilt there.
+
 A -project export carries only that project's decision records — a
 workspace-tier record belongs to no project, so it has no principled claim
 on a scoped export, and appears only in an unscoped one. A record relation

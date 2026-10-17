@@ -816,3 +816,30 @@ func TestDocumentShow_UnknownIDErrors(t *testing.T) {
 		t.Fatal("expected an error for an unknown document id")
 	}
 }
+
+// DR-0079: document ingest says how many story events a file yields, names
+// what it did not understand, and a skipped file still rebuilds its events.
+func TestDocumentIngest_ReportsStoryEventsAndWarnings(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	if _, err := kb.AddProject("work", ""); err != nil {
+		t.Fatal(err)
+	}
+	path := writeDocFixture(t, root+"/docs", "s.fountain",
+		"INT. HALL #1#\n\n/* story: story_time=1969-10-29; story_tme=oops */\n\nText.\n")
+
+	out, err := runDocument(t, kb, false, "ingest", path, "--project", "work")
+	if err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	if !strings.Contains(out, "1 story event") || !strings.Contains(out, "story_tme") {
+		t.Errorf("out = %q, want the event count and the unknown key named", out)
+	}
+
+	out, err = runDocument(t, kb, true, "ingest", path, "--project", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"events_written": 1`) || !strings.Contains(out, `"story_warnings"`) {
+		t.Errorf("json = %q, want events_written and story_warnings", out)
+	}
+}
