@@ -30,6 +30,11 @@ when -out is omitted. Every line is self-describing via a “type” field
 (project, concept, source, observation, observation_concept,
 observation_relation, project_concept, observation_source, record,
 record_relation), in dependency order.</p>
+<p>A concept line carries its “kind” (character, place, theme or
+other).</p>
+<p>Story events (story_events, DR-0075) are not exported: they are
+derived from the manuscript files by kb-document(1) ingest and are
+rebuilt there.</p>
 <p>A -project export carries only that project’s decision records — a
 workspace-tier record belongs to no project, so it has no principled
 claim on a scoped export, and appears only in an unscoped one. A record

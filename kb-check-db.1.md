@@ -1,6 +1,6 @@
-%kb-check-db(1) user manual | version 0.0.23 247ed8f
+%kb-check-db(1) user manual | version 0.0.24 0010b45
 % R. S. Doiel
-% 2026-10-16
+% 2026-10-17
 
 # NAME
 

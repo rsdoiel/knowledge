@@ -21,6 +21,118 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.24-2026-10-17">v0.0.24 — 2026-10-17</h2>
+<p>The story foundation Foul Papers builds on (knowledge DR-0075, with
+DR-0078 and DR-0079, all accepted): story front matter and Fountain
+scenes become story events, concepts have a kind, wikilinks accept a
+display alias, and <code>kb story timeline</code> and
+<code>kb story check</code> list and check the events. The plan was
+<code>agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md</code>.</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>Concept kinds</strong> (DR-0078). <code>character</code>,
+<code>place</code>, <code>theme</code> or <code>other</code>, the
+default and the value of every concept made before kinds existed (a lazy
+<code>ALTER</code>, so an old database opens as it was).
+<code>kb concept add --kind K</code>,
+<code>kb concept list --kind K</code>, and a new
+<code>kb concept set-kind NAME KIND</code>; <code>kb concept show</code>
+prints the kind when it is not <code>other</code>. Adding a concept
+again, or tagging it from prose, never resets its kind. An unknown kind
+on the command line is exit 2 and writes nothing; one in an imported
+file is exit 65, before anything is written. The kind travels through
+export, import (an older export with no <code>kind</code> leaves a local
+kind alone), merge (last-writer-wins, like the description) and
+check-db. Library: <code>ConceptKinds</code>,
+<code>ValidConceptKind</code>, <code>SetConceptKind</code>,
+<code>ConceptsOfKind</code>, <code>Concept.Kind</code>.</li>
+<li><strong>Wikilinks accept a display alias</strong> (DR-0078).
+<code>[[the-long-fire/Anna|Anna]]</code> links the concept before the
+bar and shows the text after it; a link with no bar is unchanged.
+Document ingest, record ingest and the record fuzzy-tag check read it.
+Library: <code>WikilinkTarget</code>.</li>
+<li><strong>Story metadata is read from manuscripts</strong> (DR-0075,
+DR-0078). Front matter keys <code>event</code>, <code>story_time</code>,
+<code>place</code>, <code>pov</code>, <code>status</code>,
+<code>characters</code>, <code>foreshadows</code>,
+<code>pays_off</code>, <code>precedes</code>. In a Fountain file, a
+scene number at the end of a heading
+(<code>INT. KITCHEN - DAY #12A#</code>) is the scene’s identity, and a
+one-line or multi-line boneyard after the heading carries its metadata:
+<code>/* story: story_time=1969-10-29; pov=Anna */</code>. A key or
+value that is not understood is reported, not dropped. Library:
+<code>ParsedDocument.Story</code>, <code>.StoryWarnings</code>, and per
+scene <code>DocumentSection.SceneID</code>, <code>.Story</code>;
+<code>StoryMeta</code>.</li>
+<li><strong>Story events</strong> (DR-0075, DR-0079). A numbered
+Fountain scene, or a non-Fountain file with a narrative key
+(<code>event</code>, <code>story_time</code>, <code>pov</code>,
+<code>characters</code>, <code>foreshadows</code>, <code>pays_off</code>
+or <code>precedes</code>; <code>status</code> and <code>place</code>
+alone do not make one), is a row of the new <code>story_events</code>
+table, labelled by its <code>event:</code> or its scene number.
+<code>story_time</code> is <code>1969-10-29</code>, a month, a year,
+<code>circa 1890</code>, <code>ordinal: 12</code>, or
+<code>after:</code>/<code>before:</code> another label with an optional
+offset in <code>d</code>, <code>w</code>, <code>m</code> or
+<code>y</code> (<code>after: the-fire +3d</code>). A second pass over
+the project resolves relative times in any ingest order; a missing,
+duplicated, undated or cyclic anchor stays <code>unresolved</code>, with
+a note, and is never guessed. <code>kb document ingest</code> reports
+how many events a file yields and every story value it did not
+understand. Library: <code>StoryEvents</code>, <code>StoryEvent</code>,
+<code>ParseStoryTime</code>, <code>ResolveStoryTime</code>,
+<code>StoryTime</code>.</li>
+<li><strong><code>kb story timeline --project P [--narrative]</code></strong>
+lists the events in story order: an event follows every event provably
+before it, by intervals that do not overlap, a
+<code>before:</code>/<code>after:</code> relation, or a
+<code>precedes</code> list. Where the order after the row above is not
+established the row is marked <code>~</code>; <code>?</code> is no date
+and no relation, <code>!</code> a cycle. <code>--narrative</code> lists
+them in reading order. <code>--json</code>. Library:
+<code>StoryTimeline</code>.</li>
+<li><strong><code>kb story check --project P [--strict]</code></strong>
+reports, and changes nothing: <code>missing-file</code>,
+<code>unnumbered-scene</code>, <code>duplicate-label</code>,
+<code>unparseable-time</code>, <code>unresolved-time</code>,
+<code>unknown-reference</code>, <code>contradiction</code>,
+<code>cycle</code>, <code>two-places</code> (the same day or ordinal
+only) and <code>foreshadow-order</code> (within one document). Exit 0
+whatever it finds; 1 with <code>--strict</code> when it finds anything.
+Library: <code>StoryCheck</code>, <code>StoryFinding</code>.</li>
+<li><strong>A test of the exported surface from outside the
+package</strong> (<code>storyapi_test.go</code>): ingest a manuscript,
+give characters a kind, list events, check, move to a second database
+and rebuild there, delete a document.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><strong>fountain 1.0.3 is required.</strong> It types boneyards and
+carries the scene number; <code>go.mod</code> takes the release. A
+Fountain boneyard that is not story metadata is now left out of a
+scene’s body, as the annotation list in <code>segmentFountain</code>
+always intended. A one-line boneyard used to stay in as Action text, and
+the lines of a multi-line one as Character, Dialogue and Action. A
+re-ingested screenplay with boneyards therefore has changed section
+bodies, and a reviewed summary of such a section is marked stale.</li>
+<li><strong>Story events are derived and do not travel.</strong>
+<code>export</code>, <code>import</code>, <code>merge</code> and
+<code>check-db</code> leave <code>story_events</code> out, and their
+manuals say so. Every <code>kb document ingest</code> of a file rewrites
+its events, including a file that is unchanged and so skipped for
+everything else, which is how a second machine rebuilds them: run
+<code>kb document ingest</code> on the same paths after an import or a
+merge.</li>
+<li><strong><code>kb document ingest</code></strong> prints
+<code>N story events</code> and <code>story warning:</code> lines when
+there are any; <code>--json</code> has <code>events_written</code> and
+<code>story_warnings</code>. Deleting a document deletes its events and
+unresolves anything anchored to them.</li>
+<li><code>AGENTS.md</code> lists <code>story</code> and
+<code>concept set-kind</code>. The skills are pinned to 0.0.24 and do
+not yet describe the story verbs.</li>
+</ul>
 <h2 id="v0.0.23-2026-10-16">v0.0.23 — 2026-10-16</h2>
 <p>Notes get frontmatter at ingest, search hits say where they are,
 <code>kb stats</code> shows a database’s shape, and the knowledge skills
@@ -29,7 +141,7 @@ machine are fixed (completion on macOS, and dated notes read as decision
 records). The decisions are knowledge DR-0076 and DR-0077, both
 proposed; the plan is
 <code>agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md</code>.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><strong><code>kb document ingest</code> offers frontmatter for a
 note that has none</strong> (DR-0076). On a terminal, a file with no
@@ -90,7 +202,7 @@ version.</li>
 <code>KBSearchResult</code> carries <code>Ref</code>,
 <code>Status</code>, <code>Passage</code> and <code>Section</code>.</li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li><strong><code>kb completion bash -install</code> adds a line to the
 bash startup file</strong> (<code>~/.bashrc</code>; on macOS the first
@@ -148,7 +260,7 @@ updated by this release: run
 <code>design/scoped-search-design.md</code>), <code>/</code> filters
 every list, and every row of the interface’s menus is built (the design
 is <code>design/tui-keys-and-write-flows-design.md</code>).</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><strong><code>kb search SCOPE/[KIND] TERM</code>: search scoped by a
 path</strong> (DR-0073, DR-0074).
@@ -228,7 +340,7 @@ unchanged): <code>SearchScoped</code> with <code>SearchScope</code>,
 and <code>KBSearchResult</code> carries <code>SourceID</code> and
 <code>ProjectID</code>.</li>
 </ul>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><strong><code>/</code> no longer starts the search</strong>;
 <code>S</code> does, and the screens’ legends name <code>/ filter</code>
@@ -278,7 +390,7 @@ text says where the project and tier come from. The
 <code>kb index</code> and <code>kb record fmt</code> examples are
 corrected too.</li>
 </ul>
-<h3 id="changed-2">Changed</h3>
+<h3 id="changed-3">Changed</h3>
 <ul>
 <li><strong>The built-in record viewer can find text:</strong>
 <code>/</code> finds (case-insensitive), <code>n</code> and
@@ -300,7 +412,7 @@ items U1 to U7). Written and tested red first, including the built
 binary on a pseudo-terminal. The race detector passed on darwin/arm64 at
 <code>5fd9b2e</code>; the interface was tried by hand on Raspberry Pi OS
 and macOS. It has not been run on Windows.</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><strong>The removing gate</strong> (DR-0067, DR-0064 amendment; plan
 item U3). <code>d</code> deletes the selected project (the project
@@ -460,7 +572,7 @@ terminal has reported a size.</li>
 and a legend that is wider than the window drops its spacing, then its
 movement hint, instead of losing its last key.</li>
 </ul>
-<h3 id="changed-3">Changed</h3>
+<h3 id="changed-4">Changed</h3>
 <ul>
 <li><strong><code>cmt</code> is no longer part of
 <code>make</code>.</strong> <code>make build</code> compiles the program
@@ -492,7 +604,7 @@ detector passed on darwin/arm64 at the last code commit
 The interface was tried by hand in a real terminal on Linux. The next
 release, v0.0.20, brings the rest of the writes behind the same
 gates.</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><strong><code>kb verbs</code> prints the verb table</strong>
 (DR-0059). One table in <code>cmd/kb/verbtable.go</code> now describes
@@ -530,7 +642,7 @@ same.</li>
 DR-0067 names; the table classes them so and a test pins the full
 set.</li>
 </ul>
-<h3 id="added-4">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><strong>The first write in the TUI: read a record and set its
 status</strong> (DR-0066, DR-0065, DR-0067, DR-0061). On the Records
@@ -553,7 +665,7 @@ record. Tested at unit level with a pager seam, and on a pseudo-terminal
 with a pager that waits for a key, showing the terminal is handed over
 and taken back.</li>
 </ul>
-<h3 id="changed-4">Changed</h3>
+<h3 id="changed-5">Changed</h3>
 <ul>
 <li><strong>The TUI opens at a menu, in a frame, with tabs</strong>
 (DR-0066 and its 2026-10-09 amendment). Bare <code>kb</code> on a
@@ -643,7 +755,7 @@ Everything was written and tested red first. The release shipped before
 the race detector was run; it was run afterwards, on darwin/arm64 (Go
 1.26.5) at the release commit <code>258600d</code>, and both packages
 pass (the Linux-only pseudo-terminal tests skip there).</p>
-<h3 id="changed-5">Changed</h3>
+<h3 id="changed-6">Changed</h3>
 <ul>
 <li><p><strong><code>kb record set-status</code> follows a transition
 table</strong> (DR-0060). It used to write any status on any record. Now
@@ -681,7 +793,7 @@ file mode, so <code>&lt; /dev/null</code> does not count.
 <code>golang.org/x/sys</code> are now direct dependencies; both were
 already built into <code>kb</code> through bubbletea.</p></li>
 </ul>
-<h3 id="added-5">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><strong><code>kb record set-status REF</code> with no status is a
 review</strong> (DR-0060): the record is shown through
@@ -714,7 +826,7 @@ at the last code commit and the suite passed; the new commands were
 checked read-only, with a scratch build, against both the Laboratory and
 the WorkLab workspaces (277 records, 23 projects in the second, with
 <code>DR-0001</code> repeated ten times).</p>
-<h3 id="added-6">Added</h3>
+<h3 id="added-7">Added</h3>
 <ul>
 <li><strong>A workspace is found by walking up</strong> (DR-0058): from
 the current directory to the nearest ancestor with
@@ -757,7 +869,7 @@ every <code>proposed</code> record in scope, oldest first, with the
 other <code>list</code> filters. <code>--status</code> is a usage
 error.</li>
 </ul>
-<h3 id="changed-6">Changed</h3>
+<h3 id="changed-7">Changed</h3>
 <ul>
 <li><strong>Listings name records by reference.</strong>
 <code>record list</code> starts each line with
@@ -820,7 +932,7 @@ was checked by sourcing the generated script in real bash and PowerShell
 (<code>TabExpansion2</code>) against the real workspace; that run found
 a placeholder left unsubstituted in the project-name path, which the
 unit tests had missed, and it is fixed and now tested.</p>
-<h3 id="added-7">Added</h3>
+<h3 id="added-8">Added</h3>
 <ul>
 <li><strong><code>kb completion bash|powershell [-install]</code></strong>
 (DR-0056): writes a shell completion script to standard output, or with
@@ -865,7 +977,7 @@ subverb” to “not found”), and nothing exits 70. That comparison was made
 before the <code>kb import</code> and <code>kb project add</code> fixes
 below, and <code>project add</code> on an existing name changes from
 exit 0 to 1.</p>
-<h3 id="added-8">Added</h3>
+<h3 id="added-9">Added</h3>
 <ul>
 <li><strong><code>kb concept show NAME [--limit N]</code></strong>
 (DR-0051): a concept’s description and identifier, and per kind
@@ -929,7 +1041,7 @@ purpose.</li>
 <code>RecallByText</code> adds a project filter, the project and matched
 concepts on every hit, and the list of linked projects.</li>
 </ul>
-<h3 id="changed-7">Changed</h3>
+<h3 id="changed-8">Changed</h3>
 <ul>
 <li><strong><code>kb project add</code> refuses a name that already
 exists</strong> (DR-0055): exit 1,
@@ -988,7 +1100,7 @@ the question that was asked, 2 says the command was wrong, and the
 change was checked by running the v0.0.13 build alongside the new one,
 387 commands in plain and <code>--json</code> mode, on a copy of the
 real database.</p>
-<h3 id="added-9">Added</h3>
+<h3 id="added-10">Added</h3>
 <ul>
 <li><strong>Removal verbs</strong> (DR-0050), so a mistake is fixable
 without raw SQL, which skips the search index:
@@ -1036,7 +1148,7 @@ that is not absolute, and a <code>--doi</code> that is not the bare
 <code>check-retractions</code> sends the DOI to Retraction Watch, and a
 mistyped one used to read as “not retracted”.</li>
 </ul>
-<h3 id="changed-8">Changed</h3>
+<h3 id="changed-9">Changed</h3>
 <ul>
 <li><strong>Bulk commands do everything they can, then exit with the
 class of the first failure</strong> instead of 0: <code>kb ingest</code>
@@ -1232,7 +1344,7 @@ The decisions behind the changes are DR-0040 to DR-0044. Every fix below
 was written red first, and the command-line changes were checked by
 running a build from before the change alongside the new one, on a copy
 of the real database.</p>
-<h3 id="added-10">Added</h3>
+<h3 id="added-11">Added</h3>
 <ul>
 <li><code>CleanName(kind, name)</code>, exported (DR-0042): trims
 surrounding whitespace from a project or concept name and refuses one
@@ -1249,7 +1361,7 @@ go before the verb, a name that begins with a dash follows
 <code>--</code>, and free text after a verb’s fixed arguments is taken
 as typed. EXIT STATUS now says exactly what 1 and 2 mean.</li>
 </ul>
-<h3 id="changed-9">Changed</h3>
+<h3 id="changed-10">Changed</h3>
 <ul>
 <li><strong>Usage errors exit 2</strong> (they exited 1; DR-0040).
 <code>kb -help</code> had always documented 2 for “usage error”, but
@@ -1438,7 +1550,7 @@ sweep of bugs that only showed up by running a build from before each
 change against the new one on real data. Every fix below was written red
 first, and each move was checked by diffing the old binary’s output
 against the new one, byte for byte.</p>
-<h3 id="added-11">Added</h3>
+<h3 id="added-12">Added</h3>
 <ul>
 <li><strong>The workflow logic is now library API</strong> (DR-0035).
 <code>cmd/kb</code> is <code>package   main</code>, so everything
@@ -1497,7 +1609,7 @@ vocabulary (DR-0038): adopted, then abandoned. It differs from
 record’s body, by convention. <code>kb help record</code> documents
 it.</li>
 </ul>
-<h3 id="changed-10">Changed</h3>
+<h3 id="changed-11">Changed</h3>
 <ul>
 <li><strong>Concept names that begin or end in punctuation now
 match</strong> (DR-0037). <code>C++</code>, <code>F#</code> and
@@ -1575,7 +1687,7 @@ near-miss tagging, a frontmatter provenance generator, and fuzzy
 candidate clustering, each of which surfaced and fixed a real
 self-contradiction in its own design doc before shipping, verified by
 hand rather than trusting the design’s own worked examples.</p>
-<h3 id="added-12">Added</h3>
+<h3 id="added-13">Added</h3>
 <ul>
 <li><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
 (DR-0032) catches what <code>tag</code>’s exact whole-word matching
@@ -1649,7 +1761,7 @@ unchanged.</li>
 v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
 two corpus-improvement verbs that surface candidates for a human to
 confirm rather than committing anything themselves.</p>
-<h3 id="added-13">Added</h3>
+<h3 id="added-14">Added</h3>
 <ul>
 <li><code>kb concept suggest [--project NAME] [--limit N]</code>
 (DR-0028), a read-only verb that scans every record body and document
@@ -1683,7 +1795,7 @@ and fenced blocks, is auto-linked. <code>tag_density</code> is
 deliberately left counting the unfiltered text — it is the raw signal
 the threshold is applied to, not the threshold’s output.</li>
 </ul>
-<h3 id="changed-11">Changed</h3>
+<h3 id="changed-12">Changed</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> now completes for a project
 that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
@@ -1766,7 +1878,7 @@ in favour of the per-file property the test was always really asserting
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added-14">Added</h3>
+<h3 id="added-15">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -1804,7 +1916,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-15">Added</h3>
+<h3 id="added-16">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -1886,7 +1998,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-16">Added</h3>
+<h3 id="added-17">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -1929,7 +2041,7 @@ every portability path, per the project’s standing rule that a table
 missing from the merge summary is a table whose loss goes
 unreported.</li>
 </ul>
-<h3 id="changed-12">Changed</h3>
+<h3 id="changed-13">Changed</h3>
 <ul>
 <li>The independent hand-rolled CLI flag/positional parsers in
 <code>ingest</code>, <code>record</code>, <code>source</code>, and the
@@ -1944,7 +2056,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-17">Added</h3>
+<h3 id="added-18">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -1979,7 +2091,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-18">Added</h3>
+<h3 id="added-19">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -1988,7 +2100,7 @@ start a workspace (DR-0021, DR-0022).</p>
 location for a new record, relative to <code>--root</code> like every
 other stored record path.</li>
 </ul>
-<h3 id="changed-13">Changed</h3>
+<h3 id="changed-14">Changed</h3>
 <ul>
 <li><code>kb record new --project P</code> (no <code>--dir</code>) now
 writes to <code>agents/projects/P/decisions/</code> instead of
@@ -2019,7 +2131,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-19">Added</h3>
+<h3 id="added-20">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -2061,7 +2173,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed-14">Changed</h3>
+<h3 id="changed-15">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather

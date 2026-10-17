@@ -102,9 +102,11 @@ database.</p>
 </tr>
 <tr class="odd">
 <td><code>concept</code>
-(<code>add list show recall rename delete suggest</code>)</td>
+(<code>add list show recall rename set-kind delete suggest</code>)</td>
 <td>read, additive, changing, removing</td>
-<td><code>show</code> lists links and the projects a concept spans</td>
+<td><code>show</code> lists links and the projects a concept spans; a
+concept has a kind (<code>character</code>, <code>place</code>,
+<code>theme</code>, <code>other</code>)</td>
 </tr>
 <tr class="even">
 <td><code>link</code>, <code>unlink</code></td>
@@ -154,21 +156,28 @@ source</td>
 <td>formatted overviews</td>
 </tr>
 <tr class="even">
+<td><code>story</code> (<code>timeline check</code>)</td>
+<td>read</td>
+<td>a writing project’s events in story or reading order, and a
+continuity report that changes nothing; both need
+<code>--project</code></td>
+</tr>
+<tr class="odd">
 <td><code>stats</code></td>
 <td>read</td>
 <td>counts of rows, links and checks, and a line per project</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>check-db</code></td>
 <td>read</td>
 <td>compare the database with its JSON-L dump</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>export</code>, <code>import</code>, <code>merge</code></td>
 <td>cli_only</td>
 <td>portable snapshots and reconciling two databases</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>init</code>, <code>completion</code>, <code>verbs</code></td>
 <td>cli_only</td>
 <td>create a workspace, shell completion, the verb table</td>

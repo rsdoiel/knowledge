@@ -3,6 +3,68 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.24 — 2026-10-17
+
+The story foundation Foul Papers builds on (knowledge DR-0075, with DR-0078 and DR-0079, all accepted): story
+front matter and Fountain scenes become story events, concepts have a kind, wikilinks accept a display alias,
+and `kb story timeline` and `kb story check` list and check the events. The plan was
+`agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md`.
+
+### Added
+
+- **Concept kinds** (DR-0078). `character`, `place`, `theme` or `other`, the default and the value of every
+  concept made before kinds existed (a lazy `ALTER`, so an old database opens as it was). `kb concept add --kind K`,
+  `kb concept list --kind K`, and a new `kb concept set-kind NAME KIND`; `kb concept show` prints the kind when it
+  is not `other`. Adding a concept again, or tagging it from prose, never resets its kind. An unknown kind on
+  the command line is exit 2 and writes nothing; one in an imported file is exit 65, before anything is written.
+  The kind travels through export, import (an older export with no `kind` leaves a local kind alone), merge
+  (last-writer-wins, like the description) and check-db. Library: `ConceptKinds`, `ValidConceptKind`,
+  `SetConceptKind`, `ConceptsOfKind`, `Concept.Kind`.
+- **Wikilinks accept a display alias** (DR-0078). `[[the-long-fire/Anna|Anna]]` links the concept before the
+  bar and shows the text after it; a link with no bar is unchanged. Document ingest, record ingest and the
+  record fuzzy-tag check read it. Library: `WikilinkTarget`.
+- **Story metadata is read from manuscripts** (DR-0075, DR-0078). Front matter keys `event`, `story_time`,
+  `place`, `pov`, `status`, `characters`, `foreshadows`, `pays_off`, `precedes`. In a Fountain file, a scene number
+  at the end of a heading (`INT. KITCHEN - DAY #12A#`) is the scene's identity, and a one-line or multi-line
+  boneyard after the heading carries its metadata: `/* story: story_time=1969-10-29; pov=Anna */`. A key or
+  value that is not understood is reported, not dropped. Library: `ParsedDocument.Story`, `.StoryWarnings`, and per
+  scene `DocumentSection.SceneID`, `.Story`; `StoryMeta`.
+- **Story events** (DR-0075, DR-0079). A numbered Fountain scene, or a non-Fountain file with a narrative key
+  (`event`, `story_time`, `pov`, `characters`, `foreshadows`, `pays_off` or `precedes`; `status` and `place` alone
+  do not make one), is a row of the new `story_events` table, labelled by its `event:` or its scene number.
+  `story_time` is `1969-10-29`, a month, a year, `circa 1890`, `ordinal: 12`, or `after:`/`before:` another label
+  with an optional offset in `d`, `w`, `m` or `y` (`after: the-fire +3d`). A second pass over the project resolves
+  relative times in any ingest order; a missing, duplicated, undated or cyclic anchor stays `unresolved`, with a
+  note, and is never guessed. `kb document ingest` reports how many events a file yields and every story value
+  it did not understand. Library: `StoryEvents`, `StoryEvent`, `ParseStoryTime`, `ResolveStoryTime`, `StoryTime`.
+- **`kb story timeline --project P [--narrative]`** lists the events in story order: an event follows every
+  event provably before it, by intervals that do not overlap, a `before:`/`after:` relation, or a `precedes`
+  list. Where the order after the row above is not established the row is marked `~`; `?` is no date and no
+  relation, `!` a cycle. `--narrative` lists them in reading order. `--json`. Library: `StoryTimeline`.
+- **`kb story check --project P [--strict]`** reports, and changes nothing: `missing-file`, `unnumbered-scene`,
+  `duplicate-label`, `unparseable-time`, `unresolved-time`, `unknown-reference`, `contradiction`, `cycle`,
+  `two-places` (the same day or ordinal only) and `foreshadow-order` (within one document). Exit 0 whatever it
+  finds; 1 with `--strict` when it finds anything. Library: `StoryCheck`, `StoryFinding`.
+- **A test of the exported surface from outside the package** (`storyapi_test.go`): ingest a manuscript, give
+  characters a kind, list events, check, move to a second database and rebuild there, delete a document.
+
+### Changed
+
+- **fountain 1.0.3 is required.** It types boneyards and carries the scene number; `go.mod` takes the release.
+  A Fountain boneyard that is not story metadata is now left out of a scene's body, as the annotation list in
+  `segmentFountain` always intended. A one-line boneyard used to stay in as Action text, and the lines of a
+  multi-line one as Character, Dialogue and Action. A re-ingested screenplay with boneyards therefore has
+  changed section bodies, and a reviewed summary of such a section is marked stale.
+- **Story events are derived and do not travel.** `export`, `import`, `merge` and `check-db` leave
+  `story_events` out, and their manuals say so. Every `kb document ingest` of a file rewrites its events,
+  including a file that is unchanged and so skipped for everything else, which is how a second machine rebuilds
+  them: run `kb document ingest` on the same paths after an import or a merge.
+- **`kb document ingest`** prints `N story events` and `story warning:` lines when there are any; `--json` has
+  `events_written` and `story_warnings`. Deleting a document deletes its events and unresolves anything
+  anchored to them.
+- `AGENTS.md` lists `story` and `concept set-kind`. The skills are pinned to 0.0.24 and do not yet describe the
+  story verbs.
+
 ## v0.0.23 — 2026-10-16
 
 Notes get frontmatter at ingest, search hits say where they are, `kb stats` shows a database's shape, and the

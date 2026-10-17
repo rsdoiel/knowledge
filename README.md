@@ -76,34 +76,30 @@ kb document ingest notes/2026-09-29-worklog.md --project harvey
 
 ## Release Notes
 
-- version: 0.0.23
+- version: 0.0.24
 - status: active
-- released: 2026-10-16
+- released: 2026-10-17
 
-Notes get frontmatter at ingest, search hits say where they are, `kb stats` shows a database's shape, and the knowledge skills and an agent document now ship in this repository. The decisions are DR-0076 and DR-0077 (both proposed).
+Foul Papers can build on kb: story front matter and Fountain scenes become story events, concepts have a kind, and `kb story timeline` and `kb story check` list and check them. The decisions are DR-0075, DR-0078 and DR-0079 (all accepted).
 
-Notes. `kb document ingest PATH --project P`, on a terminal, offers frontmatter for a file that has none: `title`, `author`, `dateCreated` and the known concepts the text mentions as `keywords`, one at a time (Enter accepts, text replaces, `-` skips, `q` stops), written only after you confirm. `--no-prompt`, `--dry-run`, `--json` and a missing terminal never prompt. A date at the start of a file name, `2026-09-29-worklog.md`, is now the first `dateCreated` signal, here and in `kb document frontmatter`.
+Story events. A scene file with a narrative key in its front matter (`event`, `story_time`, `pov`, `characters`, `foreshadows`, `pays_off`, `precedes`; `status` and `place` ride along), or a Fountain scene with a scene number (`INT. KITCHEN - DAY #12A#`) whose metadata is a one-line boneyard after the heading (`/* story: story_time=1969-10-29; pov=Anna */`), is a story event. `story_time` is a date, a month, a year, `circa 1890`, `ordinal: 12`, or `after:`/`before:` another event's label with an optional offset (`after: the-fire +3d`). Events are derived from the files by every `kb document ingest`, an unchanged file included, and do not travel through export, import, merge or check-db: after an import, run `kb document ingest` on the same paths.
 
-Searching. A hit now carries a record's qualified reference and status (`harvey/DR-0004 (accepted)`) and the passage that matched, the matched words between « and », with the section it is in for a record (`Decision:`, or `title:`). This is in `kb search TERM` as well as the scoped form, and in `--json`.
+Timeline and check. `kb story timeline --project P` lists the events in story order, or `--narrative` in reading order; where the order after the row above is not established it says so (`~`) and never guesses. `kb story check --project P` reports unnumbered scenes, duplicate and dangling labels, times it could not read or resolve, orders the dates contradict, cycles, a character in two places on one day, and foreshadowing out of order. It changes nothing and exits 0 unless `--strict`.
 
-Counting. `kb stats` reports rows per table, links per join table, five checks (`observations_without_project`, `concepts_without_links` and others) and a line per project, with no SQL; `--json` is one object. `kb concept show` says which projects a concept spans, tagged directly or through observations, records and document sections.
+Concepts have a kind. `character`, `place`, `theme` or `other` (the default): `kb concept add --kind`, `kb concept set-kind`, `kb concept list --kind`. The kind travels through export, import, merge and check-db.
 
-Completion. `kb completion bash -install` now also adds a line to the bash startup file (`~/.bashrc`, or on macOS the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists), because macOS's bash 3.2 never reads the bash-completion directory, so completion did nothing in a new Terminal window. `-uninstall` removes what `-install` wrote, and `-check` says what is missing. Use `eval "$(kb completion bash)"` to try it in a session: `source <(...)` silently does nothing in bash 3.2.
+Wikilinks accept a display alias. `[[the-long-fire/Anna|Anna]]` links the concept before the bar and shows the text after it.
 
-Fixed. `kb ingest` on a project directory failed on dated notes (`notes/2026-09-29-....md`, "no frontmatter"): the year read as a record id. A record is `NNNN-slug.md` and not `YYYY-MM-DD...`, and the walk skips `design`, `plans`, `feature_requests`, `notes` and `hand-off` below the directory you give it. The closing `kb: ingest: N error(s)` line no longer repeats the first error.
+Requires fountain 1.0.3, which parses boneyards and scene numbers. For packagers and Foul Papers: the library exports `StoryEvents`, `StoryTimeline`, `StoryCheck`, `ParseStoryTime`, `ResolveStoryTime`, `SetConceptKind`, `ConceptsOfKind`, `ConceptKinds`, `WikilinkTarget` and the story fields of `ParsedDocument`.
 
-Shipping. `agents/skills/` holds `setup-knowledge-base`, `update-knowledge-base` and `review-knowledge-base`, and `AGENTS.md` (with a `CLAUDE.md` that points at it) tells a harness what kb is, the rules for using it, the verbs and the exit codes. The release zips include them. `make install-skills` copies the skills to `~/.claude/skills` (`SKILLS_DIR` changes it) and `make check-skills` compares; `make install` does not install them. A test fails if a skill's `kb_version` is not the release's.
-
-For packagers and harvey: the library gains `Stats`, `StatCount`, `ProjectStats`, `ConceptSpan` and `ConceptDetailResult.Spans`, and `KBSearchResult` carries `Ref`, `Status`, `Passage` and `Section`; `Search` and `SearchScoped` take what they took.
-
-Checked in this release: the race detector passed on darwin/arm64 (macOS), and the test suite passes on Linux (Raspberry Pi OS, arm64). The built binary was driven on a pseudo-terminal on Linux for the frontmatter prompts, and on macOS for `completion -install`, `-check` and `-uninstall` under /bin/bash 3.2 and for the review skill. Not checked: the frontmatter prompts by hand on macOS or Windows, and `completion` on Windows.
+Checked in this release: `go vet` and the test suite pass on Linux (Raspberry Pi OS, arm64) under Go 1.27.2, including a test written from outside the package that drives the whole flow through exported calls. The built binary was run by hand on a small manuscript (prose scene files and a Fountain screenplay) for `kb story timeline` and `check`, and on a copy of the live database, where all 179 existing concepts migrated to kind `other`. The fountain 1.0.3 parser was run against the tests of fdx, osf and scripttool. Not checked: the race detector for this release, macOS, Windows, and a manuscript of realistic length (the timeline compares every pair of events, and was only tried on a handful).
 
 
 ## Software Requirements
 
 - Go >= 1.26.4
 - gopkg.in/yaml.v3 >= 3.0.1
-- github.com/rsdoiel/fountain >= 1.0.2
+- github.com/rsdoiel/fountain >= 1.0.3
 - git >= 2.0 (runtime, for kb document frontmatter's provenance detection)
 
 ### Software Suggestions

@@ -19,76 +19,53 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.23">knowledge 0.0.23</h2>
-<p>Notes get frontmatter at ingest, search hits say where they are,
-<code>kb stats</code> shows a database’s shape, and the knowledge skills
-and an agent document now ship in this repository. The decisions are
-DR-0076 and DR-0077 (both proposed).</p>
-<p>Notes. <code>kb document ingest PATH --project P</code>, on a
-terminal, offers frontmatter for a file that has none:
-<code>title</code>, <code>author</code>, <code>dateCreated</code> and
-the known concepts the text mentions as <code>keywords</code>, one at a
-time (Enter accepts, text replaces, <code>-</code> skips, <code>q</code>
-stops), written only after you confirm. <code>--no-prompt</code>,
-<code>--dry-run</code>, <code>--json</code> and a missing terminal never
-prompt. A date at the start of a file name,
-<code>2026-09-29-worklog.md</code>, is now the first
-<code>dateCreated</code> signal, here and in
-<code>kb document frontmatter</code>.</p>
-<p>Searching. A hit now carries a record’s qualified reference and
-status (<code>harvey/DR-0004 (accepted)</code>) and the passage that
-matched, the matched words between « and », with the section it is in
-for a record (<code>Decision:</code>, or <code>title:</code>). This is
-in <code>kb search TERM</code> as well as the scoped form, and in
-<code>--json</code>.</p>
-<p>Counting. <code>kb stats</code> reports rows per table, links per
-join table, five checks (<code>observations_without_project</code>,
-<code>concepts_without_links</code> and others) and a line per project,
-with no SQL; <code>--json</code> is one object.
-<code>kb concept show</code> says which projects a concept spans, tagged
-directly or through observations, records and document sections.</p>
-<p>Completion. <code>kb completion bash -install</code> now also adds a
-line to the bash startup file (<code>~/.bashrc</code>, or on macOS the
-first of <code>~/.bash_profile</code>, <code>~/.bash_login</code> and
-<code>~/.profile</code> that exists), because macOS’s bash 3.2 never
-reads the bash-completion directory, so completion did nothing in a new
-Terminal window. <code>-uninstall</code> removes what
-<code>-install</code> wrote, and <code>-check</code> says what is
-missing. Use <code>eval "$(kb completion bash)"</code> to try it in a
-session: <code>source &lt;(...)</code> silently does nothing in bash
-3.2.</p>
-<p>Fixed. <code>kb ingest</code> on a project directory failed on dated
-notes (<code>notes/2026-09-29-....md</code>, “no frontmatter”): the year
-read as a record id. A record is <code>NNNN-slug.md</code> and not
-<code>YYYY-MM-DD...</code>, and the walk skips <code>design</code>,
-<code>plans</code>, <code>feature_requests</code>, <code>notes</code>
-and <code>hand-off</code> below the directory you give it. The closing
-<code>kb: ingest: N error(s)</code> line no longer repeats the first
-error.</p>
-<p>Shipping. <code>agents/skills/</code> holds
-<code>setup-knowledge-base</code>, <code>update-knowledge-base</code>
-and <code>review-knowledge-base</code>, and <code>AGENTS.md</code> (with
-a <code>CLAUDE.md</code> that points at it) tells a harness what kb is,
-the rules for using it, the verbs and the exit codes. The release zips
-include them. <code>make install-skills</code> copies the skills to
-<code>~/.claude/skills</code> (<code>SKILLS_DIR</code> changes it) and
-<code>make check-skills</code> compares; <code>make install</code> does
-not install them. A test fails if a skill’s <code>kb_version</code> is
-not the release’s.</p>
-<p>For packagers and harvey: the library gains <code>Stats</code>,
-<code>StatCount</code>, <code>ProjectStats</code>,
-<code>ConceptSpan</code> and <code>ConceptDetailResult.Spans</code>, and
-<code>KBSearchResult</code> carries <code>Ref</code>,
-<code>Status</code>, <code>Passage</code> and <code>Section</code>;
-<code>Search</code> and <code>SearchScoped</code> take what they
-took.</p>
-<p>Checked in this release: the race detector passed on darwin/arm64
-(macOS), and the test suite passes on Linux (Raspberry Pi OS, arm64).
-The built binary was driven on a pseudo-terminal on Linux for the
-frontmatter prompts, and on macOS for <code>completion -install</code>,
-<code>-check</code> and <code>-uninstall</code> under /bin/bash 3.2 and
-for the review skill. Not checked: the frontmatter prompts by hand on
-macOS or Windows, and <code>completion</code> on Windows.</p>
+<h2 id="knowledge-0.0.24">knowledge 0.0.24</h2>
+<p>Foul Papers can build on kb: story front matter and Fountain scenes
+become story events, concepts have a kind, and
+<code>kb story timeline</code> and <code>kb story check</code> list and
+check them. The decisions are DR-0075, DR-0078 and DR-0079 (all
+accepted).</p>
+<p>Story events. A scene file with a narrative key in its front matter
+(<code>event</code>, <code>story_time</code>, <code>pov</code>,
+<code>characters</code>, <code>foreshadows</code>,
+<code>pays_off</code>, <code>precedes</code>; <code>status</code> and
+<code>place</code> ride along), or a Fountain scene with a scene number
+(<code>INT. KITCHEN - DAY #12A#</code>) whose metadata is a one-line
+boneyard after the heading
+(<code>/* story: story_time=1969-10-29; pov=Anna */</code>), is a story
+event. <code>story_time</code> is a date, a month, a year,
+<code>circa 1890</code>, <code>ordinal: 12</code>, or
+<code>after:</code>/<code>before:</code> another event’s label with an
+optional offset (<code>after: the-fire +3d</code>). Events are derived
+from the files by every <code>kb document ingest</code>, an unchanged
+file included, and do not travel through export, import, merge or
+check-db: after an import, run <code>kb document ingest</code> on the
+same paths.</p>
+<p>Timeline and check. <code>kb story timeline --project P</code> lists
+the events in story order, or <code>--narrative</code> in reading order;
+where the order after the row above is not established it says so
+(<code>~</code>) and never guesses.
+<code>kb story check --project P</code> reports unnumbered scenes,
+duplicate and dangling labels, times it could not read or resolve,
+orders the dates contradict, cycles, a character in two places on one
+day, and foreshadowing out of order. It changes nothing and exits 0
+unless <code>--strict</code>.</p>
+<p>Concepts have a kind. <code>character</code>, <code>place</code>,
+<code>theme</code> or <code>other</code> (the default):
+<code>kb concept add --kind</code>, <code>kb concept set-kind</code>,
+<code>kb concept list --kind</code>. The kind travels through export,
+import, merge and check-db.</p>
+<p>Wikilinks accept a display alias.
+<code>[[the-long-fire/Anna|Anna]]</code> links the concept before the
+bar and shows the text after it.</p>
+<p>Requires fountain 1.0.3, which parses boneyards and scene numbers.
+For packagers and Foul Papers: the library exports
+<code>StoryEvents</code>, <code>StoryTimeline</code>,
+<code>StoryCheck</code>, <code>ParseStoryTime</code>,
+<code>ResolveStoryTime</code>, <code>SetConceptKind</code>,
+<code>ConceptsOfKind</code>, <code>ConceptKinds</code>,
+<code>WikilinkTarget</code> and the story fields of
+<code>ParsedDocument</code>.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>
@@ -135,7 +112,7 @@ Tracker</a></li>
 <ul>
 <li>Go &gt;= 1.26.4</li>
 <li>gopkg.in/yaml.v3 &gt;= 3.0.1</li>
-<li>github.com/rsdoiel/fountain &gt;= 1.0.2</li>
+<li>github.com/rsdoiel/fountain &gt;= 1.0.3</li>
 <li>git &gt;= 2.0 (runtime, for kb document frontmatter’s provenance
 detection)</li>
 </ul>
