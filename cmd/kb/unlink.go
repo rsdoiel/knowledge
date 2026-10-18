@@ -32,7 +32,7 @@ func init() {
  */
 func cmdUnlink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("usage: unlink <project PROJECT_NAME CONCEPT_NAME | observation OBS_ID CONCEPT_NAME | source OBS_ID SOURCE_ID>")
+		return usageErrorf("usage: unlink <project PROJECT_NAME CONCEPT_NAME | observation OBS_ID CONCEPT_NAME | source OBS_ID SOURCE_ID | source --document DOC_ID SOURCE_ID | source --record REF SOURCE_ID>")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -63,9 +63,49 @@ func cmdUnlink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		}
 		return unlinked(out, jsonOut, "observation", rest[0], "concept", rest[1])
 	case "source":
-		rest, err := plainArgs(rest, 2, 2, 2, "usage: unlink source OBS_ID SOURCE_ID")
+		const usage = "usage: unlink source OBS_ID SOURCE_ID | --document DOC_ID SOURCE_ID | --record REF SOURCE_ID"
+		doc, rec := unsetFlag, unsetFlag
+		rest, err := splitFlags(rest, map[string]*string{"--document": &doc, "--record": &rec}, nil)
 		if err != nil {
 			return err
+		}
+		if doc != unsetFlag && rec != unsetFlag {
+			return usageErrorf("--document and --record name different kinds of row; give one; %s", usage)
+		}
+		switch {
+		case doc != unsetFlag, rec != unsetFlag:
+			if len(rest) != 1 {
+				return usageErrorf("%s", usage)
+			}
+			src, err := parseID("source", rest[0])
+			if err != nil {
+				return err
+			}
+			if doc != unsetFlag {
+				d, err := parseID("document", doc)
+				if err != nil {
+					return err
+				}
+				if err := logKBCallErr(dl, "UnlinkDocumentSource", map[string]any{"document": d, "source": src}, func() error {
+					return kb.UnlinkDocumentSource(d, src)
+				}); err != nil {
+					return err
+				}
+				return unlinked(out, jsonOut, "document", doc, "source", rest[0])
+			}
+			r, err := resolveRecord(kb, rec, recordFlags{})
+			if err != nil {
+				return err
+			}
+			if err := logKBCallErr(dl, "UnlinkRecordSource", map[string]any{"record": r.ID, "source": src}, func() error {
+				return kb.UnlinkRecordSource(r.ID, src)
+			}); err != nil {
+				return err
+			}
+			return unlinked(out, jsonOut, "record", rec, "source", rest[0])
+		}
+		if len(rest) != 2 {
+			return usageErrorf("%s", usage)
 		}
 		obs, err := parseID("observation", rest[0])
 		if err != nil {

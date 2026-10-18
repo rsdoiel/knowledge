@@ -111,21 +111,49 @@ func cmdSourceList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	if err != nil {
 		return err
 	}
+	cites := make([]knowledge.SourceCitations, len(sources))
+	for i, s := range sources {
+		if cites[i], err = kb.SourceCitations(s.ID); err != nil {
+			return err
+		}
+	}
 	if jsonOut {
-		return printJSON(out, sources)
+		rows := make([]sourceRow, len(sources))
+		for i, s := range sources {
+			rows[i] = sourceRow{Source: s, Citations: citationsJSON(cites[i])}
+		}
+		return printJSON(out, rows)
 	}
 	if len(sources) == 0 {
 		fmt.Fprintln(out, "(no sources)")
 		return nil
 	}
-	for _, s := range sources {
+	for i, s := range sources {
 		retracted := ""
 		if s.Retracted {
 			retracted = " [RETRACTED]"
 		}
-		fmt.Fprintf(out, "%-4d  %s%s\n", s.ID, s.Title, retracted)
+		cited := ""
+		if cites[i].Total() > 0 {
+			cited = "  — cited by " + cites[i].String()
+		}
+		fmt.Fprintf(out, "%-4d  %s%s%s\n", s.ID, s.Title, retracted, cited)
 	}
 	return nil
+}
+
+// citationsJSON is what cites a source, as --json prints it.
+type citationsJSON struct {
+	Observations int `json:"observations"`
+	Documents    int `json:"documents"`
+	Records      int `json:"records"`
+}
+
+// sourceRow is a source with its citations, for --json. Source is embedded so the
+// source's own fields keep the names they always had.
+type sourceRow struct {
+	knowledge.Source
+	Citations citationsJSON `json:"citations"`
 }
 
 func cmdSourceShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
@@ -139,8 +167,12 @@ func cmdSourceShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	if err != nil {
 		return notFoundf("source %d not found", id)
 	}
+	cites, err := kb.SourceCitations(id)
+	if err != nil {
+		return err
+	}
 	if jsonOut {
-		return printJSON(out, s)
+		return printJSON(out, sourceRow{Source: *s, Citations: citationsJSON(cites)})
 	}
 	fmt.Fprintf(out, "%d  %s\n", s.ID, s.Title)
 	if s.IdentifierType != "" {
@@ -148,6 +180,9 @@ func cmdSourceShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	}
 	if s.Retracted {
 		fmt.Fprintf(out, "  [RETRACTED] %s\n", s.RetractionNote)
+	}
+	if cites.Total() > 0 {
+		fmt.Fprintf(out, "  cited by %s\n", cites)
 	}
 	return nil
 }
@@ -198,14 +233,75 @@ func cmdSourceRetract(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 	return nil
 }
 
+// unsetFlag marks a string flag the person did not give, so a flag given with a
+// blank value can be told from one left out.
+const unsetFlag = "\x00"
+
+// cmdSourceLink implements `kb source link`: an observation, a document or a
+// decision record cites a source. The version and hash say which version of the
+// work was read, and are optional (DR-0081).
 func cmdSourceLink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
-	relationship := "cited"
-	args, err := splitFlags(args, map[string]*string{"--relationship": &relationship}, nil)
+	const usage = "usage: source link OBS_ID SOURCE_ID | --document DOC_ID SOURCE_ID | --record REF SOURCE_ID [--relationship R] [--version V] [--hash H]"
+	relationship, doc, rec, version, hash := "cited", unsetFlag, unsetFlag, unsetFlag, unsetFlag
+	args, err := splitFlags(args, map[string]*string{"--relationship": &relationship, "--document": &doc, "--record": &rec,
+		"--version": &version, "--hash": &hash}, nil)
 	if err != nil {
 		return err
 	}
+	for name, v := range map[string]string{"--version": version, "--hash": hash, "--relationship": relationship} {
+		if v != unsetFlag && strings.TrimSpace(v) == "" {
+			return usageErrorf("%s must not be blank; %s", name, usage)
+		}
+	}
+	if version == unsetFlag {
+		version = ""
+	}
+	if hash == unsetFlag {
+		hash = ""
+	}
+	if doc != unsetFlag && rec != unsetFlag {
+		return usageErrorf("--document and --record name different kinds of row; give one; %s", usage)
+	}
+	switch {
+	case doc != unsetFlag:
+		if len(args) != 1 {
+			return usageErrorf("%s", usage)
+		}
+		docID, err := strconv.ParseInt(doc, 10, 64)
+		if err != nil {
+			return usageErrorf("invalid document id %q", doc)
+		}
+		sourceID, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return usageErrorf("invalid source id %q", args[0])
+		}
+		if err := logKBCallErr(dl, "LinkDocumentSource", map[string]any{"document_id": docID, "source_id": sourceID, "relationship": relationship}, func() error {
+			return kb.LinkDocumentSource(docID, sourceID, relationship, version, hash)
+		}); err != nil {
+			return err
+		}
+		return linkedSource(out, jsonOut, "document", fmt.Sprint(docID), docID, sourceID, relationship, version, hash)
+	case rec != unsetFlag:
+		if len(args) != 1 {
+			return usageErrorf("%s", usage)
+		}
+		sourceID, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return usageErrorf("invalid source id %q", args[0])
+		}
+		r, err := resolveRecord(kb, rec, recordFlags{})
+		if err != nil {
+			return err
+		}
+		if err := logKBCallErr(dl, "LinkRecordSource", map[string]any{"record_id": r.ID, "source_id": sourceID, "relationship": relationship}, func() error {
+			return kb.LinkRecordSource(r.ID, sourceID, relationship, version, hash)
+		}); err != nil {
+			return err
+		}
+		return linkedSource(out, jsonOut, "record", rec, r.ID, sourceID, relationship, version, hash)
+	}
 	if len(args) != 2 {
-		return usageErrorf("usage: source link OBS_ID SOURCE_ID [--relationship R]")
+		return usageErrorf("%s", usage)
 	}
 	obsID, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
@@ -215,20 +311,32 @@ func cmdSourceLink(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args
 	if err != nil {
 		return usageErrorf("invalid source id %q", args[1])
 	}
-	if err := logKBCallErr(dl, "LinkObservationSource", map[string]any{"observation_id": obsID, "source_id": sourceID, "relationship": relationship}, func() error {
-		return kb.LinkObservationSource(obsID, sourceID, relationship)
+	if err := logKBCallErr(dl, "LinkObservationSourceAt", map[string]any{"observation_id": obsID, "source_id": sourceID, "relationship": relationship}, func() error {
+		return kb.LinkObservationSourceAt(obsID, sourceID, relationship, version, hash)
 	}); err != nil {
 		return err
 	}
+	return linkedSource(out, jsonOut, "observation", fmt.Sprint(obsID), obsID, sourceID, relationship, version, hash)
+}
+
+// linkedSource reports one new citation. ownerRef is what the person typed or
+// the id (a record's qualified reference), ownerID the row's id.
+func linkedSource(out io.Writer, jsonOut bool, kind, ownerRef string, ownerID, sourceID int64, relationship, version, hash string) error {
 	if jsonOut {
-		return printJSON(out, struct {
-			ObservationID int64  `json:"observation_id"`
-			SourceID      int64  `json:"source_id"`
-			Relationship  string `json:"relationship"`
-		}{ObservationID: obsID, SourceID: sourceID, Relationship: relationship})
+		m := map[string]any{kind + "_id": ownerID, "source_id": sourceID, "relationship": relationship}
+		if kind == "record" {
+			m["record"] = ownerRef
+		}
+		if version != "" {
+			m["source_version"] = version
+		}
+		if hash != "" {
+			m["source_hash"] = hash
+		}
+		return printJSON(out, m)
 	}
-	fmt.Fprintf(out, "linked observation %d to source %d (%s)\n", obsID, sourceID, relationship)
-	return nil
+	_, err := fmt.Fprintf(out, "linked %s %s to source %d (%s)\n", kind, ownerRef, sourceID, relationship)
+	return err
 }
 
 func cmdSourceCheckRetractions(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {

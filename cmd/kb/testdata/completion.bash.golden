@@ -26,7 +26,7 @@ _kb() {
         w="${COMP_WORDS[i]}"
         case "$w" in
             --db|-db) dbarg=(--db "${COMP_WORDS[i+1]}"); (( i++ )) ;;
-            --a|--accept|--accept-keywords|--authors|--b|--by|--concept|--confidence|--db|--dir|--doi|--format|--identifier-type|--identifier-value|--in|--initiative|--jsonl|--kind|--limit|--narrative|--out|--project|--published|--publisher|--relationship|--rights|--root|--set|--since|--source-doi|--status|--strict|--title|--trigger|--url|--version) (( i++ )) ;;
+            --a|--accept|--accept-keywords|--authors|--b|--by|--concept|--confidence|--db|--dir|--document|--doi|--format|--hash|--identifier-type|--identifier-value|--in|--initiative|--jsonl|--kind|--limit|--narrative|--out|--project|--published|--publisher|--record|--relationship|--rights|--root|--set|--since|--source-doi|--status|--strict|--title|--trigger|--url|--version) (( i++ )) ;;
             -*) ;;
             *) pos+=("$w") ;;
         esac
@@ -65,9 +65,10 @@ _kb() {
         project) COMPREPLY=( $(compgen -W "--status --root --dry-run" -- "$cur") ) ;;
         record) COMPREPLY=( $(compgen -W "--project --status --kind --trigger --initiative --since --root --dir --title --concept --workspace --partial --dry-run --write --all" -- "$cur") ) ;;
         search) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
-        source) COMPREPLY=( $(compgen -W "--doi --url --authors --published --publisher --rights --version --relationship" -- "$cur") ) ;;
+        source) COMPREPLY=( $(compgen -W "--doi --url --authors --published --publisher --rights --version --relationship --document --record --hash" -- "$cur") ) ;;
         story) COMPREPLY=( $(compgen -W "--project --narrative --strict" -- "$cur") ) ;;
         summary) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
+        unlink) COMPREPLY=( $(compgen -W "--document --record" -- "$cur") ) ;;
         esac
         return 0
     fi

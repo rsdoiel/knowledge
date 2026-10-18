@@ -327,7 +327,7 @@ func TestBrowse_DeleteASourceNeedsItsIDTyped(t *testing.T) {
 	if m.state != viewRemove {
 		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
 	}
-	if v := m.View(); !strings.Contains(v, "A Source To Delete") || !strings.Contains(v, "linked to no observation") {
+	if v := m.View(); !strings.Contains(v, "A Source To Delete") || !strings.Contains(v, "nothing cites it") {
 		t.Errorf("the gate does not say what is being deleted:\n%s", v)
 	}
 	m, _ = press(t, m, keyEsc)
@@ -366,7 +366,7 @@ func TestBrowse_DeleteALinkedSourceIsRefused(t *testing.T) {
 	if m.state != viewBrowse {
 		t.Fatalf("state = %s, want to stay on the list with a refusal", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "linked to 1 observation") || !strings.Contains(v, "unlink") {
+	if v := m.View(); !strings.Contains(v, "cited by 1 observation") || !strings.Contains(v, "unlink") {
 		t.Errorf("the refusal does not say what points at the source:\n%s", v)
 	}
 }

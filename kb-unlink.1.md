@@ -4,7 +4,7 @@
 
 # NAME
 
-kb-unlink — remove a link between a project or observation and a concept, or an observation and a source
+kb-unlink — remove a link between a project or observation and a concept, or an observation, document or record and a source
 
 # SYNOPSIS
 
@@ -13,6 +13,10 @@ kb unlink project PROJECT_NAME CONCEPT_NAME
 kb unlink observation OBS_ID CONCEPT_NAME
 
 kb unlink source OBS_ID SOURCE_ID
+
+kb unlink source --document DOC_ID SOURCE_ID
+
+kb unlink source --record REF SOURCE_ID
 
 # DESCRIPTION
 

@@ -18,14 +18,35 @@ kb source remove ID
 
 kb source retract ID NOTE
 
-kb source link OBS_ID SOURCE_ID [--relationship R]
+kb source link OBS_ID SOURCE_ID [--relationship R] [--version V] [--hash H]
+
+kb source link --document DOC_ID SOURCE_ID [--relationship R] [--version V] [--hash H]
+
+kb source link --record REF SOURCE_ID [--relationship R] [--version V] [--hash H]
 
 kb source check-retractions
 
 # DESCRIPTION
 
-A source is a cited work (paper, page, dataset) an observation can link to
-via source link, recording the relationship (default: cited).
+A source is a cited work (paper, page, dataset) that an observation, a document
+or a decision record can cite (DR-0081), recording the relationship (default:
+cited). source link makes the citation by hand; a document or record can also
+list its sources in a sources front matter key, which ingest links (see
+kb-document(1) and kb-ingest(1)).
+
+link
+: cite a source: OBS_ID SOURCE_ID for an observation, --document DOC_ID for a
+  document, --record REF for a decision record (a qualified reference such as
+  harvey/DR-0004). --version and --hash record which version of the work was
+  read and its content hash then; both are optional and neither may be blank.
+  Citing the same pair again changes nothing. An unknown document, record,
+  observation or source is exit 1; --document with --record, a bad id or a
+  blank value is exit 2. An observation link needs no flag.
+
+list, show
+: list the sources, or show one; each says what cites it ("cited by 2
+  observation(s), 1 document(s)"). With --json each source has a citations
+  object: observations, documents and records.
 
 add
 : register a source; --doi/--url set its identifier (doi takes priority
@@ -40,8 +61,9 @@ add
   a value is trimmed
 
 remove
-: delete a source — fails (exit 1) if it's still linked to any observation, and
-  also for an ID that does not exist
+: delete a source — fails (exit 1) if an observation, a document or a record
+  still cites it (the message says which), and also for an ID that does not
+  exist
 
 retract
 : mark a source retracted with a note (does not delete it)

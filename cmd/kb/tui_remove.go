@@ -175,20 +175,20 @@ func planRecordDelete(kb *knowledge.KnowledgeBase, rec *knowledge.Record, ref st
 // planSourceRemove plans `kb source remove ID`. A source that observations cite is
 // refused, as the command refuses it, naming what to do first.
 func planSourceRemove(kb *knowledge.KnowledgeBase, id int64, title string) (removalPlan, error) {
-	n, err := kb.SourceObservationCount(id)
+	c, err := kb.SourceCitations(id)
 	if err != nil {
 		return removalPlan{}, err
 	}
 	idText := strconv.FormatInt(id, 10)
 	p := removalPlan{Title: fmt.Sprintf("source %d", id), Confirm: idText, Equivalent: "kb source remove " + idText}
-	if n > 0 {
-		p.Refusal = fmt.Sprintf("source %d is linked to %s; nothing was deleted: unlink it first (kb unlink observation OBS SOURCE)", id, plural(n, "observation(s)"))
+	if c.Total() > 0 {
+		p.Refusal = fmt.Sprintf("source %d is cited by %s; nothing was deleted: unlink it first (kb unlink source OBS SOURCE, or --document DOC SOURCE, or --record REF SOURCE)", id, c)
 		return p, nil
 	}
 	if title = strings.TrimSpace(title); title != "" {
 		p.Lines = append(p.Lines, "“"+title+"”")
 	}
-	p.Lines = append(p.Lines, "it is linked to no observation")
+	p.Lines = append(p.Lines, "nothing cites it")
 	p.Apply = func() error { return kb.RemoveSource(id) }
 	return p, nil
 }

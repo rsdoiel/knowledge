@@ -1140,7 +1140,7 @@ const UnlinkHelpText = `%{app_name}-unlink(1) user manual | version {version} {r
 
 # NAME
 
-{app_name}-unlink — remove a link between a project or observation and a concept, or an observation and a source
+{app_name}-unlink — remove a link between a project or observation and a concept, or an observation, document or record and a source
 
 # SYNOPSIS
 
@@ -1149,6 +1149,10 @@ const UnlinkHelpText = `%{app_name}-unlink(1) user manual | version {version} {r
 {app_name} unlink observation OBS_ID CONCEPT_NAME
 
 {app_name} unlink source OBS_ID SOURCE_ID
+
+{app_name} unlink source --document DOC_ID SOURCE_ID
+
+{app_name} unlink source --record REF SOURCE_ID
 
 # DESCRIPTION
 
@@ -1218,14 +1222,35 @@ const SourceHelpText = `%{app_name}-source(1) user manual | version {version} {r
 
 {app_name} source retract ID NOTE
 
-{app_name} source link OBS_ID SOURCE_ID [--relationship R]
+{app_name} source link OBS_ID SOURCE_ID [--relationship R] [--version V] [--hash H]
+
+{app_name} source link --document DOC_ID SOURCE_ID [--relationship R] [--version V] [--hash H]
+
+{app_name} source link --record REF SOURCE_ID [--relationship R] [--version V] [--hash H]
 
 {app_name} source check-retractions
 
 # DESCRIPTION
 
-A source is a cited work (paper, page, dataset) an observation can link to
-via source link, recording the relationship (default: cited).
+A source is a cited work (paper, page, dataset) that an observation, a document
+or a decision record can cite (DR-0081), recording the relationship (default:
+cited). source link makes the citation by hand; a document or record can also
+list its sources in a sources front matter key, which ingest links (see
+{app_name}-document(1) and {app_name}-ingest(1)).
+
+link
+: cite a source: OBS_ID SOURCE_ID for an observation, --document DOC_ID for a
+  document, --record REF for a decision record (a qualified reference such as
+  harvey/DR-0004). --version and --hash record which version of the work was
+  read and its content hash then; both are optional and neither may be blank.
+  Citing the same pair again changes nothing. An unknown document, record,
+  observation or source is exit 1; --document with --record, a bad id or a
+  blank value is exit 2. An observation link needs no flag.
+
+list, show
+: list the sources, or show one; each says what cites it ("cited by 2
+  observation(s), 1 document(s)"). With --json each source has a citations
+  object: observations, documents and records.
 
 add
 : register a source; --doi/--url set its identifier (doi takes priority
@@ -1240,8 +1265,9 @@ add
   a value is trimmed
 
 remove
-: delete a source — fails (exit 1) if it's still linked to any observation, and
-  also for an ID that does not exist
+: delete a source — fails (exit 1) if an observation, a document or a record
+  still cites it (the message says which), and also for an ID that does not
+  exist
 
 retract
 : mark a source retracted with a note (does not delete it)
