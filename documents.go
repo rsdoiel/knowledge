@@ -361,7 +361,8 @@ var markdownH1Pattern = regexp.MustCompile(`^#\s+(.*)$`)
 func firstH1Heading(body string) string {
 	for _, line := range strings.Split(body, "\n") {
 		if m := markdownH1Pattern.FindStringSubmatch(line); m != nil {
-			return strings.TrimSpace(m[1])
+			text, _ := cleanMarkdownHeading(m[1])
+			return text
 		}
 	}
 	return ""
@@ -416,6 +417,48 @@ func fenceRun(s string, c byte) int {
 	return n
 }
 
+/** cleanMarkdownHeading returns the words of an ATX heading and the id of a
+ * trailing {#id} attribute (DR-0082 items 1 and 6).
+ *
+ * A closing run of '#' is CommonMark's closing sequence and is dropped, but
+ * only when it stands alone after a space (so "C# basics", "Why #1" and a
+ * Fountain-style "The fire #12A#" keep their text). A trailing {...} block
+ * after a space is a heading attribute; when it holds a "#id" word that word
+ * is the id and the whole block is removed. A block with no id (a class, a
+ * key=value) is left in the text, since nothing here reads it.
+ *
+ * Parameters:
+ *   raw (string) — the heading line with its leading '#' marks removed
+ *
+ * Returns:
+ *   text (string) — the heading's words, trimmed
+ *   id   (string) — the attribute's id, "" when there is none
+ *
+ * Example:
+ *   text, id := cleanMarkdownHeading("The fire {#12A} ##")
+ *   // text == "The fire", id == "12A"
+ */
+func cleanMarkdownHeading(raw string) (text, id string) {
+	s := strings.TrimSpace(raw)
+	if t := strings.TrimRight(s, "#"); len(t) < len(s) && (t == "" || strings.HasSuffix(t, " ")) {
+		s = strings.TrimSpace(t)
+	}
+	if strings.HasSuffix(s, "}") {
+		if i := strings.LastIndex(s, "{"); i >= 0 && (i == 0 || s[i-1] == ' ') {
+			for _, word := range strings.Fields(s[i+1 : len(s)-1]) {
+				if len(word) > 1 && word[0] == '#' {
+					id = word[1:]
+					break
+				}
+			}
+			if id != "" {
+				s = strings.TrimSpace(s[:i])
+			}
+		}
+	}
+	return s, id
+}
+
 // segmentMarkdown splits body on ATX headings (design decision 4). A body
 // with no headings at all becomes a single section with no heading, the
 // same degenerate case segmentText always produces.
@@ -444,7 +487,7 @@ func segmentMarkdown(body string) []DocumentSection {
 		}
 		if m := markdownHeadingPattern.FindStringSubmatch(line); m != nil {
 			flush()
-			heading = strings.TrimSpace(m[1])
+			heading, _ = cleanMarkdownHeading(m[1])
 			buf.Reset()
 			haveContent = true
 			continue

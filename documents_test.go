@@ -240,6 +240,56 @@ func TestSegmentMarkdown_FencedCodeIsNotHeadings(t *testing.T) {
 	}
 }
 
+// cleanMarkdownHeading takes the text after the '#' marks of an ATX heading
+// and returns the heading's words and the id of a trailing {#id} attribute
+// (DR-0082 items 1 and 6).
+func TestCleanMarkdownHeading(t *testing.T) {
+	cases := []struct{ in, text, id string }{
+		{"The fire {#12A}", "The fire", "12A"},
+		{"{#12A}", "", "12A"},
+		{"The fire {#12A .loud}", "The fire", "12A"},
+		{"The fire {.loud #12A key=v}", "The fire", "12A"},
+		{"Scene 12 ##", "Scene 12", ""},
+		{"Scene 12 #", "Scene 12", ""},
+		{"The fire {#12A} ##", "The fire", "12A"},
+		{"  The fire  {#12A}  ", "The fire", "12A"},
+		{"Why #1", "Why #1", ""},
+		{"C# basics", "C# basics", ""},
+		{"The fire #12A#", "The fire #12A#", ""},
+		{"Trailing hash##", "Trailing hash##", ""},
+		{"A class {.loud}", "A class {.loud}", ""},
+		{"Not at the end {#12A} more", "Not at the end {#12A} more", ""},
+		{"Empty id {#}", "Empty id {#}", ""},
+		{"Plain", "Plain", ""},
+		{"", "", ""},
+	}
+	for _, c := range cases {
+		text, id := cleanMarkdownHeading(c.in)
+		if text != c.text || id != c.id {
+			t.Errorf("cleanMarkdownHeading(%q) = (%q, %q), want (%q, %q)", c.in, text, id, c.text, c.id)
+		}
+	}
+}
+
+func TestFirstH1Heading_IsClean(t *testing.T) {
+	if got := firstH1Heading("# The Long Fire {#book} #\ntext\n"); got != "The Long Fire" {
+		t.Errorf("firstH1Heading = %q, want %q", got, "The Long Fire")
+	}
+}
+
+func TestSegmentMarkdown_HeadingTextIsClean(t *testing.T) {
+	got := segmentMarkdown("## The fire {#12A}\ntext\n## Scene 12 ##\nmore\n## Why #1\nz\n")
+	want := []string{"The fire", "Scene 12", "Why #1"}
+	if len(got) != len(want) {
+		t.Fatalf("sections = %d, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if got[i].Heading != w {
+			t.Errorf("section %d heading = %q, want %q", i, got[i].Heading, w)
+		}
+	}
+}
+
 const fountainFixture = `Title: A Short Scene
 Author: Test Author
 
