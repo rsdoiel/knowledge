@@ -236,3 +236,32 @@ func splitStoryList(val string) []string {
 	}
 	return out
 }
+
+// The prefixes of the warnings a Markdown scene can raise while it is parsed
+// (DR-0082 item 7). StoryCheck turns them into findings by prefix, so the
+// messages are built from these constants and a test keeps the two in step.
+const (
+	warnNoID          = "story comment: no id"
+	warnIDDisagrees   = "story comment: id"
+	warnFountainStyle = "story heading:"
+	warnCommentPrefix = "story comment:"
+	warnFMIgnored     = "front matter "
+)
+
+// markdownWarningKind names the StoryCheck finding kind a Markdown parse
+// warning belongs to, or "" for a warning StoryCheck does not report.
+func markdownWarningKind(msg string) string {
+	switch {
+	case strings.HasPrefix(msg, warnNoID):
+		return "scene-comment-no-id"
+	case strings.HasPrefix(msg, warnIDDisagrees):
+		return "scene-id-disagreement"
+	case strings.HasPrefix(msg, warnFountainStyle):
+		return "fountain-style-heading"
+	case strings.HasPrefix(msg, warnCommentPrefix):
+		return "scene-comment-syntax"
+	case strings.HasPrefix(msg, warnFMIgnored) && strings.Contains(msg, " is ignored"):
+		return "front-matter-ignored"
+	}
+	return ""
+}

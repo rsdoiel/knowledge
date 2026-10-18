@@ -6,19 +6,21 @@ import (
 	"strings"
 )
 
-/** StoryFinding is one thing StoryCheck noticed about a work (DR-0075 item 10).
- * It is a report, never a repair: nothing in the knowledge base or the
- * manuscript is changed because of it.
- *
- * Kind is one of "missing-file", "unnumbered-scene", "duplicate-label",
- * "unresolved-time", "unparseable-time", "unknown-reference", "contradiction",
- * "cycle", "two-places" or "foreshadow-order". Document is the file path, and
- * Message says what and where.
- *
- * Example:
- *   fs, _ := kb.StoryCheck(pid)
- *   for _, f := range fs { fmt.Printf("%s: %s: %s\n", f.Kind, f.Document, f.Message) }
- */
+/*
+* StoryFinding is one thing StoryCheck noticed about a work (DR-0075 item 10).
+  - It is a report, never a repair: nothing in the knowledge base or the
+  - manuscript is changed because of it.
+    *
+  - Kind is one of "missing-file", "unnumbered-scene", "scene-comment-no-id", "scene-id-disagreement", "scene-id-repeated",
+    "scene-comment-syntax", "fountain-style-heading", "front-matter-ignored", "duplicate-label",
+  - "unresolved-time", "unparseable-time", "unknown-reference", "contradiction",
+  - "cycle", "two-places" or "foreshadow-order". Document is the file path, and
+  - Message says what and where.
+    *
+  - Example:
+  - fs, _ := kb.StoryCheck(pid)
+  - for _, f := range fs { fmt.Printf("%s: %s: %s\n", f.Kind, f.Document, f.Message) }
+*/
 type StoryFinding struct {
 	Kind     string
 	Document string
@@ -49,6 +51,14 @@ func storyEventName(e StoryEvent) string {
  *     scene numbers could not be checked.
  *   - unnumbered-scene: a Fountain scene with no scene number, which therefore
  *     has no event.
+ *   - scene-comment-no-id, scene-id-disagreement, scene-id-repeated,
+ *     scene-comment-syntax, fountain-style-heading, front-matter-ignored: a
+ *     Markdown file's scenes are not what they seem to say (DR-0082): a story
+ *     comment on a heading with no id, a heading {#id} and a comment id that
+ *     differ, a scene id used twice, an unknown key or a word with no "=" in a
+ *     comment, a heading ending like a Fountain "#12A#" (which is text, not an
+ *     id), and a front matter event or story_time the file's scene ids make
+ *     moot.
  *   - duplicate-label: one label on several events.
  *   - unparseable-time, unresolved-time: a story_time that is not understood, or
  *     a relative one whose anchor is missing, ambiguous, undated or cyclic.
@@ -107,6 +117,34 @@ func (kb *KnowledgeBase) StoryCheck(projectID int64) ([]StoryFinding, error) {
 			if s.Heading != "" && s.SceneID == "" {
 				add("unnumbered-scene", d.Path, "scene %q has no scene number, so it is not an event", s.Heading)
 			}
+		}
+	}
+
+	// Markdown scenes (DR-0082 item 7): the parse warnings that mean a scene
+	// is not what the writer meant, and a scene id repeated in one file.
+	for _, d := range docs {
+		if d.Format != "markdown" {
+			continue
+		}
+		parsed, err := ParseDocumentFile(d.Path, d.Format)
+		if err != nil {
+			add("missing-file", d.Path, "cannot read the file, so its scenes were not checked: %v", err)
+			continue
+		}
+		for _, w := range parsed.StoryWarnings {
+			if kind := markdownWarningKind(w); kind != "" {
+				add(kind, d.Path, "%s", w)
+			}
+		}
+		seen := map[string]bool{}
+		for _, s := range parsed.Sections {
+			if s.SceneID == "" {
+				continue
+			}
+			if seen[s.SceneID] {
+				add("scene-id-repeated", d.Path, "scene id %q is repeated; the first scene is the event, %q is not", s.SceneID, s.Heading)
+			}
+			seen[s.SceneID] = true
 		}
 	}
 

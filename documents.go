@@ -479,6 +479,7 @@ func segmentMarkdown(body string) []DocumentSection {
 		})
 	}
 	lines := strings.Split(body, "\n")
+	warnedFountainStyle := false
 	var fence markdownFence
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
@@ -496,6 +497,13 @@ func segmentMarkdown(body string) []DocumentSection {
 			var id string
 			heading, id = cleanMarkdownHeading(m[1])
 			scene = DocumentSection{SceneID: id}
+			// A heading ending like a Fountain scene id is text here, not an
+			// id (DR-0082 item 1); say so once per file.
+			if id == "" && !warnedFountainStyle && fountainStyleHeading.MatchString(heading) {
+				warnedFountainStyle = true
+				scene.StoryWarnings = append(scene.StoryWarnings, fmt.Sprintf(
+					"%s %q ends like a Fountain scene id and is not an id in Markdown; write {#id} instead", warnFountainStyle, heading))
+			}
 			afterHeading = true
 			buf.Reset()
 			haveContent = true
@@ -520,13 +528,13 @@ func segmentMarkdown(body string) []DocumentSection {
 					switch {
 					case id != "" && scene.SceneID != "" && id != scene.SceneID:
 						scene.StoryWarnings = append(scene.StoryWarnings, fmt.Sprintf(
-							"story comment: id %q disagrees with heading id %q on %q; the comment wins", id, scene.SceneID, heading))
+							warnIDDisagrees+" %q disagrees with heading id %q on %q; the comment wins", id, scene.SceneID, heading))
 						scene.SceneID = id
 					case id != "":
 						scene.SceneID = id
 					case scene.SceneID == "":
 						scene.StoryWarnings = append(scene.StoryWarnings, fmt.Sprintf(
-							"story comment: %q has no id (give the heading {#id} or id= in the comment)", heading))
+							warnNoID+" on %q (give the heading {#id} or id= in the comment)", heading))
 					}
 					i = end
 					continue
@@ -540,6 +548,10 @@ func segmentMarkdown(body string) []DocumentSection {
 	flush()
 	return sections
 }
+
+// fountainStyleHeading matches a heading that ends in a Fountain-style scene
+// number, "#12A#".
+var fountainStyleHeading = regexp.MustCompile(`\s#[A-Za-z0-9.-]+#$`)
 
 // htmlCommentEnd reports whether lines[i] opens an HTML comment and the index
 // of the line that closes it (the same line for a one-line comment).

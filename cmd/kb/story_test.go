@@ -166,3 +166,19 @@ func TestStory_StrictCheckPrintsTheReportThenExitsOne(t *testing.T) {
 		t.Errorf("exit %d, stdout %q, stderr %q; want 1, the report, and a message", code, out.String(), errOut.String())
 	}
 }
+
+func TestCmdStory_CheckReportsAMarkdownSceneProblemAndStrictGatesIt(t *testing.T) {
+	kb, _ := storyKB(t, map[string]string{"a.md": "## The fire\n<!-- story: pov=Anna -->\ntext\n"})
+	var out bytes.Buffer
+	if err := cmdStory(kb, nil, false, []string{"check", "--project", "work"}, &out); err != nil {
+		t.Fatalf("story check (advisory) = %v, want exit 0", err)
+	}
+	if !strings.Contains(out.String(), "scene-comment-no-id") {
+		t.Errorf("output = %q, want the scene-comment-no-id report", out.String())
+	}
+	out.Reset()
+	err := cmdStory(kb, nil, false, []string{"check", "--project", "work", "--strict"}, &out)
+	if err == nil || exitCodeFor(err) != classNegative {
+		t.Errorf("story check --strict = %v, want the negative class (exit 1)", err)
+	}
+}

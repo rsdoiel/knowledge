@@ -160,3 +160,95 @@ func removeFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 }
+
+// ─── Markdown scene reports (DR-0082 item 7) ─────────────────────────────────
+
+func TestStoryCheck_AMarkdownChapterWithSceneIDsIsClean(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	ingestStory(t, kb, pid, writeTempFile(t, "ch1.md", markdownChapter))
+	if fs := checkOf(t, kb, pid); len(fs) != 0 {
+		t.Errorf("findings = %+v, want none: a heading without an id is an ordinary section", fs)
+	}
+}
+
+func TestStoryCheck_MarkdownSceneReports(t *testing.T) {
+	cases := []struct {
+		name, kind, body, wantIn string
+		wantCount                int
+	}{
+		{"a story comment with no id", "scene-comment-no-id",
+			"## The fire\n<!-- story: pov=Anna -->\ntext\n", `"The fire"`, 1},
+		{"a heading that ends like a Fountain id, once per file", "fountain-style-heading",
+			"## The fire #12A#\ntext\n\n## The fall #12B#\nmore\n", "#12A#", 1},
+		{"the heading and comment ids disagree", "scene-id-disagreement",
+			"## The fire {#12A}\n<!-- story: id=13 -->\ntext\n", "12A", 1},
+		{"a repeated scene id", "scene-id-repeated",
+			"## One {#7}\na\n\n## Two {#7}\nb\n", `"7"`, 1},
+		{"an unknown key and a word with no =", "scene-comment-syntax",
+			"## One {#1}\n<!-- story: pov=Anna; mood=dark; stray -->\na\n", "mood", 2},
+		{"front matter story_time ignored", "front-matter-ignored",
+			"---\ntitle: C\nstory_time: 1969\n---\n\n## One {#1}\na\n", "story_time", 1},
+		{"front matter event ignored", "front-matter-ignored",
+			"---\ntitle: C\nevent: whole\n---\n\n## One {#1}\na\n", "event", 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			kb := openTestKB(t)
+			pid, _ := kb.AddProject("work", "")
+			path := writeTempFile(t, "c.md", c.body)
+			ingestStory(t, kb, pid, path)
+			got := findKind(checkOf(t, kb, pid), c.kind)
+			if len(got) != c.wantCount {
+				t.Fatalf("%s findings = %+v, want %d", c.kind, got, c.wantCount)
+			}
+			found := false
+			for _, f := range got {
+				if f.Document != path {
+					t.Errorf("finding = %+v, want document %s", f, path)
+				}
+				found = found || strings.Contains(f.Message, c.wantIn)
+			}
+			if !found {
+				t.Errorf("findings = %+v, want %q in one message", got, c.wantIn)
+			}
+		})
+	}
+}
+
+// A Fountain file's boneyard warnings and an ordinary Markdown file are not
+// touched by the Markdown reports.
+func TestStoryCheck_MarkdownReportsLeaveOtherFilesAlone(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	ingestStory(t, kb, pid, writeTempFile(t, "plain.md", "---\ntitle: P\n---\n\n## Notes\n\n<!-- a plain comment -->\ntext\n"))
+	ingestStory(t, kb, pid, writeTempFile(t, "s.fountain", "INT. HALL #1#\n\n/* story: pov=Anna */\n\nText.\n"))
+	if fs := checkOf(t, kb, pid); len(fs) != 0 {
+		t.Errorf("findings = %+v, want none", fs)
+	}
+}
+
+// markdownWarningKind sorts the warnings the parser raises by the prefix
+// constants; a message built another way would silently stop being reported.
+func TestMarkdownWarningKind_MatchesTheMessagesTheParserBuilds(t *testing.T) {
+	cases := map[string]string{
+		"scene-comment-no-id":    "## A\n<!-- story: pov=X -->\n",
+		"scene-id-disagreement":  "## A {#1}\n<!-- story: id=2 -->\n",
+		"fountain-style-heading": "## A #1#\n",
+		"scene-comment-syntax":   "## A {#1}\n<!-- story: mood=x -->\n",
+	}
+	for want, body := range cases {
+		var kinds []string
+		for _, s := range segmentMarkdown(body) {
+			for _, w := range s.StoryWarnings {
+				kinds = append(kinds, markdownWarningKind(w))
+			}
+		}
+		if len(kinds) != 1 || kinds[0] != want {
+			t.Errorf("%q: kinds = %v, want [%s]", body, kinds, want)
+		}
+	}
+	if k := markdownWarningKind("story front matter: yaml: bad"); k != "" {
+		t.Errorf("a front matter YAML error is not a scene report, got %q", k)
+	}
+}
