@@ -776,6 +776,16 @@ func ParseDocumentFile(path, formatOverride string) (*ParsedDocument, error) {
 		for _, sec := range pd.Sections {
 			pd.StoryWarnings = append(pd.StoryWarnings, sec.StoryWarnings...)
 		}
+		// With scene ids, event and story_time belong to the scenes
+		// (DR-0082 item 4): the file's own are ignored, and said to be.
+		if hasSceneIDs(pd) {
+			if pd.Story.Event != "" {
+				pd.StoryWarnings = append(pd.StoryWarnings, "front matter event is ignored: the file has scene ids, and each scene names its own")
+			}
+			if pd.Story.StoryTime != "" {
+				pd.StoryWarnings = append(pd.StoryWarnings, "front matter story_time is ignored: the file has scene ids, and each scene carries its own")
+			}
+		}
 	case "fountain":
 		sections, titlePage, err := segmentFountain(data)
 		if err != nil {

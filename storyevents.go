@@ -105,6 +105,23 @@ func storyEventDrafts(p *ParsedDocument) []storyEventDraft {
 		}
 		return out
 	}
+	// A Markdown file with scene ids: one event per id (DR-0082). Front matter
+	// supplies the defaults (pov, place, status, characters); the scene's own
+	// comment overrides them field by field.
+	if p.Format == "markdown" && hasSceneIDs(p) {
+		for _, s := range p.Sections {
+			if s.SceneID == "" {
+				continue
+			}
+			meta := mergeStoryDefaults(p.Story, s.Story)
+			label := meta.Event
+			if label == "" {
+				label = s.SceneID
+			}
+			out = append(out, storyEventDraft{sceneID: s.SceneID, label: label, heading: s.Heading, seq: s.Seq, meta: meta})
+		}
+		return out
+	}
 	if p.Story.isNarrative() {
 		heading := ""
 		if len(p.Sections) > 0 {
@@ -113,6 +130,56 @@ func storyEventDrafts(p *ParsedDocument) []storyEventDraft {
 		out = append(out, storyEventDraft{label: p.Story.Event, heading: heading, meta: p.Story})
 	}
 	return out
+}
+
+// hasSceneIDs reports whether any section of the parsed file carries a scene id.
+func hasSceneIDs(p *ParsedDocument) bool {
+	for _, s := range p.Sections {
+		if s.SceneID != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// mergeStoryDefaults gives a scene the front matter's pov, place, status and
+// characters where the scene sets none of its own (DR-0082 item 4). A list in
+// the scene replaces the front matter list. Event and story_time belong to the
+// scene alone: two scenes cannot share them.
+func mergeStoryDefaults(def, scene StoryMeta) StoryMeta {
+	if scene.POV == "" {
+		scene.POV = def.POV
+	}
+	if scene.Place == "" {
+		scene.Place = def.Place
+	}
+	if scene.Status == "" {
+		scene.Status = def.Status
+	}
+	if len(scene.Characters) == 0 {
+		scene.Characters = def.Characters
+	}
+	return scene
+}
+
+// dedupeStoryDrafts keeps the first event of each scene id in a file and
+// reports the rest. story_events is unique on (document, scene_id), so a
+// repeated id (a copied scene number) must not fail the ingest.
+func dedupeStoryDrafts(drafts []storyEventDraft) ([]storyEventDraft, []string) {
+	seen := map[string]bool{}
+	var kept []storyEventDraft
+	var warnings []string
+	for _, d := range drafts {
+		if d.sceneID != "" {
+			if seen[d.sceneID] {
+				warnings = append(warnings, fmt.Sprintf("scene id %q is repeated in one file; the first scene is the event, %q is not", d.sceneID, d.heading))
+				continue
+			}
+			seen[d.sceneID] = true
+		}
+		kept = append(kept, d)
+	}
+	return kept, warnings
 }
 
 func jsonList(items []string) string {

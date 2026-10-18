@@ -348,3 +348,121 @@ func TestStoryEvents_StatusOrPlaceAloneIsNotAnEvent(t *testing.T) {
 		t.Errorf("events = %+v, want one, carrying its status", evs)
 	}
 }
+
+// ─── Markdown scenes (DR-0082) ───────────────────────────────────────────────
+
+const markdownChapter = "---\ntitle: \"Chapter One\"\npov: Anna\nplace: Kitchen\nstatus: draft\ncharacters: [Anna, Bram]\n---\n\n" +
+	"# Chapter One\n\nAn opening paragraph that is not a scene.\n\n" +
+	"## The fire {#12A}\n<!-- story: story_time=1969-10-29 -->\nAnna woke.\n\n" +
+	"## The fall\n<!-- story: id=12B; event=the-fall; story_time=after: 12A +1d; pov=Bram; characters=Bram -->\nBram fell.\n\n" +
+	"## An interlude\n\nNo id here, so not a scene.\n"
+
+func TestStoryEvents_MarkdownScenesAreEventsKeyedOnTheirID(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	res := ingestStory(t, kb, pid, writeTempFile(t, "ch1.md", markdownChapter))
+	if res.EventsWritten != 2 {
+		t.Errorf("EventsWritten = %d, want 2 (the chapter and the interlude have no id)", res.EventsWritten)
+	}
+	evs := storyEvents(t, kb, pid)
+	if len(evs) != 2 {
+		t.Fatalf("events = %+v, want 2", evs)
+	}
+	a := eventByLabel(t, evs, "12A") // no event=, so the id labels it
+	if a.SceneID != "12A" || a.SectionID == 0 || a.State != "dated" || a.Time.Start != "1969-10-29" {
+		t.Errorf("12A = %+v", a)
+	}
+	b := eventByLabel(t, evs, "the-fall")
+	if b.SceneID != "12B" || b.Seq <= a.Seq || b.State != "resolved" || b.Time.Start != "1969-10-30" || b.AnchorEventID != a.ID {
+		t.Errorf("the-fall = %+v", b)
+	}
+}
+
+func TestStoryEvents_MarkdownFrontMatterIsTheDefaultAndTheSceneOverrides(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	ingestStory(t, kb, pid, writeTempFile(t, "ch1.md", markdownChapter))
+	evs := storyEvents(t, kb, pid)
+	a := eventByLabel(t, evs, "12A")
+	if a.POV != "Anna" || a.Place != "Kitchen" || a.Status != "draft" || !reflect.DeepEqual(a.Characters, []string{"Anna", "Bram"}) {
+		t.Errorf("12A should take every front matter default: %+v", a)
+	}
+	b := eventByLabel(t, evs, "the-fall")
+	if b.POV != "Bram" || b.Place != "Kitchen" || b.Status != "draft" {
+		t.Errorf("the-fall overrides pov only: %+v", b)
+	}
+	if !reflect.DeepEqual(b.Characters, []string{"Bram"}) {
+		t.Errorf("a list in the scene replaces the front matter list, got %v", b.Characters)
+	}
+}
+
+func TestStoryEvents_MarkdownFrontMatterTimeAndEventAreIgnoredWhenThereAreSceneIDs(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	src := "---\ntitle: C\nevent: whole-chapter\nstory_time: 1969\n---\n\n## One {#1}\n<!-- story: story_time=1970 -->\ntext\n"
+	res := ingestStory(t, kb, pid, writeTempFile(t, "c.md", src))
+	evs := storyEvents(t, kb, pid)
+	if len(evs) != 1 || evs[0].Label != "1" || evs[0].StoryTimeText != "1970" {
+		t.Fatalf("events = %+v, want one event 1 dated by its own scene", evs)
+	}
+	var event, tm bool
+	for _, w := range res.StoryWarnings {
+		event = event || strings.Contains(w, "front matter event")
+		tm = tm || strings.Contains(w, "front matter story_time")
+	}
+	if !event || !tm {
+		t.Errorf("warnings = %v, want one for event and one for story_time", res.StoryWarnings)
+	}
+}
+
+func TestStoryEvents_MarkdownFileWithNoSceneIDIsStillOneEventFromFrontMatter(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	src := "---\ntitle: C\nevent: the-war\nstory_time: 1969\n---\n\n## Part one\ntext\n\n## Part two\nmore\n"
+	ingestStory(t, kb, pid, writeTempFile(t, "c.md", src))
+	evs := storyEvents(t, kb, pid)
+	if len(evs) != 1 || evs[0].Label != "the-war" || evs[0].SceneID != "" {
+		t.Errorf("events = %+v, want today's single event", evs)
+	}
+}
+
+func TestStoryEvents_MarkdownRenamedHeadingKeepsTheEvent(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	path := writeTempFile(t, "c.md", "## The fire {#1}\n<!-- story: story_time=1969 -->\ntext\n")
+	ingestStory(t, kb, pid, path)
+	if err := os.WriteFile(path, []byte("## The great fire {#1}\n<!-- story: story_time=1969 -->\ntext\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ingestStory(t, kb, pid, path)
+	evs := storyEvents(t, kb, pid)
+	if len(evs) != 1 || evs[0].SceneID != "1" || evs[0].Label != "1" || evs[0].SectionID == 0 {
+		t.Errorf("events = %+v, want the same event on the renamed section", evs)
+	}
+}
+
+func TestStoryEvents_ASceneIDRepeatedInOneFileDoesNotFailTheIngest(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	src := "## One {#7}\n<!-- story: story_time=1969 -->\na\n\n## Two {#7}\n<!-- story: story_time=1970 -->\nb\n"
+	res := ingestStory(t, kb, pid, writeTempFile(t, "dup.md", src))
+	if len(storyEvents(t, kb, pid)) != 1 || res.EventsWritten != 1 {
+		t.Errorf("events = %+v, result %+v: the first scene with an id is kept", storyEvents(t, kb, pid), res)
+	}
+	found := false
+	for _, w := range res.StoryWarnings {
+		found = found || strings.Contains(w, "scene id \"7\" is repeated")
+	}
+	if !found {
+		t.Errorf("warnings = %v, want a repeated-scene-id warning", res.StoryWarnings)
+	}
+}
+
+func TestStoryEvents_ASceneIDRepeatedInAFountainFileDoesNotFailTheIngest(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	res := ingestStory(t, kb, pid, writeTempFile(t, "d.fountain", "INT. A #3#\n\nx\n\nINT. B #3#\n\ny\n"))
+	if len(storyEvents(t, kb, pid)) != 1 || res.EventsWritten != 1 || len(res.StoryWarnings) == 0 {
+		t.Errorf("events = %+v, result %+v", storyEvents(t, kb, pid), res)
+	}
+}

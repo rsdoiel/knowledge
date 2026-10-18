@@ -140,8 +140,9 @@ func (kb *KnowledgeBase) IngestDocument(projectID int64, path string, opts Docum
 			}
 		}
 	}
-	drafts := storyEventDrafts(parsed)
+	drafts, dupWarnings := dedupeStoryDrafts(storyEventDrafts(parsed))
 	summary.StoryWarnings = append(summary.StoryWarnings, parsed.StoryWarnings...)
+	summary.StoryWarnings = append(summary.StoryWarnings, dupWarnings...)
 	summary.EventsWritten = len(drafts)
 	if !opts.DryRun {
 		// Events are derived from the file every time, a skipped one included
