@@ -3,6 +3,17 @@
 
 ## Bugs
 
+- [x] **A merged or imported database could not search a reviewed document summary.** Fixed 2026-10-18, unreleased
+  (for v0.0.25); found by the provenance acceptance test, not reported. A summary a person promotes
+  (`kb document review promote`) is indexed in `kb_fts` as `document_summary` at that moment and nowhere else, so the
+  machine that promoted it found it with `kb search` and a database built by `kb merge` or `kb import` did not: the
+  merge rebuild (`rebuildFTSIfNeeded`) indexed observations, projects, concepts and records, and the importer never
+  ran promotion. A merge-then-search or export-import-then-search returned nothing for the same words. Both now index
+  reviewed summaries, and `Open` indexes the ones an existing database is missing (`backfillDocumentSummaryFTS`, which
+  repairs databases already merged). Tests: `TestProvenance_TwoDatabasesMergedExportedImportedThenSearched` (failed
+  first, at the merged database and then at the imported one), `TestOpen_BackfillsReviewedDocumentSummariesTheIndexLacks`.
+  Not checked on real data: the database in the workspace has no reviewed summaries to lose.
+
 - [x] **`kb ingest` treated a dated note as a decision record and failed on its missing frontmatter.** Fixed
   2026-10-16, unreleased (reported the same day on v0.0.21, macmini-rd). `kb ingest agents/projects/clasm`
   printed `4 failed` for `notes/2026-09-29-....md` and three more. `recordFilePattern` (`^[0-9]{4}-.*\.md$`)
@@ -87,8 +98,14 @@
   what they show; the viewer has no horizontal scroll and its find does not mark the match inside a line
   (`KB_PAGER=less -R` is the escape hatch).
 
-- [ ] **Provenance as a first-class capability, and two meanings of "source" (raised 2026-10-14, for
-  exploration).** **Target v0.0.24, design brief only.** Provenance is a distinguishing capability of harvey, and the knowledge base may not have
+- [x] **Provenance as a first-class capability, and two meanings of "source" (raised 2026-10-14, for
+  exploration).** **DONE 2026-10-18, unreleased (for v0.0.25): knowledge DR-0080 and DR-0081, design
+  `agents/projects/knowledge/design/provenance-design.md`, plan `plans/provenance-plan.md`.** Documents and decision records
+  cite sources (`document_sources`, `record_sources`, a `sources:` front matter key), a hit carries `Sources`, `Material` and
+  `Retracted`, sources are in `kb_fts` and a `sources` search kind, `observations.source_doi` is no longer written, and it all
+  travels on merge, export, import and `check-db`. Not done: harvey's `recallKB` reading the new fields (harvey's repository),
+  a `materials` table and section-level citation (deliberately left out), dropping the `source_doi` column. *Original item,
+  as raised:* **Target v0.0.24, design brief only.** Provenance is a distinguishing capability of harvey, and the knowledge base may not have
   been designed with it as one. The word "source" has been used for two different things, and the design
   should keep them apart:
   1. **Source as material.** The code, text or document (a blog post, a design brief, a source file) that is
