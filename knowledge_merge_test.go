@@ -1369,8 +1369,8 @@ func TestMergeKnowledgeBases_SummaryIncludesRecordTables(t *testing.T) {
 			t.Errorf("summary omits %s: %v", want, seen)
 		}
 	}
-	if len(summary) != 14 {
-		t.Errorf("summary covers %d tables, want 14 (every table that travels)", len(summary))
+	if len(summary) != 16 {
+		t.Errorf("summary covers %d tables, want 16 (every table that travels)", len(summary))
 	}
 }
 

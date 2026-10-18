@@ -49,7 +49,7 @@ func TestCompareToJSONL_DatabaseAndItsOwnDumpAreInSync(t *testing.T) {
 		}
 		t.Fatalf("own dump: verdict %q", c.Recommendation())
 	}
-	if len(c.Tables) != 14 {
+	if len(c.Tables) != 16 {
 		t.Errorf("tables = %d", len(c.Tables))
 	}
 }

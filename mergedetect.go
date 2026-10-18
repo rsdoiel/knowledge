@@ -222,7 +222,7 @@ var diffQueries = []struct{ table, query string }{
 		FROM observation_concepts j JOIN observations o ON o.id = j.observation_id JOIN concepts c ON c.id = j.concept_id`},
 	{"project_concepts", `SELECT p.name || '|' || c.name, p.name || ' -> ' || c.name, ''
 		FROM project_concepts j JOIN projects p ON p.id = j.project_id JOIN concepts c ON c.id = j.concept_id`},
-	{"observation_sources", `SELECT o.uuid || '|' || s.uuid || '|' || j.relationship, substr(o.body, 1, 30) || ' -' || j.relationship || '-> ' || s.title, ''
+	{"observation_sources", `SELECT o.uuid || '|' || s.uuid || '|' || j.relationship, substr(o.body, 1, 30) || ' -' || j.relationship || '-> ' || s.title, j.source_version || char(31) || j.source_hash
 		FROM observation_sources j JOIN observations o ON o.id = j.observation_id JOIN sources s ON s.id = j.source_id`},
 	{"observation_relations", `SELECT f.uuid || '|' || t.uuid || '|' || j.relationship, substr(f.body, 1, 30) || ' -' || j.relationship || '-> ' || substr(t.body, 1, 30), ''
 		FROM observation_relations j JOIN observations f ON f.id = j.from_id JOIN observations t ON t.id = j.to_id`},
@@ -234,6 +234,10 @@ var diffQueries = []struct{ table, query string }{
 		FROM record_concepts j JOIN records r ON r.id = j.record_id LEFT JOIN projects p ON p.id = r.project_id JOIN concepts c ON c.id = j.concept_id`},
 	{"documents", `SELECT uuid, title, checksum FROM documents`},
 	{"document_sections", `SELECT uuid, heading, heading || char(31) || body || char(31) || summary_body || char(31) || summary_status FROM document_sections`},
+	{"document_sources", `SELECT d.uuid || '|' || s.uuid || '|' || j.relationship, d.title || ' -' || j.relationship || '-> ' || s.title, j.source_version || char(31) || j.source_hash
+		FROM document_sources j JOIN documents d ON d.id = j.document_id JOIN sources s ON s.id = j.source_id`},
+	{"record_sources", `SELECT ` + rkey + ` || '|' || s.uuid || '|' || j.relationship, 'DR-' || r.record_id || ' -' || j.relationship || '-> ' || s.title, j.source_version || char(31) || j.source_hash
+		FROM record_sources j JOIN records r ON r.id = j.record_id LEFT JOIN projects p ON p.id = r.project_id JOIN sources s ON s.id = j.source_id`},
 	{"document_section_concepts", `SELECT s.uuid || '|' || c.name, s.heading || ' -> ' || c.name, ''
 		FROM document_section_concepts j JOIN document_sections s ON s.id = j.section_id JOIN concepts c ON c.id = j.concept_id`},
 }

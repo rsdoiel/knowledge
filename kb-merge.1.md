@@ -17,7 +17,8 @@ drifted independently) read-only and writes their deduped union to a
 fresh -out file, which must not already exist. It never modifies -a or
 -b; placing the merged file into position is left to you. Every table
 travels — projects, concepts, sources, observations, decision records and
-record relations, plus the four join tables — so a table that would lose
+record relations, plus the join tables, among them the citation tables
+document_sources and record_sources (DR-0081) — so a table that would lose
 rows says so in the per-table summary rather than merging quietly short.
 A concept's kind (DR-0078) travels with it and follows the same
 last-writer-wins rule as its description. Story events do not travel: they are

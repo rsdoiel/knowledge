@@ -26,7 +26,8 @@ scratch database and compared with a copy of this one, table by table, using
 the same idea of "the same row" as kb-merge(1): name for projects and
 concepts, uuid for observations, sources, documents and sections, workspace,
 project, scope and record id for decision records, and the pair of parents for
-links. The report lists rows only in the JSONL, rows only in this database, and
+links (observation_sources, document_sources and record_sources also compare the
+cited version and hash). The report lists rows only in the JSONL, rows only in this database, and
 rows on both sides that differ (a project's description or status, a concept's
 description, identifier or kind, an observation's kind or body, a record's checksum,
 and so on), with per-table counts. Story events (DR-0075) are not compared:

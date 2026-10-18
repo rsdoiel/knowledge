@@ -79,6 +79,8 @@ var statLinks = []struct{ name, query string }{
 	{"record_concepts", `SELECT COUNT(*) FROM record_concepts`},
 	{"document_section_concepts", `SELECT COUNT(*) FROM document_section_concepts`},
 	{"observation_sources", `SELECT COUNT(*) FROM observation_sources`},
+	{"document_sources", `SELECT COUNT(*) FROM document_sources`},
+	{"record_sources", `SELECT COUNT(*) FROM record_sources`},
 	{"observation_relations", `SELECT COUNT(*) FROM observation_relations`},
 	{"record_relations", `SELECT COUNT(*) FROM record_relations`},
 }
@@ -91,7 +93,9 @@ var statChecks = []struct{ name, query string }{
 		AND NOT EXISTS (SELECT 1 FROM record_concepts WHERE concept_id = c.id)
 		AND NOT EXISTS (SELECT 1 FROM document_section_concepts WHERE concept_id = c.id)`},
 	{"sources_without_links", `SELECT COUNT(*) FROM sources s WHERE
-		NOT EXISTS (SELECT 1 FROM observation_sources WHERE source_id = s.id)`},
+		NOT EXISTS (SELECT 1 FROM observation_sources WHERE source_id = s.id)
+		AND NOT EXISTS (SELECT 1 FROM document_sources WHERE source_id = s.id)
+		AND NOT EXISTS (SELECT 1 FROM record_sources WHERE source_id = s.id)`},
 	// Workspace-tier records have no project row by design; one whose scope says
 	// project and has none is the unusual case.
 	{"records_without_project", `SELECT COUNT(*) FROM records WHERE scope = 'project' AND project_id IS NULL`},

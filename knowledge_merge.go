@@ -296,7 +296,7 @@ type MergeTableSummary struct {
  * UNIQUE constraint, and for records by their four-column identity). aPath and
  * bPath are opened read-only via ATTACH; neither is modified.
  *
- * All fourteen tables that travel are carried: projects, concepts, sources,
+ * All sixteen tables that travel are carried: projects, concepts, sources,
  * observations, records and documents, plus the eight join/child tables
  * (record_relations, record_concepts, document_sections,
  * document_section_concepts, observation_concepts, project_concepts,
@@ -590,8 +590,8 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		}
 
 		if _, err := db.Exec(fmt.Sprintf(`
-			INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship)
-			SELECT mo.id, ms.id, j.relationship
+			INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship, source_version, source_hash)
+			SELECT mo.id, ms.id, j.relationship, j.source_version, j.source_hash
 			FROM %s.observation_sources j
 			JOIN %s.observations so ON so.id = j.observation_id
 			JOIN %s.sources      ss ON ss.id = j.source_id
@@ -600,6 +600,34 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 			src, src, src,
 		)); err != nil {
 			return nil, fmt.Errorf("knowledge: merge observation_sources from %s: %w", src, err)
+		}
+
+		if _, err := db.Exec(fmt.Sprintf(`
+			INSERT OR IGNORE INTO document_sources (document_id, source_id, relationship, source_version, source_hash)
+			SELECT md.id, ms.id, j.relationship, j.source_version, j.source_hash
+			FROM %s.document_sources j
+			JOIN %s.documents sd ON sd.id = j.document_id
+			JOIN %s.sources   ss ON ss.id = j.source_id
+			JOIN documents md ON md.uuid = sd.uuid
+			JOIN sources   ms ON ms.uuid = ss.uuid`,
+			src, src, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge document_sources from %s: %w", src, err)
+		}
+
+		// A record is the same record on both sides by its identity (DR-0018),
+		// which carries its uuid after the records merge above.
+		if _, err := db.Exec(fmt.Sprintf(`
+			INSERT OR IGNORE INTO record_sources (record_id, source_id, relationship, source_version, source_hash)
+			SELECT mr.id, ms.id, j.relationship, j.source_version, j.source_hash
+			FROM %s.record_sources j
+			JOIN %s.records sr ON sr.id = j.record_id
+			JOIN %s.sources ss ON ss.id = j.source_id
+			JOIN records mr ON mr.uuid = sr.uuid
+			JOIN sources ms ON ms.uuid = ss.uuid`,
+			src, src, src,
+		)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge record_sources from %s: %w", src, err)
 		}
 	}
 
@@ -612,6 +640,7 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		"observation_concepts", "project_concepts", "observation_sources",
 		"observation_relations", "record_relations", "record_concepts",
 		"documents", "document_sections", "document_section_concepts",
+		"document_sources", "record_sources",
 	}
 	var summary []MergeTableSummary
 	for _, table := range allTables {

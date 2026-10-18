@@ -188,7 +188,7 @@ func TestCheckDB_JSONShape(t *testing.T) {
 	if e := json.Unmarshal([]byte(out), &v); e != nil {
 		t.Fatalf("not one JSON object: %v\n%s", e, out)
 	}
-	if v.InSync || v.Recommendation != "export" || v.Database == "" || v.JSONL == "" || len(v.Tables) != 14 {
+	if v.InSync || v.Recommendation != "export" || v.Database == "" || v.JSONL == "" || len(v.Tables) != 16 {
 		t.Errorf("decoded = %+v", v)
 	}
 	for _, tb := range v.Tables {

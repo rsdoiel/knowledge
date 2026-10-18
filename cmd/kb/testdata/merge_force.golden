@@ -20,6 +20,8 @@ record_concepts               0      0      0
 documents                     0      0      0
 document_sections             0      0      0
 document_section_concepts      0      0      0
+document_sources              0      0      0
+record_sources                0      0      0
 
 merged knowledge base written to DIR/m.db
 review it, then copy it into place over each machine's agents/knowledge.db yourself.

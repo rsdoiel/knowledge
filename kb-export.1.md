@@ -18,7 +18,12 @@ decision records) as newline-delimited JSON to -out, or to stdout when
 -out is omitted. Every line is self-describing via a "type" field
 (project, concept, source, observation, observation_concept,
 observation_relation, project_concept, observation_source, record,
-record_relation), in dependency order.
+record_relation, record_concept, document, document_section,
+document_section_concept, document_source, record_source), in dependency
+order. A document_source or record_source line joins a document or a decision
+record to a source it cites (DR-0081), and carries the cited version and hash;
+a -project export carries the sources the project's observations, documents and
+records cite.
 
 A concept line carries its "kind" (character, place, theme or other).
 

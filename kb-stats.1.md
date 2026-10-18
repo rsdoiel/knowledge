@@ -25,14 +25,15 @@ rows
 links
 : how many rows each join table has: project_concepts, observation_concepts,
   record_concepts, document_section_concepts, observation_sources,
-  observation_relations and record_relations.
+  document_sources, record_sources, observation_relations and
+  record_relations.
 
 checks
 : facts worth knowing, with a count. observations_without_project is normally
   0. concepts_without_links counts concepts nothing links to, which is not an
   error (a concept can be added before it is used); kb-concept(1)
-  delete removes one. sources_without_links counts sources no observation
-  cites. records_without_project counts project-scope records with no project
+  delete removes one. sources_without_links counts sources no observation,
+  document or record cites. records_without_project counts project-scope records with no project
   row, and documents_without_project counts documents with none; workspace-tier
   records have no project by design and are not counted.
 

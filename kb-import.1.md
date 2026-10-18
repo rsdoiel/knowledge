@@ -25,6 +25,10 @@ concept line with no "kind", as an older export wrote, leaves a local kind
 alone and is "other" when new; an unknown kind refuses the whole file
 before anything is written (exit 65).
 
+A document_source or record_source line (DR-0081) whose document, record or
+source is not in this database is skipped and counted, not an error; an older
+file with none of them imports as before.
+
 Story events are not imported, because they are not exported: after an import,
 run kb document ingest on the same paths (an unchanged file is skipped
 but still rebuilds its events). A uuid miss falls back

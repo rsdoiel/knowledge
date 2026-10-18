@@ -27,6 +27,8 @@ const (
 	recDocument               = "document"
 	recDocumentSection        = "document_section"
 	recDocumentSectionConcept = "document_section_concept"
+	recDocumentSource         = "document_source"
+	recRecordSource           = "record_source"
 )
 
 // projectRecord is the JSON-L shape of one projects row. Identity travels
@@ -181,6 +183,29 @@ type observationSourceRecord struct {
 	ObservationUUID string `json:"observation_uuid"`
 	SourceUUID      string `json:"source_uuid"`
 	Relationship    string `json:"relationship"`
+	SourceVersion   string `json:"source_version"`
+	SourceHash      string `json:"source_hash"`
+}
+
+// documentSourceRecord and recordSourceRecord are the JSON-L shapes of one
+// document_sources and record_sources join row (DR-0081). Like every join row
+// they carry the uuids of what they join, never the local ids.
+type documentSourceRecord struct {
+	Type          string `json:"type"`
+	DocumentUUID  string `json:"document_uuid"`
+	SourceUUID    string `json:"source_uuid"`
+	Relationship  string `json:"relationship"`
+	SourceVersion string `json:"source_version"`
+	SourceHash    string `json:"source_hash"`
+}
+
+type recordSourceRecord struct {
+	Type          string `json:"type"`
+	RecordUUID    string `json:"record_uuid"`
+	SourceUUID    string `json:"source_uuid"`
+	Relationship  string `json:"relationship"`
+	SourceVersion string `json:"source_version"`
+	SourceHash    string `json:"source_hash"`
 }
 
 // decisionRecord is the JSON-L shape of one records row -- named to avoid
@@ -310,6 +335,12 @@ func ExportJSONL(kb *KnowledgeBase, w io.Writer, projectName string) error {
 		return err
 	}
 	if err := exportDocumentSectionConcepts(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
+	if err := exportDocumentSources(kb, enc, scoped, projectID); err != nil {
+		return err
+	}
+	if err := exportRecordSources(kb, enc, scoped, projectID); err != nil {
 		return err
 	}
 	return nil
@@ -579,12 +610,22 @@ func exportSources(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID 
 	          FROM sources`
 	args := []any{}
 	if scoped {
+		// A source is in scope when an observation, a document or a record of
+		// the project cites it; otherwise its link would point at nothing.
 		query += ` WHERE id IN (
 			SELECT os.source_id FROM observation_sources os
 			JOIN observations o ON o.id = os.observation_id
 			WHERE o.project_id = ?
+			UNION
+			SELECT ds.source_id FROM document_sources ds
+			JOIN documents d ON d.id = ds.document_id
+			WHERE d.project_id = ?
+			UNION
+			SELECT rs.source_id FROM record_sources rs
+			JOIN records r ON r.id = rs.record_id
+			WHERE r.project_id = ?
 		)`
-		args = append(args, projectID)
+		args = append(args, projectID, projectID, projectID)
 	}
 	query += ` ORDER BY id`
 	rows, err := kb.db.Query(query, args...)
@@ -692,7 +733,7 @@ func exportProjectConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, pr
 }
 
 func exportObservationSources(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
-	query := `SELECT o.uuid, s.uuid, os.relationship
+	query := `SELECT o.uuid, s.uuid, os.relationship, os.source_version, os.source_hash
 	          FROM observation_sources os
 	          JOIN observations o ON o.id = os.observation_id
 	          JOIN sources s ON s.id = os.source_id`
@@ -708,11 +749,65 @@ func exportObservationSources(kb *KnowledgeBase, enc *json.Encoder, scoped bool,
 	defer rows.Close()
 	for rows.Next() {
 		r := observationSourceRecord{Type: recObservationSource}
-		if err := rows.Scan(&r.ObservationUUID, &r.SourceUUID, &r.Relationship); err != nil {
+		if err := rows.Scan(&r.ObservationUUID, &r.SourceUUID, &r.Relationship, &r.SourceVersion, &r.SourceHash); err != nil {
 			return fmt.Errorf("knowledge: export observation_sources: %w", err)
 		}
 		if err := enc.Encode(r); err != nil {
 			return fmt.Errorf("knowledge: export observation_sources: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+func exportDocumentSources(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT d.uuid, s.uuid, j.relationship, j.source_version, j.source_hash
+	          FROM document_sources j
+	          JOIN documents d ON d.id = j.document_id
+	          JOIN sources   s ON s.id = j.source_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE d.project_id = ?`
+		args = append(args, projectID)
+	}
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export document_sources: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := documentSourceRecord{Type: recDocumentSource}
+		if err := rows.Scan(&r.DocumentUUID, &r.SourceUUID, &r.Relationship, &r.SourceVersion, &r.SourceHash); err != nil {
+			return fmt.Errorf("knowledge: export document_sources: %w", err)
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export document_sources: %w", err)
+		}
+	}
+	return rows.Err()
+}
+
+func exportRecordSources(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
+	query := `SELECT r.uuid, s.uuid, j.relationship, j.source_version, j.source_hash
+	          FROM record_sources j
+	          JOIN records r ON r.id = j.record_id
+	          JOIN sources s ON s.id = j.source_id`
+	args := []any{}
+	if scoped {
+		query += ` WHERE r.project_id = ?`
+		args = append(args, projectID)
+	}
+	rows, err := kb.db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("knowledge: export record_sources: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := recordSourceRecord{Type: recRecordSource}
+		if err := rows.Scan(&r.RecordUUID, &r.SourceUUID, &r.Relationship, &r.SourceVersion, &r.SourceHash); err != nil {
+			return fmt.Errorf("knowledge: export record_sources: %w", err)
+		}
+		if err := enc.Encode(r); err != nil {
+			return fmt.Errorf("knowledge: export record_sources: %w", err)
 		}
 	}
 	return rows.Err()
@@ -799,6 +894,8 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		obsRelations            []observationRelationRecord
 		projConcepts            []projectConceptRecord
 		obsSources              []observationSourceRecord
+		documentSources         []documentSourceRecord
+		recordSources           []recordSourceRecord
 		records                 []decisionRecord
 		recordRelations         []decisionRecordRelation
 		recordConcepts          []recordConceptRecord
@@ -882,6 +979,18 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
 			}
 			obsSources = append(obsSources, rec)
+		case recDocumentSource:
+			var rec documentSourceRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			documentSources = append(documentSources, rec)
+		case recRecordSource:
+			var rec recordSourceRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			recordSources = append(recordSources, rec)
 		case recRecord:
 			var rec decisionRecord
 			if err := json.Unmarshal(line, &rec); err != nil {
@@ -1112,7 +1221,8 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 			s.Skipped++
 			continue
 		}
-		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship) VALUES (?, ?, ?)`, obsID, sourceID, rec.Relationship)
+		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship, source_version, source_hash) VALUES (?, ?, ?, ?, ?)`,
+			obsID, sourceID, rec.Relationship, rec.SourceVersion, rec.SourceHash)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import observation_source: %w", err)
 		}
@@ -1172,6 +1282,46 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO record_concepts (record_id, concept_id) VALUES (?, ?)`, recID, conceptID)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import record_concept: %w", err)
+		}
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recDocumentSource)
+	for _, rec := range documentSources {
+		docID, ok := resolveLocalID(kb, nil, "documents", rec.DocumentUUID)
+		sourceID, sok := resolveLocalID(kb, sourceLocalID, "sources", rec.SourceUUID)
+		if !ok || !sok {
+			s.Skipped++
+			continue
+		}
+		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO document_sources (document_id, source_id, relationship, source_version, source_hash) VALUES (?, ?, ?, ?, ?)`,
+			docID, sourceID, rec.Relationship, rec.SourceVersion, rec.SourceHash)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import document_source: %w", err)
+		}
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recRecordSource)
+	for _, rec := range recordSources {
+		recID, ok := resolveLocalID(kb, recordLocalID, "records", rec.RecordUUID)
+		sourceID, sok := resolveLocalID(kb, sourceLocalID, "sources", rec.SourceUUID)
+		if !ok || !sok {
+			s.Skipped++
+			continue
+		}
+		isNew, err := insertOrIgnore(kb, `INSERT OR IGNORE INTO record_sources (record_id, source_id, relationship, source_version, source_hash) VALUES (?, ?, ?, ?, ?)`,
+			recID, sourceID, rec.Relationship, rec.SourceVersion, rec.SourceHash)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import record_source: %w", err)
 		}
 		if isNew {
 			s.Imported++

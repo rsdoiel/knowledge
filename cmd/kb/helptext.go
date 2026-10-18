@@ -1351,7 +1351,8 @@ drifted independently) read-only and writes their deduped union to a
 fresh -out file, which must not already exist. It never modifies -a or
 -b; placing the merged file into position is left to you. Every table
 travels — projects, concepts, sources, observations, decision records and
-record relations, plus the four join tables — so a table that would lose
+record relations, plus the join tables, among them the citation tables
+document_sources and record_sources (DR-0081) — so a table that would lose
 rows says so in the per-table summary rather than merging quietly short.
 A concept's kind (DR-0078) travels with it and follows the same
 last-writer-wins rule as its description. Story events do not travel: they are
@@ -1433,7 +1434,8 @@ scratch database and compared with a copy of this one, table by table, using
 the same idea of "the same row" as {app_name}-merge(1): name for projects and
 concepts, uuid for observations, sources, documents and sections, workspace,
 project, scope and record id for decision records, and the pair of parents for
-links. The report lists rows only in the JSONL, rows only in this database, and
+links (observation_sources, document_sources and record_sources also compare the
+cited version and hash). The report lists rows only in the JSONL, rows only in this database, and
 rows on both sides that differ (a project's description or status, a concept's
 description, identifier or kind, an observation's kind or body, a record's checksum,
 and so on), with per-table counts. Story events (DR-0075) are not compared:
@@ -1591,14 +1593,15 @@ rows
 links
 : how many rows each join table has: project_concepts, observation_concepts,
   record_concepts, document_section_concepts, observation_sources,
-  observation_relations and record_relations.
+  document_sources, record_sources, observation_relations and
+  record_relations.
 
 checks
 : facts worth knowing, with a count. observations_without_project is normally
   0. concepts_without_links counts concepts nothing links to, which is not an
   error (a concept can be added before it is used); {app_name}-concept(1)
-  delete removes one. sources_without_links counts sources no observation
-  cites. records_without_project counts project-scope records with no project
+  delete removes one. sources_without_links counts sources no observation,
+  document or record cites. records_without_project counts project-scope records with no project
   row, and documents_without_project counts documents with none; workspace-tier
   records have no project by design and are not counted.
 
@@ -1656,7 +1659,12 @@ decision records) as newline-delimited JSON to -out, or to stdout when
 -out is omitted. Every line is self-describing via a "type" field
 (project, concept, source, observation, observation_concept,
 observation_relation, project_concept, observation_source, record,
-record_relation), in dependency order.
+record_relation, record_concept, document, document_section,
+document_section_concept, document_source, record_source), in dependency
+order. A document_source or record_source line joins a document or a decision
+record to a source it cites (DR-0081), and carries the cited version and hash;
+a -project export carries the sources the project's observations, documents and
+records cite.
 
 A concept line carries its "kind" (character, place, theme or other).
 
@@ -1719,6 +1727,10 @@ side's updated_at is later, the same last-writer-wins rule merge uses. A
 concept line with no "kind", as an older export wrote, leaves a local kind
 alone and is "other" when new; an unknown kind refuses the whole file
 before anything is written (exit 65).
+
+A document_source or record_source line (DR-0081) whose document, record or
+source is not in this database is skipped and counted, not an error; an older
+file with none of them imports as before.
 
 Story events are not imported, because they are not exported: after an import,
 run {app_name} document ingest on the same paths (an unchanged file is skipped

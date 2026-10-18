@@ -198,3 +198,25 @@ func TestHelp_DescribesTheMarkdownSceneSyntaxAndEveryReport(t *testing.T) {
 		}
 	}
 }
+
+// The citation tables of DR-0081 are named where a person looks for what
+// travels and what is counted.
+func TestHelp_NamesTheCitationTables(t *testing.T) {
+	for name, text := range map[string]string{
+		"merge": MergeHelpText, "check-db": CheckDBHelpText, "stats": StatsHelpText,
+	} {
+		for _, want := range []string{"document_sources", "record_sources"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("kb %s help does not mention %s", name, want)
+			}
+		}
+	}
+	// export and import speak of line types, which are singular.
+	for name, text := range map[string]string{"export": ExportHelpText, "import": ImportHelpText} {
+		for _, want := range []string{"document_source", "record_source"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("kb %s help does not mention the %s line type", name, want)
+			}
+		}
+	}
+}

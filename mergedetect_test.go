@@ -93,8 +93,8 @@ func TestDiffDatabases_IdenticalReportsNothingAndEveryTableIsCounted(t *testing.
 	a := diffFixture(t, "a")
 	b := twin(t, a)
 	by := diffByTable(t, a, b)
-	if len(by) != 14 {
-		t.Errorf("tables = %d, want all 14 that travel", len(by))
+	if len(by) != 16 {
+		t.Errorf("tables = %d, want all 16 that travel", len(by))
 	}
 	for name, d := range by {
 		if len(d.OnlyA)+len(d.OnlyB)+len(d.Different) != 0 {
@@ -331,7 +331,7 @@ func TestPrepareMergeScratch_NormalisesAPreRecordsDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("diff against a normalised pre-records copy: %v", err)
 	}
-	if len(d) != 14 {
+	if len(d) != 16 {
 		t.Errorf("tables = %d", len(d))
 	}
 }

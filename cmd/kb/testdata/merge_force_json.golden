@@ -92,6 +92,18 @@
       "FromA": 0,
       "FromB": 0,
       "Merged": 0
+    },
+    {
+      "Table": "document_sources",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
+    },
+    {
+      "Table": "record_sources",
+      "FromA": 0,
+      "FromB": 0,
+      "Merged": 0
     }
   ]
 }
