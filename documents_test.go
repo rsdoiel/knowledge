@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -288,6 +289,110 @@ func TestSegmentMarkdown_HeadingTextIsClean(t *testing.T) {
 			t.Errorf("section %d heading = %q, want %q", i, got[i].Heading, w)
 		}
 	}
+}
+
+func TestSegmentMarkdown_SceneID(t *testing.T) {
+	sceneIDs := func(body string) []string {
+		var ids []string
+		for _, s := range segmentMarkdown(body) {
+			ids = append(ids, s.SceneID)
+		}
+		return ids
+	}
+	eq := func(t *testing.T, got []string, want ...string) {
+		t.Helper()
+		if strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("scene ids = %q, want %q", got, want)
+		}
+	}
+	t.Run("heading attribute", func(t *testing.T) {
+		eq(t, sceneIDs("## The fire {#12A}\ntext\n## Quiet\nz\n"), "12A", "")
+	})
+	t.Run("comment id", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire\n<!-- story: id=12A; pov=Anna; story_time=1969-10-29 -->\nThe room burned.\n")
+		if len(secs) != 1 || secs[0].SceneID != "12A" || secs[0].Story.POV != "Anna" || secs[0].Story.StoryTime != "1969-10-29" {
+			t.Fatalf("sections = %+v", secs)
+		}
+		if strings.Contains(secs[0].Body, "story:") || !strings.Contains(secs[0].Body, "The room burned.") {
+			t.Errorf("body = %q: the comment must be dropped and the prose kept", secs[0].Body)
+		}
+	})
+	t.Run("blank lines before the comment", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire\n\n\n<!-- story: id=1; pov=Anna -->\ntext\n")
+		if len(secs) != 1 || secs[0].SceneID != "1" || secs[0].Story.POV != "Anna" {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("comment elsewhere is left alone", func(t *testing.T) {
+		body := "## The fire\ntext\n\n<!-- story: id=1; pov=Anna -->\nmore\n"
+		secs := segmentMarkdown(body)
+		if len(secs) != 1 || secs[0].SceneID != "" || !secs[0].Story.IsZero() || !strings.Contains(secs[0].Body, "story: id=1") {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("comment before the first heading is left alone", func(t *testing.T) {
+		secs := segmentMarkdown("<!-- story: id=9; pov=Anna -->\n## The fire\ntext\n")
+		for _, s := range secs {
+			if s.SceneID != "" || !s.Story.IsZero() {
+				t.Errorf("section %q picked up %+v", s.Heading, s)
+			}
+		}
+	})
+	t.Run("a plain comment is ordinary text", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire\n<!-- remember to check dates -->\ntext\n")
+		if len(secs) != 1 || secs[0].SceneID != "" || !strings.Contains(secs[0].Body, "remember to check dates") {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("both given and equal", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire {#12A}\n<!-- story: id=12A; pov=Anna -->\ntext\n")
+		if len(secs) != 1 || secs[0].SceneID != "12A" || len(secs[0].StoryWarnings) != 0 {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("both given and different: comment wins, one warning", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire {#12A}\n<!-- story: id=13; pov=Anna -->\ntext\n")
+		if len(secs) != 1 || secs[0].SceneID != "13" || len(secs[0].StoryWarnings) != 1 ||
+			!strings.Contains(secs[0].StoryWarnings[0], "12A") || !strings.Contains(secs[0].StoryWarnings[0], "13") {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("comment without any id warns and gives no scene id", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire\n<!-- story: pov=Anna -->\ntext\n")
+		if len(secs) != 1 || secs[0].SceneID != "" || secs[0].Story.POV != "Anna" || len(secs[0].StoryWarnings) != 1 {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("unknown key warns, the rest are kept", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire\n<!-- story: id=1; pov=Anna; mood=dark -->\ntext\n")
+		if len(secs) != 1 || secs[0].Story.POV != "Anna" || len(secs[0].StoryWarnings) != 1 {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("a heading ending #12A# is text, not an id", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire #12A#\ntext\n")
+		if len(secs) != 1 || secs[0].SceneID != "" || secs[0].Heading != "The fire #12A#" {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("a comment inside a fence is not read", func(t *testing.T) {
+		secs := segmentMarkdown("## The fire\n```\n<!-- story: id=1 -->\n```\ntext\n")
+		if len(secs) != 1 || secs[0].SceneID != "" {
+			t.Fatalf("sections = %+v", secs)
+		}
+	})
+	t.Run("ParseDocumentFile carries the section warnings", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "ch.md")
+		os.WriteFile(path, []byte("---\ntitle: Ch\n---\n## The fire {#1}\n<!-- story: id=2; mood=dark -->\ntext\n"), 0o644)
+		pd, err := ParseDocumentFile(path, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(pd.StoryWarnings) != 2 {
+			t.Errorf("StoryWarnings = %v, want the id disagreement and the unknown key", pd.StoryWarnings)
+		}
+	})
 }
 
 const fountainFixture = `Title: A Short Scene

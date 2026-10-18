@@ -133,10 +133,56 @@ func ParseStoryBoneyard(content string) (StoryMeta, []string, bool) {
 	if !found {
 		return StoryMeta{}, nil, false
 	}
-	m := []string{"", text}
-	var meta StoryMeta
-	var warnings []string
-	for _, pair := range strings.Split(m[1], ";") {
+	meta, _, warnings := parseStoryPairs(text, "story boneyard", false)
+	return meta, warnings, true
+}
+
+/** ParseStoryComment reads a Markdown HTML comment as the story metadata of
+ * the scene above it (DR-0082): "<!-- story: id=12A; pov=Anna -->". It is
+ * the Markdown counterpart of ParseStoryBoneyard, with the same key=value
+ * grammar plus an id key, because a Markdown scene may take its id from the
+ * comment as well as from a heading attribute.
+ *
+ * Parameters:
+ *   content (string) — one HTML comment, delimiters included; it may span
+ *     lines.
+ *
+ * Returns:
+ *   StoryMeta — the metadata the comment sets.
+ *   string    — the scene id the comment gives, "" when it has none.
+ *   []string  — a message for each pair that was not understood (an unknown
+ *     key, or a word with no "="); the rest of the pairs are kept.
+ *   bool      — true when the comment is a story comment (its text starts
+ *     "story:"); false for any other comment, which the caller leaves alone.
+ *
+ * Example:
+ *   m, id, warn, ok := knowledge.ParseStoryComment("<!-- story: id=12A; pov=Anna -->")
+ *   // ok, id == "12A", m.POV == "Anna", warn == nil
+ */
+func ParseStoryComment(content string) (StoryMeta, string, []string, bool) {
+	inner, ok := strings.CutPrefix(strings.TrimSpace(content), "<!--")
+	if !ok {
+		return StoryMeta{}, "", nil, false
+	}
+	inner, ok = strings.CutSuffix(inner, "-->")
+	if !ok {
+		return StoryMeta{}, "", nil, false
+	}
+	text, found := strings.CutPrefix(strings.TrimSpace(inner), "story:")
+	if !found {
+		return StoryMeta{}, "", nil, false
+	}
+	meta, id, warnings := parseStoryPairs(text, "story comment", true)
+	return meta, id, warnings, true
+}
+
+// parseStoryPairs reads the key=value pairs, separated by ";", that follow
+// "story:" in a Fountain boneyard or a Markdown comment. label names the
+// syntax in warnings. The id key is read only when allowID is set (the
+// Markdown comment); in a boneyard the scene number is the identity, so id
+// is an unknown key there.
+func parseStoryPairs(text, label string, allowID bool) (meta StoryMeta, id string, warnings []string) {
+	for _, pair := range strings.Split(text, ";") {
 		pair = strings.TrimSpace(pair)
 		if pair == "" {
 			continue
@@ -144,10 +190,16 @@ func ParseStoryBoneyard(content string) (StoryMeta, []string, bool) {
 		key, val, found := strings.Cut(pair, "=")
 		key, val = strings.TrimSpace(key), strings.TrimSpace(val)
 		if !found {
-			warnings = append(warnings, fmt.Sprintf("story boneyard: %q has no \"=\"", pair))
+			warnings = append(warnings, fmt.Sprintf("%s: %q has no \"=\"", label, pair))
 			continue
 		}
 		switch key {
+		case "id":
+			if !allowID {
+				warnings = append(warnings, fmt.Sprintf("%s: unknown key %q", label, key))
+				continue
+			}
+			id = val
 		case "event":
 			meta.Event = val
 		case "story_time":
@@ -167,10 +219,10 @@ func ParseStoryBoneyard(content string) (StoryMeta, []string, bool) {
 		case "precedes":
 			meta.Precedes = splitStoryList(val)
 		default:
-			warnings = append(warnings, fmt.Sprintf("story boneyard: unknown key %q", key))
+			warnings = append(warnings, fmt.Sprintf("%s: unknown key %q", label, key))
 		}
 	}
-	return meta, warnings, true
+	return meta, id, warnings
 }
 
 // splitStoryList splits a comma-separated boneyard value into trimmed,

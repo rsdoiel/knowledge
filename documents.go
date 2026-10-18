@@ -467,19 +467,25 @@ func segmentMarkdown(body string) []DocumentSection {
 	heading := ""
 	var buf strings.Builder
 	haveContent := false
+	var scene DocumentSection // the scene being read: story fields only
+	afterHeading := false     // the next non-blank line may be the scene's story comment
 	flush := func() {
 		if !haveContent {
 			return
 		}
 		sections = append(sections, DocumentSection{
 			Level: "section", Seq: len(sections), Heading: heading, Body: strings.TrimSpace(buf.String()),
+			SceneID: scene.SceneID, Story: scene.Story, StoryWarnings: scene.StoryWarnings,
 		})
 	}
+	lines := strings.Split(body, "\n")
 	var fence markdownFence
-	for _, line := range strings.Split(body, "\n") {
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
 		// A line inside a fenced code block is code, never a heading
 		// (DR-0082 item 6).
 		if fence.step(line) {
+			afterHeading = false
 			haveContent = true
 			buf.WriteString(line)
 			buf.WriteString("\n")
@@ -487,10 +493,45 @@ func segmentMarkdown(body string) []DocumentSection {
 		}
 		if m := markdownHeadingPattern.FindStringSubmatch(line); m != nil {
 			flush()
-			heading, _ = cleanMarkdownHeading(m[1])
+			var id string
+			heading, id = cleanMarkdownHeading(m[1])
+			scene = DocumentSection{SceneID: id}
+			afterHeading = true
 			buf.Reset()
 			haveContent = true
 			continue
+		}
+		if afterHeading {
+			if strings.TrimSpace(line) == "" {
+				haveContent = true
+				buf.WriteString(line)
+				buf.WriteString("\n")
+				continue
+			}
+			afterHeading = false
+			// A story comment directly after the heading belongs to the
+			// scene and is dropped from the body (DR-0082 item 3). Any other
+			// comment is ordinary text.
+			if end, ok := htmlCommentEnd(lines, i); ok {
+				comment := strings.Join(lines[i:end+1], "\n")
+				if meta, id, warns, ok := ParseStoryComment(comment); ok {
+					scene.Story = meta
+					scene.StoryWarnings = append(scene.StoryWarnings, warns...)
+					switch {
+					case id != "" && scene.SceneID != "" && id != scene.SceneID:
+						scene.StoryWarnings = append(scene.StoryWarnings, fmt.Sprintf(
+							"story comment: id %q disagrees with heading id %q on %q; the comment wins", id, scene.SceneID, heading))
+						scene.SceneID = id
+					case id != "":
+						scene.SceneID = id
+					case scene.SceneID == "":
+						scene.StoryWarnings = append(scene.StoryWarnings, fmt.Sprintf(
+							"story comment: %q has no id (give the heading {#id} or id= in the comment)", heading))
+					}
+					i = end
+					continue
+				}
+			}
 		}
 		haveContent = true
 		buf.WriteString(line)
@@ -498,6 +539,20 @@ func segmentMarkdown(body string) []DocumentSection {
 	}
 	flush()
 	return sections
+}
+
+// htmlCommentEnd reports whether lines[i] opens an HTML comment and the index
+// of the line that closes it (the same line for a one-line comment).
+func htmlCommentEnd(lines []string, i int) (int, bool) {
+	if !strings.HasPrefix(strings.TrimSpace(lines[i]), "<!--") {
+		return 0, false
+	}
+	for j := i; j < len(lines); j++ {
+		if strings.Contains(lines[j], "-->") {
+			return j, true
+		}
+	}
+	return 0, false
 }
 
 // fountainAnnotationTypes are element types the fountain library itself
@@ -718,6 +773,9 @@ func ParseDocumentFile(path, formatOverride string) (*ParsedDocument, error) {
 		}
 		pd.Sections = segmentMarkdown(body)
 		pd.Story, pd.StoryWarnings = extractStoryFrontmatter(data)
+		for _, sec := range pd.Sections {
+			pd.StoryWarnings = append(pd.StoryWarnings, sec.StoryWarnings...)
+		}
 	case "fountain":
 		sections, titlePage, err := segmentFountain(data)
 		if err != nil {

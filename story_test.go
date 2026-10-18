@@ -122,3 +122,35 @@ func TestParseDocumentFile_FountainMultiLineStoryBoneyard(t *testing.T) {
 		t.Errorf("Body = %q, want %q", got.Body, "Text.")
 	}
 }
+
+func TestParseStoryComment(t *testing.T) {
+	m, id, warns, ok := ParseStoryComment("<!-- story: id=12A; pov=Anna; story_time=1969-10-29; characters=Anna, Ben -->")
+	if !ok || id != "12A" || m.POV != "Anna" || m.StoryTime != "1969-10-29" || len(m.Characters) != 2 || len(warns) != 0 {
+		t.Errorf("ParseStoryComment = %+v, %q, %v, %v", m, id, warns, ok)
+	}
+	// Spacing and a multi-line comment are the same grammar.
+	m, id, _, ok = ParseStoryComment("<!--\n  story: id=3;\n  place=harbour\n-->")
+	if !ok || id != "3" || m.Place != "harbour" {
+		t.Errorf("multi-line = %+v, %q, %v", m, id, ok)
+	}
+	// Not a story comment: left alone by the caller.
+	for _, c := range []string{"<!-- a plain comment -->", "<!-- storyboard: x -->", "not a comment", ""} {
+		if _, _, _, ok := ParseStoryComment(c); ok {
+			t.Errorf("ParseStoryComment(%q) ok, want false", c)
+		}
+	}
+	// Unknown keys and a word with no "=" warn; the rest are kept.
+	m, _, warns, ok = ParseStoryComment("<!-- story: pov=Anna; mood=dark; stray -->")
+	if !ok || m.POV != "Anna" || len(warns) != 2 {
+		t.Errorf("warnings = %v (pov %q, ok %v), want 2", warns, m.POV, ok)
+	}
+}
+
+// The Fountain boneyard has no id key (DR-0082 consequences): the scene
+// number is the identity there.
+func TestParseStoryBoneyard_StillRejectsID(t *testing.T) {
+	_, warns, ok := ParseStoryBoneyard("/* story: id=12A; pov=Anna */")
+	if !ok || len(warns) != 1 {
+		t.Errorf("warnings = %v ok %v, want one unknown-key warning", warns, ok)
+	}
+}
