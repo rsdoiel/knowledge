@@ -161,3 +161,88 @@ func TestStoryLibrary_TheWholePhaseOneFlowFromOutsideThePackage(t *testing.T) {
 		t.Errorf("after delete: %d events, want 3", len(got))
 	}
 }
+
+// A Markdown chapter with several scenes (DR-0082) is driven through the same
+// exported calls a consumer uses: parse it, ingest it, list and check its
+// events. testdata/markdown-chapter.md is the worked example of the syntax.
+func TestStoryLibrary_AMultiSceneMarkdownChapterFromOutsideThePackage(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("testdata", "markdown-chapter.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ch1.md")
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	kb, err := knowledge.Open(knowledge.DefaultPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer kb.Close()
+	pid, err := kb.AddProject("the-long-fire", "a novel")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Preview: the scene ids and per-scene metadata, writing nothing.
+	pd, err := knowledge.ParseDocumentFile(path, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, s := range pd.Sections {
+		if s.SceneID != "" {
+			ids = append(ids, s.SceneID)
+		}
+	}
+	if strings.Join(ids, ",") != "1A,1B,1C" || len(pd.StoryWarnings) != 0 {
+		t.Fatalf("scene ids = %v, warnings = %v", ids, pd.StoryWarnings)
+	}
+
+	res, err := kb.IngestDocument(pid, path, knowledge.DocumentIngestOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.EventsWritten != 3 || len(res.StoryWarnings) != 0 {
+		t.Errorf("ingest = %+v, want 3 events and no warnings", res)
+	}
+
+	// The timeline puts them in story order, the fall resolved from the fire.
+	entries, err := kb.StoryTimeline(pid, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, e := range entries {
+		order = append(order, e.Event.Label)
+	}
+	if strings.Join(order, ",") != "1A,the-fall,1C" {
+		t.Errorf("story order = %v, want 1A, the-fall, 1C", order)
+	}
+	evs, err := kb.StoryEvents(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range evs {
+		switch e.Label {
+		case "1A":
+			if e.POV != "Anna" || e.Place != "Kitchen" || e.Time.Start != "1969-10-29" {
+				t.Errorf("1A = %+v: front matter defaults and its own date", e)
+			}
+		case "the-fall":
+			if e.POV != "Bram" || e.Time.Start != "1969-10-30" {
+				t.Errorf("the-fall = %+v", e)
+			}
+		case "1C":
+			if e.Place != "Hospital" || e.POV != "Anna" || e.Time.Start != "1969-11-01" {
+				t.Errorf("1C = %+v: its own place, the default pov", e)
+			}
+		}
+	}
+
+	findings, err := kb.StoryCheck(pid)
+	if err != nil || len(findings) != 0 {
+		t.Errorf("StoryCheck = %+v, %v, want a clean chapter", findings, err)
+	}
+}

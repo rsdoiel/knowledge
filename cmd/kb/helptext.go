@@ -509,7 +509,23 @@ heading: /* story: story_time=1969-10-29; pov=Anna */. A scene with no number
 is not an event. story_time is a date (1969-10-29), a month, a year,
 circa YEAR, ordinal: N, or after:/before: LABEL with an optional offset such
 as +3d (units d, w, m, y). The summary says how many events the file yields
-and names every key or value it did not understand. Events are derived from
+and names every key or value it did not understand.
+
+Several scenes in one Markdown file (DR-0082). A heading with an id is a scene
+and an event; a heading without one is an ordinary section. Give the id on the
+heading, ` + "`## The fire {#12A}`" + `, or as id=12A in a story comment on the line after
+the heading, ` + "`<!-- story: id=12A; story_time=1969-10-29; pov=Anna -->`" + `, or both
+(if they differ the comment wins and ingest says so). The comment takes the
+same keys as a Fountain boneyard, is left out of the section's text, and is
+read only directly after a heading. The file's front matter pov, place, status
+and characters are the defaults for every scene; a scene's comment overrides
+them field by field, and a list in the comment replaces the front matter's
+list. With scene ids, front matter event and story_time are ignored (two scenes
+cannot share them) and ingest says so. A heading ending in a Fountain-style
+number, #12A#, is plain text, not an id. A scene id repeated in one file keeps
+the first scene as the event and reports the rest. Headings inside fenced code
+blocks are not headings, and a heading's closing # marks and {#id} are not part
+of its text. Events are derived from
 the file on every ingest, a skipped one included, so running this again on the
 same paths rebuilds them after an import or merge; they are not exported,
 imported, merged or compared by check-db.
@@ -1483,8 +1499,10 @@ const StoryHelpText = `%{app_name}-story(1) user manual | version {version} {rel
 A writing project is a {app_name} project whose manuscript files have been
 ingested with {app_name}-document(1) ingest. Story events are derived from
 those files: a Fountain scene with a scene number (INT. KITCHEN - DAY #12A#),
-or a file whose front matter has a narrative key (event, story_time, pov,
-characters, foreshadows, pays_off, precedes). Both verbs only read, and both
+a Markdown heading with a scene id (## The fire {#12A}, or id=12A in a story
+comment under it; see kb-document(1)), or a file whose front matter has a
+narrative key (event, story_time, pov, characters, foreshadows, pays_off,
+precedes). Both verbs only read, and both
 need --project.
 
 timeline
@@ -1513,7 +1531,14 @@ check
   two-places (a character in two places on the same day or ordinal; wider
   intervals overlap innocently and are not flagged) and foreshadow-order (within one
   document, a scene foreshadowing an earlier scene or paying off a later one;
-  across documents the reading order is not known). The report is advice: the
+  across documents the reading order is not known). For Markdown scenes:
+  scene-comment-no-id (a story comment on a heading with no id),
+  scene-id-disagreement (the heading's {#id} and the comment's id= differ; the
+  comment wins), scene-id-repeated (one id used twice in a file),
+  scene-comment-syntax (an unknown key, or a word with no "=", in a story
+  comment), fountain-style-heading (a heading ending #12A#, which is text and
+  not an id; reported once per file) and front-matter-ignored (an event or
+  story_time in front matter, ignored because the file has scene ids). The report is advice: the
   exit status is 0 however many findings there are. With --strict it is 1 when
   there are any. --json gives a list of kind, document and message.
 

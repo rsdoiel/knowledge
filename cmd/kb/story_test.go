@@ -182,3 +182,19 @@ func TestCmdStory_CheckReportsAMarkdownSceneProblemAndStrictGatesIt(t *testing.T
 		t.Errorf("story check --strict = %v, want the negative class (exit 1)", err)
 	}
 }
+
+// The manuals say what the Markdown scene syntax is and name every check kind
+// (DR-0082): a writer finds {#id}, the story comment and each report there.
+func TestHelp_DescribesTheMarkdownSceneSyntaxAndEveryReport(t *testing.T) {
+	for _, want := range []string{"{#12A}", "<!-- story:", "id=12A"} {
+		if !strings.Contains(DocumentHelpText, want) {
+			t.Errorf("kb document help does not mention %q", want)
+		}
+	}
+	for _, kind := range []string{"scene-comment-no-id", "scene-id-disagreement", "scene-id-repeated",
+		"scene-comment-syntax", "fountain-style-heading", "front-matter-ignored"} {
+		if !strings.Contains(StoryHelpText, kind) {
+			t.Errorf("kb story help does not name the %s report", kind)
+		}
+	}
+}

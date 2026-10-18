@@ -3,6 +3,37 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.25 — unreleased
+
+Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are added as each task lands.
+
+### Added
+
+- **Several scenes in one Markdown file** (DR-0082, extending DR-0075 and DR-0078). A Markdown heading with a
+  scene id is a scene and a story event: `## The fire {#12A}`, or `id=12A` in a story comment on the line after
+  the heading, `<!-- story: id=12A; story_time=1969-10-29; pov=Anna -->`, or both (the comment wins if they
+  differ). The comment takes the same keys as a Fountain boneyard and is left out of the section's text. A
+  heading without an id stays an ordinary section. The file's front matter `pov`, `place`, `status` and
+  `characters` are defaults for every scene; a scene's comment overrides them field by field, and a list there
+  replaces the front matter list. A file with no scene id is still one event from its front matter. Library:
+  `ParseStoryComment`; `DocumentSection.SceneID` and `.Story` now fill for Markdown. A worked chapter is
+  `testdata/markdown-chapter.md`.
+- **`kb story check` reports Markdown scene problems**, all advisory: `scene-comment-no-id`,
+  `scene-id-disagreement`, `scene-id-repeated`, `scene-comment-syntax`, `fountain-style-heading` (a heading
+  ending `#12A#`, which is text in Markdown, once per file) and `front-matter-ignored` (front matter `event` or
+  `story_time` in a file with scene ids).
+
+### Fixed
+
+- **A `#` line inside a fenced code block split a Markdown section.** `segmentMarkdown` now skips backtick and
+  tilde fences. This changes the sections of existing documents: on the author's database, 14 of 15 documents
+  have a different section count, mostly hand-offs and plans with shell comments in fences. Re-ingesting them
+  reports the removed headings once and marks the affected summaries stale.
+- **A Markdown heading kept its closing `#` marks and any `{#id}` in its text.** The title, and the heading a
+  section is matched on, are now the words alone. `C# basics`, `Why #1` and `The fire #12A#` are unchanged.
+- **A scene id repeated in one file (Markdown or Fountain) failed the whole ingest** on the `story_events`
+  uniqueness constraint. The first scene is now the event and the rest are reported.
+
 ## v0.0.24 — 2026-10-17
 
 The story foundation Foul Papers builds on (knowledge DR-0075, with DR-0078 and DR-0079, all accepted): story

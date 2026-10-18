@@ -59,7 +59,23 @@ heading: /* story: story_time=1969-10-29; pov=Anna */. A scene with no number
 is not an event. story_time is a date (1969-10-29), a month, a year,
 circa YEAR, ordinal: N, or after:/before: LABEL with an optional offset such
 as +3d (units d, w, m, y). The summary says how many events the file yields
-and names every key or value it did not understand. Events are derived from
+and names every key or value it did not understand.
+
+Several scenes in one Markdown file (DR-0082). A heading with an id is a scene
+and an event; a heading without one is an ordinary section. Give the id on the
+heading, `## The fire {#12A}`, or as id=12A in a story comment on the line after
+the heading, `<!-- story: id=12A; story_time=1969-10-29; pov=Anna -->`, or both
+(if they differ the comment wins and ingest says so). The comment takes the
+same keys as a Fountain boneyard, is left out of the section's text, and is
+read only directly after a heading. The file's front matter pov, place, status
+and characters are the defaults for every scene; a scene's comment overrides
+them field by field, and a list in the comment replaces the front matter's
+list. With scene ids, front matter event and story_time are ignored (two scenes
+cannot share them) and ingest says so. A heading ending in a Fountain-style
+number, #12A#, is plain text, not an id. A scene id repeated in one file keeps
+the first scene as the event and reports the rest. Headings inside fenced code
+blocks are not headings, and a heading's closing # marks and {#id} are not part
+of its text. Events are derived from
 the file on every ingest, a skipped one included, so running this again on the
 same paths rebuilds them after an import or merge; they are not exported,
 imported, merged or compared by check-db.

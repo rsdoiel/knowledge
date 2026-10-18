@@ -17,8 +17,10 @@ kb story check --project P [--strict]
 A writing project is a kb project whose manuscript files have been
 ingested with kb-document(1) ingest. Story events are derived from
 those files: a Fountain scene with a scene number (INT. KITCHEN - DAY #12A#),
-or a file whose front matter has a narrative key (event, story_time, pov,
-characters, foreshadows, pays_off, precedes). Both verbs only read, and both
+a Markdown heading with a scene id (## The fire {#12A}, or id=12A in a story
+comment under it; see kb-document(1)), or a file whose front matter has a
+narrative key (event, story_time, pov, characters, foreshadows, pays_off,
+precedes). Both verbs only read, and both
 need --project.
 
 timeline
@@ -47,7 +49,14 @@ check
   two-places (a character in two places on the same day or ordinal; wider
   intervals overlap innocently and are not flagged) and foreshadow-order (within one
   document, a scene foreshadowing an earlier scene or paying off a later one;
-  across documents the reading order is not known). The report is advice: the
+  across documents the reading order is not known). For Markdown scenes:
+  scene-comment-no-id (a story comment on a heading with no id),
+  scene-id-disagreement (the heading's {#id} and the comment's id= differ; the
+  comment wins), scene-id-repeated (one id used twice in a file),
+  scene-comment-syntax (an unknown key, or a word with no "=", in a story
+  comment), fountain-style-heading (a heading ending #12A#, which is text and
+  not an id; reported once per file) and front-matter-ignored (an event or
+  story_time in front matter, ignored because the file has scene ids). The report is advice: the
   exit status is 0 however many findings there are. With --strict it is 1 when
   there are any. --json gives a list of kind, document and message.
 
