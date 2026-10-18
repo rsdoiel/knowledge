@@ -367,6 +367,55 @@ func firstH1Heading(body string) string {
 	return ""
 }
 
+// markdownFence tracks whether a line is inside a fenced code block: an
+// opening run of three or more backticks or tildes (up to three spaces of
+// indent, then an optional info string) closed by a run of at least as many
+// of the same character and nothing else. A fence never closed runs to the
+// end of the body, as CommonMark has it.
+type markdownFence struct {
+	char  byte
+	count int
+}
+
+// step reports whether line belongs to a fenced block (the opening and
+// closing lines included) and updates the state.
+func (f *markdownFence) step(line string) bool {
+	trimmed := strings.TrimLeft(line, " ")
+	indented := len(line)-len(trimmed) <= 3
+	if f.count > 0 {
+		if indented {
+			run := fenceRun(trimmed, f.char)
+			if run >= f.count && strings.TrimSpace(trimmed[run:]) == "" {
+				f.count = 0
+			}
+		}
+		return true
+	}
+	if !indented || trimmed == "" {
+		return false
+	}
+	for _, c := range []byte{'`', '~'} {
+		if run := fenceRun(trimmed, c); run >= 3 {
+			// A backtick fence's info string may not contain a backtick.
+			if c == '`' && strings.Contains(trimmed[run:], "`") {
+				return false
+			}
+			f.char, f.count = c, run
+			return true
+		}
+	}
+	return false
+}
+
+// fenceRun returns the length of the run of c at the start of s.
+func fenceRun(s string, c byte) int {
+	n := 0
+	for n < len(s) && s[n] == c {
+		n++
+	}
+	return n
+}
+
 // segmentMarkdown splits body on ATX headings (design decision 4). A body
 // with no headings at all becomes a single section with no heading, the
 // same degenerate case segmentText always produces.
@@ -383,7 +432,16 @@ func segmentMarkdown(body string) []DocumentSection {
 			Level: "section", Seq: len(sections), Heading: heading, Body: strings.TrimSpace(buf.String()),
 		})
 	}
+	var fence markdownFence
 	for _, line := range strings.Split(body, "\n") {
+		// A line inside a fenced code block is code, never a heading
+		// (DR-0082 item 6).
+		if fence.step(line) {
+			haveContent = true
+			buf.WriteString(line)
+			buf.WriteString("\n")
+			continue
+		}
 		if m := markdownHeadingPattern.FindStringSubmatch(line); m != nil {
 			flush()
 			heading = strings.TrimSpace(m[1])

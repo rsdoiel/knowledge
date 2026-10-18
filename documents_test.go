@@ -211,6 +211,35 @@ func TestSegmentMarkdown_NoHeadingsIsOneSection(t *testing.T) {
 	}
 }
 
+// A heading-like line inside a fenced code block is code, not a heading
+// (DR-0082 item 6): it must not split the section it sits in.
+func TestSegmentMarkdown_FencedCodeIsNotHeadings(t *testing.T) {
+	cases := []struct {
+		name, body string
+		want       int
+	}{
+		{"backtick fence", "# One\ntext\n```\n# not a heading\n```\nafter\n", 1},
+		{"tilde fence", "# One\ntext\n~~~\n## not a heading\n~~~\nafter\n", 1},
+		{"longer fence closed by equal run", "# One\n````\n# in\n```\n# still in\n````\n# Two\nz\n", 2},
+		{"unclosed fence runs to the end", "# One\n```\n# in\n## also in\n", 1},
+		{"indented heading in a fence", "# One\n```\n   # in\n```\n", 1},
+		{"info string on the opening fence", "# One\n```go\n# in\n```\n# Two\n", 2},
+		{"heading after the fence closes is real", "# One\n```\n# in\n```\n## Two\nz\n", 2},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := segmentMarkdown(c.body)
+			if len(got) != c.want {
+				t.Fatalf("sections = %d, want %d: %+v", len(got), c.want, got)
+			}
+		})
+	}
+	got := segmentMarkdown("# One\ntext\n```\n# not a heading\n```\nafter\n")
+	if len(got) == 1 && !strings.Contains(got[0].Body, "# not a heading") {
+		t.Errorf("fenced line missing from the body: %q", got[0].Body)
+	}
+}
+
 const fountainFixture = `Title: A Short Scene
 Author: Test Author
 
