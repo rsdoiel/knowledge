@@ -110,9 +110,9 @@ func (i searchResultItem) Title() string {
 }
 func (i searchResultItem) Description() string {
 	if len(i.spans) > 0 {
-		return i.r.Snippet + "   [" + strings.Join(i.spans, ", ") + "]"
+		return i.r.Snippet + "   [" + strings.Join(i.spans, ", ") + "]" + retractionMarker(i.r.HitProvenance)
 	}
-	return i.r.Snippet
+	return i.r.Snippet + retractionMarker(i.r.HitProvenance)
 }
 func (i searchResultItem) FilterValue() string { return i.r.Label + " " + i.r.Snippet }
 

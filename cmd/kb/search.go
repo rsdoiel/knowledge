@@ -134,6 +134,13 @@ type scopedHit struct {
 	ID        int64    `json:"source_id"`
 	ProjectID int64    `json:"project_id,omitempty"`
 	Projects  []string `json:"projects,omitempty"`
+
+	// Provenance (DR-0080): what the hit cites, the file it came from, and
+	// whether any cited work is retracted.
+	marker    string        // the printed retraction marker, not part of --json
+	Sources   []jsonSource  `json:"sources"`
+	Material  *jsonMaterial `json:"material,omitempty"`
+	Retracted bool          `json:"retracted"`
 }
 
 // searchScoped runs a scoped search and prints it grouped by kind with counts.
@@ -150,7 +157,9 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 	var hits []scopedHit
 	for _, r := range res.Results {
 		h := scopedHit{Kind: r.Kind, Ref: r.Ref, Label: r.Label, Snippet: r.Snippet, Status: r.Status, Passage: r.Passage,
-			Section: r.Section, Type: r.SourceType, ID: r.SourceID, ProjectID: r.ProjectID}
+			Section: r.Section, Type: r.SourceType, ID: r.SourceID, ProjectID: r.ProjectID,
+			Sources: jsonSources(r.HitProvenance), Material: jsonMaterialOf(r.HitProvenance), Retracted: r.Retracted}
+		h.marker = retractionMarker(r.HitProvenance)
 		// A concept and a source span projects: the ones whose context holds
 		// the concept, the ones whose rows cite the source.
 		switch r.SourceType {
@@ -210,6 +219,7 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 			if len(h.Projects) > 0 {
 				line += "   [" + strings.Join(h.Projects, ", ") + "]"
 			}
+			line += h.marker
 			fmt.Fprintln(out, line)
 			if pl := passageLine(h.Section, h.Passage); pl != "" {
 				fmt.Fprintln(out, "  "+pl)
@@ -279,13 +289,14 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		if r.Status != "" {
 			who += " (" + r.Status + ")"
 		}
+		mark := retractionMarker(r.HitProvenance)
 		switch {
 		case who != "" && r.Snippet != "":
-			fmt.Fprintf(out, "[%-10s] %s — %s\n", label, who, r.Snippet)
+			fmt.Fprintf(out, "[%-10s] %s — %s%s\n", label, who, r.Snippet, mark)
 		case who != "":
-			fmt.Fprintf(out, "[%-10s] %s\n", label, who)
+			fmt.Fprintf(out, "[%-10s] %s%s\n", label, who, mark)
 		default:
-			fmt.Fprintf(out, "[%-10s] %s\n", label, r.Snippet)
+			fmt.Fprintf(out, "[%-10s] %s%s\n", label, r.Snippet, mark)
 		}
 		if pl := passageLine(r.Section, r.Passage); pl != "" && r.SourceType != "observation" {
 			fmt.Fprintln(out, pl)

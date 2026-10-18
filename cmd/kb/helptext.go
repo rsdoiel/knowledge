@@ -946,8 +946,10 @@ recall
   listed on a ` + "`projects:`" + ` line, apart from the hits. Text that matches no
   concept says so and exits 1; no text and no --concept is exit 2. A document
   section's excerpt is its summary only once reviewed. ` + "`--json`" + ` gives
-  matched, hits (kind, id, project, concepts, excerpt) and projects. Nothing is
-  written and no concept is created. It shares its ranking with the library's
+  matched, hits (kind, id, project, concepts, excerpt, sources, material and
+  retracted) and projects. A hit whose row cites a retracted work ends with
+  ` + "`[retracted source: TITLE]`" + `; this reports and never changes the ranking or hides
+  the hit (DR-0080). Nothing is written and no concept is created. It shares its ranking with the library's
   RecallByConceptNames, which is unchanged and adds no project filter or
   per-hit concepts.
   See DR-0051 (knowledge/decisions/).
@@ -1313,6 +1315,16 @@ search
   the fields are ref, status, passage and section (the unscoped list uses the
   library's names: Ref, Status, Passage, Section). Observations, concepts and
   projects have no reference or status, and a concept or project has no passage.
+
+  A hit also says what supports it (DR-0080). In -json, sources lists the works
+  its row cites (id, title, identifier, version, rights, retracted,
+  retraction_note, relationship, and the version and hash that were read),
+  material gives the file a document or record came from (path, checksum,
+  format, ingested_at), and retracted is true when any cited work is retracted;
+  an unscoped list carries the same as Sources, Material and Retracted. A hit
+  that cites a retracted work ends with [retracted source: TITLE], one for each
+  such work. This is a report: a retracted citation does not rank a hit lower,
+  higher or out of the results.
 
   A project's concepts are those tagged on the project, on any of its
   observations and on any of its records. Projects are searched at the global

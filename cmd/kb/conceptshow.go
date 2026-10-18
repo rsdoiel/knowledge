@@ -266,10 +266,16 @@ func cmdConceptRecall(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 			Concepts []string `json:"concepts"`
 			Title    string   `json:"title,omitempty"`
 			Excerpt  string   `json:"excerpt"`
+
+			// Provenance (DR-0080).
+			Sources   []jsonSource  `json:"sources"`
+			Material  *jsonMaterial `json:"material,omitempty"`
+			Retracted bool          `json:"retracted"`
 		}
 		hits := make([]hit, 0, len(r.Hits))
 		for _, h := range r.Hits {
-			hits = append(hits, hit{h.SourceType, h.ID, h.Project, h.Concepts, h.Title, excerpt(h.Body, 120)})
+			hits = append(hits, hit{h.SourceType, h.ID, h.Project, h.Concepts, h.Title, excerpt(h.Body, 120),
+				jsonSources(h.HitProvenance), jsonMaterialOf(h.HitProvenance), h.Retracted})
 		}
 		projects := r.Projects
 		if projects == nil {
@@ -299,7 +305,8 @@ func cmdConceptRecall(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 		if proj == "" {
 			proj = "(workspace)"
 		}
-		fmt.Fprintf(out, "%s #%d  %s  [%s]  %s\n", h.SourceType, h.ID, proj, strings.Join(h.Concepts, ", "), excerpt(text, 100))
+		fmt.Fprintf(out, "%s #%d  %s  [%s]  %s%s\n", h.SourceType, h.ID, proj, strings.Join(h.Concepts, ", "), excerpt(text, 100),
+			retractionMarker(h.HitProvenance))
 	}
 	return nil
 }

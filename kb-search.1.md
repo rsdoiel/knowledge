@@ -66,6 +66,16 @@ search
   library's names: Ref, Status, Passage, Section). Observations, concepts and
   projects have no reference or status, and a concept or project has no passage.
 
+  A hit also says what supports it (DR-0080). In -json, sources lists the works
+  its row cites (id, title, identifier, version, rights, retracted,
+  retraction_note, relationship, and the version and hash that were read),
+  material gives the file a document or record came from (path, checksum,
+  format, ingested_at), and retracted is true when any cited work is retracted;
+  an unscoped list carries the same as Sources, Material and Retracted. A hit
+  that cites a retracted work ends with [retracted source: TITLE], one for each
+  such work. This is a report: a retracted citation does not rank a hit lower,
+  higher or out of the results.
+
   A project's concepts are those tagged on the project, on any of its
   observations and on any of its records. Projects are searched at the global
   scope only: workspace/observations and harvey/projects are exit 1 with the

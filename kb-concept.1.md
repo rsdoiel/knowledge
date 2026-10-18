@@ -82,8 +82,10 @@ recall
   listed on a `projects:` line, apart from the hits. Text that matches no
   concept says so and exits 1; no text and no --concept is exit 2. A document
   section's excerpt is its summary only once reviewed. `--json` gives
-  matched, hits (kind, id, project, concepts, excerpt) and projects. Nothing is
-  written and no concept is created. It shares its ranking with the library's
+  matched, hits (kind, id, project, concepts, excerpt, sources, material and
+  retracted) and projects. A hit whose row cites a retracted work ends with
+  `[retracted source: TITLE]`; this reports and never changes the ranking or hides
+  the hit (DR-0080). Nothing is written and no concept is created. It shares its ranking with the library's
   RecallByConceptNames, which is unchanged and adds no project filter or
   per-hit concepts.
   See DR-0051 (knowledge/decisions/).
