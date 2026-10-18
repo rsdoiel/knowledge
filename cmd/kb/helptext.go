@@ -530,6 +530,20 @@ the file on every ingest, a skipped one included, so running this again on the
 same paths rebuilds them after an import or merge; they are not exported,
 imported, merged or compared by check-db.
 
+Sources a document cites (DR-0081). A front matter key sources lists the works
+the document rests on: a bare DOI (10.1234/sparql), an absolute URL, or
+source:ID for a source already in the knowledge base. Ingest links each to the
+document through document_sources: an existing identifier or id is linked, and a
+DOI or URL not yet known becomes a new source titled by its identifier. The links
+are rebuilt on every ingest of the file, a skipped one included. A file with the
+key manages the links it made (relationship cited): drop an entry and its link
+goes, and sources: [] clears them; links with another relationship, made by hand,
+are kept. A file with no sources key manages none. An entry that is not one of the
+three forms (a pasted doi: or doi.org prefix is refused, as kb source add refuses
+it), or a source:ID that names no source, is reported as a source warning and
+skipped, and never fails the ingest. The summary says how many sources were
+linked. See kb-source(1) for the registry and retraction checking.
+
 Re-ingesting a changed file matches new sections to old ones by heading
 text: an unchanged section is left alone; a changed one updates its body
 and is flagged stale rather than losing its summary; a heading with no
@@ -1823,6 +1837,14 @@ skips the project layout's directories that never hold records: design, plans,
 feature_requests, notes and hand-off. A directory given as PATH is read whatever
 it is called. (kb index, by
 contrast, takes one directory and does not descend.)
+
+A record may list the works it cites in an optional sources frontmatter key
+(DR-0081), in the same three forms as a document's: a bare DOI, an absolute
+URL, or source:ID. Ingest links them through record_sources and rebuilds the
+links on every run, an unchanged record included; a record with the key manages
+the links it made (relationship cited), and one without it manages none. A
+malformed entry is a warning, not a failure. A dry run reports the warnings and
+links nothing.
 
 Which project a record belongs to, and whether it is at the workspace tier, is
 read from the record's own "project:" frontmatter, never from where the file

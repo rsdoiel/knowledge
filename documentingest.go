@@ -65,6 +65,11 @@ type DocumentIngestResult struct {
 	// StoryWarnings what was not understood in its story metadata.
 	EventsWritten int      `json:"events_written,omitempty"`
 	StoryWarnings []string `json:"story_warnings,omitempty"`
+	// SourcesLinked is how many sources the file's `sources:` key cites, and
+	// SourceWarnings the entries that were not understood or not found
+	// (DR-0081 item 4).
+	SourcesLinked  int      `json:"sources_linked,omitempty"`
+	SourceWarnings []string `json:"source_warnings,omitempty"`
 }
 
 /** IngestDocument parses the file at path and creates or reconciles its
@@ -157,6 +162,26 @@ func (kb *KnowledgeBase) IngestDocument(projectID int64, path string, opts Docum
 				return DocumentIngestResult{}, err
 			}
 			summary.StoryWarnings = append(summary.StoryWarnings, warnings...)
+		}
+	}
+	// The sources the file lists are re-derived every time too (DR-0081 item 4).
+	if parsed.SourcesPresent {
+		refs, warns := ParseSourceRefs(parsed.Sources)
+		summary.SourceWarnings = append(summary.SourceWarnings, warns...)
+		summary.SourcesLinked = len(refs)
+		if !opts.DryRun {
+			doc, err := kb.DocumentByPath(path)
+			if err != nil {
+				return DocumentIngestResult{}, err
+			}
+			if doc != nil {
+				n, w, err := kb.SyncDocumentSources(doc.ID, refs)
+				if err != nil {
+					return DocumentIngestResult{}, err
+				}
+				summary.SourcesLinked = n
+				summary.SourceWarnings = append(summary.SourceWarnings, w...)
+			}
 		}
 	}
 	return summary, nil

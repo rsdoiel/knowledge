@@ -294,3 +294,50 @@ func normalizeDOI(s string) string {
 	s = strings.TrimSpace(s)
 	return doiPrefixPattern.ReplaceAllString(s, "")
 }
+
+/** UnlinkDocumentSource removes the link between a document and a source it
+ * cites. Removing a link that does not exist is ErrNotFound.
+ *
+ * Parameters:
+ *   documentID (int64) — the document's id.
+ *   sourceID   (int64) — the source's id.
+ *
+ * Returns:
+ *   error — ErrNotFound for a missing document, source or link; or on database failure.
+ *
+ * Example:
+ *   err := kb.UnlinkDocumentSource(7, 2)
+ */
+func (kb *KnowledgeBase) UnlinkDocumentSource(documentID, sourceID int64) error {
+	return kb.unlinkSource("document_sources", "document_id", "documents", "document", documentID, sourceID)
+}
+
+/** UnlinkRecordSource removes the link between a decision record and a source it
+ * cites. Removing a link that does not exist is ErrNotFound.
+ *
+ * Parameters:
+ *   recordID (int64) — the record's id.
+ *   sourceID (int64) — the source's id.
+ *
+ * Returns:
+ *   error — ErrNotFound for a missing record, source or link; or on database failure.
+ *
+ * Example:
+ *   err := kb.UnlinkRecordSource(3, 2)
+ */
+func (kb *KnowledgeBase) UnlinkRecordSource(recordID, sourceID int64) error {
+	return kb.unlinkSource("record_sources", "record_id", "records", "record", recordID, sourceID)
+}
+
+func (kb *KnowledgeBase) unlinkSource(table, ownerCol, ownerTable, ownerWhat string, ownerID, sourceID int64) error {
+	if err := kb.requireRow(ownerTable, ownerID, ownerWhat); err != nil {
+		return err
+	}
+	if err := kb.requireRow("sources", sourceID, "source"); err != nil {
+		return err
+	}
+	return kb.unlink(`DELETE FROM `+table+` WHERE `+ownerCol+` = ? AND source_id = ?`,
+		func() error {
+			return notFoundf("knowledge: %s %d is not linked to source %d", ownerWhat, ownerID, sourceID)
+		}, ownerID, sourceID)
+}

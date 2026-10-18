@@ -295,3 +295,29 @@ func (kb *KnowledgeBase) kbExec(t *testing.T, q string, args ...any) {
 		t.Fatalf("%s: %v", q, err)
 	}
 }
+
+func TestUnlinkDocumentAndRecordSource(t *testing.T) {
+	f := newCiteFixture(t)
+	f.kb.LinkDocumentSource(f.doc, f.src, "cited", "", "")
+	f.kb.LinkRecordSource(f.rec, f.src, "cited", "", "")
+	if err := f.kb.UnlinkDocumentSource(f.doc, f.src); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.kb.UnlinkRecordSource(f.rec, f.src); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := f.kb.SourceCitations(f.src); c.Total() != 0 {
+		t.Errorf("citations = %+v, want none", c)
+	}
+	for name, err := range map[string]error{
+		"no link":     f.kb.UnlinkDocumentSource(f.doc, f.src),
+		"no link rec": f.kb.UnlinkRecordSource(f.rec, f.src),
+		"no document": f.kb.UnlinkDocumentSource(f.doc+99, f.src),
+		"no record":   f.kb.UnlinkRecordSource(f.rec+99, f.src),
+		"no source":   f.kb.UnlinkDocumentSource(f.doc, f.src+99),
+	} {
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s: err = %v, want ErrNotFound", name, err)
+		}
+	}
+}

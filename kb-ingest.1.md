@@ -34,6 +34,14 @@ feature_requests, notes and hand-off. A directory given as PATH is read whatever
 it is called. (kb index, by
 contrast, takes one directory and does not descend.)
 
+A record may list the works it cites in an optional sources frontmatter key
+(DR-0081), in the same three forms as a document's: a bare DOI, an absolute
+URL, or source:ID. Ingest links them through record_sources and rebuilds the
+links on every run, an unchanged record included; a record with the key manages
+the links it made (relationship cited), and one without it manages none. A
+malformed entry is a warning, not a failure. A dry run reports the warnings and
+links nothing.
+
 Which project a record belongs to, and whether it is at the workspace tier, is
 read from the record's own "project:" frontmatter, never from where the file
 sits. A record with an empty project is workspace tier; a project name the

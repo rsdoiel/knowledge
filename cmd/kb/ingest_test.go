@@ -1171,3 +1171,106 @@ func TestCmdIngest_WikilinkAliasLinksTarget(t *testing.T) {
 		t.Errorf("RecordConcepts = %+v, want one concept the-long-fire/Anna", concepts)
 	}
 }
+
+// A record's `sources:` key links what it cites, and a document's does too
+// (DR-0081 item 4). The key is re-derived on every ingest of the file.
+func withSourcesKey(t *testing.T, path, list string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	i := strings.Index(s, "\ntags:")
+	if i < 0 {
+		t.Fatalf("no tags line in %s", s)
+	}
+	j := i + 1 + strings.Index(s[i+1:], "\n")
+	s = s[:j+1] + "sources: " + list + "\n" + s[j+1:]
+	if err := os.WriteFile(path, []byte(s), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCmdIngest_RecordSourcesKeyLinksAndRederives(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	proj := filepath.Join(root, "work")
+	path := testRecord{ID: "0001", Project: "work"}.write(t, filepath.Join(proj, "decisions"))
+	withSourcesKey(t, path, `["10.1234/sparql", "https://example.org/a", "doi:10.9/pasted"]`)
+
+	s := runIngest(t, kb, proj)
+	if s.Added != 1 || s.Failed != 0 {
+		t.Fatalf("summary = %+v", s)
+	}
+	warned := false
+	for _, w := range s.Warnings {
+		warned = warned || strings.Contains(w, "doi:10.9/pasted")
+	}
+	if !warned {
+		t.Errorf("warnings = %v, want the pasted DOI named", s.Warnings)
+	}
+	p, _ := kb.ProjectByName("work")
+	recs, _ := kb.RecordsByProject(p.ID)
+	links, err := kb.RecordSources(recs[0].ID)
+	if err != nil || len(links) != 2 {
+		t.Fatalf("record links = %+v, %v, want the two good entries", links, err)
+	}
+
+	// Run again, unchanged (skipped) with one link lost: it is rebuilt.
+	for _, l := range links {
+		if err := kb.UnlinkRecordSource(recs[0].ID, l.Source.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s = runIngest(t, kb, proj)
+	if s.Skipped != 1 {
+		t.Fatalf("summary = %+v, want the unchanged record skipped", s)
+	}
+	if links, _ := kb.RecordSources(recs[0].ID); len(links) != 2 {
+		t.Errorf("a skipped ingest did not rebuild the links: %+v", links)
+	}
+
+	// A dry run writes nothing.
+	relinked, _ := kb.RecordSources(recs[0].ID)
+	for _, l := range relinked {
+		kb.UnlinkRecordSource(recs[0].ID, l.Source.ID)
+	}
+	var out bytes.Buffer
+	if err := cmdIngest(kb, nil, true, []string{"--dry-run", proj}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if links, _ := kb.RecordSources(recs[0].ID); len(links) != 0 {
+		t.Errorf("a dry run linked sources: %+v", links)
+	}
+}
+
+func TestCmdDocument_IngestReportsSourcesLinkedAndWarnings(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	kb.AddProject("work", "")
+	path := writeDocFixture(t, root+"/docs", "s.md", "---\ntitle: S\nsources: [\"10.1/a\", \"nonsense\"]\n---\n\ntext\n")
+	var out bytes.Buffer
+	if err := cmdDocument(kb, nil, false, []string{"ingest", path, "--project", "work"}, &out); err != nil {
+		t.Fatalf("document ingest: %v", err)
+	}
+	if !strings.Contains(out.String(), "1 source linked") || !strings.Contains(out.String(), "source warning:") ||
+		!strings.Contains(out.String(), "nonsense") {
+		t.Errorf("output = %q", out.String())
+	}
+	out.Reset()
+	if err := cmdDocument(kb, nil, true, []string{"ingest", path, "--project", "work"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"sources_linked": 1`) || !strings.Contains(out.String(), `"source_warnings"`) {
+		t.Errorf("json = %s", out.String())
+	}
+}
+
+func TestHelp_DescribesTheSourcesFrontMatterKey(t *testing.T) {
+	for name, text := range map[string]string{"document": DocumentHelpText, "ingest": IngestHelpText} {
+		for _, want := range []string{"sources", "source:ID", "DR-0081"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("kb %s help does not mention %q", name, want)
+			}
+		}
+	}
+}

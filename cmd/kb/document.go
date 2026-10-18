@@ -265,6 +265,16 @@ func cmdDocumentIngest(kb *knowledge.KnowledgeBase, jsonOut bool, args []string,
 	for _, w := range summary.StoryWarnings {
 		fmt.Fprintln(out, "story warning:", w)
 	}
+	if summary.SourcesLinked > 0 {
+		noun := "sources"
+		if summary.SourcesLinked == 1 {
+			noun = "source"
+		}
+		fmt.Fprintf(out, "%d %s linked\n", summary.SourcesLinked, noun)
+	}
+	for _, w := range summary.SourceWarnings {
+		fmt.Fprintln(out, "source warning:", w)
+	}
 	return nil
 }
 

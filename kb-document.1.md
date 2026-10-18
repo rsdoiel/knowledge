@@ -80,6 +80,20 @@ the file on every ingest, a skipped one included, so running this again on the
 same paths rebuilds them after an import or merge; they are not exported,
 imported, merged or compared by check-db.
 
+Sources a document cites (DR-0081). A front matter key sources lists the works
+the document rests on: a bare DOI (10.1234/sparql), an absolute URL, or
+source:ID for a source already in the knowledge base. Ingest links each to the
+document through document_sources: an existing identifier or id is linked, and a
+DOI or URL not yet known becomes a new source titled by its identifier. The links
+are rebuilt on every ingest of the file, a skipped one included. A file with the
+key manages the links it made (relationship cited): drop an entry and its link
+goes, and sources: [] clears them; links with another relationship, made by hand,
+are kept. A file with no sources key manages none. An entry that is not one of the
+three forms (a pasted doi: or doi.org prefix is refused, as kb source add refuses
+it), or a source:ID that names no source, is reported as a source warning and
+skipped, and never fails the ingest. The summary says how many sources were
+linked. See kb-source(1) for the registry and retraction checking.
+
 Re-ingesting a changed file matches new sections to old ones by heading
 text: an unchanged section is left alone; a changed one updates its body
 and is flagged stale rather than losing its summary; a heading with no

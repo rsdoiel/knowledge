@@ -733,6 +733,13 @@ type ParsedDocument struct {
 	// understood, from front matter and from every scene's boneyard.
 	Story         StoryMeta
 	StoryWarnings []string
+
+	// Sources is the front matter's `sources:` list, as written, and
+	// SourcesPresent says the key was there at all (DR-0081 item 4): a file
+	// with the key manages the citations it makes; a file without it manages
+	// none.
+	Sources        []string
+	SourcesPresent bool
 }
 
 /** ParseDocumentFile reads path, determines its format, and segments it per
@@ -785,6 +792,7 @@ func ParseDocumentFile(path, formatOverride string) (*ParsedDocument, error) {
 		}
 		pd.Sections = segmentMarkdown(body)
 		pd.Story, pd.StoryWarnings = extractStoryFrontmatter(data)
+		pd.Sources, pd.SourcesPresent = extractSourcesFrontmatter(data)
 		for _, sec := range pd.Sections {
 			pd.StoryWarnings = append(pd.StoryWarnings, sec.StoryWarnings...)
 		}

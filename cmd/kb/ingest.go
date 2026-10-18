@@ -401,6 +401,7 @@ func (ing *ingester) upsertAll(files []string) {
 		}
 		ing.linkInitiative(rf, projectID)
 		ing.linkWikilinkTags(rf, rec.dbID)
+		ing.linkSources(rf, rec.dbID)
 
 		ing.byIdent[identityKey{rf.ProjectName, rf.Record.Scope, rf.Record.RecordID}] = rec
 		ing.order = append(ing.order, rec)
@@ -464,6 +465,32 @@ func (ing *ingester) linkInitiative(rf *knowledge.RecordFile, projectID int64) {
 		return
 	}
 	_ = ing.kb.LinkProjectConcept(projectID, conceptID)
+}
+
+// linkSources makes the record's cited sources match its `sources:` key
+// (DR-0081 item 4). A record without the key manages no citations. Like the
+// tags, it runs for an added, updated or skipped record alike, so the links are
+// rebuilt on every run; a dry run only reports what the key's entries mean.
+// Entries that are not a bare DOI, an absolute URL or source:ID, or that name no
+// source, are warned about and skipped; they never fail the ingest.
+func (ing *ingester) linkSources(rf *knowledge.RecordFile, recordDBID int64) {
+	if !rf.SourcesPresent {
+		return
+	}
+	refs, warns := knowledge.ParseSourceRefs(rf.Sources)
+	for _, w := range warns {
+		ing.summary.Warnings = append(ing.summary.Warnings, rf.Record.Path+": "+w)
+	}
+	if ing.dryRun || recordDBID == 0 {
+		return
+	}
+	_, more, err := ing.kb.SyncRecordSources(recordDBID, refs)
+	for _, w := range more {
+		ing.summary.Warnings = append(ing.summary.Warnings, rf.Record.Path+": "+w)
+	}
+	if err != nil {
+		ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf("%s: link sources: %v", rf.Record.Path, err))
+	}
 }
 
 // linkWikilinkTags resolves [[Name]] tokens in the record body and every

@@ -77,8 +77,12 @@ type recordFrontmatter struct {
 	Session      string   `yaml:"session"`
 	Decisions    []qstr   `yaml:"decisions,flow"`
 	Tags         []string `yaml:"tags,flow"`
-	UUID         qstr     `yaml:"uuid"`
-	OriginHost   qstr     `yaml:"origin_host"`
+	// Sources is the optional list of works the record cites (DR-0081): a
+	// pointer, so a record without the key renders without it and `sources: []`
+	// stays.
+	Sources    *[]string `yaml:"sources,flow,omitempty"`
+	UUID       qstr      `yaml:"uuid"`
+	OriginHost qstr      `yaml:"origin_host"`
 }
 
 // quotedFields are the frontmatter keys the format requires double-quoted.
@@ -132,6 +136,12 @@ type RecordFile struct {
 	Decisions    []string
 	Tags         []string
 	Warnings     []string
+
+	// Sources is the `sources:` list as written and SourcesPresent says the
+	// key was there at all (DR-0081): a record with the key manages the
+	// citations it makes.
+	Sources        []string
+	SourcesPresent bool
 
 	unknown []unknownField
 }
@@ -221,6 +231,10 @@ func ParseRecord(data []byte, path string) (*RecordFile, error) {
 		Decisions:    fromQstr(fm.Decisions),
 		Tags:         fm.Tags,
 	}
+	if fm.Sources != nil {
+		rf.SourcesPresent = true
+		rf.Sources = *fm.Sources
+	}
 	rf.Record.Scope = "project"
 	if rf.ProjectName == "" {
 		rf.Record.Scope = "workspace"
@@ -306,7 +320,7 @@ func knownFieldNames() map[string]bool {
 	for _, tag := range []string{
 		"id", "title", "date", "status", "kind", "trigger", "project", "phase",
 		"supersedes", "superseded_by", "relates_to", "initiative", "session",
-		"decisions", "tags", "uuid", "origin_host",
+		"decisions", "tags", "sources", "uuid", "origin_host",
 	} {
 		out[tag] = true
 	}
@@ -373,6 +387,10 @@ func RenderRecordFile(rf *RecordFile) ([]byte, error) {
 		OriginHost:   qstr(rf.Record.OriginHost),
 	}
 
+	if rf.SourcesPresent {
+		src := nonNil(rf.Sources)
+		fm.Sources = &src
+	}
 	front, err := yaml.Marshal(fm)
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: render frontmatter: %w", err)
