@@ -1814,6 +1814,10 @@ type KBSearchResult struct {
 	Status     string // a record's status; "" for other kinds
 	Passage    string // the part of an observation, record or document summary that matched, the matched words between « and »; "" when only the label matched
 	Section    string // for a record, the bold label ("Decision") of the part that matched, or "title"; "" otherwise
+
+	// HitProvenance is what supports the hit: the works its row cites, the file
+	// it came from and whether any cited work is retracted (DR-0080).
+	HitProvenance
 }
 
 /** Search performs a full-text search across observations, projects, and concepts
@@ -1912,6 +1916,9 @@ func (kb *KnowledgeBase) runSearch(term string) ([]KBSearchResult, error) {
 	rows.Close()
 	for i := range out {
 		kb.finishHit(&out[i])
+	}
+	if err := kb.fillHitProvenance(out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

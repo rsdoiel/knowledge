@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"testing"
 )
@@ -1570,7 +1571,7 @@ func TestMergeKnowledgeBases_MergedRecordSearchesLikeAnIngestedOne(t *testing.T)
 	if len(ingested) != 1 || len(afterMerge) != 1 {
 		t.Fatalf("hits: ingested %d, merged %d, want exactly 1 each", len(ingested), len(afterMerge))
 	}
-	if ingested[0] != afterMerge[0] {
+	if !reflect.DeepEqual(ingested[0], afterMerge[0]) {
 		t.Errorf("merged record searches differently from the ingested one:\n ingested: %+v\n   merged: %+v",
 			ingested[0], afterMerge[0])
 	}

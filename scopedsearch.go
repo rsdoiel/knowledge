@@ -271,6 +271,9 @@ func (kb *KnowledgeBase) runScoped(term, where string, args []any, limit int) (*
 	for i := range out.Results {
 		kb.finishHit(&out.Results[i])
 	}
+	if err := kb.fillHitProvenance(out.Results); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

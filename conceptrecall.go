@@ -248,6 +248,13 @@ func (kb *KnowledgeBase) RecallByNames(names []string, limit int, project string
 		hits = hits[:limit]
 	}
 	r.Hits = hits
+	targets := make([]provTarget, len(hits))
+	for i := range hits {
+		targets[i] = provTarget{sourceType: hits[i].SourceType, id: hits[i].ID, dst: &hits[i].HitProvenance}
+	}
+	if err := kb.fillProvenance(targets); err != nil {
+		return r, fmt.Errorf("knowledge: recall provenance: %w", err)
+	}
 
 	prows, err := kb.db.Query(`SELECT DISTINCT p.name FROM projects p
 		JOIN project_concepts x ON x.project_id = p.id

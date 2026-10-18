@@ -46,6 +46,10 @@ type ConceptMatch struct {
 	SummaryStatus string
 	MatchCount    int
 	CreatedAt     time.Time
+
+	// HitProvenance is filled by RecallByText and RecallByNames (DR-0080); the
+	// older RecallByConceptNames leaves it empty.
+	HitProvenance
 }
 
 // conceptIDsByNames resolves names to existing concept ids, case-insensitively,

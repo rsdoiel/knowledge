@@ -53,6 +53,16 @@ func (kb *KnowledgeBase) finishHit(r *KBSearchResult) {
 	r.Section = recordSection(title, body, r.Passage)
 }
 
+// fillHitProvenance sets Provenance on a page of hits in a fixed number of
+// queries (DR-0080).
+func (kb *KnowledgeBase) fillHitProvenance(hits []KBSearchResult) error {
+	targets := make([]provTarget, len(hits))
+	for i := range hits {
+		targets[i] = provTarget{sourceType: hits[i].SourceType, id: hits[i].SourceID, dst: &hits[i].HitProvenance}
+	}
+	return kb.fillProvenance(targets)
+}
+
 // recordSection names the part of a record that a passage's first marked word is
 // in: "title" when it is in the title, otherwise the last **Label.** before it,
 // or "" when it sits before any label. The index holds the title, a newline and
