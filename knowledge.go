@@ -431,6 +431,7 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 		kb.ftsAvailable = true
 		_ = kb.rebuildFTSIfNeeded()
 		kb.backfillSourceFTS()
+		kb.backfillDocumentSummaryFTS()
 	}
 	return kb, nil
 }
@@ -1726,6 +1727,32 @@ const sourceFTSSelect = `
 	       'source', id, 0
 	FROM sources`
 
+// documentSummaryFTSSelect is the row a reviewed document summary contributes to
+// kb_fts, the same shape indexDocumentSummaryFTS writes when a summary is
+// promoted. A raw section body is never indexed (design decision 8).
+const documentSummaryFTSSelect = `
+	SELECT s.summary_body, s.level,
+	       CASE WHEN s.heading != '' THEN d.title || ' — ' || s.heading ELSE d.title END,
+	       s.heading, 'document_summary', s.id, IFNULL(d.project_id, 0)
+	FROM document_sections s JOIN documents d ON d.id = s.document_id
+	WHERE s.summary_status = 'reviewed'`
+
+// backfillDocumentSummaryFTS indexes every reviewed summary when the index holds
+// fewer summary rows than there are reviewed summaries: a database made by a
+// merge, whose rebuild did not index them, or one that kb_fts lost rows of. It
+// is idempotent, as backfillSourceFTS is.
+func (kb *KnowledgeBase) backfillDocumentSummaryFTS() {
+	var nReviewed, nIndexed int
+	if kb.db.QueryRow(`SELECT COUNT(*) FROM document_sections WHERE summary_status = 'reviewed'`).Scan(&nReviewed) != nil || nReviewed == 0 {
+		return
+	}
+	if kb.db.QueryRow(`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'document_summary'`).Scan(&nIndexed) != nil || nIndexed >= nReviewed {
+		return
+	}
+	_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'document_summary'`)
+	_, _ = kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + documentSummaryFTSSelect)
+}
+
 // indexSourceFTS (re)writes one source's row in kb_fts.
 func (kb *KnowledgeBase) indexSourceFTS(id int64) {
 	if !kb.ftsAvailable {
@@ -1772,6 +1799,7 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 	// knowledge base can be exactly that.
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM records`, total).Scan(&total)
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM sources`, total).Scan(&total)
+	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM document_sections WHERE summary_status = 'reviewed'`, total).Scan(&total)
 	if total == 0 {
 		return nil
 	}
@@ -1809,6 +1837,11 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 	// its title as it finds a record.
 	if _, err := kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + sourceFTSSelect); err != nil {
 		return fmt.Errorf("fts rebuild sources: %w", err)
+	}
+	// Reviewed document summaries too: a merge writes sections straight into the
+	// merged database, and promotion is the only other thing that indexes them.
+	if _, err := kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + documentSummaryFTSSelect); err != nil {
+		return fmt.Errorf("fts rebuild document summaries: %w", err)
 	}
 	return nil
 }

@@ -23,6 +23,35 @@ Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are add
   ending `#12A#`, which is text in Markdown, once per file) and `front-matter-ignored` (front matter `event` or
   `story_time` in a file with scene ids).
 
+- **Provenance** (knowledge DR-0080 and DR-0081, with the design in `agents/projects/knowledge/design/provenance-design.md`).
+  Documents and decision records can cite sources as observations always could, a hit says what supports it, and
+  sources are searchable.
+  - **Citations.** New tables `document_sources` and `record_sources`, and `source_version` and `source_hash` on
+    `observation_sources` (which version of the work was read, and its content hash then). A document or a record
+    lists what it cites in an optional `sources:` front matter key: a bare DOI, an absolute URL, or `source:ID`.
+    Ingest links them, re-deriving the links on every ingest, a skipped one included; an entry that is none of the
+    three (a pasted `doi:` or `doi.org` prefix included) is a warning, never a failure. A file with the key manages
+    the `cited` links it made (`sources: []` clears them); one without it manages none. `kb source link` takes
+    `--document DOC_ID` or `--record REF` as well as an observation id, with `--version` and `--hash`; `kb unlink
+    source` takes `--document` and `--record`; `kb source list` and `show` say what cites each source; `kb source
+    remove` refuses a source any kind still cites. The tables travel on merge, export, import and `check-db`, which
+    now report sixteen tables. Library: `LinkDocumentSource`, `LinkRecordSource`, `LinkObservationSourceAt`,
+    `DocumentSources`, `RecordSources`, `ObservationSourceLinks`, `SourceCitations`, `UnlinkDocumentSource`,
+    `UnlinkRecordSource`, `ParseSourceRefs`, `SyncDocumentSources`, `SyncRecordSources`.
+  - **`observations.source_doi` is no longer written.** `AddObservationWithSource` (and `kb observation add
+    --source-doi`) finds or makes the source for the DOI, normalising a pasted `doi:` or `doi.org` prefix, and links
+    it; a malformed DOI writes nothing. The column is still read and exported, so older exports import.
+  - **A hit says what supports it.** `KBSearchResult` and the recall hit embed `HitProvenance`: `Sources` (each
+    cited work with its identifier, version, rights, retraction state, relationship, and the version and hash read),
+    `Material` (the file a document or record came from) and `Retracted`, filled in a fixed number of queries per
+    page. `KBSearchResult` is no longer comparable with `==`. `kb search`, `kb concept recall` and the interface end a
+    hit that cites a retracted work with `[retracted source: TITLE]`; `--json` carries `sources`, `material` and
+    `retracted`. A retraction is reported and never changes the ranking.
+  - **Sources are searchable** (amends DR-0013). `kb_fts` holds a row per source (title, authors, publisher,
+    identifier), `sources` is a search kind (`kb search /sources TERM`, `harvey/sources TERM`) scoped to the
+    sources a project's observations, documents and records cite, and a source hit lists the projects that cite
+    it. `Open` indexes the sources of an older database.
+
 ### Fixed
 
 - **A `#` line inside a fenced code block split a Markdown section.** `segmentMarkdown` now skips backtick and
@@ -31,6 +60,10 @@ Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are add
   reports the removed headings once and marks the affected summaries stale.
 - **A Markdown heading kept its closing `#` marks and any `{#id}` in its text.** The title, and the heading a
   section is matched on, are now the words alone. `C# basics`, `Why #1` and `The fire #12A#` are unchanged.
+- **A merged or imported database could not search a reviewed document summary.** The merge rebuild and the
+  import indexed observations, records and concepts but not the summaries a person had promoted, so `kb search`
+  found them on the machine that promoted them and nowhere else. Found by the provenance acceptance test. Both now
+  index them, and `Open` indexes the ones an older merged database is missing.
 - **A scene id repeated in one file (Markdown or Fountain) failed the whole ingest** on the `story_events`
   uniqueness constraint. The first scene is now the event and the rest are reported.
 

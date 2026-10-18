@@ -208,3 +208,36 @@ func TestSearchScoped_UnknownKindStaysInvalidAndSourcesJoinTheDefaultSet(t *test
 		t.Errorf("an all-kinds search leaves out sources: %v, %v", scopedSourceIDs(all), err)
 	}
 }
+
+// A merge writes sections straight into the merged database, and import never
+// ran promotion, so a reviewed document summary was not searchable there until
+// DR-0080's acceptance test found it. Open now indexes the ones an older
+// database is missing.
+func TestOpen_BackfillsReviewedDocumentSummariesTheIndexLacks(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("work", "")
+	doc, _ := kb.AddDocument(Document{ProjectID: pid, Title: "A Story", Format: "text", Path: "a.txt"})
+	sec, _ := kb.AddDocumentSection(DocumentSection{DocumentID: doc, Level: "gist"})
+	kb.DraftDocumentSummary(sec, "a distinctive summary about hedgehogs", "human", nil)
+	kb.PromoteDocumentSummary(sec)
+	path := kb.Path()
+	kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'document_summary'`)
+	kb.Close()
+	for i := 0; i < 2; i++ { // the second Open must add nothing
+		again, err := Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rs, _ := again.Search("hedgehogs")
+		n := 0
+		for _, r := range rs {
+			if r.SourceType == "document_summary" {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("Open #%d: %d summary hits, want 1", i+1, n)
+		}
+		again.Close()
+	}
+}

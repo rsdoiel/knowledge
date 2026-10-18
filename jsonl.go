@@ -1653,7 +1653,7 @@ func importDocumentSection(kb *KnowledgeBase, rec documentSectionRecord, localDo
 	if err != sql.ErrNoRows {
 		return false, err
 	}
-	_, err = kb.AddDocumentSection(DocumentSection{
+	id, err := kb.AddDocumentSection(DocumentSection{
 		DocumentID: localDocumentID, Level: rec.Level, Seq: rec.Seq, Heading: rec.Heading, Body: rec.Body,
 		SummaryBody: rec.SummaryBody, SummaryStatus: rec.SummaryStatus, SummaryStale: rec.SummaryStale,
 		SourceSize: rec.SourceSize, TagDensity: rec.TagDensity, Confidence: rec.Confidence,
@@ -1661,6 +1661,13 @@ func importDocumentSection(kb *KnowledgeBase, rec documentSectionRecord, localDo
 	})
 	if err != nil {
 		return false, err
+	}
+	// A reviewed summary is searchable (design decision 8); promotion is not
+	// run on an imported section, so it is indexed here.
+	if rec.SummaryStatus == "reviewed" && kb.ftsAvailable {
+		_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'document_summary' AND source_id = ?`, id)
+		_, _ = kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)`+
+			documentSummaryFTSSelect+` AND s.id = ?`, id)
 	}
 	return true, nil
 }
