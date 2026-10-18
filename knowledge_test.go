@@ -313,8 +313,14 @@ func TestKnowledgeBase_observationSourceDOI(t *testing.T) {
 	if got := byID[id1].SourceDOI; got != "" {
 		t.Errorf("observation %d SourceDOI = %q, want \"\"", id1, got)
 	}
-	if got := byID[id2].SourceDOI; got != doi {
-		t.Errorf("observation %d SourceDOI = %q, want %q", id2, got, doi)
+	// DR-0081 item 5: a DOI is a citation, linked through observation_sources;
+	// the old column is read but no longer written.
+	if got := byID[id2].SourceDOI; got != "" {
+		t.Errorf("observation %d SourceDOI = %q, want \"\" (no longer written)", id2, got)
+	}
+	links, err := kb.ObservationSourceLinks(id2)
+	if err != nil || len(links) != 1 || links[0].Source.IdentifierValue != "10.1234/abcd.5678" {
+		t.Errorf("observation %d links = %+v, %v, want the DOI as a linked source", id2, links, err)
 	}
 }
 

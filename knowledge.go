@@ -264,6 +264,9 @@ var kbAlterStmts = []string{
 // kbSourcesAlterStmts are lazy-migration statements for the sources table,
 // applied separately since sources doesn't exist yet when kbAlterStmts runs.
 var kbSourcesAlterStmts = []string{
+	// DR-0081: the version and content hash of the cited work, per citation.
+	`ALTER TABLE observation_sources ADD COLUMN source_version TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE observation_sources ADD COLUMN source_hash TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN uuid TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN origin_host TEXT NOT NULL DEFAULT ''`,
 }
@@ -390,6 +393,12 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 	if _, err := db.Exec(documentsSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: apply documents schema: %w", err)
+	}
+	// The citation join tables of DR-0081 need documents, records and sources
+	// to exist, so they are applied after all three.
+	if _, err := db.Exec(documentSourcesSchema + recordSourcesSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("knowledge: apply citation schema: %w", err)
 	}
 	if _, err := db.Exec(storyEventsSchema); err != nil {
 		db.Close()
@@ -944,14 +953,24 @@ func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, s
 	if strings.TrimSpace(body) == "" {
 		return 0, invalidf("knowledge: observation body must not be empty")
 	}
+	// A DOI is a citation: it is found or made as a source and linked
+	// (DR-0081 item 5), and observations.source_doi is no longer written. The
+	// source is resolved first so a malformed DOI writes nothing.
+	var sourceID int64
+	if doi := normalizeDOI(sourceDOI); doi != "" {
+		var err error
+		if sourceID, err = kb.AddSource(Source{Title: doi, IdentifierType: "doi", IdentifierValue: doi}); err != nil {
+			return 0, err
+		}
+	}
 	u, err := uuid.NewV7()
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: generate uuid: %w", err)
 	}
 	host, _ := os.Hostname()
 	res, err := kb.db.Exec(
-		`INSERT INTO observations (project_id, kind, body, source_doi, uuid, origin_host) VALUES (?, ?, ?, ?, ?, ?)`,
-		projectID, kind, body, sourceDOI, u.String(), host,
+		`INSERT INTO observations (project_id, kind, body, uuid, origin_host) VALUES (?, ?, ?, ?, ?)`,
+		projectID, kind, body, u.String(), host,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add observation: %w", err)
@@ -959,6 +978,11 @@ func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, s
 	id, err := res.LastInsertId()
 	if err != nil {
 		return 0, err
+	}
+	if sourceID != 0 {
+		if err := kb.LinkObservationSource(id, sourceID, "cited"); err != nil {
+			return 0, err
+		}
 	}
 	if kb.ftsAvailable {
 		_, _ = kb.db.Exec(
@@ -2218,14 +2242,12 @@ func (kb *KnowledgeBase) ShowSource(id int64) (*Source, error) {
  *   err := kb.RemoveSource(1) // fails if linked
  */
 func (kb *KnowledgeBase) RemoveSource(id int64) error {
-	var count int
-	if err := kb.db.QueryRow(
-		`SELECT COUNT(*) FROM observation_sources WHERE source_id = ?`, id,
-	).Scan(&count); err != nil {
+	c, err := kb.SourceCitations(id)
+	if err != nil {
 		return err
 	}
-	if count > 0 {
-		return inUsef("source %d is linked to %d observation(s); unlink first", id, count)
+	if c.Total() > 0 {
+		return inUsef("source %d is cited by %s; unlink first", id, c)
 	}
 	res, err := kb.db.Exec(`DELETE FROM sources WHERE id = ?`, id)
 	if err != nil {
@@ -2299,18 +2321,7 @@ func (kb *KnowledgeBase) RetractSource(id int64, note string) error {
  *   err := kb.LinkObservationSource(42, 1, "retrieved")
  */
 func (kb *KnowledgeBase) LinkObservationSource(observationID, sourceID int64, relationship string) error {
-	if err := kb.requireRow("observations", observationID, "observation"); err != nil {
-		return err
-	}
-	if err := kb.requireRow("sources", sourceID, "source"); err != nil {
-		return err
-	}
-	_, err := kb.db.Exec(
-		`INSERT OR IGNORE INTO observation_sources (observation_id, source_id, relationship)
-		 VALUES (?, ?, ?)`,
-		observationID, sourceID, relationship,
-	)
-	return err
+	return kb.LinkObservationSourceAt(observationID, sourceID, relationship, "", "")
 }
 
 /** ObservationSources returns all sources linked to the given observation id,

@@ -52,8 +52,13 @@ func TestCmdObservation_AddWithSourceDOI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Observations: %v", err)
 	}
-	if len(obs) != 1 || obs[0].SourceDOI != "10.1/x" {
-		t.Errorf("obs = %+v, want one observation with SourceDOI=10.1/x", obs)
+	// DR-0081 item 5: the DOI becomes a linked source, not the old column.
+	if len(obs) != 1 || obs[0].SourceDOI != "" {
+		t.Fatalf("obs = %+v, want one observation with the legacy SourceDOI left empty", obs)
+	}
+	links, err := kb.ObservationSourceLinks(obs[0].ID)
+	if err != nil || len(links) != 1 || links[0].Source.IdentifierValue != "10.1/x" {
+		t.Errorf("links = %+v, %v, want the DOI as a linked source", links, err)
 	}
 }
 
