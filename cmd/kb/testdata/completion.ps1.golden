@@ -16,7 +16,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
         }
     }
     function Get-KbSearchScopes {
-        $kinds = @('records', 'observations', 'concepts', 'documents', 'projects')
+        $kinds = @('records', 'observations', 'concepts', 'documents', 'sources', 'projects')
         foreach ($p in @('', 'workspace') + @(Get-KbProjects)) {
             "$p/"
             # projects is searched at the global scope only (DR-0073).

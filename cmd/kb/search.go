@@ -150,9 +150,14 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 	var hits []scopedHit
 	for _, r := range res.Results {
 		h := scopedHit{Kind: r.Kind, Ref: r.Ref, Label: r.Label, Snippet: r.Snippet, Status: r.Status, Passage: r.Passage,
-			Section: r.Section, Type: r.SourceType, ID: r.SourceID, ProjectID: r.ProjectID, Projects: res.Spans[r.SourceID]}
-		if r.SourceType != "concept" {
-			h.Projects = nil
+			Section: r.Section, Type: r.SourceType, ID: r.SourceID, ProjectID: r.ProjectID}
+		// A concept and a source span projects: the ones whose context holds
+		// the concept, the ones whose rows cite the source.
+		switch r.SourceType {
+		case "concept":
+			h.Projects = res.Spans[r.SourceID]
+		case "source":
+			h.Projects = res.SourceSpans[r.SourceID]
 		}
 		hits = append(hits, h)
 	}
@@ -178,7 +183,7 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 		noun = "match"
 	}
 	fmt.Fprintf(out, "%s: %d %s — %s\n", scopeName, res.Total, noun, strings.Join(parts, " · "))
-	typeOf := map[string]string{"records": "record", "observations": "observation", "concepts": "concept", "documents": "document_summary", "projects": "project"}
+	typeOf := map[string]string{"records": "record", "observations": "observation", "concepts": "concept", "documents": "document_summary", "sources": "source", "projects": "project"}
 	for _, k := range searchKindOrder {
 		if res.Counts[k] == 0 {
 			continue

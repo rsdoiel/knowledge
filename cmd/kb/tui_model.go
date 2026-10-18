@@ -1205,6 +1205,9 @@ func (m *tuiModel) runSearchLine(line string) error {
 		if r.SourceType == "concept" {
 			it.spans = res.Spans[r.SourceID]
 		}
+		if r.SourceType == "source" {
+			it.spans = res.SourceSpans[r.SourceID]
+		}
 		items[i] = it
 	}
 	noun := "matches"

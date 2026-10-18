@@ -161,7 +161,7 @@ func TestSearchScope_UsageErrorsAreExit2(t *testing.T) {
 	w := newScopedWorld(t)
 	for name, args := range map[string][]string{
 		"unknown project":      {"nosuch/", "cache"},
-		"unknown kind":         {"alpha/sources", "cache"},
+		"unknown kind":         {"alpha/papers", "cache"},
 		"scope with no query":  {"alpha/records"},
 		"slash alone":          {"/"},
 		"a path-like term":     {"cmd/kb"},
@@ -273,5 +273,59 @@ func TestSearchScope_ErrNoMembersIsClassifiedNegative(t *testing.T) {
 	}
 	if c := exitCodeFor(err); c.Code != 1 {
 		t.Errorf("exit %d (%s), want 1: a classified negative, not 70", c.Code, c.Name)
+	}
+}
+
+// Sources are a search kind (DR-0080 item 3): grouped under "sources", with the
+// projects that cite them, as a concept shows the projects it spans.
+func TestSearchScope_SourcesKind(t *testing.T) {
+	w := newScopedWorld(t)
+	sid, _ := w.kb.AddSource(knowledge.Source{Title: "A cache design paper", IdentifierType: "doi", IdentifierValue: "10.1/cache"})
+	obs, _ := w.kb.AddObservation(w.alpha, "note", "cites the cache paper")
+	if err := w.kb.LinkObservationSource(obs, sid, "cited"); err != nil {
+		t.Fatal(err)
+	}
+	w.kb.AddSource(knowledge.Source{Title: "A cache paper nobody cites"})
+
+	out, err := w.search(t, false, "/sources", "cache")
+	if err != nil {
+		t.Fatalf("search /sources: %v", err)
+	}
+	if !strings.Contains(out, "sources (2)") || !strings.Contains(out, "A cache design paper") || !strings.Contains(out, "[alpha]") {
+		t.Errorf("global sources output:\n%s", out)
+	}
+	out, err = w.search(t, false, "alpha/sources", "cache")
+	if err != nil {
+		t.Fatalf("search alpha/sources: %v", err)
+	}
+	if !strings.Contains(out, "sources (1)") || strings.Contains(out, "nobody cites") {
+		t.Errorf("alpha sources output:\n%s", out)
+	}
+	js, err := w.search(t, true, "/sources", "cache")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Counts  map[string]int
+		Results []struct {
+			Type     string   `json:"source_type"`
+			ID       int64    `json:"source_id"`
+			Projects []string `json:"projects"`
+		}
+	}
+	if err := json.Unmarshal([]byte(js), &doc); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range doc.Results {
+		if r.Type == "source" && r.ID == sid {
+			found = true
+			if len(r.Projects) != 1 || r.Projects[0] != "alpha" {
+				t.Errorf("source projects = %v, want [alpha]", r.Projects)
+			}
+		}
+	}
+	if !found || doc.Counts["sources"] != 2 {
+		t.Errorf("json: counts %v, found %v", doc.Counts, found)
 	}
 }

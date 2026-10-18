@@ -430,6 +430,7 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 	if _, err := db.Exec(ftsSchema); err == nil {
 		kb.ftsAvailable = true
 		_ = kb.rebuildFTSIfNeeded()
+		kb.backfillSourceFTS()
 	}
 	return kb, nil
 }
@@ -1713,6 +1714,44 @@ func IsValidKind(kind string) bool {
 
 // ─── FTS5 helpers ─────────────────────────────────────────────────────────────
 
+// sourceFTSSelect is the row a source contributes to kb_fts (DR-0080 item 2):
+// its title, authors, publisher and identifier are the searchable text, the
+// label is the title, and the description is the identifier or the publisher.
+// A source belongs to no one project, so its project id is 0. Retraction is not
+// text and is not indexed; a hit reports it from the sources table instead.
+const sourceFTSSelect = `
+	SELECT title || char(10) || authors || char(10) || publisher || char(10) || identifier_value,
+	       'source', title,
+	       CASE WHEN identifier_value != '' THEN identifier_type || ':' || identifier_value ELSE publisher END,
+	       'source', id, 0
+	FROM sources`
+
+// indexSourceFTS (re)writes one source's row in kb_fts.
+func (kb *KnowledgeBase) indexSourceFTS(id int64) {
+	if !kb.ftsAvailable {
+		return
+	}
+	_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'source' AND source_id = ?`, id)
+	_, _ = kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)`+
+		sourceFTSSelect+` WHERE id = ?`, id)
+}
+
+// backfillSourceFTS indexes every source when the index holds fewer source rows
+// than the table holds sources: a database made before sources were searchable,
+// or one that kb_fts lost rows of. The rows are written afresh, so it is
+// idempotent.
+func (kb *KnowledgeBase) backfillSourceFTS() {
+	var nSources, nIndexed int
+	if kb.db.QueryRow(`SELECT COUNT(*) FROM sources`).Scan(&nSources) != nil || nSources == 0 {
+		return
+	}
+	if kb.db.QueryRow(`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'source'`).Scan(&nIndexed) != nil || nIndexed >= nSources {
+		return
+	}
+	_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'source'`)
+	_, _ = kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + sourceFTSSelect)
+}
+
 // rebuildFTSIfNeeded populates kb_fts from the source tables when the FTS
 // index is empty but the source tables contain data. This handles databases
 // created before FTS5 support was added.
@@ -1732,6 +1771,7 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 	// database holding only records still triggers the rebuild. A merged
 	// knowledge base can be exactly that.
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM records`, total).Scan(&total)
+	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM sources`, total).Scan(&total)
 	if total == 0 {
 		return nil
 	}
@@ -1764,9 +1804,12 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 		FROM records`); err != nil {
 		return fmt.Errorf("fts rebuild records: %w", err)
 	}
-	// sources is deliberately absent, not overlooked: DR-0013 left it out as
-	// a pre-existing gap unrelated to records, so that what a source's
-	// searchable text should be stays its own decision.
+	// Sources are indexed too (DR-0080, amending DR-0013, which had left them
+	// out as a gap unrelated to records): a merged database finds a source by
+	// its title as it finds a record.
+	if _, err := kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + sourceFTSSelect); err != nil {
+		return fmt.Errorf("fts rebuild sources: %w", err)
+	}
 	return nil
 }
 
@@ -2172,7 +2215,12 @@ func (kb *KnowledgeBase) AddSource(s Source) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	kb.indexSourceFTS(id)
+	return id, nil
 }
 
 /** ListSources returns all rows in the sources table, ordered by id.
@@ -2262,6 +2310,9 @@ func (kb *KnowledgeBase) RemoveSource(id int64) error {
 	}
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
 		return notFoundf("source %d not found", id)
+	}
+	if kb.ftsAvailable {
+		_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'source' AND source_id = ?`, id)
 	}
 	return nil
 }

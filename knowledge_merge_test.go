@@ -1577,24 +1577,27 @@ func TestMergeKnowledgeBases_MergedRecordSearchesLikeAnIngestedOne(t *testing.T)
 	}
 }
 
-// DR-0013 left sources out of the rebuild deliberately. Asserting the absence
-// keeps that a decision rather than something the next change quietly undoes.
-func TestMergeKnowledgeBases_SourcesStayOutOfFTS(t *testing.T) {
+// DR-0080 reverses DR-0013 here: sources are indexed in kb_fts, so a merged
+// database finds a source by its title as it finds a record.
+func TestMergeKnowledgeBases_SourcesAreIndexed(t *testing.T) {
 	a := openTestKB(t)
 	b := openTestKB(t)
 	if _, err := a.AddSource(Source{Title: "A paper about streaming"}); err != nil {
 		t.Fatalf("AddSource: %v", err)
 	}
+	if _, err := b.AddSource(Source{Title: "A page about marmalade"}); err != nil {
+		t.Fatalf("AddSource: %v", err)
+	}
 
 	merged := openMergedTestKB(t, a, b)
-	var n int
-	if err := merged.db.QueryRow(
-		`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'source'`,
-	).Scan(&n); err != nil {
-		t.Fatalf("count source rows: %v", err)
-	}
-	if n != 0 {
-		t.Errorf("kb_fts holds %d source rows; sources are deliberately not indexed (DR-0013)", n)
+	for _, term := range []string{"streaming", "marmalade"} {
+		rs, err := merged.Search(term)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sourceHits(rs)) != 1 {
+			t.Errorf("merged Search(%q) source hits = %+v, want the one source", term, rs)
+		}
 	}
 }
 

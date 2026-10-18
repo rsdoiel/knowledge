@@ -21,8 +21,9 @@ kb format [--project NAME]
 # DESCRIPTION
 
 search
-: full-text search across observations, records, projects, concepts and
-  documents' reviewed summaries using the FTS5 index. TERM uses standard FTS5
+: full-text search across observations, records, projects, concepts, sources
+  (title, authors, publisher and identifier) and documents' reviewed summaries
+  using the FTS5 index. TERM uses standard FTS5
   query syntax: multiple words are ANDed, "quoted phrases" match exactly,
   prefix* matches by prefix. A first word that starts with a dash is read as
   a mistyped option and refused (exit 2); give a dash-leading term after --,
@@ -33,7 +34,10 @@ search
   name, workspace (the workspace tier only, as for records), the workspace
   directory's own name as an alias for workspace (a project of that name
   wins), or nothing, which means everywhere. KIND is one of records,
-  observations, concepts, documents and projects, or nothing for every kind.
+  observations, concepts, documents, sources and projects, or nothing for every
+  kind. A project's sources are those its observations, documents and records
+  cite; the workspace tier's are those cited by workspace-tier records and by
+  documents with no project.
 
       kb search "exit codes"              every kind, everywhere
       kb search harvey/ "exit codes"      one project, every kind
@@ -48,7 +52,7 @@ search
 
   A scoped search prints its matches grouped by kind with counts. A record
   is named by its qualified reference (harvey/DR-0004), and a concept shows
-  the projects it is in. At most 50 rows are printed; the line "showing 50 of
+  the projects it is in, and a source the projects that cite it. At most 50 rows are printed; the line "showing 50 of
   N" says when more matched. With the global -json option it prints one
   object: scope, term, total, counts and results.
 

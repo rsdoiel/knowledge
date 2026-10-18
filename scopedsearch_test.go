@@ -176,8 +176,8 @@ func TestSearchScoped_UnknownProjectAndKind(t *testing.T) {
 	if _, err := f.kb.SearchScoped("cache", SearchScope{Project: "nope"}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown project: err = %v, want ErrNotFound", err)
 	}
-	if _, err := f.kb.SearchScoped("cache", SearchScope{Kinds: []string{"sources"}}); !errors.Is(err, ErrInvalid) {
-		t.Errorf("sources is not a kind yet: err = %v, want ErrInvalid", err)
+	if _, err := f.kb.SearchScoped("cache", SearchScope{Kinds: []string{"papers"}}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("an unknown kind (sources became one in DR-0080): err = %v, want ErrInvalid", err)
 	}
 	if _, err := f.kb.SearchScoped("cache", SearchScope{Project: "alpha", Workspace: true}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("project and workspace together: err = %v, want ErrInvalid", err)

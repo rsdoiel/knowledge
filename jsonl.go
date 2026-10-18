@@ -1542,6 +1542,9 @@ func importSource(kb *KnowledgeBase, rec sourceRecord) (localID int64, isNew boo
 		return 0, false, err
 	}
 	localID, err = res.LastInsertId()
+	if err == nil {
+		kb.indexSourceFTS(localID)
+	}
 	return localID, true, err
 }
 
