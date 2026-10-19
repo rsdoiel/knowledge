@@ -3,9 +3,9 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## v0.0.25 — unreleased
+## v0.0.25 — 2026-10-19
 
-Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are added as each task lands.
+Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`.
 
 ### Added
 
