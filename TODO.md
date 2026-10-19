@@ -70,7 +70,7 @@
   for v0.0.24. Wikilink alias, story front matter and Fountain boneyards, concept kinds, `story_events`,
   `kb story timeline` and `check`, and the library surface tested from outside the package (DR-0078 and
   DR-0079 settled the open questions). Plan: `agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md`.
-  Still open from it, none for v0.0.24: `kb story who-knows`, beats and compile (DR-0075 items 9 and 11), the
+  Still open from it, none for v0.0.24 (`who-knows` and the two check kinds were built for v0.0.25, DR-0083): beats and compile (DR-0075 items 9 and 11), the
   two `check` kinds that need `who-knows` and provenance ("knowledge before it is learned", "a source dated
   after the event it describes"), `kb story` in the interface, a `story` and a concept-kind line in the three
   skills, and multi-scene Markdown files (a scene syntax inside one Markdown file).

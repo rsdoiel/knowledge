@@ -23,6 +23,23 @@ Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are add
   ending `#12A#`, which is text in Markdown, once per file) and `front-matter-ignored` (front matter `event` or
   `story_time` in a file with scene ids).
 
+- **What characters learn and know** (DR-0083, partly superseding DR-0075 item 9). Two story keys, `learns` and `knows`,
+  each a list of `"Character: fact"`: `learns` says the character finds the fact out in this scene, `knows` that the
+  character already knew it and the scene relies on it. In front matter they are YAML lists; in a Fountain boneyard or
+  a Markdown story comment the key repeats once per fact, so a fact may hold a comma. A fact is the same fact whatever
+  its case or spacing. A derived table `story_knowledge` holds them with each event; like `story_events` it does not
+  travel on export, import, merge or `check-db` and is rebuilt by ingest. In a Markdown file with scene ids the front
+  matter `learns` and `knows` are ignored (warned), as `event` and `story_time` are.
+  - `kb story who-knows CHARACTER [SCENE] --project P`: what the character learns, in story order, up to and including
+    a scene (a scene number or an event label). Facts learned only in scenes whose order against SCENE is not
+    established are listed apart, never guessed. `kb story who-learns FACT --project P`: who learns a fact, and where.
+    The scene is positional (DR-0075 had `--at`). Library: `WhoKnows`, `WhoLearns`, `KnownFact`, `WhoKnowsResult`,
+    `Learner`, `ErrAmbiguousScene`, `ParseKnowledgeItem`, `FactKey`.
+  - Three advisory `kb story check` kinds: `knowledge-before-learned` (a knows whose every learning scene is later; a
+    knows with no learns is backstory), `unknown-fact` (two facts of at least 12 characters one edit apart) and
+    `late-source` (a source cited with the relationship `evidence`, published after the end of an event in the
+    document; make one with `kb source link --document ID SOURCE_ID --relationship evidence`).
+
 - **Provenance** (knowledge DR-0080 and DR-0081, with the design in `agents/projects/knowledge/design/provenance-design.md`).
   Documents and decision records can cite sources as observations always could, a hit says what supports it, and
   sources are searchable.
