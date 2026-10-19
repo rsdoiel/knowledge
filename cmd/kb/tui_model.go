@@ -1049,6 +1049,8 @@ func (m *tuiModel) contextSearchScope() string {
 			return "/concepts"
 		case "document":
 			return "/documents"
+		case "source":
+			return "/sources"
 		}
 	case viewRecordScope:
 		return "/records"

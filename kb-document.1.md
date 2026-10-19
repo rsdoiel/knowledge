@@ -123,6 +123,14 @@ ingest
   it is also off with `--dry-run`, with the global `--json`, and whenever
   standard input or output is not a terminal, and nothing makes it appear in
   those cases. A file whose frontmatter block has a title is never offered one.
+  There is no directory form: ingest takes one file, and kb ingest is for
+  decision records and skips dated notes. To bring a directory of notes in, loop
+  over its files, and each one that lacks a title is offered the editor in turn
+  (q skips the editor for that file, which is still ingested):
+
+      for f in notes/*.md; do kb document ingest "$f" --project P; done
+
+  Add --no-prompt to ingest them all without being asked.
 
 list
 : print matching documents, one per line

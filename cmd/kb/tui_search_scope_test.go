@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	knowledge "github.com/rsdoiel/knowledge"
 )
 
 // The Search group, the scoped prompt and the S key (knowledge DR-0073, DR-0074,
@@ -185,5 +187,22 @@ func TestDeepLink_BareSearchOpensTheSearchMenuOnATerminal(t *testing.T) {
 	_, open, _ = deepLink([]string{"search", "harvey/records", "exit"}, false, true)
 	if open {
 		t.Errorf("a complete command runs as a command")
+	}
+}
+
+// sources became a search kind in v0.0.25 (DR-0080), so S on the sources list
+// is scoped to them like the concepts and documents lists.
+func TestSearchKey_InTheSourcesBrowseListTheScopeIsSources(t *testing.T) {
+	m, _, kb := layoutModel(t)
+	if _, err := kb.AddSource(knowledge.Source{Title: "A Later History", PublishedDate: "1975"}); err != nil {
+		t.Fatal(err)
+	}
+	m = openLeaf(t, m, "Sources", "Browse")
+	m, _ = press(t, m, ch('S'))
+	if !m.searching {
+		t.Fatalf("S should open the prompt\n%s", m.View())
+	}
+	if v := m.View(); !strings.Contains(v, "/sources") {
+		t.Errorf("the prompt should be scoped to the kind, /sources:\n%s", v)
 	}
 }

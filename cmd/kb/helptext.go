@@ -107,7 +107,8 @@ no term, or with only a scope, opens this menu or this prompt on a terminal.
 
 Keys: the arrow keys or j and k move; Enter opens; / filters the list in front of
 you as you type (Enter keeps the filter, Esc clears it); S searches, with the
-scope of the screen you are on (a project's tabs search that project); o, c and r switch
+scope of the screen you are on (a project's tabs search that project, a Browse list
+its kind: concepts, documents or sources); o, c and r switch
 a project's tabs. q goes back to the screen above (the project list to the
 Projects menu, a group menu to the top menu) and quits at the top menu. Esc
 cancels something in progress, such as a search being typed, and does nothing
@@ -578,6 +579,14 @@ ingest
   it is also off with ` + "`--dry-run`" + `, with the global ` + "`--json`" + `, and whenever
   standard input or output is not a terminal, and nothing makes it appear in
   those cases. A file whose frontmatter block has a title is never offered one.
+  There is no directory form: ingest takes one file, and {app_name} ingest is for
+  decision records and skips dated notes. To bring a directory of notes in, loop
+  over its files, and each one that lacks a title is offered the editor in turn
+  (q skips the editor for that file, which is still ingested):
+
+      for f in notes/*.md; do {app_name} document ingest "$f" --project P; done
+
+  Add --no-prompt to ingest them all without being asked.
 
 list
 : print matching documents, one per line

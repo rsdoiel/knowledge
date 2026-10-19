@@ -418,3 +418,15 @@ func TestCmdStory_CheckReportsAKnowledgeProblemAndStrictGatesIt(t *testing.T) {
 		t.Error("--strict with a knowledge finding must fail")
 	}
 }
+
+// There is no directory form of `document ingest`; the manual shows the loop that
+// brings a directory of notes in, with the editor offered file by file (T6).
+func TestHelp_DocumentIngestShowsTheLoopForADirectoryOfNotes(t *testing.T) {
+	text := strings.Join(strings.Fields(DocumentHelpText), " ")
+	for _, want := range []string{"There is no directory form", `for f in notes/*.md; do {app_name} document ingest "$f" --project P; done`,
+		"--no-prompt", "decision records", "S searches, with the scope of the screen you are on"} {
+		if !strings.Contains(text, want) && !strings.Contains(strings.Join(strings.Fields(HelpText), " "), want) {
+			t.Errorf("the help does not say %q", want)
+		}
+	}
+}
