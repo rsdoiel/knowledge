@@ -27,7 +27,8 @@ records cite.
 
 A concept line carries its "kind" (character, place, theme or other).
 
-Story events (story_events, DR-0075) are not exported: they are derived from
+Story events (story_events, DR-0075) and the story knowledge kept with them
+(story_knowledge, DR-0083) are not exported: they are derived from
 the manuscript files by kb-document(1) ingest and are rebuilt there.
 
 A -project export carries only that project's decision records — a

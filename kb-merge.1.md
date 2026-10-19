@@ -21,7 +21,8 @@ record relations, plus the join tables, among them the citation tables
 document_sources and record_sources (DR-0081) — so a table that would lose
 rows says so in the per-table summary rather than merging quietly short.
 A concept's kind (DR-0078) travels with it and follows the same
-last-writer-wins rule as its description. Story events do not travel: they are
+last-writer-wins rule as its description. Story events and the story knowledge
+(learns and knows) kept with them do not travel: they are
 derived from manuscript files, so the merged database has none until
 kb document ingest is run on the same paths.
 Each side is copied to a scratch file and brought up to the current schema

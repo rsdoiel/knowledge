@@ -404,6 +404,10 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: apply story_events schema: %w", err)
 	}
+	if _, err := db.Exec(storyKnowledgeSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("knowledge: apply story_knowledge schema: %w", err)
+	}
 	// One-time data migration: promote existing source_doi values into the
 	// sources authority table and link them via observation_sources.
 	_, _ = db.Exec(`

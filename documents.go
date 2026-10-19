@@ -805,6 +805,14 @@ func ParseDocumentFile(path, formatOverride string) (*ParsedDocument, error) {
 			if pd.Story.StoryTime != "" {
 				pd.StoryWarnings = append(pd.StoryWarnings, "front matter story_time is ignored: the file has scene ids, and each scene carries its own")
 			}
+			// What a character learns or already knows belongs to one scene
+			// (DR-0083 item 1, read narrowly as for event and story_time).
+			if len(pd.Story.Learns) > 0 {
+				pd.StoryWarnings = append(pd.StoryWarnings, "front matter learns is ignored: the file has scene ids, and each scene states its own")
+			}
+			if len(pd.Story.Knows) > 0 {
+				pd.StoryWarnings = append(pd.StoryWarnings, "front matter knows is ignored: the file has scene ids, and each scene states its own")
+			}
 		}
 	case "fountain":
 		sections, titlePage, err := segmentFountain(data)

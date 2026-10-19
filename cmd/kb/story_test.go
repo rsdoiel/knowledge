@@ -220,3 +220,24 @@ func TestHelp_NamesTheCitationTables(t *testing.T) {
 		}
 	}
 }
+
+func TestHelp_DescribesLearnsAndKnowsAndTheirPortability(t *testing.T) {
+	for name, c := range map[string]struct {
+		text string
+		want []string
+	}{
+		"document": {DocumentHelpText, []string{"learns", "knows", "the key repeats", "Character: fact"}},
+		"story":    {StoryHelpText, []string{"learns", "knows"}},
+		"export":   {ExportHelpText, []string{"story_knowledge"}},
+		"import":   {ImportHelpText, []string{"story knowledge are not imported"}},
+		"merge":    {MergeHelpText, []string{"story knowledge"}},
+		"check-db": {CheckDBHelpText, []string{"story knowledge (DR-0083) are not compared"}},
+	} {
+		text := strings.Join(strings.Fields(c.text), " ")
+		for _, w := range c.want {
+			if !strings.Contains(text, w) {
+				t.Errorf("kb %s help does not mention %q", name, w)
+			}
+		}
+	}
+}

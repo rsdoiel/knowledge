@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // storyEventsSchema creates story_events (DR-0075, DR-0079). It is derived
@@ -40,6 +41,22 @@ CREATE TABLE IF NOT EXISTS story_events (
     UNIQUE (document_id, scene_id)
 );
 CREATE INDEX IF NOT EXISTS idx_story_events_project ON story_events(project_id, label);
+`
+
+// storyKnowledgeSchema creates story_knowledge (DR-0083 item 4): what a scene
+// says a character learns or already knows. Like story_events it is derived
+// from manuscript files by ingest and does not travel; it goes with its event.
+const storyKnowledgeSchema = `
+CREATE TABLE IF NOT EXISTS story_knowledge (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id  INTEGER NOT NULL REFERENCES story_events(id) ON DELETE CASCADE,
+    character TEXT NOT NULL,
+    fact      TEXT NOT NULL,
+    fact_key  TEXT NOT NULL,
+    how       TEXT NOT NULL CHECK (how IN ('learns', 'knows'))
+);
+CREATE INDEX IF NOT EXISTS idx_story_knowledge_key ON story_knowledge(fact_key);
+CREATE INDEX IF NOT EXISTS idx_story_knowledge_event ON story_knowledge(event_id);
 `
 
 /** StoryEvent is one row of story_events: a scene, or a prose scene file, placed
@@ -243,7 +260,7 @@ func (kb *KnowledgeBase) replaceStoryEvents(projectID, documentID int64, drafts 
 		if id, ok := sectionByHeading[d.heading]; ok {
 			sectionID = id
 		}
-		if _, err := tx.Exec(
+		res, err := tx.Exec(
 			`INSERT INTO story_events (project_id, document_id, section_id, scene_id, label, story_time, relation,
 			     anchor_label, anchor_offset, start_at, end_at, precision, state, note, place, pov, status,
 			     characters, foreshadows, pays_off, precedes, seq)
@@ -251,8 +268,16 @@ func (kb *KnowledgeBase) replaceStoryEvents(projectID, documentID int64, drafts 
 			projectID, documentID, sectionID, d.sceneID, d.label, d.meta.StoryTime, t.Relation,
 			t.Anchor, t.Offset, t.Start, t.End, t.Precision, state, note, d.meta.Place, d.meta.POV, d.meta.Status,
 			jsonList(d.meta.Characters), jsonList(d.meta.Foreshadows), jsonList(d.meta.PaysOff), jsonList(d.meta.Precedes), d.seq,
-		); err != nil {
+		)
+		if err != nil {
 			return nil, fmt.Errorf("knowledge: write story events: %w", err)
+		}
+		eventID, err := res.LastInsertId()
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: write story events: %w", err)
+		}
+		if err := insertStoryKnowledge(tx, eventID, d.meta); err != nil {
+			return nil, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -407,6 +432,37 @@ func (kb *KnowledgeBase) resolveStoryEvents(projectID int64) error {
 			anchorID, e.Time.Start, e.Time.End, e.Time.Precision, e.State, e.Note, e.ID,
 		); err != nil {
 			return fmt.Errorf("knowledge: resolve story events: %w", err)
+		}
+	}
+	return nil
+}
+
+// insertStoryKnowledge writes one event's learns and knows rows (DR-0083). A
+// learns repeated by the same character for the same fact keeps the first and
+// says nothing (item 6); a knows is never folded into a learns.
+func insertStoryKnowledge(tx *sql.Tx, eventID int64, m StoryMeta) error {
+	seen := map[string]bool{}
+	for _, group := range []struct {
+		how   string
+		items []string
+	}{{"learns", m.Learns}, {"knows", m.Knows}} {
+		for _, item := range group.items {
+			who, fact, ok := ParseKnowledgeItem(item)
+			if !ok {
+				continue
+			}
+			key := FactKey(fact)
+			dup := group.how + "\x00" + strings.ToLower(who) + "\x00" + key
+			if seen[dup] {
+				continue
+			}
+			seen[dup] = true
+			if _, err := tx.Exec(
+				`INSERT INTO story_knowledge (event_id, character, fact, fact_key, how) VALUES (?, ?, ?, ?, ?)`,
+				eventID, who, fact, key, group.how,
+			); err != nil {
+				return fmt.Errorf("knowledge: write story knowledge: %w", err)
+			}
 		}
 	}
 	return nil

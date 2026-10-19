@@ -20,7 +20,7 @@ those files: a Fountain scene with a scene number (INT. KITCHEN - DAY #12A#),
 a Markdown heading with a scene id (## The fire {#12A}, or id=12A in a story
 comment under it; see kb-document(1)), or a file whose front matter has a
 narrative key (event, story_time, pov, characters, foreshadows, pays_off,
-precedes). Both verbs only read, and both
+precedes, learns, knows). Both verbs only read, and both
 need --project.
 
 timeline
@@ -56,7 +56,7 @@ check
   scene-comment-syntax (an unknown key, or a word with no "=", in a story
   comment), fountain-style-heading (a heading ending #12A#, which is text and
   not an id; reported once per file) and front-matter-ignored (an event or
-  story_time in front matter, ignored because the file has scene ids). The report is advice: the
+  story_time, learns or knows in front matter, ignored because the file has scene ids). The report is advice: the
   exit status is 0 however many findings there are. With --strict it is 1 when
   there are any. --json gives a list of kind, document and message.
 

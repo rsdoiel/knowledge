@@ -30,7 +30,8 @@ links (observation_sources, document_sources and record_sources also compare the
 cited version and hash). The report lists rows only in the JSONL, rows only in this database, and
 rows on both sides that differ (a project's description or status, a concept's
 description, identifier or kind, an observation's kind or body, a record's checksum,
-and so on), with per-table counts. Story events (DR-0075) are not compared:
+and so on), with per-table counts. Story events (DR-0075) and story
+knowledge (DR-0083) are not compared:
 they are derived from the manuscript files, are not in the JSONL, and are
 rebuilt by kb document ingest.
 

@@ -28,6 +28,8 @@ type StoryMeta struct {
 	Foreshadows []string
 	PaysOff     []string
 	Precedes    []string
+	Learns      []string
+	Knows       []string
 }
 
 /** IsZero reports whether no story field is set.
@@ -40,7 +42,8 @@ type StoryMeta struct {
  */
 func (m StoryMeta) IsZero() bool {
 	return m.Event == "" && m.StoryTime == "" && m.Place == "" && m.POV == "" && m.Status == "" &&
-		len(m.Characters) == 0 && len(m.Foreshadows) == 0 && len(m.PaysOff) == 0 && len(m.Precedes) == 0
+		len(m.Characters) == 0 && len(m.Foreshadows) == 0 && len(m.PaysOff) == 0 && len(m.Precedes) == 0 &&
+		len(m.Learns) == 0 && len(m.Knows) == 0
 }
 
 // isNarrative reports whether m carries a key that only a story would have.
@@ -48,7 +51,8 @@ func (m StoryMeta) IsZero() bool {
 // a file an event (DR-0079 item 4).
 func (m StoryMeta) isNarrative() bool {
 	return m.Event != "" || m.StoryTime != "" || m.POV != "" || len(m.Characters) > 0 ||
-		len(m.Foreshadows) > 0 || len(m.PaysOff) > 0 || len(m.Precedes) > 0
+		len(m.Foreshadows) > 0 || len(m.PaysOff) > 0 || len(m.Precedes) > 0 ||
+		len(m.Learns) > 0 || len(m.Knows) > 0
 }
 
 // yamlList decodes a YAML sequence, or a single scalar as a one-item list,
@@ -86,6 +90,8 @@ type storyFrontmatter struct {
 	Foreshadows yamlList `yaml:"foreshadows"`
 	PaysOff     yamlList `yaml:"pays_off"`
 	Precedes    yamlList `yaml:"precedes"`
+	Learns      yamlList `yaml:"learns"`
+	Knows       yamlList `yaml:"knows"`
 }
 
 // extractStoryFrontmatter reads the story keys from a document's leading
@@ -101,13 +107,16 @@ func extractStoryFrontmatter(data []byte) (StoryMeta, []string) {
 	if err := yaml.Unmarshal([]byte(front), &fm); err != nil {
 		return StoryMeta{}, []string{fmt.Sprintf("story front matter: %v", err)}
 	}
+	learns, learnWarns := cleanKnowledgeItems("story front matter", "learns", fm.Learns)
+	knows, knowWarns := cleanKnowledgeItems("story front matter", "knows", fm.Knows)
 	return StoryMeta{
 		Event:     strings.TrimSpace(fm.Event),
 		StoryTime: strings.TrimSpace(fm.StoryTime), Place: strings.TrimSpace(fm.Place),
 		POV: strings.TrimSpace(fm.POV), Status: strings.TrimSpace(fm.Status),
 		Characters: fm.Characters, Foreshadows: fm.Foreshadows,
 		PaysOff: fm.PaysOff, Precedes: fm.Precedes,
-	}, nil
+		Learns: learns, Knows: knows,
+	}, append(learnWarns, knowWarns...)
 }
 
 /** ParseStoryBoneyard reads a Fountain boneyard element as story metadata
@@ -218,11 +227,74 @@ func parseStoryPairs(text, label string, allowID bool) (meta StoryMeta, id strin
 			meta.PaysOff = splitStoryList(val)
 		case "precedes":
 			meta.Precedes = splitStoryList(val)
+		case "learns", "knows":
+			// These two keys repeat, once per fact, because a fact may hold
+			// a comma (DR-0083 item 3).
+			kept, w := cleanKnowledgeItems(label, key, []string{val})
+			warnings = append(warnings, w...)
+			if key == "learns" {
+				meta.Learns = append(meta.Learns, kept...)
+			} else {
+				meta.Knows = append(meta.Knows, kept...)
+			}
 		default:
 			warnings = append(warnings, fmt.Sprintf("%s: unknown key %q", label, key))
 		}
 	}
 	return meta, id, warnings
+}
+
+/** ParseKnowledgeItem splits one learns or knows item, "Character: fact", at its
+ * first colon (DR-0083 item 1). The fact may itself contain colons.
+ *
+ * Parameters:
+ *   item (string) — the item as written, e.g. "Anna: the letter is forged".
+ *
+ * Returns:
+ *   string — the character, trimmed.
+ *   string — the fact, trimmed, as written.
+ *   bool   — false when there is no colon or either side is empty.
+ *
+ * Example:
+ *   who, fact, ok := knowledge.ParseKnowledgeItem("Anna: the letter is forged")
+ *   // who == "Anna", fact == "the letter is forged", ok
+ */
+func ParseKnowledgeItem(item string) (character, fact string, ok bool) {
+	before, after, found := strings.Cut(item, ":")
+	character, fact = strings.TrimSpace(before), strings.TrimSpace(after)
+	return character, fact, found && character != "" && fact != ""
+}
+
+/** FactKey folds a fact's text to its identity (DR-0083 item 2): lower case, with
+ * runs of white space collapsed to one space. No stemming.
+ *
+ * Parameters:
+ *   fact (string) — the fact as written.
+ *
+ * Returns:
+ *   string — the key two spellings of one fact share.
+ *
+ * Example:
+ *   knowledge.FactKey("The  Letter is forged") // "the letter is forged"
+ */
+func FactKey(fact string) string {
+	return strings.Join(strings.Fields(strings.ToLower(fact)), " ")
+}
+
+// cleanKnowledgeItems keeps the learns or knows items that read as
+// "Character: fact" and warns, naming label and key, about each that does not.
+func cleanKnowledgeItems(label, key string, items []string) (kept, warnings []string) {
+	for _, item := range items {
+		if item = strings.TrimSpace(item); item == "" {
+			continue
+		}
+		if _, _, ok := ParseKnowledgeItem(item); !ok {
+			warnings = append(warnings, fmt.Sprintf("%s: %s %q is not \"Character: fact\"", label, key, item))
+			continue
+		}
+		kept = append(kept, item)
+	}
+	return kept, warnings
 }
 
 // splitStoryList splits a comma-separated boneyard value into trimmed,

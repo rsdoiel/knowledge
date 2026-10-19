@@ -501,8 +501,8 @@ links the concept before the bar and shows the text after it. Only the part
 before the bar is the concept's name.
 
 Story events (DR-0075, DR-0079). A file whose front matter has a narrative key
-(event, story_time, pov, characters, foreshadows, pays_off or precedes; place
-and status alone are ordinary front matter and do not count, but travel with
+(event, story_time, pov, characters, foreshadows, pays_off, precedes, learns or
+knows; place and status alone are ordinary front matter and do not count, but travel with
 an event) is one story event; a Fountain scene with a scene number (INT. KITCHEN - DAY
 #12A#) is an event too, with its own metadata in a one-line boneyard after the
 heading: /* story: story_time=1969-10-29; pov=Anna */. A scene with no number
@@ -510,6 +510,16 @@ is not an event. story_time is a date (1969-10-29), a month, a year,
 circa YEAR, ordinal: N, or after:/before: LABEL with an optional offset such
 as +3d (units d, w, m, y). The summary says how many events the file yields
 and names every key or value it did not understand.
+
+What a character learns or already knows (DR-0083). learns and knows each take
+items of the form "Character: fact": learns says the character finds the fact
+out in this scene, knows says the character already knew it and the scene
+relies on it. In front matter they are YAML lists; in a boneyard or a story
+comment the key repeats, once per fact, because a fact may hold a comma:
+/* story: learns=Anna: the letter, which Cass wrote, is forged; learns=Bram: the debt */.
+A fact is the same fact whatever its case or spacing. A repeated learns of one
+fact by one character keeps the first. In a Markdown file with scene ids the
+front matter learns and knows are ignored, as event and story_time are.
 
 Several scenes in one Markdown file (DR-0082). A heading with an id is a scene
 and an event; a heading without one is an ordinary section. Give the id on the
@@ -1411,7 +1421,8 @@ record relations, plus the join tables, among them the citation tables
 document_sources and record_sources (DR-0081) — so a table that would lose
 rows says so in the per-table summary rather than merging quietly short.
 A concept's kind (DR-0078) travels with it and follows the same
-last-writer-wins rule as its description. Story events do not travel: they are
+last-writer-wins rule as its description. Story events and the story knowledge
+(learns and knows) kept with them do not travel: they are
 derived from manuscript files, so the merged database has none until
 {app_name} document ingest is run on the same paths.
 Each side is copied to a scratch file and brought up to the current schema
@@ -1494,7 +1505,8 @@ links (observation_sources, document_sources and record_sources also compare the
 cited version and hash). The report lists rows only in the JSONL, rows only in this database, and
 rows on both sides that differ (a project's description or status, a concept's
 description, identifier or kind, an observation's kind or body, a record's checksum,
-and so on), with per-table counts. Story events (DR-0075) are not compared:
+and so on), with per-table counts. Story events (DR-0075) and story
+knowledge (DR-0083) are not compared:
 they are derived from the manuscript files, are not in the JSONL, and are
 rebuilt by {app_name} document ingest.
 
@@ -1560,7 +1572,7 @@ those files: a Fountain scene with a scene number (INT. KITCHEN - DAY #12A#),
 a Markdown heading with a scene id (## The fire {#12A}, or id=12A in a story
 comment under it; see kb-document(1)), or a file whose front matter has a
 narrative key (event, story_time, pov, characters, foreshadows, pays_off,
-precedes). Both verbs only read, and both
+precedes, learns, knows). Both verbs only read, and both
 need --project.
 
 timeline
@@ -1596,7 +1608,7 @@ check
   scene-comment-syntax (an unknown key, or a word with no "=", in a story
   comment), fountain-style-heading (a heading ending #12A#, which is text and
   not an id; reported once per file) and front-matter-ignored (an event or
-  story_time in front matter, ignored because the file has scene ids). The report is advice: the
+  story_time, learns or knows in front matter, ignored because the file has scene ids). The report is advice: the
   exit status is 0 however many findings there are. With --strict it is 1 when
   there are any. --json gives a list of kind, document and message.
 
@@ -1724,7 +1736,8 @@ records cite.
 
 A concept line carries its "kind" (character, place, theme or other).
 
-Story events (story_events, DR-0075) are not exported: they are derived from
+Story events (story_events, DR-0075) and the story knowledge kept with them
+(story_knowledge, DR-0083) are not exported: they are derived from
 the manuscript files by {app_name}-document(1) ingest and are rebuilt there.
 
 A -project export carries only that project's decision records — a
@@ -1788,7 +1801,7 @@ A document_source or record_source line (DR-0081) whose document, record or
 source is not in this database is skipped and counted, not an error; an older
 file with none of them imports as before.
 
-Story events are not imported, because they are not exported: after an import,
+Story events and story knowledge are not imported, because they are not exported: after an import,
 run {app_name} document ingest on the same paths (an unchanged file is skipped
 but still rebuilds its events). A uuid miss falls back
 to matching by name (DR-0003) -- an existing local row under that name

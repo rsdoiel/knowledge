@@ -51,8 +51,8 @@ links the concept before the bar and shows the text after it. Only the part
 before the bar is the concept's name.
 
 Story events (DR-0075, DR-0079). A file whose front matter has a narrative key
-(event, story_time, pov, characters, foreshadows, pays_off or precedes; place
-and status alone are ordinary front matter and do not count, but travel with
+(event, story_time, pov, characters, foreshadows, pays_off, precedes, learns or
+knows; place and status alone are ordinary front matter and do not count, but travel with
 an event) is one story event; a Fountain scene with a scene number (INT. KITCHEN - DAY
 #12A#) is an event too, with its own metadata in a one-line boneyard after the
 heading: /* story: story_time=1969-10-29; pov=Anna */. A scene with no number
@@ -60,6 +60,16 @@ is not an event. story_time is a date (1969-10-29), a month, a year,
 circa YEAR, ordinal: N, or after:/before: LABEL with an optional offset such
 as +3d (units d, w, m, y). The summary says how many events the file yields
 and names every key or value it did not understand.
+
+What a character learns or already knows (DR-0083). learns and knows each take
+items of the form "Character: fact": learns says the character finds the fact
+out in this scene, knows says the character already knew it and the scene
+relies on it. In front matter they are YAML lists; in a boneyard or a story
+comment the key repeats, once per fact, because a fact may hold a comma:
+/* story: learns=Anna: the letter, which Cass wrote, is forged; learns=Bram: the debt */.
+A fact is the same fact whatever its case or spacing. A repeated learns of one
+fact by one character keeps the first. In a Markdown file with scene ids the
+front matter learns and knows are ignored, as event and story_time are.
 
 Several scenes in one Markdown file (DR-0082). A heading with an id is a scene
 and an event; a heading without one is an ordinary section. Give the id on the

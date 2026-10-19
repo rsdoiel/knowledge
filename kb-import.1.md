@@ -29,7 +29,7 @@ A document_source or record_source line (DR-0081) whose document, record or
 source is not in this database is skipped and counted, not an error; an older
 file with none of them imports as before.
 
-Story events are not imported, because they are not exported: after an import,
+Story events and story knowledge are not imported, because they are not exported: after an import,
 run kb document ingest on the same paths (an unchanged file is skipped
 but still rebuilds its events). A uuid miss falls back
 to matching by name (DR-0003) -- an existing local row under that name
