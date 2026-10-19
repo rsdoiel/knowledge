@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -198,7 +198,7 @@ func (f *changeFlow) toConfirm(value string) {
 }
 
 // updateChange handles a key in a change: picking or typing, then y.
-func (m *tuiModel) updateChange(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateChange(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	f := m.change
 	cancel := func() (tea.Model, tea.Cmd) {
 		m.setState(f.back)
@@ -290,7 +290,7 @@ func (m *tuiModel) changeScreen() (string, []string) {
 			body = append(body, "")
 			body = append(body, wrap(f.note, 0)...)
 		}
-		body = append(body, "", f.confirm.View())
+		body = append(body, "", f.confirm.render())
 	case f.phase == changeConfirm:
 		body = append(body, "was:")
 		body = append(body, indent(f.old)...)
@@ -300,14 +300,14 @@ func (m *tuiModel) changeScreen() (string, []string) {
 			body = append(body, "")
 			body = append(body, wrap(f.note, 0)...)
 		}
-		body = append(body, "", f.confirm.View())
+		body = append(body, "", f.confirm.render())
 	case f.chooser != nil:
-		body = append(body, f.chooser.View())
+		body = append(body, f.chooser.render())
 	default:
 		body = append(body, "was:")
 		body = append(body, indent(f.old)...)
 		body = append(body, "", "new:")
-		body = append(body, strings.Split(f.edit.View(), "\n")...)
+		body = append(body, strings.Split(f.edit.render(), "\n")...)
 	}
 	return "Change — " + f.subject, body
 }

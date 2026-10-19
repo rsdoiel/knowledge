@@ -1,9 +1,9 @@
 package main
 
 import (
-	bkey "github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
+	bkey "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
 )
 
 /** editModel is a text field that starts from a current value and takes a new one
@@ -51,15 +51,15 @@ func (m *editModel) value() string { return m.ta.Value() }
 func (m *editModel) Init() tea.Cmd { return nil }
 
 func (m *editModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}
-	switch km.Type {
-	case tea.KeyEsc, tea.KeyCtrlC:
+	switch {
+	case isEsc(km) || isCtrlC(km):
 		m.cancelled = true
 		return m, nil
-	case tea.KeyEnter:
+	case km.Code == tea.KeyEnter:
 		v := m.ta.Value()
 		switch {
 		case v == "" && !m.allowEmpty:
@@ -77,7 +77,14 @@ func (m *editModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *editModel) View() string {
+// View wraps render for Bubble Tea v2, which draws a tea.View.
+func (m *editModel) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = false
+	return v
+}
+
+func (m *editModel) render() string {
 	v := m.ta.View()
 	if m.message != "" {
 		v += "\n" + m.message

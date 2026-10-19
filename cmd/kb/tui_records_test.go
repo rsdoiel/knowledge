@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -47,7 +47,7 @@ func TestRecords_BrowseShowsTheRecordsInScopeNewestFirst(t *testing.T) {
 	if m.state != viewRecordScope {
 		t.Fatalf("state = %s, want the Records screen", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	i2, i1, i3 := strings.Index(v, "alpha/DR-0002"), strings.Index(v, "alpha/DR-0001"), strings.Index(v, "beta/DR-0003")
 	if i2 < 0 || i1 < 0 || i3 < 0 {
 		t.Fatalf("the screen lacks a qualified reference (alpha/DR-0002 %d, alpha/DR-0001 %d, beta/DR-0003 %d):\n%s", i2, i1, i3, v)
@@ -66,7 +66,7 @@ func TestRecords_BrowseShowsTheRecordsInScopeNewestFirst(t *testing.T) {
 
 // One line a record: the list's two-line rows would halve what fits.
 func TestRecords_EachRecordIsOneLine(t *testing.T) {
-	v := openRecords(t, recordsModel(t), 0).View()
+	v := openRecords(t, recordsModel(t), 0).View().Content
 	for _, ref := range []string{"alpha/DR-0002", "alpha/DR-0001", "beta/DR-0003"} {
 		if n := strings.Count(v, ref); n != 1 {
 			t.Errorf("%s appears %d times, want once", ref, n)
@@ -82,7 +82,7 @@ func TestRecords_PendingIsTheProposedOnesOldestFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	m = openRecords(t, m, 1)
-	v := m.View()
+	v := m.View().Content
 	if m.state != viewRecordScope || !strings.Contains(v, "Pending") {
 		t.Fatalf("state %s, view:\n%s", viewStateNames[m.state], v)
 	}
@@ -101,16 +101,16 @@ func TestRecords_TheScopeFollowsTheProjectAndAWidensIt(t *testing.T) {
 	m := recordsModel(t)
 	t.Setenv("KB_PROJECT", "alpha") // recordsModel clears it for its own set-up
 	m = openRecords(t, m, 0)
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, "alpha") || strings.Contains(v, "beta/DR-0003") {
 		t.Fatalf("the scope should be alpha only:\n%s", v)
 	}
 	m, _ = press(t, m, ch('a'))
-	if v = m.View(); !strings.Contains(v, "beta/DR-0003") {
+	if v = m.View().Content; !strings.Contains(v, "beta/DR-0003") {
 		t.Errorf("a did not widen the scope:\n%s", v)
 	}
 	m, _ = press(t, m, ch('a'))
-	if v = m.View(); strings.Contains(v, "beta/DR-0003") {
+	if v = m.View().Content; strings.Contains(v, "beta/DR-0003") {
 		t.Errorf("a again did not narrow it:\n%s", v)
 	}
 }
@@ -121,8 +121,8 @@ func TestRecords_TheGroupMenuNamesTheScope(t *testing.T) {
 	t.Setenv("KB_PROJECT", "alpha")
 	g := openRow(t, m, "Records")
 	for _, want := range []string{"scope: alpha", "a all scopes"} {
-		if !strings.Contains(g.View(), want) {
-			t.Errorf("the Records menu lacks %q:\n%s", want, g.View())
+		if !strings.Contains(g.View().Content, want) {
+			t.Errorf("the Records menu lacks %q:\n%s", want, g.View().Content)
 		}
 	}
 }
@@ -151,7 +151,7 @@ func TestRecords_SearchFromHereReturnsHere(t *testing.T) {
 }
 
 func TestRecords_TheLegendOffersReadAndStatus(t *testing.T) {
-	v := openRecords(t, recordsModel(t), 0).View()
+	v := openRecords(t, recordsModel(t), 0).View().Content
 	for _, want := range []string{"Enter read", "s status", "a all scopes", "/ filter", "q back"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the legend lacks %q:\n%s", want, v)
@@ -163,7 +163,7 @@ func TestRecords_AnEmptyScopeSaysSo(t *testing.T) {
 	t.Chdir(t.TempDir())
 	t.Setenv("KB_PROJECT", "")
 	m := openRecords(t, menuModel(t), 1) // Pending; the fixture has nothing proposed
-	if v := m.View(); !strings.Contains(v, "No pending records") && !strings.Contains(v, "no pending records") {
+	if v := m.View().Content; !strings.Contains(v, "No pending records") && !strings.Contains(v, "no pending records") {
 		t.Errorf("an empty Pending screen should say so:\n%s", v)
 	}
 }

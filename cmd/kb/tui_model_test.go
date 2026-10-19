@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -46,9 +46,12 @@ func newTestTUIModelWithDebugLog(t *testing.T, dl *DebugLog) *tuiModel {
 	return updated.(*tuiModel)
 }
 
-func key(k tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: k} }
+func key(k rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: k} }
 
-func runeKey(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+// ctrlKey is r pressed with Ctrl held.
+func ctrlKey(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl} }
+
+func runeKey(s string) tea.KeyPressMsg { return tea.KeyPressMsg{Code: []rune(s)[0], Text: s} }
 
 func TestTUIModel_StartsOnProjectList(t *testing.T) {
 	m := newTestTUIModel(t)
@@ -158,7 +161,7 @@ func TestTUIModel_EscCancelsSearchInput(t *testing.T) {
 	updated, _ := m.Update(runeKey("S"))
 	m = updated.(*tuiModel)
 
-	updated, _ = m.Update(key(tea.KeyEsc))
+	updated, _ = m.Update(key(tea.KeyEscape))
 	m = updated.(*tuiModel)
 	if m.searching {
 		t.Error("expected searching=false after Esc cancels the search prompt")
@@ -330,7 +333,7 @@ func TestTUIModel_RecordsViewRendersAndGoesBack(t *testing.T) {
 	updated, _ = m.Update(runeKey("r"))
 	m = updated.(*tuiModel)
 
-	if view := m.View(); !strings.Contains(view, "Records") {
+	if view := m.View().Content; !strings.Contains(view, "Records") {
 		t.Errorf("View() = %q, want the records list rendered", view)
 	}
 	updated, cmd := m.Update(runeKey("q"))

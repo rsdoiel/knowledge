@@ -16,9 +16,9 @@ func TestSearchGroup_HasAnEverywhereRowAndOneRowPerKind(t *testing.T) {
 	m, _, _ := layoutModel(t)
 	m = openRow(t, m, "Search")
 	if m.state != viewGroup || m.group != "search" {
-		t.Fatalf("state = %s group %q, want the Search menu\n%s", viewStateNames[m.state], m.group, m.View())
+		t.Fatalf("state = %s group %q, want the Search menu\n%s", viewStateNames[m.state], m.group, m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"Everywhere…", "Workspace tier…", "Records…", "Observations…", "Concepts…", "Documents…", "Projects…"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the Search menu lacks %q:\n%s", want, v)
@@ -30,17 +30,17 @@ func TestSearchGroup_ARowOpensThePromptWithTheScopePrefilled(t *testing.T) {
 	m, _, _ := layoutModel(t)
 	m = openLeaf(t, m, "Search", "Records…")
 	if !m.searching {
-		t.Fatalf("Records… should open the search prompt\n%s", m.View())
+		t.Fatalf("Records… should open the search prompt\n%s", m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "/records") {
+	if v := m.View().Content; !strings.Contains(v, "/records") {
 		t.Errorf("the prompt should show the scope it will run, /records:\n%s", v)
 	}
 	m, _ = press(t, m, typed("first")...)
 	m, _ = press(t, m, keyEnter)
 	if m.state != viewSearch {
-		t.Fatalf("state = %s, want the results\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the results\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"clasm/DR-0001", "kb search /records first"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the results lack %q:\n%s", want, v)
@@ -54,9 +54,9 @@ func TestSearchPrompt_TakesTheCommandLineGrammar(t *testing.T) {
 	m, _ = press(t, m, typed("clasm/records rough")...)
 	m, _ = press(t, m, keyEnter)
 	if m.state != viewSearch {
-		t.Fatalf("state = %s\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, "A rough one") || strings.Contains(v, "The first") {
 		t.Errorf("clasm/records rough should find the rough record only:\n%s", v)
 	}
@@ -68,9 +68,9 @@ func TestSearchPrompt_AUsageErrorStaysInThePrompt(t *testing.T) {
 	m, _ = press(t, m, typed("nosuch/ x")...)
 	m, _ = press(t, m, keyEnter)
 	if !m.searching {
-		t.Fatalf("a bad scope should keep the prompt open so it can be corrected\n%s", m.View())
+		t.Fatalf("a bad scope should keep the prompt open so it can be corrected\n%s", m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "unknown scope") {
+	if v := m.View().Content; !strings.Contains(v, "unknown scope") {
 		t.Errorf("the error should be shown:\n%s", v)
 	}
 }
@@ -81,9 +81,9 @@ func TestSearchPrompt_NoMembersIsSaidNotShownAsAnEmptyList(t *testing.T) {
 	m, _ = press(t, m, typed("workspace/observations x")...)
 	m, _ = press(t, m, keyEnter)
 	if !m.searching {
-		t.Fatalf("the prompt should stay open\n%s", m.View())
+		t.Fatalf("the prompt should stay open\n%s", m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "workspace tier") {
+	if v := m.View().Content; !strings.Contains(v, "workspace tier") {
 		t.Errorf("the reason should be shown:\n%s", v)
 	}
 }
@@ -96,7 +96,7 @@ func TestSearchPrompt_NothingFoundSaysSoInTheResults(t *testing.T) {
 	if m.state != viewSearch {
 		t.Fatalf("state = %s", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "no results") {
+	if v := m.View().Content; !strings.Contains(v, "no results") {
 		t.Errorf("an empty result should say so:\n%s", v)
 	}
 }
@@ -106,7 +106,7 @@ func TestSearchKey_CapitalSOpensThePromptInEveryContext(t *testing.T) {
 	// The top menu.
 	m, _ = press(t, m, ch('S'))
 	if !m.searching {
-		t.Fatalf("S at the top menu should open the prompt\n%s", m.View())
+		t.Fatalf("S at the top menu should open the prompt\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, keyEsc)
 	// A group menu.
@@ -126,9 +126,9 @@ func TestSearchKey_InAProjectTheScopeIsThatProject(t *testing.T) {
 	}
 	m, _ = press(t, m, ch('S'))
 	if !m.searching {
-		t.Fatalf("S should open the prompt\n%s", m.View())
+		t.Fatalf("S should open the prompt\n%s", m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "clasm/") {
+	if v := m.View().Content; !strings.Contains(v, "clasm/") {
 		t.Errorf("the prompt should be scoped to the project it was opened in, clasm/:\n%s", v)
 	}
 }
@@ -141,16 +141,16 @@ func TestSearchKey_InABrowseListTheScopeIsTheKind(t *testing.T) {
 	m = openLeaf(t, m, "Concepts", "Browse")
 	m, _ = press(t, m, ch('S'))
 	if !m.searching {
-		t.Fatalf("S should open the prompt\n%s", m.View())
+		t.Fatalf("S should open the prompt\n%s", m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "/concepts") {
+	if v := m.View().Content; !strings.Contains(v, "/concepts") {
 		t.Errorf("the prompt should be scoped to the kind, /concepts:\n%s", v)
 	}
 }
 
 func TestSearchKey_LegendNamesIt(t *testing.T) {
 	m, _, _ := layoutModel(t)
-	if v := m.View(); !strings.Contains(v, "S search") {
+	if v := m.View().Content; !strings.Contains(v, "S search") {
 		t.Errorf("the top menu legend should name S:\n%s", v)
 	}
 }
@@ -158,16 +158,16 @@ func TestSearchKey_LegendNamesIt(t *testing.T) {
 func TestSearchGroup_ThisProjectRowAppearsWhenAProjectIsKnown(t *testing.T) {
 	m, _, _ := layoutModel(t)
 	m = openRow(t, m, "Search")
-	if strings.Contains(m.View(), "This project") {
-		t.Errorf("no project is selected yet:\n%s", m.View())
+	if strings.Contains(m.View().Content, "This project") {
+		t.Errorf("no project is selected yet:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch('q'))
 	m = openLeaf(t, m, "Projects", "Browse")
 	m, _ = press(t, m, keyEnter)
 	m, _ = press(t, m, ch('q'), ch('q'), ch('q')) // tabs, project list, Projects menu: the top menu
 	m = openRow(t, m, "Search")
-	if !strings.Contains(m.View(), "This project (clasm)…") {
-		t.Errorf("a selected project should be offered:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "This project (clasm)…") {
+		t.Errorf("a selected project should be offered:\n%s", m.View().Content)
 	}
 }
 
@@ -200,9 +200,9 @@ func TestSearchKey_InTheSourcesBrowseListTheScopeIsSources(t *testing.T) {
 	m = openLeaf(t, m, "Sources", "Browse")
 	m, _ = press(t, m, ch('S'))
 	if !m.searching {
-		t.Fatalf("S should open the prompt\n%s", m.View())
+		t.Fatalf("S should open the prompt\n%s", m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "/sources") {
+	if v := m.View().Content; !strings.Contains(v, "/sources") {
 		t.Errorf("the prompt should be scoped to the kind, /sources:\n%s", v)
 	}
 }

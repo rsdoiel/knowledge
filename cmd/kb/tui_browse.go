@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -54,7 +54,7 @@ func (m *tuiModel) openBrowse(kind string) (tea.Model, tea.Cmd) {
 	}
 	m.browseKind = kind
 	m.clearFilter(viewBrowse)
-	m.browseList = newBrowserList(items, strings.ToUpper(kind[:1])+kind[1:]+"s", m.cols()-4, m.listHeight())
+	m.browseList = newBrowserList(m.isDark, items, strings.ToUpper(kind[:1])+kind[1:]+"s", m.cols()-4, m.listHeight())
 	m.setState(viewBrowse)
 	return m, nil
 }
@@ -151,7 +151,7 @@ func (m *tuiModel) setBrowseItems(items []list.Item) {
 // updateBrowse handles a key on a Browse list: Enter shows the item, q goes back
 // to the group menu and d deletes. `/` filters the rows and S searches; both are
 // taken before this is reached.
-func (m *tuiModel) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateBrowse(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
 		m.setState(viewGroup)

@@ -1,7 +1,7 @@
 package main
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -13,7 +13,7 @@ func runTUI(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) error {
 	if err != nil {
 		return err
 	}
-	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
+	_, err = tea.NewProgram(m).Run()
 	return err
 }
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 /** textCapturer is implemented by every model that can be taking text. A key
@@ -29,30 +29,31 @@ type textCapturer interface {
  * confirmation take them one at a time so each is decided on its own.
  *
  * Parameters:
- *   msg (tea.KeyMsg) — the message bubbletea delivered
+ *   msg (tea.KeyPressMsg) — the message bubbletea delivered
  *
  * Returns:
- *   []tea.KeyMsg — one message per typed character, or msg itself when it is one key
+ *   []tea.KeyPressMsg — one message per typed character, or msg itself when it is one key
  *
  * Example:
  *   keysOf(runeKey("ay")) // two messages, a then y
  */
-func keysOf(msg tea.KeyMsg) []tea.KeyMsg {
-	if msg.Type != tea.KeyRunes || msg.Paste || len(msg.Runes) < 2 {
-		return []tea.KeyMsg{msg}
+func keysOf(msg tea.KeyPressMsg) []tea.KeyPressMsg {
+	runes := keyRunes(msg)
+	if len(runes) < 2 {
+		return []tea.KeyPressMsg{msg}
 	}
-	keys := make([]tea.KeyMsg, len(msg.Runes))
-	for i, r := range msg.Runes {
-		keys[i] = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}, Alt: msg.Alt}
+	keys := make([]tea.KeyPressMsg, len(runes))
+	for i, r := range runes {
+		keys[i] = tea.KeyPressMsg{Code: r, Text: string(r), Mod: msg.Mod}
 	}
 	return keys
 }
 
 // typedRune returns the single character a key message carries, lower-cased, or
 // 0 when it is not one typed character.
-func typedRune(k tea.KeyMsg) rune {
-	if k.Type == tea.KeyRunes && len(k.Runes) == 1 && !k.Alt {
-		return unicode.ToLower(k.Runes[0])
+func typedRune(k tea.KeyPressMsg) rune {
+	if r := keyRunes(k); len(r) == 1 && !hasAlt(k) {
+		return unicode.ToLower(r[0])
 	}
 	return 0
 }
@@ -60,8 +61,8 @@ func typedRune(k tea.KeyMsg) rune {
 // isBackOut reports whether a key leaves a choice or confirmation without
 // acting: Esc and Ctrl-C always, and q where letters are commands (DR-0064).
 // Alt is ignored so the Esc that a terminal glues to the next byte still counts.
-func isBackOut(k tea.KeyMsg) bool {
-	return k.Type == tea.KeyEsc || k.Type == tea.KeyCtrlC || typedRune(k) == 'q'
+func isBackOut(k tea.KeyPressMsg) bool {
+	return isEsc(k) || isCtrlC(k) || typedRune(k) == 'q'
 }
 
 /** chooserModel offers the moves a record may make and takes one key to pick
@@ -97,7 +98,7 @@ func newChooser(ref, from string, options []string) *chooserModel {
 }
 
 // step takes one key and reports whether it decided the choice.
-func (m *chooserModel) step(k tea.KeyMsg) bool {
+func (m *chooserModel) step(k tea.KeyPressMsg) bool {
 	if isBackOut(k) {
 		m.cancelled = true
 		return true
@@ -116,7 +117,7 @@ func (m *chooserModel) step(k tea.KeyMsg) bool {
 func (m *chooserModel) Init() tea.Cmd { return nil }
 
 func (m *chooserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok {
+	if km, ok := msg.(tea.KeyPressMsg); ok {
 		for _, k := range keysOf(km) {
 			if m.step(k) {
 				return m, tea.Quit
@@ -126,7 +127,14 @@ func (m *chooserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *chooserModel) View() string {
+// View wraps render for Bubble Tea v2, which draws a tea.View.
+func (m *chooserModel) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = false
+	return v
+}
+
+func (m *chooserModel) render() string {
 	labels := make([]string, 0, len(m.options)+1)
 	for _, o := range m.options {
 		k := m.keyOf(o)
@@ -164,7 +172,7 @@ type confirmModel struct {
 func newConfirm(question string) *confirmModel { return &confirmModel{question: question} }
 
 // step takes one key and reports whether it decided the confirmation.
-func (m *confirmModel) step(k tea.KeyMsg) bool {
+func (m *confirmModel) step(k tea.KeyPressMsg) bool {
 	switch {
 	case typedRune(k) == 'y':
 		m.confirmed = true
@@ -179,7 +187,7 @@ func (m *confirmModel) step(k tea.KeyMsg) bool {
 func (m *confirmModel) Init() tea.Cmd { return nil }
 
 func (m *confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok {
+	if km, ok := msg.(tea.KeyPressMsg); ok {
 		for _, k := range keysOf(km) {
 			if m.step(k) {
 				return m, tea.Quit
@@ -189,7 +197,14 @@ func (m *confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *confirmModel) View() string {
+// View wraps render for Bubble Tea v2, which draws a tea.View.
+func (m *confirmModel) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = false
+	return v
+}
+
+func (m *confirmModel) render() string {
 	return m.question + "  [y] apply  [n/q/Esc] cancel"
 }
 
@@ -225,7 +240,7 @@ func newReview(ref, from string, options []string) *reviewModel {
 func (m *reviewModel) Init() tea.Cmd { return nil }
 
 func (m *reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}
@@ -250,17 +265,24 @@ func (m *reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *reviewModel) View() string {
+// View wraps render for Bubble Tea v2, which draws a tea.View.
+func (m *reviewModel) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = false
+	return v
+}
+
+func (m *reviewModel) render() string {
 	switch m.phase {
 	case phaseConfirm:
-		return m.confirm.View()
+		return m.confirm.render()
 	case phaseDone:
 		if m.confirm.confirmed {
 			return m.confirm.question + " yes"
 		}
 		return "cancelled"
 	}
-	return m.chooser.View()
+	return m.chooser.render()
 }
 
 func (m *reviewModel) capturingText() bool { return false }
@@ -304,39 +326,42 @@ func newTypedConfirm(expected string) *typedConfirmModel {
 func (m *typedConfirmModel) Init() tea.Cmd { return nil }
 
 func (m *typedConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}
-	switch km.Type {
-	case tea.KeyEsc, tea.KeyCtrlC:
+	switch {
+	case isEsc(km) || isCtrlC(km):
 		m.cancelled = true
 		return m, tea.Quit
-	case tea.KeyEnter:
+	case km.Code == tea.KeyEnter:
 		if m.value == m.expected {
 			m.confirmed = true
 			return m, tea.Quit
 		}
 		m.message = fmt.Sprintf("%q does not match; type %q exactly, or Esc to cancel", m.value, m.expected)
-	case tea.KeyBackspace:
+	case km.Code == tea.KeyBackspace:
 		if r := []rune(m.value); len(r) > 0 {
 			m.value = string(r[:len(r)-1])
 		}
 		m.message = ""
-	case tea.KeyCtrlU:
+	case km.String() == "ctrl+u":
 		m.value, m.message = "", ""
-	case tea.KeyRunes, tea.KeySpace:
-		if km.Type == tea.KeySpace {
-			m.value += " "
-		} else {
-			m.value += string(km.Runes)
-		}
+	case km.Text != "":
+		m.value += km.Text
 		m.message = ""
 	}
 	return m, nil
 }
 
-func (m *typedConfirmModel) View() string {
+// View wraps render for Bubble Tea v2, which draws a tea.View.
+func (m *typedConfirmModel) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = false
+	return v
+}
+
+func (m *typedConfirmModel) render() string {
 	v := fmt.Sprintf("Type %s to confirm: %s", m.expected, m.value)
 	if m.message != "" {
 		v += "\n" + m.message
@@ -405,7 +430,7 @@ func reviewInput(in io.Reader) io.Reader {
  */
 func runReview(in io.Reader, out io.Writer, ref, from string, options []string) (chosen string, confirmed bool, err error) {
 	m := newReview(ref, from, options)
-	if _, err := tea.NewProgram(m, tea.WithInput(reviewInput(in)), tea.WithOutput(out)).Run(); err != nil {
+	if _, err := tea.NewProgram(m, tea.WithInput(reviewInput(in)), tea.WithOutput(out), tea.WithWindowSize(80, 24)).Run(); err != nil {
 		return "", false, err
 	}
 	chosen, confirmed = m.result()

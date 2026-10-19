@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -70,7 +70,7 @@ func TestRun_FormatFilesRunsAtOnceOnTheScopesDirectory(t *testing.T) {
 	if string(after) == string(before) || !strings.Contains(string(after), "supersedes:") {
 		t.Errorf("the rough record was not rewritten:\n%s", after)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"1 changed", "1 already canonical", "equivalent:", "kb record fmt"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the result lacks %q:\n%s", want, v)
@@ -99,7 +99,7 @@ func TestRun_IndexWritesTheIndexForTheScope(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), "DR-0001") {
 		t.Fatalf("index.md = %q, %v; want a line for DR-0001", b, err)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"index.md", "equivalent:", "kb index"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the result lacks %q:\n%s", want, v)
@@ -118,11 +118,11 @@ func TestRun_WidenedToEveryScopeItRunsOverTheWorkspaceTree(t *testing.T) {
 	if m.state != viewText {
 		t.Fatalf("state = %s", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, filepath.Join(root, "agents")) && !strings.Contains(v, "agents") {
+	if v := m.View().Content; !strings.Contains(v, filepath.Join(root, "agents")) && !strings.Contains(v, "agents") {
 		t.Errorf("the result should name the agents tree:\n%s", v)
 	}
-	if !strings.Contains(m.View(), "kb record fmt") {
-		t.Errorf("the equivalent command is missing:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "kb record fmt") {
+		t.Errorf("the equivalent command is missing:\n%s", m.View().Content)
 	}
 }
 
@@ -138,7 +138,7 @@ func TestRun_ANoDirectoryIsANoticeAndCreatesNothing(t *testing.T) {
 	if m.state != viewGroup {
 		t.Fatalf("state = %s; a missing directory should leave the menu", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "ghost") || !strings.Contains(v, "no decisions directory") {
+	if v := m.View().Content; !strings.Contains(v, "ghost") || !strings.Contains(v, "no decisions directory") {
 		t.Errorf("the notice should name the project and the missing directory:\n%s", v)
 	}
 	if _, err := os.Stat(filepath.Join(root, "agents", "projects", "ghost")); err == nil {
@@ -157,7 +157,7 @@ func TestRun_AnIndexErrorIsANotice(t *testing.T) {
 	if m.state != viewMenu {
 		t.Fatalf("state = %s; a failed index should stay on the menu with a notice", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "0003-bad.md") && !strings.Contains(v, "parse") && !strings.Contains(v, "malformed") {
+	if v := m.View().Content; !strings.Contains(v, "0003-bad.md") && !strings.Contains(v, "parse") && !strings.Contains(v, "malformed") {
 		t.Errorf("the notice should carry the command's error:\n%s", v)
 	}
 }

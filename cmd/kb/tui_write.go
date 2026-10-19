@@ -10,10 +10,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // ansiPattern matches the colour escapes the highlighter writes, so the find
@@ -144,10 +143,10 @@ func (m *tuiModel) openViewer(purpose string) {
 	if h <= 0 {
 		h = 20
 	}
-	vp := viewport.New(m.cols()-4, h)
+	vp := viewport.New(viewport.WithWidth(m.cols()-4), viewport.WithHeight(h))
 	width := m.cols() - 4
 	var wrapped string
-	if (purpose == "read" || purpose == "status") && lipgloss.ColorProfile() != termenv.Ascii && os.Getenv("NO_COLOR") == "" {
+	if (purpose == "read" || purpose == "status") && m.colourOn() {
 		wrapped = wrapHighlighted(string(m.reviewRaw), width)
 	} else {
 		wrapped = lipgloss.NewStyle().Width(width).Render(string(m.reviewRaw))
@@ -156,7 +155,7 @@ func (m *tuiModel) openViewer(purpose string) {
 	m.text = vp
 	m.textPlain = strings.Split(ansiPattern.ReplaceAllString(wrapped, ""), "\n")
 	m.textLines = strings.Split(wrapped, "\n")
-	m.textMarks = lipgloss.ColorProfile() != termenv.Ascii && os.Getenv("NO_COLOR") == ""
+	m.textMarks = m.colourOn()
 	m.finding, m.findQuery, m.findHits, m.findCur = false, "", nil, 0
 	m.textPurpose = purpose
 	m.setState(viewText)
@@ -166,13 +165,13 @@ func (m *tuiModel) openViewer(purpose string) {
 // page keys scroll; g and G jump to the ends; / finds text and n and N move
 // between the matches; q finishes (and continues to the chooser for a status
 // review). While a term is being typed every key is text, and Esc abandons it.
-func (m *tuiModel) updateText(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateText(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.finding {
-		switch msg.Type {
-		case tea.KeyEsc:
+		switch {
+		case isEsc(msg):
 			m.finding = false
 			m.findInput.Blur()
-		case tea.KeyEnter:
+		case msg.Code == tea.KeyEnter:
 			m.finding = false
 			m.findInput.Blur()
 			m.findQuery = m.findInput.Value()
@@ -186,7 +185,7 @@ func (m *tuiModel) updateText(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			default:
 				// The first match at or below the top of the screen.
 				for i, h := range m.findHits {
-					if h >= m.text.YOffset {
+					if h >= m.text.YOffset() {
 						m.findCur = i
 						break
 					}
@@ -340,7 +339,7 @@ func (m *tuiModel) refreshFindMarks() {
 			lines[h] = markMatches(lines[h], m.findQuery)
 		}
 	}
-	at := m.text.YOffset
+	at := m.text.YOffset()
 	m.text.SetContent(strings.Join(lines, "\n"))
 	m.text.SetYOffset(at)
 }
@@ -348,7 +347,7 @@ func (m *tuiModel) refreshFindMarks() {
 // updateReview hands a key to the embedded chooser and confirmation (T3) and
 // finishes when they have an answer. The embedded model asks the program to quit
 // when it is done; that is ignored, since this is only one screen of it.
-func (m *tuiModel) updateReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateReview(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.review.Update(msg)
 	if m.review.phase == phaseDone {
 		return m.finishReview()
@@ -407,7 +406,7 @@ func (m *tuiModel) reloadRecords() {
 // reviewScreen is the status review's screen: the record, then the chooser or the
 // confirmation.
 func (m *tuiModel) reviewScreen() (string, []string) {
-	return "Set status — " + m.reviewRef, []string{m.reviewRef + "  " + m.reviewRec.Title, "", m.review.View()}
+	return "Set status — " + m.reviewRef, []string{m.reviewRef + "  " + m.reviewRec.Title, "", m.review.render()}
 }
 
 // reviewLegend names the keys of the current phase of the review.

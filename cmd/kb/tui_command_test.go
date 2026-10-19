@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The `:` command line (knowledge DR-0066 point 2, DR-0067, v0.0.20 U6). Any verb
@@ -51,7 +51,7 @@ func TestCommand_AReadRunsAndItsOutputIsShown(t *testing.T) {
 	if m.state != viewText {
 		t.Fatalf("state = %s, want the result", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"kb record list", "clasm/DR-0001"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the result lacks %q:\n%s", want, v)
@@ -67,8 +67,8 @@ func TestCommand_QIsTextInThePromptAndEscCancels(t *testing.T) {
 	m, _, _ := planModel(t)
 	m, _ = press(t, m, ch(':'))
 	m, _ = press(t, m, typed("quokka")...)
-	if m.state != viewCommand || !strings.Contains(m.View(), "quokka") {
-		t.Fatalf("typing q quit or lost the text (%s):\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewCommand || !strings.Contains(m.View().Content, "quokka") {
+		t.Fatalf("typing q quit or lost the text (%s):\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, cmd := press(t, m, keyEsc)
 	if isQuit(cmd) || m.state != viewMenu {
@@ -82,24 +82,24 @@ func TestCommand_QIsTextInThePromptAndEscCancels(t *testing.T) {
 func TestCommand_AFailureShowsTheErrorAndTheExitStatus(t *testing.T) {
 	m, _, _ := planModel(t)
 	m = runCommand(t, m, "record show nosuch/DR-0009")
-	if m.state != viewText || !strings.Contains(m.View(), "exit status") {
-		t.Errorf("state %s; the result should say the exit status:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewText || !strings.Contains(m.View().Content, "exit status") {
+		t.Errorf("state %s; the result should say the exit status:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 }
 
 func TestCommand_UnknownAndCommandLineOnlyVerbsAreRefused(t *testing.T) {
 	m, _, _ := planModel(t)
 	m = runCommand(t, m, "frobnicate now")
-	if m.state != viewMenu || !strings.Contains(m.View(), "unknown verb") {
-		t.Errorf("unknown verb: state %s:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewMenu || !strings.Contains(m.View().Content, "unknown verb") {
+		t.Errorf("unknown verb: state %s:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m = runCommand(t, m, "merge -a x.db -b y.db")
-	if m.state != viewMenu || !strings.Contains(m.View(), "command line only") {
-		t.Errorf("merge: state %s:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewMenu || !strings.Contains(m.View().Content, "command line only") {
+		t.Errorf("merge: state %s:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m = runCommand(t, m, "-json record list")
-	if m.state != viewMenu || !strings.Contains(m.View(), "option") {
-		t.Errorf("a global option should be refused:\n%s", m.View())
+	if m.state != viewMenu || !strings.Contains(m.View().Content, "option") {
+		t.Errorf("a global option should be refused:\n%s", m.View().Content)
 	}
 }
 
@@ -109,7 +109,7 @@ func TestCommand_AnAdditiveWriteShowsTheCommandAndAsksFirst(t *testing.T) {
 	if m.state != viewPlan {
 		t.Fatalf("state = %s, want the confirmation", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"not been run", `kb concept add Fresh "a new idea"`, "y apply"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the screen lacks %q:\n%s", want, v)
@@ -141,9 +141,9 @@ func TestCommand_SetStatusIsTheTUIsOwnChange(t *testing.T) {
 	file := filepath.Join(root, "agents", "projects", "clasm", "decisions", "0001-fixture.md")
 	m = runCommand(t, m, "record set-status clasm/DR-0001 accepted")
 	if m.state != viewPlan {
-		t.Fatalf("state = %s, want the confirmation:\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the confirmation:\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "proposed") || !strings.Contains(v, "accepted") {
+	if v := m.View().Content; !strings.Contains(v, "proposed") || !strings.Contains(v, "accepted") {
 		t.Errorf("the confirmation should show old and new:\n%s", v)
 	}
 	if b, _ := os.ReadFile(file); strings.Contains(string(b), "status: accepted") {
@@ -159,7 +159,7 @@ func TestCommand_ARefusedMoveIsRefusedBeforeAnyConfirmation(t *testing.T) {
 	m, _, _ := planModel(t)
 	m = runCommand(t, m, "record set-status clasm/DR-0001 proposed")
 	if m.state == viewPlan {
-		t.Errorf("a move the table forbids reached the confirmation:\n%s", m.View())
+		t.Errorf("a move the table forbids reached the confirmation:\n%s", m.View().Content)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestCommand_ARemovingWriteMeetsTheTypedGate(t *testing.T) {
 	m, _, kb := planModel(t)
 	m = runCommand(t, m, "concept delete streaming")
 	if m.state != viewRemove {
-		t.Fatalf("state = %s, want the removing gate:\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the removing gate:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, keyEsc)
 	if ok, _ := kb.HasConcept("streaming"); !ok || m.state != viewMenu {
@@ -179,8 +179,8 @@ func TestCommand_ARemovingWriteMeetsTheTypedGate(t *testing.T) {
 		t.Error("the typed name did not delete")
 	}
 	m = runCommand(t, m, "unlink project alpha streaming") // unlink still has no screen
-	if m.state != viewMenu || !strings.Contains(m.View(), "no confirmation screen") {
-		t.Errorf("a removing verb with no gate here should say so:\n%s", m.View())
+	if m.state != viewMenu || !strings.Contains(m.View().Content, "no confirmation screen") {
+		t.Errorf("a removing verb with no gate here should say so:\n%s", m.View().Content)
 	}
 }
 
@@ -188,8 +188,8 @@ func TestCommand_APlanVerbShowsItsDryRunFirst(t *testing.T) {
 	m, root, _ := planModel(t)
 	doc := filepath.Join(root, "docs", "note.md")
 	m = runCommand(t, m, "document tag --project clasm")
-	if m.state != viewPlan || !strings.Contains(m.View(), "would tag") {
-		t.Fatalf("state %s; want the dry run:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewPlan || !strings.Contains(m.View().Content, "would tag") {
+		t.Fatalf("state %s; want the dry run:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	if b, _ := os.ReadFile(doc); strings.Contains(string(b), "[[streaming]]") {
 		t.Fatal("the dry run wrote")
@@ -204,7 +204,7 @@ func TestCommand_ADirectVerbRunsAtOnce(t *testing.T) {
 	m, root, _ := planModel(t)
 	m = runCommand(t, m, "index "+shellWord(filepath.Join(root, "agents", "projects", "clasm", "decisions")))
 	if m.state != viewText {
-		t.Fatalf("state = %s, want the result:\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the result:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	if _, err := os.Stat(filepath.Join(root, "agents", "projects", "clasm", "decisions", "index.md")); err != nil {
 		t.Errorf("index.md was not written: %v", err)
@@ -216,12 +216,12 @@ func TestCommand_AColonInATextFieldIsText(t *testing.T) {
 	m, _, _ := planModel(t)
 	m = openLeaf(t, m, "Concepts", "New concept…")
 	m, _ = press(t, m, typed("a:b")...)
-	if m.state != viewForm || !strings.Contains(m.View(), "a:b") {
-		t.Errorf("the colon was not text (%s):\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewForm || !strings.Contains(m.View().Content, "a:b") {
+		t.Errorf("the colon was not text (%s):\n%s", viewStateNames[m.state], m.View().Content)
 	}
 }
 
-var _ = tea.KeyMsg{}
+var _ = tea.KeyPressMsg{}
 
 func TestBinary_TUICommandLineOnATerminal(t *testing.T) {
 	if runtime.GOOS != "linux" {

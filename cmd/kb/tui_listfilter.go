@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 )
 
 /** listFilter is the filter of one list in the terminal interface: the rows
@@ -113,7 +113,7 @@ func (m *tuiModel) applyFilter(state viewState, lf *listFilter, text string) {
  * a prompt of its own is open, it takes nothing.
  *
  * Parameters:
- *   msg (tea.KeyMsg) — the key
+ *   msg (tea.KeyPressMsg) — the key
  *
  * Returns:
  *   (tea.Cmd, bool) — the text input's command, and whether the key was taken
@@ -121,22 +121,22 @@ func (m *tuiModel) applyFilter(state viewState, lf *listFilter, text string) {
  * Example:
  *   if cmd, took := m.filterKey(msg); took { return m, cmd }
  */
-func (m *tuiModel) filterKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (m *tuiModel) filterKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	l := m.listOf(m.state)
 	if l == nil || m.searching || m.err != nil {
 		return nil, false
 	}
 	lf := m.filters[m.state]
 	if lf != nil && lf.typing {
-		switch msg.Type {
-		case tea.KeyEsc:
+		switch {
+		case isEsc(msg):
 			lf.typing = false
 			lf.input.Blur()
 			lf.text = ""
 			m.applyFilter(m.state, lf, "")
 			m.clearFilter(m.state)
 			return nil, true
-		case tea.KeyEnter:
+		case msg.Code == tea.KeyEnter:
 			lf.typing = false
 			lf.input.Blur()
 			lf.text = strings.TrimSpace(lf.input.Value())

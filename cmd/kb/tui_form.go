@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -140,7 +140,7 @@ func (m *tuiModel) enterField(i int) {
 }
 
 // updateForm handles a key in a form.
-func (m *tuiModel) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateForm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	f := m.form
 	cancel := func() (tea.Model, tea.Cmd) {
 		m.setState(f.back)
@@ -237,7 +237,7 @@ func (m *tuiModel) formScreen() (string, []string) {
 	if f.step >= len(f.fields) {
 		body = append(body, "", "This is the same as:")
 		body = append(body, wrap("  "+f.command(f.values))...)
-		body = append(body, "", f.confirm.View())
+		body = append(body, "", f.confirm.render())
 		return m.formTitle(), body
 	}
 	if len(body) > 0 {
@@ -250,9 +250,9 @@ func (m *tuiModel) formScreen() (string, []string) {
 	}
 	body = append(body, "")
 	if f.chooser != nil {
-		body = append(body, wrap(f.chooser.View())...)
+		body = append(body, wrap(f.chooser.render())...)
 	} else {
-		body = append(body, strings.Split(f.edit.View(), "\n")...)
+		body = append(body, strings.Split(f.edit.render(), "\n")...)
 	}
 	return m.formTitle(), body
 }

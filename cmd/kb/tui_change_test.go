@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The changing writes (knowledge DR-0067, DR-0064 amendment; v0.0.20 U2): show the
@@ -14,7 +14,7 @@ import (
 // so its rules and its errors are the command's. Esc cancels at every step, and
 // while text is typed every key is text.
 
-func ctrlJ() tea.Msg { return tea.KeyMsg{Type: tea.KeyCtrlJ} }
+func ctrlJ() tea.Msg { return ctrlKey('j') }
 
 // projectStatus reads a project's status from the database.
 func projectStatus(t *testing.T, m *tuiModel, name string) string {
@@ -36,7 +36,7 @@ func TestChange_ProjectStatusIsPickedThenConfirmedOldToNew(t *testing.T) {
 	if m.state != viewChange {
 		t.Fatalf("state = %s, want the change screen", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, "empty") || !strings.Contains(v, was) {
 		t.Errorf("the screen should show the project and its status %q:\n%s", was, v)
 	}
@@ -50,7 +50,7 @@ func TestChange_ProjectStatusIsPickedThenConfirmedOldToNew(t *testing.T) {
 		t.Errorf("the chooser offers the status the project already has:\n%s", v)
 	}
 	m, _ = press(t, m, ch('p'))
-	v = m.View()
+	v = m.View().Content
 	for _, want := range []string{was, "paused", "y apply"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the confirmation lacks %q:\n%s", want, v)
@@ -66,7 +66,7 @@ func TestChange_ProjectStatusIsPickedThenConfirmedOldToNew(t *testing.T) {
 	if got := projectStatus(t, m, "empty"); got != "paused" {
 		t.Errorf("status = %q, want paused", got)
 	}
-	v = m.View()
+	v = m.View().Content
 	for _, want := range []string{`✓ project "empty" status set to paused`, "equivalent:  kb project set-status empty paused"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the screen lacks %q:\n%s", want, v)
@@ -92,7 +92,7 @@ func TestChange_EveryCancelChangesNothing(t *testing.T) {
 			if projectStatus(t, m, "empty") != was {
 				t.Error("a cancel changed the status")
 			}
-			if v := m.View(); !strings.Contains(v, "cancelled") || strings.Contains(v, "equivalent:") {
+			if v := m.View().Content; !strings.Contains(v, "cancelled") || strings.Contains(v, "equivalent:") {
 				t.Errorf("the screen should say cancelled and show no command:\n%s", v)
 			}
 		})
@@ -124,12 +124,12 @@ func TestChange_ADescriptionIsEditedFromItsCurrentText(t *testing.T) {
 	if m.state != viewChange || !m.capturingText() {
 		t.Fatalf("state %s, capturing %v; want the editor, taking text", viewStateNames[m.state], m.capturingText())
 	}
-	if !strings.Contains(m.View(), "a stray project") {
-		t.Errorf("the editor should start from the current text:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "a stray project") {
+		t.Errorf("the editor should start from the current text:\n%s", m.View().Content)
 	}
-	m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyCtrlU}) // clear the line
+	m, _ = press(t, m, ctrlKey('u')) // clear the line
 	m, _ = press(t, m, append(typed("a better description"), keyEnter)...)
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"a stray project", "a better description", "y apply"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the confirmation lacks %q:\n%s", want, v)
@@ -140,8 +140,8 @@ func TestChange_ADescriptionIsEditedFromItsCurrentText(t *testing.T) {
 	if p.Description != "a better description" {
 		t.Errorf("description = %q", p.Description)
 	}
-	if !strings.Contains(m.View(), `equivalent:  kb project set-description empty "a better description"`) {
-		t.Errorf("the equivalent command is missing:\n%s", m.View())
+	if !strings.Contains(m.View().Content, `equivalent:  kb project set-description empty "a better description"`) {
+		t.Errorf("the equivalent command is missing:\n%s", m.View().Content)
 	}
 }
 
@@ -150,19 +150,19 @@ func TestChange_AnUnchangedOrEmptyEditStaysInTheEditor(t *testing.T) {
 	selectProject(t, m, "empty")
 	m, _ = press(t, m, ch('r'))  // rename
 	m, _ = press(t, m, keyEnter) // unchanged
-	if m.state != viewChange || !strings.Contains(m.View(), "unchanged") {
-		t.Errorf("state %s; an unchanged name should say so and stay:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewChange || !strings.Contains(m.View().Content, "unchanged") {
+		t.Errorf("state %s; an unchanged name should say so and stay:\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyCtrlU}, keyEnter) // empty
-	if m.state != viewChange || !strings.Contains(m.View(), "empty") {
-		t.Errorf("state %s; an empty name should be refused:\n%s", viewStateNames[m.state], m.View())
+	m, _ = press(t, m, ctrlKey('u'), keyEnter) // empty
+	if m.state != viewChange || !strings.Contains(m.View().Content, "empty") {
+		t.Errorf("state %s; an empty name should be refused:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 }
 
 func TestChange_ARenameIsTheCommandsOwnAndItsErrorIsANotice(t *testing.T) {
 	m := removeModel(t)
 	selectProject(t, m, "empty")
-	m, _ = press(t, m, ch('r'), tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, _ = press(t, m, ch('r'), ctrlKey('u'))
 	m, _ = press(t, m, append(typed("alpha"), keyEnter, ch('y'))...) // a name that is taken
 	if m.state != viewProjects {
 		t.Fatalf("state = %s, want the list", viewStateNames[m.state])
@@ -170,7 +170,7 @@ func TestChange_ARenameIsTheCommandsOwnAndItsErrorIsANotice(t *testing.T) {
 	if p, _ := m.kb.ProjectByName("empty"); p == nil {
 		t.Error("the project was renamed onto a taken name")
 	}
-	if v := m.View(); strings.Contains(v, "✓") || !strings.Contains(v, "alpha") {
+	if v := m.View().Content; strings.Contains(v, "✓") || !strings.Contains(v, "alpha") {
 		t.Errorf("the screen should show the command's refusal, not a success:\n%s", v)
 	}
 }
@@ -178,13 +178,13 @@ func TestChange_ARenameIsTheCommandsOwnAndItsErrorIsANotice(t *testing.T) {
 func TestChange_ARenameThatIsFreeWorks(t *testing.T) {
 	m := removeModel(t)
 	selectProject(t, m, "empty")
-	m, _ = press(t, m, ch('r'), tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, _ = press(t, m, ch('r'), ctrlKey('u'))
 	m, _ = press(t, m, append(typed("quokka"), keyEnter, ch('y'))...) // starts with q: text
 	if p, _ := m.kb.ProjectByName("quokka"); p == nil {
 		t.Fatal("the project was not renamed")
 	}
-	if !strings.Contains(m.View(), "equivalent:  kb project rename empty quokka") {
-		t.Errorf("the equivalent command is missing:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "equivalent:  kb project rename empty quokka") {
+		t.Errorf("the equivalent command is missing:\n%s", m.View().Content)
 	}
 }
 
@@ -192,13 +192,13 @@ func TestChange_ARenameThatIsFreeWorks(t *testing.T) {
 func TestChange_CommandLettersAreTextInTheEditor(t *testing.T) {
 	m := removeModel(t)
 	selectProject(t, m, "empty")
-	m, _ = press(t, m, ch('e'), tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, _ = press(t, m, ch('e'), ctrlKey('u'))
 	m, cmd := press(t, m, typed("qjkdsyn:")...)
 	if isQuit(cmd) || m.state != viewChange {
 		t.Fatalf("typing acted as a command: state %s, quit %v", viewStateNames[m.state], isQuit(cmd))
 	}
 	m, cmd = press(t, m, keyEsc)
-	if isQuit(cmd) || m.state != viewProjects || !strings.Contains(m.View(), "cancelled") {
+	if isQuit(cmd) || m.state != viewProjects || !strings.Contains(m.View().Content, "cancelled") {
 		t.Errorf("Esc: state %s, quit %v", viewStateNames[m.state], isQuit(cmd))
 	}
 	p, _ := m.kb.ProjectByName("empty")
@@ -213,14 +213,14 @@ func TestChange_AnObservationIsUpdatedAndMayHaveSeveralLines(t *testing.T) {
 	m := removeModel(t)
 	selectProject(t, m, "alpha")
 	m, _ = press(t, m, keyEnter, ch('e')) // observations tab, edit
-	if m.state != viewChange || !strings.Contains(m.View(), "a specific observation body") {
-		t.Fatalf("state %s; the editor should start from the observation:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewChange || !strings.Contains(m.View().Content, "a specific observation body") {
+		t.Fatalf("state %s; the editor should start from the observation:\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, _ = press(t, m, ctrlKey('u'))
 	m, _ = press(t, m, typed("first line")...)
 	m, _ = press(t, m, ctrlJ()) // a newline; Enter submits
 	m, _ = press(t, m, append(typed("second line"), keyEnter)...)
-	if v := m.View(); !strings.Contains(v, "supersed") || !strings.Contains(v, "original wording is kept") {
+	if v := m.View().Content; !strings.Contains(v, "supersed") || !strings.Contains(v, "original wording is kept") {
 		t.Errorf("the confirmation should say that this corrects by superseding and keeps the original:\n%s", v)
 	}
 	m, _ = press(t, m, ch('y'))
@@ -240,7 +240,7 @@ func TestChange_AnObservationIsUpdatedAndMayHaveSeveralLines(t *testing.T) {
 	if corrected == "" || len(obs) != 2 {
 		t.Errorf("observations = %+v, want the original and a new one with the two lines", obs)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"observation 1 corrected by observation", "supersedes it", "equivalent:  kb observation update 1", "Observations (2)"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the screen lacks %q:\n%s", want, v)
@@ -254,7 +254,7 @@ func TestChange_AConceptIsRenamedFromItsTab(t *testing.T) {
 	m := removeModel(t)
 	selectProject(t, m, "alpha")
 	m, _ = press(t, m, keyEnter, ch('c'), ch('e')) // concepts tab, edit its name
-	m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, _ = press(t, m, ctrlKey('u'))
 	m, _ = press(t, m, append(typed("event-streaming"), keyEnter, ch('y'))...)
 	if m.state != viewConcepts {
 		t.Fatalf("state = %s, want the concepts tab", viewStateNames[m.state])
@@ -269,8 +269,8 @@ func TestChange_AConceptIsRenamedFromItsTab(t *testing.T) {
 	if !found {
 		t.Error("the concept was not renamed")
 	}
-	if !strings.Contains(m.View(), "equivalent:  kb concept rename streaming event-streaming") {
-		t.Errorf("the equivalent command is missing:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "equivalent:  kb concept rename streaming event-streaming") {
+		t.Errorf("the equivalent command is missing:\n%s", m.View().Content)
 	}
 }
 
@@ -279,18 +279,18 @@ func TestChange_AConceptIsRenamedFromItsTab(t *testing.T) {
 func TestChange_TheLegendsOfferTheKeys(t *testing.T) {
 	m := removeModel(t)
 	for _, want := range []string{"s status", "e desc", "r rename"} {
-		if !strings.Contains(m.View(), want) {
-			t.Errorf("the project list legend lacks %q:\n%s", want, m.View())
+		if !strings.Contains(m.View().Content, want) {
+			t.Errorf("the project list legend lacks %q:\n%s", want, m.View().Content)
 		}
 	}
 	selectProject(t, m, "alpha")
 	m, _ = press(t, m, keyEnter)
-	if !strings.Contains(m.View(), "e edit") {
-		t.Errorf("the observations legend lacks e edit:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "e edit") {
+		t.Errorf("the observations legend lacks e edit:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch('c'))
-	if !strings.Contains(m.View(), "e rename") {
-		t.Errorf("the concepts legend lacks e rename:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "e rename") {
+		t.Errorf("the concepts legend lacks e rename:\n%s", m.View().Content)
 	}
 }
 
@@ -390,12 +390,12 @@ func TestChange_ARecordSupersedesAnotherAndBothSidesAreWritten(t *testing.T) {
 	if m.state != viewChange || !m.capturingText() {
 		t.Fatalf("state %s, capturing %v; want the field, taking text", viewStateNames[m.state], m.capturingText())
 	}
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, "clasm/DR-0001") || !strings.Contains(v, "clasm/") {
 		t.Errorf("the screen should name the record and start the reference with its scope:\n%s", v)
 	}
 	m, _ = press(t, m, append(typed("0002"), keyEnter)...)
-	v = m.View()
+	v = m.View().Content
 	for _, want := range []string{"clasm/DR-0001", "clasm/DR-0002", "supersedes", "becomes superseded", "y apply"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the confirmation lacks %q:\n%s", want, v)
@@ -414,7 +414,7 @@ func TestChange_ARecordSupersedesAnotherAndBothSidesAreWritten(t *testing.T) {
 	if !fileHas(t, root, "0001", "supersedes: [") || !fileHas(t, root, "0001", "0002") {
 		t.Errorf("the new record does not carry supersedes DR-0002:\n%s", readFixture(t, root, "clasm", "0001"))
 	}
-	v = m.View()
+	v = m.View().Content
 	for _, want := range []string{"✓", "equivalent:  kb record supersede clasm/DR-0001 clasm/DR-0002"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the screen lacks %q:\n%s", want, v)
@@ -436,8 +436,8 @@ func TestChange_ASupersessionTheCommandRefusesStaysInTheField(t *testing.T) {
 			if m.state != viewChange || isQuit(cmd) {
 				t.Fatalf("state %s; a refusal should stay in the field", viewStateNames[m.state])
 			}
-			if strings.Contains(m.View(), "y apply") {
-				t.Errorf("a refused supersession reached the confirmation:\n%s", m.View())
+			if strings.Contains(m.View().Content, "y apply") {
+				t.Errorf("a refused supersession reached the confirmation:\n%s", m.View().Content)
 			}
 			if readFixture(t, root, "clasm", "0001") != before {
 				t.Error("a refused supersession wrote")
@@ -459,8 +459,8 @@ func TestChange_ASupersessionCanBeCancelledAtEveryStep(t *testing.T) {
 			selectRef(t, m, "clasm/DR-0001")
 			m, _ = press(t, m, ch('u'))
 			m, cmd := press(t, m, keys...)
-			if isQuit(cmd) || m.state != viewRecordScope || !strings.Contains(m.View(), "cancelled") {
-				t.Fatalf("state %s (quit %v); want the Records screen and a cancelled notice:\n%s", viewStateNames[m.state], isQuit(cmd), m.View())
+			if isQuit(cmd) || m.state != viewRecordScope || !strings.Contains(m.View().Content, "cancelled") {
+				t.Fatalf("state %s (quit %v); want the Records screen and a cancelled notice:\n%s", viewStateNames[m.state], isQuit(cmd), m.View().Content)
 			}
 			if readFixture(t, root, "clasm", "0001") != b1 || readFixture(t, root, "clasm", "0002") != b2 {
 				t.Error("a cancel wrote")
@@ -472,7 +472,7 @@ func TestChange_ASupersessionCanBeCancelledAtEveryStep(t *testing.T) {
 func TestChange_TheLegendsOfferSupersede(t *testing.T) {
 	fakePagerSeam(t)
 	m, _ := writeModel(t)
-	if !strings.Contains(m.View(), "u supersede") {
-		t.Errorf("the Records screen legend lacks u supersede:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "u supersede") {
+		t.Errorf("the Records screen legend lacks u supersede:\n%s", m.View().Content)
 	}
 }

@@ -311,17 +311,21 @@ func (sc *ptyScreen) text() string {
 	return sc.buf.String()
 }
 
+// screen is what is on the terminal now: the bytes played onto an 80 by 24
+// grid, so text the renderer wrote in pieces reads as one phrase.
+func (sc *ptyScreen) screen() string { return emulate(sc.text(), 80, 24) }
+
 // waitFor fails the test if text does not appear within ten seconds.
 func (sc *ptyScreen) waitFor(t *testing.T, text string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if strings.Contains(sc.text(), text) {
+		if strings.Contains(sc.text(), text) || strings.Contains(sc.screen(), text) {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("%q never appeared on the terminal; it showed:\n%s", text, sc.text())
+	t.Fatalf("%q never appeared on the terminal; it showed:\n%s", text, sc.screen())
 }
 
 // reviewOnATerminal starts the built kb on a pseudo-terminal with the pager set

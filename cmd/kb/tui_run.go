@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 /** decisionsTarget returns the directory `index` and `record fmt` run on for the

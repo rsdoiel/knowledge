@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 /** planFlow is a plan-then-apply write in progress (knowledge DR-0068, DR-0067
@@ -47,7 +47,7 @@ func (m *tuiModel) beginPlan(p *planFlow, back viewState) {
 	if h < 3 {
 		h = 3
 	}
-	vp := viewport.New(m.cols()-4, h)
+	vp := viewport.New(viewport.WithWidth(m.cols()-4), viewport.WithHeight(h))
 	vp.SetContent(lipgloss.NewStyle().Width(m.cols() - 4).Render(strings.TrimRight(p.text, "\n")))
 	m.planView = vp
 	m.setState(viewPlan)
@@ -56,7 +56,7 @@ func (m *tuiModel) beginPlan(p *planFlow, back viewState) {
 // updatePlan handles a key on a plan. y applies; n, q and Esc leave with nothing
 // done; the scroll keys move the text; everything else, Enter included, is
 // ignored so that a habitual key cannot write.
-func (m *tuiModel) updatePlan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updatePlan(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	for _, k := range keysOf(msg) {
 		switch k.String() {
 		case "y":
@@ -65,7 +65,7 @@ func (m *tuiModel) updatePlan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setState(m.plan.back)
 			m.notice = fmt.Sprintf("cancelled; nothing was applied (%s)", m.plan.title)
 			return m, nil
-		case "j", "k", "up", "down", " ", "pgup", "pgdown":
+		case "j", "k", "up", "down", "space", "pgup", "pgdown":
 			m.planView, _ = m.planView.Update(k)
 		}
 	}

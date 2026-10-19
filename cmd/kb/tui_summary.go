@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -90,7 +90,7 @@ func (m *tuiModel) loadReviewQueue() error {
 	for i, it := range queue {
 		items[i] = reviewQueueItem{it}
 	}
-	l := newCompactList(items, fmt.Sprintf("Review queue — %s  (%d)", m.recordScopeName(), len(items)), m.cols()-4, m.listHeight())
+	l := newCompactList(m.isDark, items, fmt.Sprintf("Review queue — %s  (%d)", m.recordScopeName(), len(items)), m.cols()-4, m.listHeight())
 	l.SetStatusBarItemName("section", "sections")
 	m.queueList = l
 	m.clearFilter(viewReviewQueue)
@@ -114,7 +114,7 @@ func (m *tuiModel) reloadReviewQueue() {
 
 // updateReviewQueue handles a key on the queue. Enter starts the unit; q goes back
 // to the Documents menu; a widens the scope.
-func (m *tuiModel) updateReviewQueue(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateReviewQueue(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
 		return m.openGroup("document")
@@ -263,7 +263,7 @@ func (m *tuiModel) reviewSummary() (tea.Model, tea.Cmd) {
 	if h < 3 {
 		h = 3
 	}
-	vp := viewport.New(m.cols()-4, h)
+	vp := viewport.New(viewport.WithWidth(m.cols()-4), viewport.WithHeight(h))
 	vp.SetContent(lipgloss.NewStyle().Width(m.cols() - 4).Render(u.text))
 	u.source = vp
 	m.setState(viewSummary)
@@ -280,7 +280,7 @@ func (m *tuiModel) leaveUnit(format string, a ...any) (tea.Model, tea.Cmd) {
 
 // updateSummary takes a key of the unit: text while writing in the built-in area,
 // otherwise y, e, the cancels and scrolling.
-func (m *tuiModel) updateSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateSummary(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	u := m.unit
 	if u == nil {
 		m.setState(viewReviewQueue)
@@ -316,7 +316,7 @@ func (m *tuiModel) updateSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.writeSummary(u.candidate)
 		case "n", "q", "esc":
 			return m.leaveUnit("cancelled; section %d is unchanged (summaries approved earlier are kept)", u.item.ID)
-		case "j", "k", "up", "down", " ", "pgup", "pgdown":
+		case "j", "k", "up", "down", "space", "pgup", "pgdown":
 			u.source, _ = u.source.Update(k)
 		}
 	}
@@ -361,7 +361,7 @@ func (m *tuiModel) summaryScreen() (string, []string) {
 			return title, []string{"the editor is open"}
 		}
 		body := wrap("Write the summary; the section's text is below to start from. Enter accepts, Ctrl-J starts a new line, Esc cancels.")
-		return title, append(append(body, ""), strings.Split(u.edit.View(), "\n")...)
+		return title, append(append(body, ""), strings.Split(u.edit.render(), "\n")...)
 	}
 	body := []string{"summary — what will be saved:"}
 	sum := wrap(u.candidate)

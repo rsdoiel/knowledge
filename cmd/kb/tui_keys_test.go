@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The TUI's key conventions (knowledge DR-0064, v0.0.19 T4): q goes back and
@@ -208,7 +208,7 @@ func TestTUIKeys_EveryScreenShowsItsKeys(t *testing.T) {
 		viewRecords:      {"o c r tabs", "/ filter", "q back"},
 		viewSearch:       {"/ filter", "q back"},
 	} {
-		view := browserAt(t, state).View()
+		view := browserAt(t, state).View().Content
 		for _, w := range want {
 			if !strings.Contains(view, w) {
 				t.Errorf("%s: the legend lacks %q:\n%s", viewStateNames[state], w, view)
@@ -220,7 +220,7 @@ func TestTUIKeys_EveryScreenShowsItsKeys(t *testing.T) {
 // While typing, the legend says what Esc and Enter do, and does not offer q.
 func TestTUIKeys_TheLegendChangesWithTheMode(t *testing.T) {
 	m, _ := press(t, browserAt(t, viewObservations), ch('S'))
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"Esc cancel", "Enter search"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the typing legend lacks %q:\n%s", want, view)
@@ -238,7 +238,7 @@ func TestTUIKeys_TheLegendChangesWithTheMode(t *testing.T) {
 func TestTUIKeys_AnErrorIsDismissedWithQ(t *testing.T) {
 	m := browserAt(t, viewObservations)
 	m.setErr(fmt.Errorf("boom"))
-	if v := m.View(); !strings.Contains(v, "boom") || !strings.Contains(v, "q dismiss") {
+	if v := m.View().Content; !strings.Contains(v, "boom") || !strings.Contains(v, "q dismiss") {
 		t.Errorf("the error view lacks the message or its key:\n%s", v)
 	}
 	m, cmd := press(t, m, ch('q'))
@@ -282,7 +282,7 @@ func TestTUIKeys_ListsHaveNoQuitKeysOrHiddenFilter(t *testing.T) {
 func TestTUIKeys_TheLegendFitsInTheWindow(t *testing.T) {
 	for _, state := range allStates {
 		m := browserAt(t, state)
-		lines := strings.Count(m.View(), "\n") + 1
+		lines := strings.Count(m.View().Content, "\n") + 1
 		if lines > 24 {
 			t.Errorf("%s: the view is %d lines in a 24-line window", viewStateNames[state], lines)
 		}

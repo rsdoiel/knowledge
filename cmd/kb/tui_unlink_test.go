@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -55,14 +55,14 @@ func TestUnlink_ProjectConceptFromTheConceptsTab(t *testing.T) {
 	if m.state != viewConcepts {
 		t.Fatalf("state = %s", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "u unlink") {
+	if v := m.View().Content; !strings.Contains(v, "u unlink") {
 		t.Errorf("the tab's legend should offer u unlink:\n%s", v)
 	}
 	m, _ = press(t, m, ch('u'))
 	if m.state != viewRemove {
-		t.Fatalf("state = %s, want the gate\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the gate\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"Unlink", `concept "streaming"`, "project alpha", "kb unlink project alpha streaming"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the gate lacks %q:\n%s", want, v)
@@ -77,8 +77,8 @@ func TestUnlink_ProjectConceptFromTheConceptsTab(t *testing.T) {
 		t.Fatalf("state = %s, want back on the tab", viewStateNames[m.state])
 	}
 	for _, want := range []string{"unlinked", "kb unlink project alpha streaming"} {
-		if !strings.Contains(m.View(), want) {
-			t.Errorf("the result lacks %q:\n%s", want, m.View())
+		if !strings.Contains(m.View().Content, want) {
+			t.Errorf("the result lacks %q:\n%s", want, m.View().Content)
 		}
 	}
 	p, _ := kb.ProjectByName("alpha")
@@ -99,8 +99,8 @@ func TestUnlink_AWrongConfirmationAndEscChangeNothing(t *testing.T) {
 		t.Fatalf("a wrong confirmation left the gate: %s", viewStateNames[m.state])
 	}
 	m, _ = press(t, m, keyEsc)
-	if m.state != viewConcepts || !strings.Contains(m.View(), "cancelled") {
-		t.Errorf("Esc: state %s\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewConcepts || !strings.Contains(m.View().Content, "cancelled") {
+		t.Errorf("Esc: state %s\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	p, _ := kb.ProjectByName("alpha")
 	if cs, _ := kb.ProjectConcepts(p.ID); len(cs) != 1 {
@@ -114,14 +114,14 @@ func TestUnlink_AnObservationListsItsLinksToPickFrom(t *testing.T) {
 	if m.state != viewObservations {
 		t.Fatalf("state = %s", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "u unlink") {
+	if v := m.View().Content; !strings.Contains(v, "u unlink") {
 		t.Errorf("the tab's legend should offer u unlink:\n%s", v)
 	}
 	m, _ = press(t, m, ch('u'))
 	if m.state != viewUnlink {
-		t.Fatalf("state = %s, want the link picker\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the link picker\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{`concept "caching"`, "source", "A cited paper"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the picker lacks %q:\n%s", want, v)
@@ -132,7 +132,7 @@ func TestUnlink_AnObservationListsItsLinksToPickFrom(t *testing.T) {
 	if m.state != viewRemove {
 		t.Fatalf("state = %s, want the gate", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "kb unlink observation") || !strings.Contains(v, "caching") {
+	if v := m.View().Content; !strings.Contains(v, "kb unlink observation") || !strings.Contains(v, "caching") {
 		t.Errorf("the gate should name the command:\n%s", v)
 	}
 	m, _ = press(t, m, typed("caching")...)
@@ -157,7 +157,7 @@ func TestUnlink_ASourceLinkIsConfirmedByItsID(t *testing.T) {
 	if m.state != viewRemove {
 		t.Fatalf("state = %s", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, "kb unlink source") || !strings.Contains(v, "A cited paper") {
 		t.Errorf("the gate should name the source and the command:\n%s", v)
 	}
@@ -183,8 +183,8 @@ func TestUnlink_AnObservationWithNoLinksSaysSo(t *testing.T) {
 	next, _ := fresh.Update(windowSize80())
 	m = next.(*tuiModel)
 	m, _ = press(t, m, ch('j'), keyEnter, ch('u')) // beta's observation
-	if m.state != viewObservations || !strings.Contains(m.View(), "no concept or source links") {
-		t.Errorf("state %s\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewObservations || !strings.Contains(m.View().Content, "no concept or source links") {
+		t.Errorf("state %s\n%s", viewStateNames[m.state], m.View().Content)
 	}
 }
 

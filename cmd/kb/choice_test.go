@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The chooser, the confirmation and the typed confirmation (knowledge DR-0065,
@@ -15,12 +15,12 @@ import (
 // recordreview_test.go.
 
 // ch is a single typed character; runeKey (tui_model_test.go) is a string of them.
-func ch(r rune) tea.Msg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
+func ch(r rune) tea.Msg { return tea.KeyPressMsg{Code: r, Text: string(r)} }
 
 var (
-	keyEsc   tea.Msg = tea.KeyMsg{Type: tea.KeyEsc}
-	keyEnter tea.Msg = tea.KeyMsg{Type: tea.KeyEnter}
-	keyCtrlC tea.Msg = tea.KeyMsg{Type: tea.KeyCtrlC}
+	keyEsc   tea.Msg = tea.KeyPressMsg{Code: tea.KeyEscape}
+	keyEnter tea.Msg = tea.KeyPressMsg{Code: tea.KeyEnter}
+	keyCtrlC tea.Msg = ctrlKey('c')
 )
 
 // isQuit reports whether a command is bubbletea's Quit.
@@ -66,7 +66,7 @@ func TestChooser_QEscAndCtrlCCancelAtOnce(t *testing.T) {
 func TestChooser_OtherKeysAreIgnored(t *testing.T) {
 	for name, msg := range map[string]tea.Msg{
 		"enter": keyEnter, "s (not offered)": ch('s'), "p (not offered)": ch('p'), "x": ch('x'),
-		"space": tea.KeyMsg{Type: tea.KeySpace}, "tab": tea.KeyMsg{Type: tea.KeyTab},
+		"space": tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}, "tab": tea.KeyPressMsg{Code: tea.KeyTab},
 	} {
 		m := newChooser("clasm/DR-0001", "proposed", proposedOptions)
 		_, cmd := m.Update(msg)
@@ -86,7 +86,7 @@ func TestChooser_SeveralKeysInOneMessage(t *testing.T) {
 }
 
 func TestChooser_ViewNamesTheRecordAndTheMoves(t *testing.T) {
-	v := newChooser("clasm/DR-0001", "proposed", proposedOptions).View()
+	v := newChooser("clasm/DR-0001", "proposed", proposedOptions).View().Content
 	for _, want := range []string{"clasm/DR-0001", "proposed", "[a]ccepted", "[r]ejected", "[c]ancelled", "[q]uit"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the view lacks %q: %q", want, v)
@@ -113,7 +113,7 @@ func TestConfirm_NQEscAndCtrlCCancelAtOnce(t *testing.T) {
 
 // Enter must not apply a write: a habitual Enter is not consent.
 func TestConfirm_EnterAndOtherKeysDoNothing(t *testing.T) {
-	for name, msg := range map[string]tea.Msg{"enter": keyEnter, "space": tea.KeyMsg{Type: tea.KeySpace}, "x": ch('x'), "a": ch('a')} {
+	for name, msg := range map[string]tea.Msg{"enter": keyEnter, "space": tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}, "x": ch('x'), "a": ch('a')} {
 		m := newConfirm("Set?")
 		_, cmd := m.Update(msg)
 		if m.confirmed || m.cancelled || isQuit(cmd) {
@@ -127,8 +127,8 @@ func TestReview_AThenYAppliesAndNeedsNoEnter(t *testing.T) {
 	if _, cmd := m.Update(ch('a')); isQuit(cmd) {
 		t.Fatal("choosing a status ended the program; the confirmation still has to be answered")
 	}
-	if !strings.Contains(m.View(), "from proposed to accepted") {
-		t.Errorf("the confirmation does not name the move: %q", m.View())
+	if !strings.Contains(m.View().Content, "from proposed to accepted") {
+		t.Errorf("the confirmation does not name the move: %q", m.View().Content)
 	}
 	if _, cmd := m.Update(ch('y')); !isQuit(cmd) || !m.confirm.confirmed || m.chooser.chosen != "accepted" {
 		t.Errorf("y: quit %v, confirmed %v, chosen %q", isQuit(cmd), m.confirm.confirmed, m.chooser.chosen)
@@ -234,7 +234,7 @@ func TestTypedConfirm_EscAndCtrlCCancel(t *testing.T) {
 func TestTypedConfirm_BackspaceEdits(t *testing.T) {
 	m := newTypedConfirm("ab")
 	m.Update(runeKey("abx"))
-	m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	if _, cmd := m.Update(keyEnter); !m.confirmed || !isQuit(cmd) {
 		t.Errorf("after a backspace the text should match: value %q", m.value)
 	}

@@ -45,7 +45,7 @@ func stripAndRule(t *testing.T, view string) (string, string) {
 }
 
 func TestTabs_AProjectShowsTheStripWithCounts(t *testing.T) {
-	v := projectTabs(t).View()
+	v := projectTabs(t).View().Content
 	strip, _ := stripAndRule(t, v)
 	for _, want := range []string{"Observations (1)", "Concepts (1)", "Records (2)"} {
 		if !strings.Contains(strip, want) {
@@ -69,7 +69,7 @@ func TestTabs_TheActiveTabIsUnderlined(t *testing.T) {
 		if m.state != tc.state {
 			t.Fatalf("%c gave %s, want %s", tc.key, viewStateNames[m.state], viewStateNames[tc.state])
 		}
-		strip, rule := stripAndRule(t, m.View())
+		strip, rule := stripAndRule(t, m.View().Content)
 		col := column(strip, tc.label)
 		bar := column(rule, "━")
 		if col < 0 || bar != col {
@@ -94,7 +94,7 @@ func TestTabs_TheLegendNamesTheTabKeys(t *testing.T) {
 	m := projectTabs(t)
 	for _, state := range []viewState{viewObservations, viewConcepts, viewRecords} {
 		m.setState(state)
-		if v := m.View(); !strings.Contains(v, "o c r tabs") || !strings.Contains(v, "q back") {
+		if v := m.View().Content; !strings.Contains(v, "o c r tabs") || !strings.Contains(v, "q back") {
 			t.Errorf("%s: the legend lacks the tab keys:\n%s", viewStateNames[state], v)
 		}
 	}
@@ -106,7 +106,7 @@ func TestTabs_TheViewStillFitsTheWindow(t *testing.T) {
 	m := projectTabs(t)
 	for _, state := range []viewState{viewObservations, viewConcepts, viewRecords} {
 		m.setState(state)
-		if n := len(strings.Split(m.View(), "\n")); n != 24 {
+		if n := len(strings.Split(m.View().Content, "\n")); n != 24 {
 			t.Errorf("%s: %d lines in a 24-line window", viewStateNames[state], n)
 		}
 	}

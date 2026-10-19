@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The `:` command line (knowledge DR-0066 point 2, DR-0067, v0.0.20 U6). A line
@@ -175,7 +175,7 @@ func (m *tuiModel) openCommand() (tea.Model, tea.Cmd) {
 
 // updateCommand takes a key at the prompt. Every printable key is text, q and `:`
 // included; Enter runs the line, Esc cancels.
-func (m *tuiModel) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateCommand(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	c := m.command
 	c.edit.Update(msg)
 	switch {
@@ -192,7 +192,7 @@ func (m *tuiModel) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // commandScreen is the prompt's screen.
 func (m *tuiModel) commandScreen() (string, []string) {
 	body := []string{"kb ...", ""}
-	body = append(body, strings.Split(m.command.edit.View(), "\n")...)
+	body = append(body, strings.Split(m.command.edit.render(), "\n")...)
 	body = append(body, "",
 		"Type a command as on the command line, without the leading kb.",
 		"A write shows what it will do and asks first; kb verbs lists them.")

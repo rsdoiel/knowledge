@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // The top menu, the group menus and the frame (knowledge DR-0066 and its
@@ -61,7 +61,7 @@ func TestMenu_BareKBOpensTheTopMenu(t *testing.T) {
 	if m.state != viewMenu {
 		t.Fatalf("state = %s, want viewMenu", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, it := range topMenu() {
 		if !strings.Contains(v, it.Label) {
 			t.Errorf("the top menu lacks %q:\n%s", it.Label, v)
@@ -74,7 +74,7 @@ func TestMenu_BareKBOpensTheTopMenu(t *testing.T) {
 
 // Some machines have more than one workspace, so the menu says which this is.
 func TestMenu_TheHeaderNamesTheWorkspace(t *testing.T) {
-	v := menuModel(t).View()
+	v := menuModel(t).View().Content
 	for _, want := range []string{"agents/knowledge.db", "2 projects", "records"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the header lacks %q:\n%s", want, v)
@@ -88,9 +88,9 @@ func TestMenu_EveryScreenIsInOneFrame(t *testing.T) {
 	m := menuModel(t)
 	check := func(name string, m *tuiModel) {
 		t.Helper()
-		lines := strings.Split(strings.TrimRight(m.View(), "\n"), "\n")
+		lines := strings.Split(strings.TrimRight(m.View().Content, "\n"), "\n")
 		if !strings.HasPrefix(lines[0], "┌ ") || !strings.HasPrefix(lines[len(lines)-1], "└") {
-			t.Errorf("%s: not boxed:\n%s", name, m.View())
+			t.Errorf("%s: not boxed:\n%s", name, m.View().Content)
 		}
 		for i, l := range lines {
 			if w := lipgloss.Width(l); w != 80 {
@@ -100,7 +100,7 @@ func TestMenu_EveryScreenIsInOneFrame(t *testing.T) {
 		if len(lines) > 24 {
 			t.Errorf("%s: %d lines in a 24-line window", name, len(lines))
 		}
-		if !strings.Contains(m.View(), "├──") {
+		if !strings.Contains(m.View().Content, "├──") {
 			t.Errorf("%s: no divider above the legend", name)
 		}
 	}
@@ -117,11 +117,11 @@ func TestMenu_JKAndTheArrowsMoveAndStopAtTheEnds(t *testing.T) {
 	if m.menuCursor != 0 {
 		t.Errorf("k at the top moved to %d", m.menuCursor)
 	}
-	m, _ = press(t, m, ch('j'), tea.KeyMsg{Type: tea.KeyDown})
+	m, _ = press(t, m, ch('j'), tea.KeyPressMsg{Code: tea.KeyDown})
 	if m.menuCursor != 2 {
 		t.Errorf("j then Down gave %d, want 2", m.menuCursor)
 	}
-	m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyUp})
+	m, _ = press(t, m, tea.KeyPressMsg{Code: tea.KeyUp})
 	if m.menuCursor != 1 {
 		t.Errorf("Up gave %d, want 1", m.menuCursor)
 	}
@@ -138,7 +138,7 @@ func TestMenu_AGroupOpensItsMenuAndBrowseOpensTheProjects(t *testing.T) {
 	if m.state != viewGroup || m.group != "project" {
 		t.Fatalf("state %s group %q, want the project group menu", viewStateNames[m.state], m.group)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"Browse", "New project…"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the Projects menu lacks %q:\n%s", want, v)
@@ -155,7 +155,7 @@ func TestMenu_AGroupOpensItsMenuAndBrowseOpensTheProjects(t *testing.T) {
 func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
 	asUnbuilt(t, "document", "frontmatter", "v0.0.22")
 	m := openRow(t, menuModel(t), "Documents")
-	if v := m.View(); !strings.Contains(v, "Frontmatter") || !strings.Contains(v, "(v0.0.22)") {
+	if v := m.View().Content; !strings.Contains(v, "Frontmatter") || !strings.Contains(v, "(v0.0.22)") {
 		t.Errorf("the Documents menu does not mark Frontmatter as coming:\n%s", v)
 	}
 	for i, it := range groupMenu("document") {
@@ -170,14 +170,14 @@ func TestMenu_AnUnbuiltRowSaysSoAndShowsTheCommand(t *testing.T) {
 	if m.state != viewGroup {
 		t.Errorf("choosing an unbuilt row left the menu for %s", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"not in the TUI yet", "v0.0.22", "kb document frontmatter"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the explanation lacks %q:\n%s", want, v)
 		}
 	}
 	m, _ = press(t, m, ch('k'))
-	if strings.Contains(m.View(), "not in the TUI yet") {
+	if strings.Contains(m.View().Content, "not in the TUI yet") {
 		t.Error("the explanation stayed after another key")
 	}
 }
@@ -190,7 +190,7 @@ func TestMenu_AGroupWithAnUnbuiltRowStillOpens(t *testing.T) {
 	if m.state != viewGroup || m.group != "document" {
 		t.Fatalf("state %s group %q, want the document group menu", viewStateNames[m.state], m.group)
 	}
-	if v := m.View(); !strings.Contains(v, "kb document frontmatter") {
+	if v := m.View().Content; !strings.Contains(v, "kb document frontmatter") {
 		t.Errorf("choosing Frontmatter in the Documents group should show its command:\n%s", v)
 	}
 }
@@ -229,8 +229,8 @@ func TestMenu_ADeepLinkHasTheSameWayBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.state != viewGroup || g.group != "record" || !strings.Contains(g.View(), "Pending") {
-		t.Errorf("a deep link to the record group opened %s %q:\n%s", viewStateNames[g.state], g.group, g.View())
+	if g.state != viewGroup || g.group != "record" || !strings.Contains(g.View().Content, "Pending") {
+		t.Errorf("a deep link to the record group opened %s %q:\n%s", viewStateNames[g.state], g.group, g.View().Content)
 	}
 }
 
@@ -282,14 +282,14 @@ func TestMenu_CommandLettersAreTextInTheSearchPromptFromAMenu(t *testing.T) {
 func TestMenu_TheLegendsNameTheKeys(t *testing.T) {
 	m := menuModel(t)
 	for _, w := range []string{"Enter open", "S search", "q quit"} {
-		if !strings.Contains(m.View(), w) {
-			t.Errorf("the top-menu legend lacks %q:\n%s", w, m.View())
+		if !strings.Contains(m.View().Content, w) {
+			t.Errorf("the top-menu legend lacks %q:\n%s", w, m.View().Content)
 		}
 	}
 	g := openRow(t, m, "Projects")
 	for _, w := range []string{"Enter open", "q back"} {
-		if !strings.Contains(g.View(), w) {
-			t.Errorf("the group legend lacks %q:\n%s", w, g.View())
+		if !strings.Contains(g.View().Content, w) {
+			t.Errorf("the group legend lacks %q:\n%s", w, g.View().Content)
 		}
 	}
 }

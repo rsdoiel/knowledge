@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -116,7 +116,7 @@ func (m *tuiModel) openUnlink() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.unlinkObs = it.o.ID
-	m.unlinkList = newBrowserList(items, fmt.Sprintf("Unlink — observation %d", it.o.ID), m.cols()-4, m.listHeight())
+	m.unlinkList = newBrowserList(m.isDark, items, fmt.Sprintf("Unlink — observation %d", it.o.ID), m.cols()-4, m.listHeight())
 	m.clearFilter(viewUnlink)
 	m.setState(viewUnlink)
 	return m, nil
@@ -124,7 +124,7 @@ func (m *tuiModel) openUnlink() (tea.Model, tea.Cmd) {
 
 // updateUnlink handles a key in the link picker: Enter opens the gate for the
 // selected link, q goes back to the observations.
-func (m *tuiModel) updateUnlink(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateUnlink(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
 		m.setState(viewObservations)

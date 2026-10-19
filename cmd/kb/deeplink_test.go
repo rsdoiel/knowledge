@@ -228,7 +228,7 @@ func TestDeepLink_TheModelStartsWhereItIsTold(t *testing.T) {
 		want  string
 	}{
 		{tuiStart{state: viewRecordScope, status: "proposed"}, func(m *tuiModel) bool {
-			return m.state == viewRecordScope && len(m.scopeList.Items()) == 1 && strings.Contains(m.View(), "Pending")
+			return m.state == viewRecordScope && len(m.scopeList.Items()) == 1 && strings.Contains(m.View().Content, "Pending")
 		}, "the Pending screen with its one record"},
 		{tuiStart{state: viewRecordScope, all: true, ref: "alpha/DR-0001"}, func(m *tuiModel) bool {
 			it, ok := m.scopeList.SelectedItem().(scopedRecordItem)
@@ -243,7 +243,7 @@ func TestDeepLink_TheModelStartsWhereItIsTold(t *testing.T) {
 			t.Fatalf("%+v: %v", c.start, err)
 		}
 		if !c.check(m) {
-			t.Errorf("%+v: want %s; state %s\n%s", c.start, c.want, viewStateNames[m.state], m.View())
+			t.Errorf("%+v: want %s; state %s\n%s", c.start, c.want, viewStateNames[m.state], m.View().Content)
 		}
 	}
 }

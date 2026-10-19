@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The first write in the TUI (knowledge DR-0066, DR-0065, DR-0067; v0.0.19 T6):
@@ -126,8 +126,8 @@ func TestWrite_TheLegendOffersReadAndStatus(t *testing.T) {
 	m, _ := writeModel(t)
 	// This model starts with every scope shown, so the scope key offers to narrow.
 	for _, want := range []string{"Enter read", "s status", "a this scope", "q back"} {
-		if !strings.Contains(m.View(), want) {
-			t.Errorf("the legend lacks %q:\n%s", want, m.View())
+		if !strings.Contains(m.View().Content, want) {
+			t.Errorf("the legend lacks %q:\n%s", want, m.View().Content)
 		}
 	}
 }
@@ -143,7 +143,7 @@ func TestWrite_SShowsThePagerThenTheChooser(t *testing.T) {
 		t.Fatalf("pager calls %d purpose %q; want one status", seam.calls, seam.purpose)
 	}
 	m, _ = donePager(t, m, cmd)
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"clasm/DR-0001", "proposed", "[a]ccepted", "[r]ejected", "[c]ancelled", "[q]uit", "The proposed one"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the chooser lacks %q:\n%s", want, v)
@@ -159,8 +159,8 @@ func TestWrite_ChoosingAndConfirmingWritesThroughTheCLIsFunction(t *testing.T) {
 	m, root := writeModel(t)
 	m = beginStatus(t, m, "clasm/DR-0001")
 	m, _ = press(t, m, ch('r'))
-	if !strings.Contains(m.View(), "from proposed to rejected") {
-		t.Fatalf("the confirmation does not name the move:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "from proposed to rejected") {
+		t.Fatalf("the confirmation does not name the move:\n%s", m.View().Content)
 	}
 	m, cmd := press(t, m, ch('y'))
 	if isQuit(cmd) {
@@ -175,7 +175,7 @@ func TestWrite_ChoosingAndConfirmingWritesThroughTheCLIsFunction(t *testing.T) {
 	if st := storedStatus(t, m.kb, "clasm", "0001"); st != "rejected" {
 		t.Errorf("the database carries %q, want rejected", st)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"clasm/DR-0001 status set to rejected", "equivalent:  kb record set-status clasm/DR-0001 rejected"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the screen lacks %q:\n%s", want, v)
@@ -187,7 +187,7 @@ func TestWrite_ChoosingAndConfirmingWritesThroughTheCLIsFunction(t *testing.T) {
 	}
 	// the notice goes with the next key
 	m, _ = press(t, m, ch('j'))
-	if strings.Contains(m.View(), "equivalent:") {
+	if strings.Contains(m.View().Content, "equivalent:") {
 		t.Error("the equivalent line stayed after another key")
 	}
 }
@@ -208,7 +208,7 @@ func TestWrite_SupersededIsOfferedOnlyWithASupersededBy(t *testing.T) {
 	fakePagerSeam(t)
 	m, _ := writeModel(t)
 	m = beginStatus(t, m, "clasm/DR-0002") // accepted, with superseded_by
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, "[s]uperseded") || !strings.Contains(v, "[c]ancelled") || strings.Contains(v, "[a]ccepted") {
 		t.Errorf("accepted with a link should offer superseded and cancelled only:\n%s", v)
 	}
@@ -222,7 +222,7 @@ func TestWrite_ARecordWithNoMovesSaysSoBeforeThePager(t *testing.T) {
 	if seam.calls != 0 {
 		t.Error("the pager ran for a record with no moves")
 	}
-	if v := m.View(); !strings.Contains(v, "final") || m.state != viewRecordScope {
+	if v := m.View().Content; !strings.Contains(v, "final") || m.state != viewRecordScope {
 		t.Errorf("state %s; the screen should say the record is final:\n%s", viewStateNames[m.state], v)
 	}
 }
@@ -247,7 +247,7 @@ func TestWrite_EveryCancelWritesNothingAndSaysSo(t *testing.T) {
 			if isQuit(cmd) || m.state != viewRecordScope {
 				t.Fatalf("a cancel left state %s (quit %v), want the Records screen", viewStateNames[m.state], isQuit(cmd))
 			}
-			if v := m.View(); !strings.Contains(v, "cancelled") || !strings.Contains(v, "clasm/DR-0001") || strings.Contains(v, "equivalent:") {
+			if v := m.View().Content; !strings.Contains(v, "cancelled") || !strings.Contains(v, "clasm/DR-0001") || strings.Contains(v, "equivalent:") {
 				t.Errorf("the screen should say the record is unchanged and show no command:\n%s", v)
 			}
 			if after := readFixture(t, root, "clasm", "0001"); after != before {
@@ -289,7 +289,7 @@ func TestWrite_AMoveRefusedByTheTableIsANoticeAndWritesNothing(t *testing.T) {
 	if after := readFixture(t, root, "clasm", "0001"); after != before {
 		t.Errorf("a refused move changed the file:\n%s", after)
 	}
-	if v := m.View(); !strings.Contains(v, "cannot be set to accepted") || m.state != viewRecordScope {
+	if v := m.View().Content; !strings.Contains(v, "cannot be set to accepted") || m.state != viewRecordScope {
 		t.Errorf("state %s; the screen should say the move is refused:\n%s", viewStateNames[m.state], v)
 	}
 }
@@ -320,8 +320,8 @@ func TestWrite_TheProjectRecordsTabHasTheSameKeys(t *testing.T) {
 		t.Fatalf("state = %s, want the Records tab", viewStateNames[pm.state])
 	}
 	for _, want := range []string{"Enter read", "s status"} {
-		if !strings.Contains(pm.View(), want) {
-			t.Errorf("the Records tab legend lacks %q:\n%s", want, pm.View())
+		if !strings.Contains(pm.View().Content, want) {
+			t.Errorf("the Records tab legend lacks %q:\n%s", want, pm.View().Content)
 		}
 	}
 	// the list is newest first: DR-0004; move to DR-0001
@@ -367,7 +367,7 @@ func TestWrite_WithNoPagerTheBuiltInViewerShowsTheRecord(t *testing.T) {
 	if m.state != viewText {
 		t.Fatalf("state = %s, want the built-in viewer", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"The proposed one", "status: proposed", "q back"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the viewer lacks %q:\n%s", want, v)
@@ -386,8 +386,8 @@ func TestWrite_WithNoPagerStatusGoesViewerThenChooser(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	selectRef(t, m, "clasm/DR-0001")
 	m, _ = press(t, m, ch('s'))
-	if m.state != viewText || !strings.Contains(m.View(), "continue") {
-		t.Fatalf("state %s; the viewer should offer to continue:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewText || !strings.Contains(m.View().Content, "continue") {
+		t.Fatalf("state %s; the viewer should offer to continue:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, ch('q'))
 	if m.state != viewReview {
@@ -413,9 +413,9 @@ func TestWrite_TheViewerScrolls(t *testing.T) {
 		t.Fatal(err)
 	}
 	m, _ = press(t, m, tea.WindowSizeMsg{Width: 80, Height: 24}, keyEnter)
-	top := m.View()
+	top := m.View().Content
 	m, _ = press(t, m, ch('j'), ch('j'), ch('j'))
-	if m.View() == top {
+	if m.View().Content == top {
 		t.Error("j did not scroll the viewer")
 	}
 	if !strings.Contains(top, "title:") {

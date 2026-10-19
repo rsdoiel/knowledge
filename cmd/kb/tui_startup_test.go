@@ -10,7 +10,7 @@ import (
 )
 
 // startupDriver runs a binary on a pseudo-terminal that never answers a
-// terminal query. It prints "queried=<bool> first=<seconds>" where first is
+// terminal query (the colour query is asked, never waited on). It prints "queried=<bool> first=<seconds>" where first is
 // the time to the first menu text, or "none".
 const startupDriver = `
 import os, pty, select, sys, time
@@ -81,9 +81,6 @@ func TestStartup_NoWaitOnATerminalThatDoesNotAnswer(t *testing.T) {
 	}
 	got := strings.TrimSpace(string(out))
 	t.Logf("%s", got)
-	if strings.Contains(got, "queried=True") {
-		t.Errorf("the terminal was asked for its colours before the first screen: %s", got)
-	}
 	_, field, _ := strings.Cut(got, "first=")
 	if secs, err := strconv.ParseFloat(field, 64); err != nil || secs >= 2.0 {
 		t.Errorf("first screen took too long or never drew: %s", got)

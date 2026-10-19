@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -87,7 +87,7 @@ func TestRemove_AProjectThatOwnsContentIsRefusedWithoutAGate(t *testing.T) {
 	if m.state != viewProjects || isQuit(cmd) {
 		t.Fatalf("state = %s; a refusal should leave the list", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"busy", "owns", "1 observation", "nothing was deleted"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the refusal lacks %q:\n%s", want, v)
@@ -105,7 +105,7 @@ func TestRemove_TheGateShowsThePlanAndAsksForTheName(t *testing.T) {
 	if m.state != viewRemove || !m.capturingText() {
 		t.Fatalf("state %s, capturing %v; want the gate, taking text", viewStateNames[m.state], m.capturingText())
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"empty", "1 concept link", "Type empty", "local", "Esc cancel"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the gate lacks %q:\n%s", want, v)
@@ -124,7 +124,7 @@ func TestRemove_TypingTheNameDeletesAndShowsTheCommand(t *testing.T) {
 	if p, _ := m.kb.ProjectByName("empty"); p != nil {
 		t.Error("the project is still there")
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{`✓ deleted project "empty"`, "equivalent:  kb project delete empty --force"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the screen lacks %q:\n%s", want, v)
@@ -146,8 +146,8 @@ func TestRemove_AWrongNameDeletesNothing(t *testing.T) {
 	if p, _ := m.kb.ProjectByName("empty"); p == nil {
 		t.Error("a wrong name deleted the project")
 	}
-	if !strings.Contains(m.View(), "does not match") {
-		t.Errorf("the gate should say the name does not match:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "does not match") {
+		t.Errorf("the gate should say the name does not match:\n%s", m.View().Content)
 	}
 }
 
@@ -160,7 +160,7 @@ func TestRemove_EscCancelsAndSaysSo(t *testing.T) {
 	if m.state != viewProjects || isQuit(cmd) {
 		t.Fatalf("state %s (quit %v); want the list", viewStateNames[m.state], isQuit(cmd))
 	}
-	if v := m.View(); !strings.Contains(v, "cancelled") || strings.Contains(v, "equivalent:") {
+	if v := m.View().Content; !strings.Contains(v, "cancelled") || strings.Contains(v, "equivalent:") {
 		t.Errorf("the screen should say cancelled and show no command:\n%s", v)
 	}
 	if p, _ := m.kb.ProjectByName("empty"); p == nil {
@@ -206,7 +206,7 @@ func TestRemove_ANameStartingWithQCanBeTyped(t *testing.T) {
 	}
 }
 
-func keyCtrlU() tea.Msg { return tea.KeyMsg{Type: tea.KeyCtrlU} }
+func keyCtrlU() tea.Msg { return ctrlKey('u') }
 
 // ─── observations and concepts ───────────────────────────────────────────────
 
@@ -220,7 +220,7 @@ func TestRemove_AnObservationFromItsTab(t *testing.T) {
 	selectProject(t, m, "alpha")
 	m, _ = press(t, m, keyEnter) // observations tab
 	m, _ = press(t, m, ch('d'))
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"observation", "1 concept link", "Type 1"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the gate lacks %q:\n%s", want, v)
@@ -233,11 +233,11 @@ func TestRemove_AnObservationFromItsTab(t *testing.T) {
 	if left, _ := m.kb.Observations(mustProject(t, m, "alpha").ID); len(left) != 0 {
 		t.Errorf("%d observations left", len(left))
 	}
-	if !strings.Contains(m.View(), "equivalent:  kb observation delete 1 --force") {
-		t.Errorf("the equivalent command is missing:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "equivalent:  kb observation delete 1 --force") {
+		t.Errorf("the equivalent command is missing:\n%s", m.View().Content)
 	}
-	if !strings.Contains(m.View(), "Observations (0)") {
-		t.Errorf("the tab count was not refreshed:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "Observations (0)") {
+		t.Errorf("the tab count was not refreshed:\n%s", m.View().Content)
 	}
 }
 
@@ -246,15 +246,15 @@ func TestRemove_AConceptFromItsTab(t *testing.T) {
 	selectProject(t, m, "alpha")
 	m, _ = press(t, m, keyEnter, ch('c')) // concepts tab: streaming
 	m, _ = press(t, m, ch('d'))
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"streaming", "1 project", "Type streaming"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the gate lacks %q:\n%s", want, v)
 		}
 	}
 	m, _ = press(t, m, append(typed("streaming"), keyEnter)...)
-	if m.state != viewConcepts || !strings.Contains(m.View(), "equivalent:  kb concept delete streaming --force") {
-		t.Errorf("state %s; the command is missing:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewConcepts || !strings.Contains(m.View().Content, "equivalent:  kb concept delete streaming --force") {
+		t.Errorf("state %s; the command is missing:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	if cs, _ := m.kb.Concepts(); len(cs) > 0 {
 		for _, c := range cs {
@@ -285,7 +285,7 @@ func TestRemove_ARecordWhoseFileExistsIsRefused(t *testing.T) {
 	if m.state != viewRecordScope {
 		t.Fatalf("state = %s; a refusal should stay on the Records screen", viewStateNames[m.state])
 	}
-	v := unwrapped(m.View())
+	v := unwrapped(m.View().Content)
 	for _, want := range []string{"file still exists", "nothing was deleted", "set-status clasm/DR-0001 cancelled"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the refusal lacks %q:\n%s", want, v)
@@ -303,7 +303,7 @@ func TestRemove_ARecordWhoseFileIsGoneNamesWhatPointsAtIt(t *testing.T) {
 	if m.state != viewRemove {
 		t.Fatalf("state = %s; want the gate (the file is gone)", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"clasm/DR-0002", "clasm/DR-0004", "Type clasm/DR-0002", "relation"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the gate lacks %q (it should name what points at the record):\n%s", want, v)
@@ -313,7 +313,7 @@ func TestRemove_ARecordWhoseFileIsGoneNamesWhatPointsAtIt(t *testing.T) {
 	if m.state != viewRecordScope {
 		t.Fatalf("state = %s, want the Records screen", viewStateNames[m.state])
 	}
-	v = m.View()
+	v = m.View().Content
 	if strings.Contains(v, "clasm/DR-0002 ") && strings.Contains(v, "The accepted one") {
 		t.Errorf("the record is still listed:\n%s", v)
 	}
@@ -328,20 +328,20 @@ func TestRemove_ARecordWhoseFileIsGoneNamesWhatPointsAtIt(t *testing.T) {
 
 func TestRemove_TheLegendsOfferDeleteWhereItWorks(t *testing.T) {
 	m := removeModel(t)
-	if !strings.Contains(m.View(), "d delete") {
-		t.Errorf("the project list legend lacks d delete:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "d delete") {
+		t.Errorf("the project list legend lacks d delete:\n%s", m.View().Content)
 	}
 	selectProject(t, m, "alpha")
 	m, _ = press(t, m, keyEnter)
 	for _, state := range []viewState{viewObservations, viewConcepts, viewRecords} {
 		m.setState(state)
-		if !strings.Contains(m.View(), "d delete") {
-			t.Errorf("%s: the legend lacks d delete:\n%s", viewStateNames[state], m.View())
+		if !strings.Contains(m.View().Content, "d delete") {
+			t.Errorf("%s: the legend lacks d delete:\n%s", viewStateNames[state], m.View().Content)
 		}
 	}
 	w, _ := writeModel(t)
-	if !strings.Contains(w.View(), "d delete") {
-		t.Errorf("the Records screen legend lacks d delete:\n%s", w.View())
+	if !strings.Contains(w.View().Content, "d delete") {
+		t.Errorf("the Records screen legend lacks d delete:\n%s", w.View().Content)
 	}
 }
 

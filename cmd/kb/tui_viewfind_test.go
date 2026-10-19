@@ -5,16 +5,22 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 )
 
 // viewerModel is a TUI with a long record open in the built-in viewer.
-func viewerModel(t *testing.T) *tuiModel {
+func viewerModel(t *testing.T) *tuiModel { return viewerModelColour(t, false) }
+
+// viewerModelColour is viewerModel on a terminal that does, or does not, show
+// colour: the profile message Bubble Tea sends at start-up (DR-0084).
+func viewerModelColour(t *testing.T, colour bool) *tuiModel {
 	t.Helper()
 	m, _ := writeModel(t)
 	m, _ = press(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	if colour {
+		m, _ = press(t, m, tea.ColorProfileMsg{Profile: colorprofile.ANSI})
+	}
 	var b strings.Builder
 	for i := 1; i <= 100; i++ {
 		fmt.Fprintf(&b, "line %03d filler text\n", i)
@@ -35,15 +41,15 @@ func viewerModel(t *testing.T) *tuiModel {
 
 func TestViewer_GAndGJumpToTheEnds(t *testing.T) {
 	m := viewerModel(t)
-	if !strings.Contains(m.View(), "line 001") {
-		t.Fatalf("the viewer does not start at the top:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "line 001") {
+		t.Fatalf("the viewer does not start at the top:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch('G'))
-	if v := m.View(); !strings.Contains(v, "second Needle") {
+	if v := m.View().Content; !strings.Contains(v, "second Needle") {
 		t.Errorf("G did not reach the end:\n%s", v)
 	}
 	m, _ = press(t, m, ch('g'))
-	if v := m.View(); !strings.Contains(v, "line 001") {
+	if v := m.View().Content; !strings.Contains(v, "line 001") {
 		t.Errorf("g did not return to the top:\n%s", v)
 	}
 	if m.state != viewText {
@@ -54,22 +60,22 @@ func TestViewer_GAndGJumpToTheEnds(t *testing.T) {
 func TestViewer_SlashFindsAndNMovesToTheNextMatch(t *testing.T) {
 	m := viewerModel(t)
 	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("needle")...), keyEnter)...)
-	if v := m.View(); !strings.Contains(v, "the needle is here") {
+	if v := m.View().Content; !strings.Contains(v, "the needle is here") {
 		t.Fatalf("the first match is not on screen:\n%s", v)
 	}
-	if !strings.Contains(m.View(), "1/2") {
-		t.Errorf("the legend does not say which match this is:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "1/2") {
+		t.Errorf("the legend does not say which match this is:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch('n'))
-	if v := m.View(); !strings.Contains(v, "second Needle") {
+	if v := m.View().Content; !strings.Contains(v, "second Needle") {
 		t.Errorf("n did not move to the second match (matching is case-insensitive):\n%s", v)
 	}
 	m, _ = press(t, m, ch('n'))
-	if v := m.View(); !strings.Contains(v, "the needle is here") {
+	if v := m.View().Content; !strings.Contains(v, "the needle is here") {
 		t.Errorf("n did not wrap to the first match:\n%s", v)
 	}
 	m, _ = press(t, m, ch('N'))
-	if v := m.View(); !strings.Contains(v, "second Needle") {
+	if v := m.View().Content; !strings.Contains(v, "second Needle") {
 		t.Errorf("N did not go back to the previous match:\n%s", v)
 	}
 }
@@ -82,12 +88,12 @@ func TestViewer_TypingATermTakesEveryKeyAsText(t *testing.T) {
 	if m.state != viewText {
 		t.Fatalf("a typed q left the viewer: %s", viewStateNames[m.state])
 	}
-	if !strings.Contains(m.View(), "qg:n") {
-		t.Errorf("the find prompt does not show what was typed:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "qg:n") {
+		t.Errorf("the find prompt does not show what was typed:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, keyEsc)
-	if m.state != viewText || strings.Contains(m.View(), "qg:n") {
-		t.Errorf("Esc did not abandon the find (state %s):\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewText || strings.Contains(m.View().Content, "qg:n") {
+		t.Errorf("Esc did not abandon the find (state %s):\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, ch('q'))
 	if m.state != viewRecordScope {
@@ -101,8 +107,8 @@ func TestViewer_ATermWithNoMatchSaysSo(t *testing.T) {
 	if m.state != viewText {
 		t.Fatalf("state = %s", viewStateNames[m.state])
 	}
-	if !strings.Contains(m.View(), "no match") {
-		t.Errorf("a find with no match says nothing:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "no match") {
+		t.Errorf("a find with no match says nothing:\n%s", m.View().Content)
 	}
 }
 
@@ -159,26 +165,23 @@ func TestMarkMatches(t *testing.T) {
 }
 
 func TestViewer_FindMarksTheMatchInsideItsLineAndANewFindClearsIt(t *testing.T) {
-	old := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.ANSI)
-	t.Cleanup(func() { lipgloss.SetColorProfile(old) })
-	m := viewerModel(t)
+	m := viewerModelColour(t, true)
 	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("needle")...), keyEnter)...)
-	if v := m.View(); !strings.Contains(v, "the \x1b[7mneedle\x1b[27m is here") {
+	if v := m.View().Content; !strings.Contains(v, "the \x1b[7mneedle\x1b[27m is here") {
 		t.Errorf("the match is not marked in its line:\n%q", v)
 	}
 	m, _ = press(t, m, ch('n'))
-	if v := m.View(); !strings.Contains(v, "\x1b[7mNeedle\x1b[27m appears") {
+	if v := m.View().Content; !strings.Contains(v, "\x1b[7mNeedle\x1b[27m appears") {
 		t.Errorf("the second match is not marked:\n%q", v)
 	}
 	// Another term moves the marks; an empty one removes them.
 	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("filler")...), keyEnter)...)
-	if v := m.View(); strings.Contains(v, "\x1b[7mneedle") || !strings.Contains(v, "\x1b[7mfiller\x1b[27m") {
+	if v := m.View().Content; strings.Contains(v, "\x1b[7mneedle") || !strings.Contains(v, "\x1b[7mfiller\x1b[27m") {
 		t.Errorf("the marks did not follow the new term:\n%q", v)
 	}
 	m, _ = press(t, m, ch('/'))
 	m, _ = press(t, m, keyEnter)
-	if v := m.View(); strings.Contains(v, "\x1b[7m") {
+	if v := m.View().Content; strings.Contains(v, "\x1b[7m") {
 		t.Errorf("an empty find left the marks on:\n%q", v)
 	}
 }

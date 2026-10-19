@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -98,7 +98,7 @@ func sectionStatus(t *testing.T, kb *knowledge.KnowledgeBase, id int64) (status,
 
 func TestSummary_TheQueueShowsTheTriageSignals(t *testing.T) {
 	m, _, it := summaryModel(t)
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"unsummarized", "A note", "size", "density", "Enter summarise"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the queue lacks %q (section %d):\n%s", want, it.ID, v)
@@ -127,9 +127,9 @@ func TestSummary_TheEditorWritesTheSummaryAndYApproves(t *testing.T) {
 	}
 	m = doneEditor(t, m, cmd)
 	if m.state != viewSummary {
-		t.Fatalf("state = %s, want the review of the summary:\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the review of the summary:\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"Streaming is how events arrive.", "streaming here", "y approve"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the review lacks %q:\n%s", want, v)
@@ -149,7 +149,7 @@ func TestSummary_TheEditorWritesTheSummaryAndYApproves(t *testing.T) {
 	if m.state != viewReviewQueue {
 		t.Fatalf("state = %s, want the queue", viewStateNames[m.state])
 	}
-	v = m.View()
+	v = m.View().Content
 	for _, want := range []string{"kb document draft", "kb document review promote"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the notice lacks %q:\n%s", want, v)
@@ -168,8 +168,8 @@ func TestSummary_AnUnchangedOrEmptyBufferIsRefused(t *testing.T) {
 			t.Setenv("EDITOR", "ed")
 			m, cmd := press(t, m, keyEnter)
 			m = doneEditor(t, m, cmd)
-			if m.state != viewReviewQueue || !strings.Contains(m.View(), name) {
-				t.Errorf("state %s; want the queue and a refusal saying %q:\n%s", viewStateNames[m.state], name, m.View())
+			if m.state != viewReviewQueue || !strings.Contains(m.View().Content, name) {
+				t.Errorf("state %s; want the queue and a refusal saying %q:\n%s", viewStateNames[m.state], name, m.View().Content)
 			}
 			if st, _, _ := sectionStatus(t, kb, it.ID); st != "unsummarized" {
 				t.Errorf("status %q, want unchanged", st)
@@ -184,18 +184,18 @@ func TestSummary_WithNoEditorTheBuiltInTextAreaIsUsed(t *testing.T) {
 	if cmd != nil || m.state != viewSummary {
 		t.Fatalf("state %s (cmd %v); want the built-in text area", viewStateNames[m.state], cmd != nil)
 	}
-	if !strings.Contains(m.View(), "streaming here") {
-		t.Errorf("the text area should start from the section text:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "streaming here") {
+		t.Errorf("the text area should start from the section text:\n%s", m.View().Content)
 	}
 	// q is text here, and Esc cancels the unit.
-	m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, _ = press(t, m, ctrlKey('u'))
 	m, _ = press(t, m, typed("quiet summary")...)
-	if m.state != viewSummary || !strings.Contains(m.View(), "quiet summary") {
-		t.Fatalf("typing left the text area (%s):\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewSummary || !strings.Contains(m.View().Content, "quiet summary") {
+		t.Fatalf("typing left the text area (%s):\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, keyEnter)
-	if !strings.Contains(m.View(), "y approve") {
-		t.Fatalf("Enter should go on to the review:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "y approve") {
+		t.Fatalf("Enter should go on to the review:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch('y'))
 	if st, body, _ := sectionStatus(t, kb, it.ID); st != "reviewed" || !strings.HasSuffix(body, "quiet summary") {
@@ -211,14 +211,14 @@ func TestSummary_EveryCancelWritesNothing(t *testing.T) {
 		t.Fatalf("Esc in the text area gave %s", viewStateNames[m.state])
 	}
 	for name, key := range map[string]tea.Msg{"n": ch('n'), "q": ch('q'), "Esc": keyEsc} {
-		m, _ = press(t, m, keyEnter, tea.KeyMsg{Type: tea.KeyCtrlU})
+		m, _ = press(t, m, keyEnter, ctrlKey('u'))
 		m, _ = press(t, m, append(typed("text"), keyEnter)...)
 		if m.state != viewSummary {
 			t.Fatalf("%s: could not reach the review (%s)", name, viewStateNames[m.state])
 		}
 		m, _ = press(t, m, key)
-		if m.state != viewReviewQueue || !strings.Contains(m.View(), "cancelled") {
-			t.Errorf("%s: state %s:\n%s", name, viewStateNames[m.state], m.View())
+		if m.state != viewReviewQueue || !strings.Contains(m.View().Content, "cancelled") {
+			t.Errorf("%s: state %s:\n%s", name, viewStateNames[m.state], m.View().Content)
 		}
 		if st, _, _ := sectionStatus(t, kb, it.ID); st != "unsummarized" {
 			t.Errorf("%s: status %q", name, st)
@@ -234,8 +234,8 @@ func TestSummary_AnExistingDraftGoesStraightToTheReview(t *testing.T) {
 	m, _ = press(t, m, ch('q'), ch('q'))
 	m = openLeaf(t, m, "Documents", "Review queue")
 	m, cmd := press(t, m, keyEnter)
-	if cmd != nil || m.state != viewSummary || !strings.Contains(m.View(), "A model's draft.") || !strings.Contains(m.View(), "y approve") {
-		t.Fatalf("state %s; a draft should be shown beside its source:\n%s", viewStateNames[m.state], m.View())
+	if cmd != nil || m.state != viewSummary || !strings.Contains(m.View().Content, "A model's draft.") || !strings.Contains(m.View().Content, "y approve") {
+		t.Fatalf("state %s; a draft should be shown beside its source:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, ch('y'))
 	st, body, by := sectionStatus(t, kb, it.ID)
@@ -256,8 +256,8 @@ func TestSummary_EditingADraftMakesItTheirs(t *testing.T) {
 	m, _ = press(t, m, keyEnter)
 	m, cmd := press(t, m, ch('e'))
 	m = doneEditor(t, m, cmd)
-	if !strings.Contains(m.View(), "A better draft.") {
-		t.Fatalf("the edited text is not shown:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "A better draft.") {
+		t.Fatalf("the edited text is not shown:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch('y'))
 	if st, body, by := sectionStatus(t, kb, it.ID); st != "reviewed" || body != "A better draft." || by != "human" {
@@ -282,8 +282,8 @@ func TestSummary_PromoteTypedAtTheCommandLineIsTheReviewForm(t *testing.T) {
 	}
 	m, _ = press(t, m, ch('q'))
 	m = runCommand(t, m, "document review promote "+strconv.FormatInt(it.ID, 10))
-	if m.state != viewSummary || !strings.Contains(m.View(), "A model's draft.") {
-		t.Fatalf("state %s; want the review form:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewSummary || !strings.Contains(m.View().Content, "A model's draft.") {
+		t.Fatalf("state %s; want the review form:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, ch('y'))
 	if st, _, _ := sectionStatus(t, kb, it.ID); st != "reviewed" {
@@ -295,8 +295,8 @@ func TestSummary_PromotingWhatHasNoDraftIsRefused(t *testing.T) {
 	m, kb, it := summaryModel(t)
 	m, _ = press(t, m, ch('q'))
 	m = runCommand(t, m, "document review promote "+strconv.FormatInt(it.ID, 10))
-	if m.state == viewSummary || !strings.Contains(m.View(), "draft") {
-		t.Errorf("state %s; a section with no draft must say so:\n%s", viewStateNames[m.state], m.View())
+	if m.state == viewSummary || !strings.Contains(m.View().Content, "draft") {
+		t.Errorf("state %s; a section with no draft must say so:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	if st, _, _ := sectionStatus(t, kb, it.ID); st != "unsummarized" {
 		t.Errorf("status %q", st)
@@ -308,7 +308,7 @@ func TestSummary_DraftTypedAtTheCommandLineAsksFirst(t *testing.T) {
 	m, _ = press(t, m, ch('q'))
 	m = runCommand(t, m, "document draft "+strconv.FormatInt(it.ID, 10)+` "By hand." --by me`)
 	if m.state != viewPlan {
-		t.Fatalf("state %s; want the confirmation:\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state %s; want the confirmation:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, ch('y'))
 	if st, body, by := sectionStatus(t, kb, it.ID); st != "drafted" || body != "By hand." || by != "me" {
@@ -369,12 +369,12 @@ func TestReviewQueue_SlashFiltersAndSSearches(t *testing.T) {
 	if m.searching {
 		t.Fatalf("/ opened the search on the review queue; on a list it filters")
 	}
-	if v := m.View(); !strings.Contains(v, "Filter:") {
+	if v := m.View().Content; !strings.Contains(v, "Filter:") {
 		t.Errorf("the legend should show the filter prompt:\n%s", v)
 	}
 	m, _ = press(t, m, keyEsc)
 	m, _ = press(t, m, ch('S'))
 	if !m.searching {
-		t.Errorf("S should open the search from the review queue:\n%s", m.View())
+		t.Errorf("S should open the search from the review queue:\n%s", m.View().Content)
 	}
 }

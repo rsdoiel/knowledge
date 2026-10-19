@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -287,7 +287,7 @@ func (m *tuiModel) removeSelected() (tea.Model, tea.Cmd) {
 
 // updateRemove hands a key to the typed confirmation. Every printable key is text
 // here, q included; Esc cancels and Enter deletes only on an exact match.
-func (m *tuiModel) updateRemove(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateRemove(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.removeInput.Update(msg)
 	switch {
 	case m.removeInput.cancelled:
@@ -403,6 +403,6 @@ func (m *tuiModel) removeScreen() (string, []string) {
 		body = append(body, "equivalent:  "+m.removal.Equivalent, "")
 	}
 	body = append(body, "A "+strings.ToLower(verb)+" is local: "+localDeleteNote+".", "")
-	body = append(body, strings.Split(m.removeInput.View(), "\n")...)
+	body = append(body, strings.Split(m.removeInput.render(), "\n")...)
 	return verb + " — " + m.removal.Title, body
 }

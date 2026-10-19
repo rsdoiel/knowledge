@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/rsdoiel/knowledge"
 )
 
@@ -17,9 +17,9 @@ import (
 func browseResult(t *testing.T, m *tuiModel, wants ...string) {
 	t.Helper()
 	if m.state != viewText {
-		t.Fatalf("state = %s, want the viewer with the result\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the viewer with the result\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range wants {
 		if !strings.Contains(v, want) {
 			t.Errorf("the result lacks %q:\n%s", want, v)
@@ -34,9 +34,9 @@ func browseResult(t *testing.T, m *tuiModel, wants ...string) {
 func browseList(t *testing.T, m *tuiModel, wants ...string) {
 	t.Helper()
 	if m.state != viewBrowse {
-		t.Fatalf("state = %s, want a selectable list\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want a selectable list\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range wants {
 		if !strings.Contains(v, want) {
 			t.Errorf("the list lacks %q:\n%s", want, v)
@@ -96,7 +96,7 @@ func TestBrowse_AnEmptyListSaysSoAndStaysOnTheMenu(t *testing.T) {
 	if m.state != viewGroup {
 		t.Fatalf("state = %s, want the Sources menu", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "no sources") {
+	if v := m.View().Content; !strings.Contains(v, "no sources") {
 		t.Errorf("an empty list does not say so:\n%s", v)
 	}
 }
@@ -115,7 +115,7 @@ func TestBrowse_ObservationsGoesToTheProjectList(t *testing.T) {
 	if m.state != viewProjects {
 		t.Fatalf("state = %s, want the project list", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "observations") {
+	if v := m.View().Content; !strings.Contains(v, "observations") {
 		t.Errorf("the project list does not say how to reach observations:\n%s", v)
 	}
 }
@@ -148,7 +148,7 @@ func TestBrowse_RecallWithNothingToLookForSaysSo(t *testing.T) {
 	if m.state != viewGroup {
 		t.Fatalf("state = %s, want the Concepts menu", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "text or concept names") {
+	if v := m.View().Content; !strings.Contains(v, "text or concept names") {
 		t.Errorf("no explanation of what to give:\n%s", v)
 	}
 }
@@ -171,12 +171,12 @@ func TestBrowse_SuggestAsksForAProjectAndALimit(t *testing.T) {
 	}
 	// project left empty; the limit starts at 20, so clear it and give 5
 	m, _ = press(t, m, keyEnter)
-	back := tea.KeyMsg{Type: tea.KeyBackspace}
+	back := tea.KeyPressMsg{Code: tea.KeyBackspace}
 	m, _ = press(t, m, append([]tea.Msg{back, back}, append(typed("5"), keyEnter)...)...)
 	if m.state != viewText {
-		t.Fatalf("state = %s, want the viewer\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the viewer\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"kb concept suggest", "--limit 5", "equivalent:"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the result lacks %q:\n%s", want, v)
@@ -188,12 +188,12 @@ func TestBrowse_SuggestRefusesALimitThatIsNotANumber(t *testing.T) {
 	m, _, _ := layoutModel(t)
 	m = openLeaf(t, m, "Concepts", "Suggest…")
 	m, _ = press(t, m, keyEnter)
-	back := tea.KeyMsg{Type: tea.KeyBackspace}
+	back := tea.KeyPressMsg{Code: tea.KeyBackspace}
 	m, _ = press(t, m, append([]tea.Msg{back, back}, append(typed("many"), keyEnter)...)...)
 	if m.state != viewForm {
 		t.Fatalf("state = %s; a bad limit should keep the form open", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "number") {
+	if v := m.View().Content; !strings.Contains(v, "number") {
 		t.Errorf("the field does not say why it was refused:\n%s", v)
 	}
 }
@@ -217,9 +217,9 @@ func TestBrowse_CheckRetractionsAsksBeforeAnyLookup(t *testing.T) {
 	}
 	m = openLeaf(t, m, "Sources", "Check retractions…")
 	if m.state != viewPlan {
-		t.Fatalf("state = %s, want the confirmation before anything is looked up\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the confirmation before anything is looked up\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"Watch service", "network access", "kb source check-retractions", "y runs"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the confirmation lacks %q:\n%s", want, v)
@@ -244,8 +244,8 @@ func TestBrowse_CheckRetractionsRunsOnYAndShowsTheResult(t *testing.T) {
 	m, _, _ := layoutModel(t)
 	m = openLeaf(t, m, "Sources", "Check retractions…")
 	m, _ = press(t, m, ch('y'))
-	if strings.Contains(m.View(), "has not been run yet") {
-		t.Errorf("y did not run the command:\n%s", m.View())
+	if strings.Contains(m.View().Content, "has not been run yet") {
+		t.Errorf("y did not run the command:\n%s", m.View().Content)
 	}
 }
 
@@ -257,7 +257,7 @@ func searchFor(t *testing.T, m *tuiModel, term string) *tuiModel {
 	t.Helper()
 	m, _ = press(t, m, append(append([]tea.Msg{ch('S')}, typed(term)...), keyEnter)...)
 	if m.state != viewSearch {
-		t.Fatalf("state = %s, want the search results\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the search results\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	return m
 }
@@ -325,9 +325,9 @@ func TestBrowse_DeleteASourceNeedsItsIDTyped(t *testing.T) {
 	m = openLeaf(t, m, "Sources", "Browse")
 	m, _ = press(t, m, ch('d'))
 	if m.state != viewRemove {
-		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "A Source To Delete") || !strings.Contains(v, "nothing cites it") {
+	if v := m.View().Content; !strings.Contains(v, "A Source To Delete") || !strings.Contains(v, "nothing cites it") {
 		t.Errorf("the gate does not say what is being deleted:\n%s", v)
 	}
 	m, _ = press(t, m, keyEsc)
@@ -342,7 +342,7 @@ func TestBrowse_DeleteASourceNeedsItsIDTyped(t *testing.T) {
 	if m.state != viewGroup {
 		t.Errorf("state = %s, want the Sources menu once the list is empty", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "kb source remove "+strconv.FormatInt(id, 10)) {
+	if v := m.View().Content; !strings.Contains(v, "kb source remove "+strconv.FormatInt(id, 10)) {
 		t.Errorf("the result does not show the equivalent command:\n%s", v)
 	}
 }
@@ -366,7 +366,7 @@ func TestBrowse_DeleteALinkedSourceIsRefused(t *testing.T) {
 	if m.state != viewBrowse {
 		t.Fatalf("state = %s, want to stay on the list with a refusal", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "cited by 1 observation") || !strings.Contains(v, "unlink") {
+	if v := m.View().Content; !strings.Contains(v, "cited by 1 observation") || !strings.Contains(v, "unlink") {
 		t.Errorf("the refusal does not say what points at the source:\n%s", v)
 	}
 }
@@ -381,13 +381,13 @@ func TestBrowse_DeleteADocumentNeedsItsIDTyped(t *testing.T) {
 	m = openLeaf(t, m, "Documents", "Browse")
 	m, _ = press(t, m, ch('d'))
 	if m.state != viewRemove {
-		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "re-ingest") || !strings.Contains(v, "A Document To Delete") {
+	if v := m.View().Content; !strings.Contains(v, "re-ingest") || !strings.Contains(v, "A Document To Delete") {
 		t.Errorf("the gate lacks what goes and what recreates it:\n%s", v)
 	}
 	m, _ = press(t, m, append(typed(strconv.FormatInt(id, 10)), keyEnter)...)
-	if v := m.View(); !strings.Contains(v, "kb document delete "+strconv.FormatInt(id, 10)) {
+	if v := m.View().Content; !strings.Contains(v, "kb document delete "+strconv.FormatInt(id, 10)) {
 		t.Errorf("the result does not show the equivalent command:\n%s", v)
 	}
 	if docs, _ := kb.Documents(0); len(docs) != 0 {
@@ -426,9 +426,9 @@ func TestBrowse_ColonSourceRemoveOpensTheGate(t *testing.T) {
 	}
 	m = runCommand(t, m, "source remove "+strconv.FormatInt(id, 10))
 	if m.state != viewRemove {
-		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	if v := m.View(); !strings.Contains(v, "Typed At The Colon") {
+	if v := m.View().Content; !strings.Contains(v, "Typed At The Colon") {
 		t.Errorf("the gate does not name the source:\n%s", v)
 	}
 }
@@ -442,7 +442,7 @@ func TestBrowse_ColonDocumentDeleteOpensTheGate(t *testing.T) {
 	}
 	m = runCommand(t, m, "document delete "+strconv.FormatInt(id, 10))
 	if m.state != viewRemove {
-		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the removing gate\n%s", viewStateNames[m.state], m.View().Content)
 	}
 }
 
@@ -478,7 +478,7 @@ func TestBrowse_SlashFiltersTheList(t *testing.T) {
 	m = typeKeys(t, m, "cache")
 	m, _ = press(t, m, keyEnter)
 	browseList(t, m, "Cache invalidation")
-	v := m.View()
+	v := m.View().Content
 	for _, gone := range []string{"Aardvark", "Zebra crossing"} {
 		if strings.Contains(v, gone) {
 			t.Errorf("the filter left %q in the list:\n%s", gone, v)
@@ -497,8 +497,8 @@ func TestBrowse_FilterIsCaseInsensitiveAndMatchesDescription(t *testing.T) {
 	m = typeKeys(t, m, "ABOUT ZEB")
 	m, _ = press(t, m, keyEnter)
 	browseList(t, m, "Zebra crossing")
-	if strings.Contains(m.View(), "Aardvark") {
-		t.Errorf("Aardvark matched 'ABOUT ZEB':\n%s", m.View())
+	if strings.Contains(m.View().Content, "Aardvark") {
+		t.Errorf("Aardvark matched 'ABOUT ZEB':\n%s", m.View().Content)
 	}
 }
 
@@ -513,8 +513,8 @@ func TestBrowse_TypingTakesEveryKeyAsText(t *testing.T) {
 	if m.searching {
 		t.Errorf("a typed S started the search")
 	}
-	if !strings.Contains(m.View(), "qdS") {
-		t.Errorf("the prompt does not show what was typed:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "qdS") {
+		t.Errorf("the prompt does not show what was typed:\n%s", m.View().Content)
 	}
 }
 
@@ -541,7 +541,7 @@ func TestBrowse_NoMatchSaysSoAndNamesTheSearch(t *testing.T) {
 	m, _ = press(t, m, ch('/'))
 	m = typeKeys(t, m, "nonesuch")
 	m, _ = press(t, m, keyEnter)
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, `no concept matches "nonesuch"`) || !strings.Contains(v, "S searches") {
 		t.Errorf("an empty filter should say so and name S:\n%s", v)
 	}
@@ -556,13 +556,13 @@ func TestBrowse_CapitalSIsTheGlobalSearch(t *testing.T) {
 	m := browseConcepts(t)
 	m, _ = press(t, m, ch('S'))
 	if !m.searching {
-		t.Fatalf("S in a Browse list did not start the search\n%s", m.View())
+		t.Fatalf("S in a Browse list did not start the search\n%s", m.View().Content)
 	}
 }
 
 func TestBrowse_LegendNamesTheFilterAndTheSearch(t *testing.T) {
 	m := browseConcepts(t)
-	v := m.View()
+	v := m.View().Content
 	if !strings.Contains(v, "/ filter") || !strings.Contains(v, "S search") || strings.Contains(v, "/ search") {
 		t.Errorf("legend should say '/ filter' and 'S search':\n%s", v)
 	}
@@ -574,7 +574,7 @@ func TestBrowse_DeleteActsOnTheFilteredSelection(t *testing.T) {
 	m = typeKeys(t, m, "zebra")
 	m, _ = press(t, m, keyEnter)
 	m, _ = press(t, m, ch('d'))
-	if v := m.View(); !strings.Contains(v, "Zebra crossing") || strings.Contains(v, "Aardvark") {
+	if v := m.View().Content; !strings.Contains(v, "Zebra crossing") || strings.Contains(v, "Aardvark") {
 		t.Errorf("the gate should name the filtered row, Zebra crossing:\n%s", v)
 	}
 }

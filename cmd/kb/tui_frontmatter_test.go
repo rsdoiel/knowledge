@@ -32,7 +32,7 @@ func openFrontmatterPicker(t *testing.T, m *tuiModel, path string) *tuiModel {
 	t.Helper()
 	m = openLeaf(t, m, "Documents", "Frontmatter…")
 	if m.state != viewForm {
-		t.Fatalf("state = %s, want the path form\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the path form\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, typed(path)...)
 	m, _ = press(t, m, keyEnter)
@@ -43,9 +43,9 @@ func TestFrontmatter_ThePickerListsProposalsWithNothingSelected(t *testing.T) {
 	m, path := frontmatterFile(t)
 	m = openFrontmatterPicker(t, m, path)
 	if m.state != viewPick {
-		t.Fatalf("state = %s, want the picker\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the picker\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"title", "A Post About Caching", "caching", "[ ]", "space toggle"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the picker lacks %q:\n%s", want, v)
@@ -61,8 +61,8 @@ func TestFrontmatter_NothingSelectedWritesNothingAndSaysSo(t *testing.T) {
 	before, _ := os.ReadFile(path)
 	m = openFrontmatterPicker(t, m, path)
 	m, _ = press(t, m, keyEnter)
-	if m.state != viewPick || !strings.Contains(m.View(), "nothing is selected") {
-		t.Errorf("state %s\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewPick || !strings.Contains(m.View().Content, "nothing is selected") {
+		t.Errorf("state %s\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	after, _ := os.ReadFile(path)
 	if string(after) != string(before) {
@@ -75,14 +75,14 @@ func TestFrontmatter_SelectThenReviewThenApply(t *testing.T) {
 	m = openFrontmatterPicker(t, m, path)
 	// The first selectable row is the title.
 	m, _ = press(t, m, ch(' '))
-	if !strings.Contains(m.View(), "[x]") {
-		t.Fatalf("space should toggle the row:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "[x]") {
+		t.Fatalf("space should toggle the row:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, keyEnter)
 	if m.state != viewPlan {
-		t.Fatalf("state = %s, want the plan\n%s", viewStateNames[m.state], m.View())
+		t.Fatalf("state = %s, want the plan\n%s", viewStateNames[m.state], m.View().Content)
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"accepted", "kb document frontmatter", "--accept", "title"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the plan lacks %q:\n%s", want, v)
@@ -110,12 +110,12 @@ func TestFrontmatter_AKeywordIsSelectedAndWritten(t *testing.T) {
 		m, _ = press(t, m, ch('j'))
 	}
 	if !strings.Contains(currentPickRow(m), "caching") {
-		t.Fatalf("could not reach the caching row:\n%s", m.View())
+		t.Fatalf("could not reach the caching row:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch(' '))
 	m, _ = press(t, m, keyEnter)
-	if m.state != viewPlan || !strings.Contains(m.View(), "--accept-keywords caching") {
-		t.Fatalf("state %s\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewPlan || !strings.Contains(m.View().Content, "--accept-keywords caching") {
+		t.Fatalf("state %s\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, ch('y'))
 	b, _ := os.ReadFile(path)
@@ -160,14 +160,14 @@ func TestFrontmatter_ADocumentWithNothingToProposeSaysSo(t *testing.T) {
 		t.Fatal(err)
 	}
 	m = openFrontmatterPicker(t, m, path)
-	if m.state == viewPick && strings.Contains(m.View(), "[ ]") && !strings.Contains(m.View(), "dateModified") {
-		t.Errorf("nothing was expected to be selectable:\n%s", m.View())
+	if m.state == viewPick && strings.Contains(m.View().Content, "[ ]") && !strings.Contains(m.View().Content, "dateModified") {
+		t.Errorf("nothing was expected to be selectable:\n%s", m.View().Content)
 	}
 }
 
 // currentPickRow is the checklist row the cursor is on, as shown.
 func currentPickRow(m *tuiModel) string {
-	for _, l := range strings.Split(m.View(), "\n") {
+	for _, l := range strings.Split(m.View().Content, "\n") {
 		if strings.Contains(l, "> [") {
 			return l
 		}

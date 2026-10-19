@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -122,7 +122,7 @@ func (m *tuiModel) openPick(path string) error {
 
 // updatePick handles a key in the checklist: the arrows and j, k move, space
 // toggles a row, a toggles every row, Enter plans the selection and q leaves.
-func (m *tuiModel) updatePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updatePick(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	p := m.pick
 	switch msg.String() {
 	case "q":
@@ -139,7 +139,7 @@ func (m *tuiModel) updatePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if p.cursor > 0 {
 			p.cursor--
 		}
-	case " ", "space":
+	case "space":
 		p.items[p.cursor].checked = !p.items[p.cursor].checked
 	case "a":
 		all := true

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	knowledge "github.com/rsdoiel/knowledge"
 )
 
@@ -67,7 +67,7 @@ func TestPlan_IngestShowsTheDryRunAndOnlyYApplies(t *testing.T) {
 	if m.state != viewPlan {
 		t.Fatalf("state = %s, want the plan", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"dry run", "1 added", "concept: would create Fresh", "arrived accepted", "y apply"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the plan lacks %q:\n%s", want, v)
@@ -89,7 +89,7 @@ func TestPlan_IngestShowsTheDryRunAndOnlyYApplies(t *testing.T) {
 	if m.state != viewText {
 		t.Fatalf("state = %s, want the result", viewStateNames[m.state])
 	}
-	v = m.View()
+	v = m.View().Content
 	for _, want := range []string{"1 added", "concept: created Fresh", "equivalent:", "kb ingest agents/projects/clasm/decisions"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the result lacks %q:\n%s", want, v)
@@ -114,7 +114,7 @@ func TestPlan_EveryCancelAppliesNothing(t *testing.T) {
 			if recs, _ := kb.ListRecords(knowledge.RecordFilter{}); len(recs) != 1 {
 				t.Errorf("a cancel applied: %d records", len(recs))
 			}
-			if v := m.View(); !strings.Contains(v, "cancelled") || strings.Contains(v, "equivalent:") {
+			if v := m.View().Content; !strings.Contains(v, "cancelled") || strings.Contains(v, "equivalent:") {
 				t.Errorf("the screen should say cancelled and show no command:\n%s", v)
 			}
 		})
@@ -125,7 +125,7 @@ func TestPlan_OnlyYApplies(t *testing.T) {
 	m, root, kb := planModel(t)
 	addRecordFile(t, root)
 	m = openRow(t, m, "Ingest")
-	m, _ = press(t, m, keyEnter, ch('j'), ch('a'), tea.KeyMsg{Type: tea.KeySpace}) // nothing here applies
+	m, _ = press(t, m, keyEnter, ch('j'), ch('a'), tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}) // nothing here applies
 	if m.state != viewPlan {
 		t.Fatalf("state = %s; a key that is not y must not leave the plan", viewStateNames[m.state])
 	}
@@ -147,7 +147,7 @@ func TestPlan_RecordFuzzyTagReportsThenWrites(t *testing.T) {
 	if m.state != viewPlan {
 		t.Fatalf("state = %s, want the plan", viewStateNames[m.state])
 	}
-	v := m.View()
+	v := m.View().Content
 	for _, want := range []string{"streaming ~ streeming", "nothing was written", "y apply"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the plan lacks %q:\n%s", want, v)
@@ -161,7 +161,7 @@ func TestPlan_RecordFuzzyTagReportsThenWrites(t *testing.T) {
 	if !strings.Contains(string(after), "tags: [streaming]") {
 		t.Errorf("the tag was not written:\n%s", after)
 	}
-	v = m.View()
+	v = m.View().Content
 	for _, want := range []string{"tagged 1 record", "kb ingest", "equivalent:  kb record fuzzy-tag --project clasm --write"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("the result lacks %q:\n%s", want, v)
@@ -179,17 +179,17 @@ func TestPlan_WithEveryScopeTheProjectIsAskedFirst(t *testing.T) {
 		m, _ = press(t, m, ch('j'))
 	}
 	m, _ = press(t, m, keyEnter) // Fuzzy-tag…
-	if m.state != viewForm || !strings.Contains(m.View(), "project") {
-		t.Fatalf("state %s; the project should be asked:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewForm || !strings.Contains(m.View().Content, "project") {
+		t.Fatalf("state %s; the project should be asked:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, append(typed("nosuch"), keyEnter)...)
-	if m.state != viewForm || !strings.Contains(m.View(), "no project") {
-		t.Errorf("an unknown project should be refused in the field:\n%s", m.View())
+	if m.state != viewForm || !strings.Contains(m.View().Content, "no project") {
+		t.Errorf("an unknown project should be refused in the field:\n%s", m.View().Content)
 	}
-	m, _ = press(t, m, tea.KeyMsg{Type: tea.KeyCtrlU})
+	m, _ = press(t, m, ctrlKey('u'))
 	m, _ = press(t, m, append(typed("clasm"), keyEnter)...)
-	if m.state != viewPlan || !strings.Contains(m.View(), "streeming") {
-		t.Errorf("state %s; want the plan for clasm:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewPlan || !strings.Contains(m.View().Content, "streeming") {
+		t.Errorf("state %s; want the plan for clasm:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 }
 
@@ -202,7 +202,7 @@ func TestPlan_DocumentTagPlansThenEditsTheFile(t *testing.T) {
 	if m.state != viewPlan {
 		t.Fatalf("state = %s, want the plan", viewStateNames[m.state])
 	}
-	if v := m.View(); !strings.Contains(v, "would tag") || !strings.Contains(v, "streaming") {
+	if v := m.View().Content; !strings.Contains(v, "would tag") || !strings.Contains(v, "streaming") {
 		t.Errorf("the plan lacks the tag it would insert:\n%s", v)
 	}
 	if b, _ := os.ReadFile(doc); strings.Contains(string(b), "[[streaming]]") {
@@ -212,16 +212,16 @@ func TestPlan_DocumentTagPlansThenEditsTheFile(t *testing.T) {
 	if b, _ := os.ReadFile(doc); !strings.Contains(string(b), "[[streaming]]") {
 		t.Errorf("the wikilink was not inserted:\n%s", b)
 	}
-	if !strings.Contains(m.View(), "equivalent:  kb document tag --project clasm") {
-		t.Errorf("the equivalent command is missing:\n%s", m.View())
+	if !strings.Contains(m.View().Content, "equivalent:  kb document tag --project clasm") {
+		t.Errorf("the equivalent command is missing:\n%s", m.View().Content)
 	}
 }
 
 func TestPlan_DocumentFuzzyTagSaysWhenThereIsNothingToDo(t *testing.T) {
 	m, _, _ := planModel(t)
 	m = openLeaf(t, m, "Documents", "Fuzzy-tag…")
-	if m.state != viewPlan || !strings.Contains(m.View(), "no changes") {
-		t.Errorf("state %s; the plan should say there is nothing to do:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewPlan || !strings.Contains(m.View().Content, "no changes") {
+		t.Errorf("state %s; the plan should say there is nothing to do:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 }
 
@@ -232,14 +232,14 @@ func TestPlan_DocumentIngestIsAFormThenAPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	m = openLeaf(t, m, "Documents", "Ingest a document…")
-	if m.state != viewForm || !strings.Contains(m.View(), "path") {
-		t.Fatalf("state %s; the path should be asked:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewForm || !strings.Contains(m.View().Content, "path") {
+		t.Fatalf("state %s; the path should be asked:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	m, _ = press(t, m, append(typed(fresh), keyEnter)...)
 	m, _ = press(t, m, keyEnter) // project: the scope's clasm
 	m, _ = press(t, m, keyEnter) // title: none
-	if m.state != viewPlan || !strings.Contains(m.View(), "added") {
-		t.Fatalf("state %s; want the plan:\n%s", viewStateNames[m.state], m.View())
+	if m.state != viewPlan || !strings.Contains(m.View().Content, "added") {
+		t.Fatalf("state %s; want the plan:\n%s", viewStateNames[m.state], m.View().Content)
 	}
 	docs, _ := kb.Documents(0)
 	if len(docs) != 1 {
@@ -274,11 +274,11 @@ func TestPlan_DocumentIngestSaysWhenTheFileHasNoTitleAndWhereToAddOne(t *testing
 			m, _ = press(t, m, keyEnter)
 			m, _ = press(t, m, keyEnter)
 			if m.state != viewPlan {
-				t.Fatalf("state %s:\n%s", viewStateNames[m.state], m.View())
+				t.Fatalf("state %s:\n%s", viewStateNames[m.state], m.View().Content)
 			}
-			has := strings.Contains(m.View(), "Documents → Frontmatter…")
+			has := strings.Contains(m.View().Content, "Documents → Frontmatter…")
 			if has != tc.hint {
-				t.Errorf("hint shown = %v, want %v:\n%s", has, tc.hint, m.View())
+				t.Errorf("hint shown = %v, want %v:\n%s", has, tc.hint, m.View().Content)
 			}
 		})
 	}

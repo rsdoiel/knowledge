@@ -2,17 +2,18 @@ package main
 
 import (
 	"fmt"
+	"github.com/charmbracelet/colorprofile"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	bkey "github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	bkey "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
@@ -165,6 +166,8 @@ type tuiModel struct {
 	textPurpose     string
 	textPlain       []string        // the viewer's lines without colour, for the find
 	textLines       []string        // the viewer's lines as drawn, colour included, for the marks
+	colorOn         bool            // the terminal shows colour (tea.ColorProfileMsg); NO_COLOR is checked apart
+	isDark          bool            // the terminal background is dark; assumed until it answers
 	textMarks       bool            // whether the find may mark matches (colour is on)
 	finding         bool            // a find term is being typed in the viewer
 	findInput       textinput.Model // the viewer's find prompt
@@ -200,16 +203,17 @@ func newTUIModelAt(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) (*
 	for i, p := range projects {
 		items[i] = projectItem{p}
 	}
-	projectList := newBrowserList(items, "Projects", 0, 0)
+	projectList := newBrowserList(true, items, "Projects", 0, 0)
 
 	ti := textinput.New()
 	ti.Placeholder = "search term"
 
 	m := &tuiModel{
-		kb:    kb,
-		dl:    dl,
-		state: start.state,
-		group: start.group,
+		kb:     kb,
+		dl:     dl,
+		isDark: true,
+		state:  start.state,
+		group:  start.group,
 
 		projectList: projectList,
 		// Constructed empty (not left as a zero-value list.Model{}) so
@@ -217,11 +221,11 @@ func newTUIModelAt(kb *knowledge.KnowledgeBase, dl *DebugLog, start tuiStart) (*
 		// anything can still call SetSize on these safely -- list.Model
 		// has internal state a zero value doesn't populate, and calling
 		// its methods before list.New has run panics.
-		observationList: newBrowserList(nil, "", 0, 0),
-		conceptList:     newBrowserList(nil, "", 0, 0),
-		recordList:      newBrowserList(nil, "", 0, 0),
-		searchList:      newBrowserList(nil, "", 0, 0),
-		scopeList:       newBrowserList(nil, "", 0, 0),
+		observationList: newBrowserList(true, nil, "", 0, 0),
+		conceptList:     newBrowserList(true, nil, "", 0, 0),
+		recordList:      newBrowserList(true, nil, "", 0, 0),
+		searchList:      newBrowserList(true, nil, "", 0, 0),
+		scopeList:       newBrowserList(true, nil, "", 0, 0),
 		searchInput:     ti,
 		findInput:       newFindInput(),
 	}
@@ -283,7 +287,13 @@ func workspaceLabel(dbPath string) (dir, db string) {
 	return dir, db
 }
 
-func (m *tuiModel) Init() tea.Cmd { return nil }
+// Init asks the terminal for its background colour. The answer arrives as a
+// message whenever the terminal gives it; nothing waits (DR-0084).
+func (m *tuiModel) Init() tea.Cmd { return tea.RequestBackgroundColor }
+
+// colourOn reports whether the viewer may draw colour: the terminal shows it
+// and NO_COLOR is unset.
+func (m *tuiModel) colourOn() bool { return m.colorOn && os.Getenv("NO_COLOR") == "" }
 
 // viewStateNames gives a readable name per viewState for debug-log field
 // values -- never shown in the actual UI.
@@ -333,12 +343,21 @@ func (m *tuiModel) setErr(err error) {
 
 func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	msgFields := map[string]any{"msg_type": fmt.Sprintf("%T", msg)}
-	if km, ok := msg.(tea.KeyMsg); ok {
+	if km, ok := msg.(tea.KeyPressMsg); ok {
 		msgFields["key"] = km.String()
 	}
 	m.dl.Log("tui_msg", msgFields)
 
 	switch msg := msg.(type) {
+	case tea.ColorProfileMsg:
+		m.colorOn = msg.Profile >= colorprofile.ANSI
+		return m, nil
+
+	case tea.BackgroundColorMsg:
+		m.isDark = msg.IsDark()
+		m.restyle()
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		for _, l := range []*list.Model{&m.projectList, &m.searchList, &m.scopeList} {
@@ -361,10 +380,10 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editorDoneMsg:
 		return m.handleEditorDone(msg)
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Ctrl-C quits from everywhere, typing and errors included, and writes
 		// nothing (DR-0064).
-		if msg.Type == tea.KeyCtrlC {
+		if isCtrlC(msg) {
 			return m.quit()
 		}
 		if m.err != nil {
@@ -473,8 +492,11 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
  * Example:
  *   l := newBrowserList(items, "Records — alpha", 80, 23)
  */
-func newBrowserList(items []list.Item, title string, w, h int) list.Model {
-	l := list.New(items, list.NewDefaultDelegate(), w, h)
+func newBrowserList(isDark bool, items []list.Item, title string, w, h int) list.Model {
+	d := list.NewDefaultDelegate()
+	d.Styles = list.NewDefaultItemStyles(isDark)
+	l := list.New(items, d, w, h)
+	l.Styles = list.DefaultStyles(isDark)
 	l.Title = title
 	l.SetShowTitle(false) // the frame shows the title
 	l.SetFilteringEnabled(false)
@@ -537,8 +559,8 @@ func (m *tuiModel) capturingText() bool {
 
 // updateError handles a key while an error is on screen: q or Enter dismisses it
 // and nothing else happens. Ctrl-C is handled before this is reached.
-func (m *tuiModel) updateError(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.Type == tea.KeyEnter || (msg.Type == tea.KeyRunes && string(msg.Runes) == "q") {
+func (m *tuiModel) updateError(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if msg.Code == tea.KeyEnter || msg.Text == "q" {
 		m.err = nil
 	}
 	return m, nil
@@ -553,7 +575,7 @@ func (m *tuiModel) openGroup(group string) (tea.Model, tea.Cmd) {
 }
 
 // moveCursor applies j, k and the arrows to a cursor over n rows, stopping at the ends.
-func moveCursor(cur, n int, msg tea.KeyMsg) int {
+func moveCursor(cur, n int, msg tea.KeyPressMsg) int {
 	switch msg.String() {
 	case "j", "down":
 		if cur < n-1 {
@@ -581,7 +603,7 @@ func (m *tuiModel) quit() (tea.Model, tea.Cmd) {
 }
 
 // updateMenu handles a key on the top menu. q quits: there is nowhere further back.
-func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateMenu(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	items := topMenu()
 	switch msg.String() {
 	case "q":
@@ -612,7 +634,7 @@ func (m *tuiModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // updateGroup handles a key on a group's menu. q goes back to the top menu.
-func (m *tuiModel) updateGroup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateGroup(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	items := m.groupItems()
 	switch msg.String() {
 	case "q":
@@ -654,14 +676,48 @@ func (i scopedRecordItem) Description() string { return "" }
 func (i scopedRecordItem) FilterValue() string { return i.e.Ref + " " + i.e.Title }
 
 // newCompactList is a browser list with one line a row and no description.
-func newCompactList(items []list.Item, title string, w, h int) list.Model {
+func newCompactList(isDark bool, items []list.Item, title string, w, h int) list.Model {
+	l := newBrowserList(isDark, items, title, w, h)
+	l.SetDelegate(compactDelegate(isDark))
+	return l
+}
+
+// compactDelegate is the one-line, no-description row of a compact list, in the
+// colours for a dark or a light terminal.
+func compactDelegate(isDark bool) list.DefaultDelegate {
 	d := list.NewDefaultDelegate()
+	d.Styles = list.NewDefaultItemStyles(isDark)
 	d.ShowDescription = false
 	d.SetHeight(1)
 	d.SetSpacing(0)
-	l := newBrowserList(items, title, w, h)
-	l.SetDelegate(d)
-	return l
+	return d
+}
+
+// restyle gives every list the colours for the terminal's background, once the
+// terminal has said which it is. The lists start with the dark ones.
+func (m *tuiModel) restyle() {
+	// browseList, unlinkList and queueList are zero values until opened, and a
+	// zero list.Model cannot be restyled; an opened one has a title.
+	browser := []*list.Model{&m.projectList, &m.observationList, &m.conceptList, &m.recordList, &m.searchList}
+	for _, l := range []*list.Model{&m.browseList, &m.unlinkList} {
+		if l.Title != "" {
+			browser = append(browser, l)
+		}
+	}
+	for _, l := range browser {
+		l.Styles = list.DefaultStyles(m.isDark)
+		d := list.NewDefaultDelegate()
+		d.Styles = list.NewDefaultItemStyles(m.isDark)
+		l.SetDelegate(d)
+	}
+	compact := []*list.Model{&m.scopeList}
+	if m.queueList.Title != "" {
+		compact = append(compact, &m.queueList)
+	}
+	for _, l := range compact {
+		l.Styles = list.DefaultStyles(m.isDark)
+		l.SetDelegate(compactDelegate(m.isDark))
+	}
 }
 
 // recordScopeName is the scope's name for the title and the Records menu: the
@@ -711,7 +767,7 @@ func (m *tuiModel) loadRecordScope() error {
 	if m.scopeStatus == "proposed" {
 		name, noun = "Pending", "pending record"
 	}
-	l := newCompactList(items, fmt.Sprintf("%s — %s  (%d)", name, m.recordScopeName(), len(items)), m.cols()-4, m.listHeight())
+	l := newCompactList(m.isDark, items, fmt.Sprintf("%s — %s  (%d)", name, m.recordScopeName(), len(items)), m.cols()-4, m.listHeight())
 	l.SetStatusBarItemName(noun, noun+"s")
 	m.scopeList = l
 	m.clearFilter(viewRecordScope)
@@ -726,7 +782,7 @@ func (m *tuiModel) openRecordScope(status string) (tea.Model, tea.Cmd) {
 
 // updateRecordScope handles a key on the Records screen. q goes back to the
 // Records menu; a widens the scope to every scope and back.
-func (m *tuiModel) updateRecordScope(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateRecordScope(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
 		return m.openGroup("record")
@@ -821,7 +877,7 @@ func (m *tuiModel) runLeaf(it menuItem) (tea.Model, tea.Cmd) {
 }
 
 // updateProjects: the project list. q goes back to the Projects menu.
-func (m *tuiModel) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateProjects(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
 		return m.openGroup("project")
@@ -872,7 +928,7 @@ func (m *tuiModel) goTo(state viewState, load func() error) (tea.Model, tea.Cmd)
 
 // updateObservations: a project's observations. q goes back to the projects; c and
 // r switch to its concepts and records.
-func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateObservations(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		if it, ok := m.observationList.SelectedItem().(observationItem); ok {
@@ -901,7 +957,7 @@ func (m *tuiModel) updateObservations(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateConcepts(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "d":
 		return m.removeSelected()
@@ -927,7 +983,7 @@ func (m *tuiModel) updateConcepts(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateRecords handles a project's Records tab: Enter reads the selected record
 // and s sets its status, as on the Records screen.
-func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateRecords(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		return m.showSelected("read")
@@ -954,7 +1010,7 @@ func (m *tuiModel) updateRecords(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // updateSearchResults: q returns to the screen the search began on.
-func (m *tuiModel) updateSearchResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateSearchResults(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
 		return m.goTo(m.searchFrom, nil)
@@ -973,7 +1029,7 @@ func (m *tuiModel) updateSearchResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // updateSearching handles a key in the search prompt. Everything printable is
 // text; Esc leaves the prompt and Enter runs the search.
-func (m *tuiModel) updateSearching(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *tuiModel) updateSearching(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.searching = false
@@ -1110,7 +1166,7 @@ func (m *tuiModel) loadObservations() error {
 	for i, o := range obs {
 		items[i] = observationItem{o}
 	}
-	l := newBrowserList(items, fmt.Sprintf("Observations — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
+	l := newBrowserList(m.isDark, items, fmt.Sprintf("Observations — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.observationList = l
 	m.clearFilter(viewObservations)
 	return nil
@@ -1133,7 +1189,7 @@ func (m *tuiModel) loadRecords() error {
 	for i, r := range records {
 		items[len(records)-1-i] = recordItem{r}
 	}
-	l := newBrowserList(items, fmt.Sprintf("Records — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
+	l := newBrowserList(m.isDark, items, fmt.Sprintf("Records — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.recordList = l
 	m.clearFilter(viewRecords)
 	return nil
@@ -1151,7 +1207,7 @@ func (m *tuiModel) loadConcepts() error {
 	for i, c := range concepts {
 		items[i] = conceptItem{c}
 	}
-	l := newBrowserList(items, fmt.Sprintf("Concepts — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
+	l := newBrowserList(m.isDark, items, fmt.Sprintf("Concepts — %s", m.selectedProject.Name), m.cols()-4, m.tabHeight())
 	m.conceptList = l
 	m.clearFilter(viewConcepts)
 	return nil
@@ -1168,7 +1224,7 @@ func (m *tuiModel) runSearch(term string) error {
 	for i, r := range results {
 		items[i] = searchResultItem{r: r}
 	}
-	l := newBrowserList(items, fmt.Sprintf("Search: %s", term), m.cols()-4, m.listHeight())
+	l := newBrowserList(m.isDark, items, fmt.Sprintf("Search: %s", term), m.cols()-4, m.listHeight())
 	m.searchList = l
 	m.clearFilter(viewSearch)
 	return nil
@@ -1222,7 +1278,7 @@ func (m *tuiModel) runSearchLine(line string) error {
 	if res.Total > len(items) {
 		title += fmt.Sprintf(", showing %d", len(items))
 	}
-	m.searchList = newBrowserList(items, title, m.cols()-4, m.listHeight())
+	m.searchList = newBrowserList(m.isDark, items, title, m.cols()-4, m.listHeight())
 	m.clearFilter(viewSearch)
 	return nil
 }
@@ -1544,7 +1600,14 @@ func (m *tuiModel) frame(title string, body []string, legend string) string {
 	return strings.Join(out, "\n")
 }
 
-func (m *tuiModel) View() string {
+// View wraps render for Bubble Tea v2, which draws a tea.View.
+func (m *tuiModel) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	return v
+}
+
+func (m *tuiModel) render() string {
 	title, body := m.screen()
 	return m.frame(title, body, m.legend())
 }
