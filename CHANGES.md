@@ -71,6 +71,12 @@ Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are add
 
 ### Fixed
 
+- **The small known problems of v0.0.23 to v0.0.24 (T6).** A record's search passage is the paragraph the match is in, without
+  its label and without the title (a short record used to come back whole). `kb document ingest` offers the frontmatter editor
+  to a file with a frontmatter block but no title, asking only about the fields it lacks. The interface's "Ingest a document…"
+  plan says when the file has no title and points at Documents → Frontmatter…. The viewer's find marks the match inside its
+  line in reverse video, and the pattern that strips colour escapes before the find (it matched no real escape) is fixed, so a
+  term such as `35` no longer hits every coloured line. The review queue's `/` filters and `S` searches, as on every list.
 - **A `#` line inside a fenced code block split a Markdown section.** `segmentMarkdown` now skips backtick and
   tilde fences. This changes the sections of existing documents: on the author's database, 14 of 15 documents
   have a different section count, mostly hand-offs and plans with shell comments in fences. Re-ingesting them
