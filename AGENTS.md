@@ -50,7 +50,7 @@ Each is `kb VERB`; the class is what it does to the database.
 | `index` | direct | regenerate a `decisions/index.md` |
 | `document` (`ingest draft review list review promote show tag fuzzy-tag frontmatter delete`) | guided, plan_apply | narrative documents; summaries need a person to promote |
 | `summary`, `format` | read | formatted overviews |
-| `story` (`timeline check`) | read | a writing project's events in story or reading order, and a continuity report that changes nothing; both need `--project` |
+| `story` (`timeline check who-knows who-learns`) | read | a writing project's events in story or reading order, a continuity report that changes nothing, what a character has learned by a scene, and who learns a fact; all need `--project` |
 | `stats` | read | counts of rows, links and checks, and a line per project |
 | `check-db` | read | compare the database with its JSON-L dump |
 | `export`, `import`, `merge` | cli_only | portable snapshots and reconciling two databases |
