@@ -69,6 +69,16 @@ Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are add
     sources a project's observations, documents and records cite, and a source hit lists the projects that cite
     it. `Open` indexes the sources of an older database.
 
+### Changed
+
+- **The interface runs on the Bubble Tea v2 stack** (DR-0084; Bubble Tea 2.1, Bubbles 2.2, Lip Gloss 2.0). The old
+  library asked the terminal for its colours before any of `kb` ran and waited up to five seconds for an answer, so on
+  a terminal that never replied (some multiplexers, serial consoles, over a slow link) the first screen came five
+  seconds late. The first screen now draws at once (0.03 s on a terminal that does not answer); `kb` asks for the
+  background colour in the background and switches the lists to the light colours if the terminal says it is light.
+  Behaviour is unchanged: every key, screen and legend is as before. `termenv` is no longer a dependency. The terminal
+  tests read an emulated screen, because the new renderer redraws only what changed.
+
 ### Fixed
 
 - **The small known problems of v0.0.23 to v0.0.24 (T6).** A record's search passage is the paragraph the match is in, without
