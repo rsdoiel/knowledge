@@ -124,7 +124,10 @@ On a record, on the Records screens and on a project's Records tab, Enter reads
 it and s sets its status. Both show the record file in the pager ($KB_PAGER, else
 bat, else less -R), with the interface suspended while it runs and restored when
 it ends; with no pager the record is shown in a built-in viewer instead (the
-arrows or j and k scroll, space pages, q finishes). s then offers the moves the
+arrows or j and k scroll, space pages, g and G jump to the ends, / finds a word,
+n and N move between the matches and each match is shown in reverse video on a
+terminal with colour, q finishes; long lines wrap, so there is no sideways scroll).
+s then offers the moves the
 record's status allows, each on one key, and asks for y before it writes, exactly
 as kb record set-status REF does, and by the same function. Esc, q and Ctrl-C
 back out at either step with nothing written. When it writes, the screen says what
@@ -190,7 +193,9 @@ j and k, with nothing written. y applies it by running the same command without
 --dry-run, and the result is shown with the command that does the same; n, q and Esc
 leave with nothing done, and Enter does nothing, so a habitual key cannot write. With
 every scope the project is asked first; Ingest a document asks for the file, the
-project and an optional title. Documents → Frontmatter… is still the command line.
+project and an optional title, and says when the file has no title in frontmatter
+(the offer the command line makes on a terminal cannot run inside the interface);
+Documents → Frontmatter… adds one.
 
 Documents → Review queue lists the sections waiting for a person, gist first, with
 each one's size, tag density and confidence. Enter on one is a unit of two steps. The

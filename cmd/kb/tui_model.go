@@ -164,6 +164,8 @@ type tuiModel struct {
 	unit            *summaryUnit              // the summary unit in progress, in viewSummary
 	textPurpose     string
 	textPlain       []string        // the viewer's lines without colour, for the find
+	textLines       []string        // the viewer's lines as drawn, colour included, for the marks
+	textMarks       bool            // whether the find may mark matches (colour is on)
 	finding         bool            // a find term is being typed in the viewer
 	findInput       textinput.Model // the viewer's find prompt
 	findQuery       string

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,7 +18,7 @@ import (
 
 // ansiPattern matches the colour escapes the highlighter writes, so the find
 // searches the text a person sees.
-var ansiPattern = regexp.MustCompile(`\x1b\\[[0-9;]*m`)
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 // pagerDoneMsg says the pager (or the built-in viewer) has finished showing a
 // record. purpose is "read" or "status": a status review goes on to the chooser.
@@ -154,6 +155,8 @@ func (m *tuiModel) openViewer(purpose string) {
 	vp.SetContent(wrapped)
 	m.text = vp
 	m.textPlain = strings.Split(ansiPattern.ReplaceAllString(wrapped, ""), "\n")
+	m.textLines = strings.Split(wrapped, "\n")
+	m.textMarks = lipgloss.ColorProfile() != termenv.Ascii && os.Getenv("NO_COLOR") == ""
 	m.finding, m.findQuery, m.findHits, m.findCur = false, "", nil, 0
 	m.textPurpose = purpose
 	m.setState(viewText)
@@ -175,6 +178,7 @@ func (m *tuiModel) updateText(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.findQuery = m.findInput.Value()
 			m.findHits = findLines(m.textPlain, m.findQuery)
 			m.findCur = 0
+			m.refreshFindMarks()
 			switch {
 			case m.findQuery == "":
 			case len(m.findHits) == 0:
@@ -246,6 +250,99 @@ func findLines(lines []string, term string) []int {
 		}
 	}
 	return hits
+}
+
+// reverseOn and reverseOff turn reverse video on and off around a find match.
+const (
+	reverseOn  = "\x1b[7m"
+	reverseOff = "\x1b[27m"
+)
+
+/** markMatches puts reverse video around every match of term in a line of the
+ * viewer, ignoring case. The line may carry the colour escapes the highlighter
+ * writes: a match is found in the text a person sees, and where a colour starts
+ * or ends inside a match the reverse video is turned on again after it, because
+ * a reset would cancel it.
+ *
+ * Parameters:
+ *   line (string) — one viewer line, with or without colour escapes
+ *   term (string) — the text to mark; empty marks nothing
+ *
+ * Returns:
+ *   string — line with the matches marked; the text is unchanged
+ *
+ * Example:
+ *   markMatches("the needle is here", "needle") // "the \x1b[7mneedle\x1b[27m is here"
+ */
+func markMatches(line, term string) string {
+	if term == "" {
+		return line
+	}
+	plain := []rune(ansiPattern.ReplaceAllString(line, ""))
+	want := []rune(term)
+	var spans [][2]int // [start, end) in plain, in order, not overlapping
+	for i := 0; i+len(want) <= len(plain); {
+		if strings.EqualFold(string(plain[i:i+len(want)]), term) {
+			spans = append(spans, [2]int{i, i + len(want)})
+			i += len(want)
+			continue
+		}
+		i++
+	}
+	if len(spans) == 0 {
+		return line
+	}
+	var b strings.Builder
+	p, next, in := 0, 0, false
+	rest := line
+	for rest != "" {
+		if in && p >= spans[next][1] {
+			b.WriteString(reverseOff)
+			in = false
+			next++
+		}
+		if loc := ansiPattern.FindStringIndex(rest); loc != nil && loc[0] == 0 {
+			b.WriteString(rest[:loc[1]])
+			if in {
+				b.WriteString(reverseOn) // a reset inside the match would cancel it
+			}
+			rest = rest[loc[1]:]
+			continue
+		}
+		if !in && next < len(spans) && p == spans[next][0] {
+			b.WriteString(reverseOn)
+			in = true
+		}
+		r, size := utf8.DecodeRuneInString(rest)
+		b.WriteRune(r)
+		rest = rest[size:]
+		p++
+	}
+	if in {
+		b.WriteString(reverseOff)
+	}
+	return b.String()
+}
+
+// refreshFindMarks redraws the viewer with the current find term marked in every
+// line that has it, or unmarked when there is no term. It keeps the scroll place.
+// Marks are reverse video, so they are only written where colour is: on a
+// terminal that is plain (NO_COLOR, a dumb terminal) the find moves the screen
+// and says which match it is on, as before.
+func (m *tuiModel) refreshFindMarks() {
+	if !m.textMarks || len(m.textLines) == 0 {
+		return
+	}
+	lines := m.textLines
+	if m.findQuery != "" && len(m.findHits) > 0 {
+		lines = append([]string(nil), m.textLines...)
+		for _, h := range m.findHits {
+			lines[h] = markMatches(lines[h], m.findQuery)
+		}
+	}
+	at := m.text.YOffset
+	m.text.SetContent(strings.Join(lines, "\n"))
+	m.text.SetYOffset(at)
 }
 
 // updateReview hands a key to the embedded chooser and confirmation (T3) and

@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // viewerModel is a TUI with a long record open in the built-in viewer.
@@ -120,5 +122,63 @@ func TestViewer_ColourCarriesAcrossAWrappedCodeSpan(t *testing.T) {
 		if !strings.Contains(l, "\x1b[33m") {
 			t.Errorf("line %d of the wrapped span has lost its colour: %q", i, l)
 		}
+	}
+}
+
+// ─── the find marks the match inside its line (TODO, v0.0.22) ────────────────
+
+func TestAnsiPattern_StripsTheEscapesTheHighlighterWrites(t *testing.T) {
+	// The pattern had an extra backslash and matched no real escape, so the find
+	// searched the escape codes as well as the text.
+	got := ansiPattern.ReplaceAllString("\x1b[1;35m# Title\x1b[0m and \x1b[4;34mlink\x1b[0m", "")
+	if got != "# Title and link" {
+		t.Errorf("stripped = %q", got)
+	}
+}
+
+func TestMarkMatches(t *testing.T) {
+	const on, off = "\x1b[7m", "\x1b[27m"
+	for name, tc := range map[string]struct{ line, term, want string }{
+		"plain":            {"the needle is here", "needle", "the " + on + "needle" + off + " is here"},
+		"case-insensitive": {"a second Needle appears", "needle", "a second " + on + "Needle" + off + " appears"},
+		"two in a line":    {"ab ab", "ab", on + "ab" + off + " " + on + "ab" + off},
+		"inside a colour":  {"\x1b[1;35m# Needle here\x1b[0m", "needle", "\x1b[1;35m# " + on + "Needle" + off + " here\x1b[0m"},
+		"across a style":   {"ne\x1b[1medle", "needle", on + "ne\x1b[1m" + on + "edle" + off},
+		"no match":         {"nothing here", "needle", "nothing here"},
+		"empty term":       {"nothing here", "", "nothing here"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := markMatches(tc.line, tc.term); got != tc.want {
+				t.Errorf("markMatches(%q, %q)\n got %q\nwant %q", tc.line, tc.term, got, tc.want)
+			}
+			if plain := ansiPattern.ReplaceAllString(markMatches(tc.line, tc.term), ""); plain != ansiPattern.ReplaceAllString(tc.line, "") {
+				t.Errorf("marking changed the text: %q", plain)
+			}
+		})
+	}
+}
+
+func TestViewer_FindMarksTheMatchInsideItsLineAndANewFindClearsIt(t *testing.T) {
+	old := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI)
+	t.Cleanup(func() { lipgloss.SetColorProfile(old) })
+	m := viewerModel(t)
+	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("needle")...), keyEnter)...)
+	if v := m.View(); !strings.Contains(v, "the \x1b[7mneedle\x1b[27m is here") {
+		t.Errorf("the match is not marked in its line:\n%q", v)
+	}
+	m, _ = press(t, m, ch('n'))
+	if v := m.View(); !strings.Contains(v, "\x1b[7mNeedle\x1b[27m appears") {
+		t.Errorf("the second match is not marked:\n%q", v)
+	}
+	// Another term moves the marks; an empty one removes them.
+	m, _ = press(t, m, append(append([]tea.Msg{ch('/')}, typed("filler")...), keyEnter)...)
+	if v := m.View(); strings.Contains(v, "\x1b[7mneedle") || !strings.Contains(v, "\x1b[7mfiller\x1b[27m") {
+		t.Errorf("the marks did not follow the new term:\n%q", v)
+	}
+	m, _ = press(t, m, ch('/'))
+	m, _ = press(t, m, keyEnter)
+	if v := m.View(); strings.Contains(v, "\x1b[7m") {
+		t.Errorf("an empty find left the marks on:\n%q", v)
 	}
 }
