@@ -20,11 +20,13 @@
 <section id="main-content">
 <h1 id="name">NAME</h1>
 <p>kb-unlink — remove a link between a project or observation and a
-concept, or an observation and a source</p>
+concept, or an observation, document or record and a source</p>
 <h1 id="synopsis">SYNOPSIS</h1>
 <p>kb unlink project PROJECT_NAME CONCEPT_NAME</p>
 <p>kb unlink observation OBS_ID CONCEPT_NAME</p>
 <p>kb unlink source OBS_ID SOURCE_ID</p>
+<p>kb unlink source –document DOC_ID SOURCE_ID</p>
+<p>kb unlink source –record REF SOURCE_ID</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>The inverse of kb-link(1) and of kb source link: it removes one link
 and nothing else, so the project, observation, concept or source itself

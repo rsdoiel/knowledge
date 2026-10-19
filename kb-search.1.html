@@ -30,21 +30,24 @@
 <dl>
 <dt>search</dt>
 <dd>
-full-text search across observations, records, projects, concepts and
-documents’ reviewed summaries using the FTS5 index. TERM uses standard
-FTS5 query syntax: multiple words are ANDed, “quoted phrases” match
-exactly, prefix* matches by prefix. A first word that starts with a dash
-is read as a mistyped option and refused (exit 2); give a dash-leading
-term after –, as in kb search – -x. Later words are text as typed,
-dashes included. Finding nothing is exit 1.
+full-text search across observations, records, projects, concepts,
+sources (title, authors, publisher and identifier) and documents’
+reviewed summaries using the FTS5 index. TERM uses standard FTS5 query
+syntax: multiple words are ANDed, “quoted phrases” match exactly,
+prefix* matches by prefix. A first word that starts with a dash is read
+as a mistyped option and refused (exit 2); give a dash-leading term
+after –, as in kb search – -x. Later words are text as typed, dashes
+included. Finding nothing is exit 1.
 </dd>
 </dl>
 <p>A first argument with a slash in it says where to look. SCOPE is a
 project name, workspace (the workspace tier only, as for records), the
 workspace directory’s own name as an alias for workspace (a project of
 that name wins), or nothing, which means everywhere. KIND is one of
-records, observations, concepts, documents and projects, or nothing for
-every kind.</p>
+records, observations, concepts, documents, sources and projects, or
+nothing for every kind. A project’s sources are those its observations,
+documents and records cite; the workspace tier’s are those cited by
+workspace-tier records and by documents with no project.</p>
 <pre><code>  kb search &quot;exit codes&quot;              every kind, everywhere
   kb search harvey/ &quot;exit codes&quot;      one project, every kind
   kb search harvey/records &quot;exit codes&quot;
@@ -56,9 +59,10 @@ scope and is not one is a usage error (exit 2) that names the choices;
 text that contains a slash is given after –.</p>
 <p>A scoped search prints its matches grouped by kind with counts. A
 record is named by its qualified reference (harvey/DR-0004), and a
-concept shows the projects it is in. At most 50 rows are printed; the
-line “showing 50 of N” says when more matched. With the global -json
-option it prints one object: scope, term, total, counts and results.</p>
+concept shows the projects it is in, and a source the projects that cite
+it. At most 50 rows are printed; the line “showing 50 of N” says when
+more matched. With the global -json option it prints one object: scope,
+term, total, counts and results.</p>
 <p>Every search, scoped or not, shows where a hit is. A record hit
 carries its qualified reference and status (“harvey/DR-0004
 (accepted)”), so the next step is kb record show REF. Under a hit, when
@@ -69,6 +73,16 @@ it is in the title. In -json the fields are ref, status, passage and
 section (the unscoped list uses the library’s names: Ref, Status,
 Passage, Section). Observations, concepts and projects have no reference
 or status, and a concept or project has no passage.</p>
+<p>A hit also says what supports it (DR-0080). In -json, sources lists
+the works its row cites (id, title, identifier, version, rights,
+retracted, retraction_note, relationship, and the version and hash that
+were read), material gives the file a document or record came from
+(path, checksum, format, ingested_at), and retracted is true when any
+cited work is retracted; an unscoped list carries the same as Sources,
+Material and Retracted. A hit that cites a retracted work ends with
+[retracted source: TITLE], one for each such work. This is a report: a
+retracted citation does not rank a hit lower, higher or out of the
+results.</p>
 <p>A project’s concepts are those tagged on the project, on any of its
 observations and on any of its records. Projects are searched at the
 global scope only: workspace/observations and harvey/projects are exit 1

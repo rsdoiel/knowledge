@@ -55,19 +55,61 @@ is a mechanical triage signal, not a link – see review, below.</p>
 bar and shows the text after it. Only the part before the bar is the
 concept’s name.</p>
 <p>Story events (DR-0075, DR-0079). A file whose front matter has a
-narrative key (event, story_time, pov, characters, foreshadows, pays_off
-or precedes; place and status alone are ordinary front matter and do not
-count, but travel with an event) is one story event; a Fountain scene
-with a scene number (INT. KITCHEN - DAY #12A#) is an event too, with its
-own metadata in a one-line boneyard after the heading: /* story:
-story_time=1969-10-29; pov=Anna */. A scene with no number is not an
-event. story_time is a date (1969-10-29), a month, a year, circa YEAR,
-ordinal: N, or after:/before: LABEL with an optional offset such as +3d
-(units d, w, m, y). The summary says how many events the file yields and
-names every key or value it did not understand. Events are derived from
-the file on every ingest, a skipped one included, so running this again
-on the same paths rebuilds them after an import or merge; they are not
-exported, imported, merged or compared by check-db.</p>
+narrative key (event, story_time, pov, characters, foreshadows,
+pays_off, precedes, learns or knows; place and status alone are ordinary
+front matter and do not count, but travel with an event) is one story
+event; a Fountain scene with a scene number (INT. KITCHEN - DAY #12A#)
+is an event too, with its own metadata in a one-line boneyard after the
+heading: /* story: story_time=1969-10-29; pov=Anna */. A scene with no
+number is not an event. story_time is a date (1969-10-29), a month, a
+year, circa YEAR, ordinal: N, or after:/before: LABEL with an optional
+offset such as +3d (units d, w, m, y). The summary says how many events
+the file yields and names every key or value it did not understand.</p>
+<p>What a character learns or already knows (DR-0083). learns and knows
+each take items of the form “Character: fact”: learns says the character
+finds the fact out in this scene, knows says the character already knew
+it and the scene relies on it. In front matter they are YAML lists; in a
+boneyard or a story comment the key repeats, once per fact, because a
+fact may hold a comma: /* story: learns=Anna: the letter, which Cass
+wrote, is forged; learns=Bram: the debt */. A fact is the same fact
+whatever its case or spacing. A repeated learns of one fact by one
+character keeps the first. In a Markdown file with scene ids the front
+matter learns and knows are ignored, as event and story_time are.</p>
+<p>Several scenes in one Markdown file (DR-0082). A heading with an id
+is a scene and an event; a heading without one is an ordinary section.
+Give the id on the heading, <code>## The fire {#12A}</code>, or as
+id=12A in a story comment on the line after the heading,
+<code>&lt;!-- story: id=12A; story_time=1969-10-29; pov=Anna --&gt;</code>,
+or both (if they differ the comment wins and ingest says so). The
+comment takes the same keys as a Fountain boneyard, is left out of the
+section’s text, and is read only directly after a heading. The file’s
+front matter pov, place, status and characters are the defaults for
+every scene; a scene’s comment overrides them field by field, and a list
+in the comment replaces the front matter’s list. With scene ids, front
+matter event and story_time are ignored (two scenes cannot share them)
+and ingest says so. A heading ending in a Fountain-style number, #12A#,
+is plain text, not an id. A scene id repeated in one file keeps the
+first scene as the event and reports the rest. Headings inside fenced
+code blocks are not headings, and a heading’s closing # marks and {#id}
+are not part of its text. Events are derived from the file on every
+ingest, a skipped one included, so running this again on the same paths
+rebuilds them after an import or merge; they are not exported, imported,
+merged or compared by check-db.</p>
+<p>Sources a document cites (DR-0081). A front matter key sources lists
+the works the document rests on: a bare DOI (10.1234/sparql), an
+absolute URL, or source:ID for a source already in the knowledge base.
+Ingest links each to the document through document_sources: an existing
+identifier or id is linked, and a DOI or URL not yet known becomes a new
+source titled by its identifier. The links are rebuilt on every ingest
+of the file, a skipped one included. A file with the key manages the
+links it made (relationship cited): drop an entry and its link goes, and
+sources: [] clears them; links with another relationship, made by hand,
+are kept. A file with no sources key manages none. An entry that is not
+one of the three forms (a pasted doi: or doi.org prefix is refused, as
+kb source add refuses it), or a source:ID that names no source, is
+reported as a source warning and skipped, and never fails the ingest.
+The summary says how many sources were linked. See kb-source(1) for the
+registry and retraction checking.</p>
 <p>Re-ingesting a changed file matches new sections to old ones by
 heading text: an unchanged section is left alone; a changed one updates
 its body and is flagged stale rather than losing its summary; a heading
@@ -75,22 +117,31 @@ with no match is reported, never deleted.</p>
 <dl>
 <dt>ingest</dt>
 <dd>
-parse and segment PATH, creating the document and its sections on first
-ingest, or reconciling a changed file against its existing rows. On a
-terminal, a file with no frontmatter block (a note, say) is first
-offered one: <code>title</code>, <code>author</code> and
-<code>dateCreated</code> are proposed one at a time as for the
-frontmatter subverb below (Enter accepts, text replaces, - skips, q
-stops), then the known concepts the text mentions as
+<p>parse and segment PATH, creating the document and its sections on
+first ingest, or reconciling a changed file against its existing rows.
+On a terminal, a file with no frontmatter block (a note, say), or with a
+block that has no title, is first offered one (a block’s other keys are
+kept, and only the fields it lacks are asked about): <code>title</code>,
+<code>author</code> and <code>dateCreated</code> are proposed one at a
+time as for the frontmatter subverb below (Enter accepts, text replaces,
+- skips, q stops), then the known concepts the text mentions as
 <code>keywords</code>, and the file is written only after a final
 confirmation. A new concept is never created here. Stopping, declining
 or input that ends leaves the file as it was, and the note is ingested
 as before. <code>--no-prompt</code> turns the offer off; it is also off
 with <code>--dry-run</code>, with the global <code>--json</code>, and
 whenever standard input or output is not a terminal, and nothing makes
-it appear in those cases. A file that already has a frontmatter block is
-never offered one.
+it appear in those cases. A file whose frontmatter block has a title is
+never offered one. There is no directory form: ingest takes one file,
+and kb ingest is for decision records and skips dated notes. To bring a
+directory of notes in, loop over its files, and each one that lacks a
+title is offered the editor in turn (q skips the editor for that file,
+which is still ingested):</p>
+<p>for f in notes/*.md; do kb document ingest “$f” –project P; done</p>
 </dd>
+</dl>
+<p>Add –no-prompt to ingest them all without being asked.</p>
+<dl>
 <dt>list</dt>
 <dd>
 print matching documents, one per line

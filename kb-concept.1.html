@@ -92,10 +92,12 @@ recency. Projects linked to a matched concept are listed on a
 concept says so and exits 1; no text and no –concept is exit 2. A
 document section’s excerpt is its summary only once reviewed.
 <code>--json</code> gives matched, hits (kind, id, project, concepts,
-excerpt) and projects. Nothing is written and no concept is created. It
-shares its ranking with the library’s RecallByConceptNames, which is
-unchanged and adds no project filter or per-hit concepts. See DR-0051
-(knowledge/decisions/).
+excerpt, sources, material and retracted) and projects. A hit whose row
+cites a retracted work ends with <code>[retracted source: TITLE]</code>;
+this reports and never changes the ranking or hides the hit (DR-0080).
+Nothing is written and no concept is created. It shares its ranking with
+the library’s RecallByConceptNames, which is unchanged and adds no
+project filter or per-hit concepts. See DR-0051 (knowledge/decisions/).
 </dd>
 <dt>rename</dt>
 <dd>
@@ -144,14 +146,20 @@ outright rather than scored. –limit caps the number printed (default
 when a human runs concept add. See DR-0028 (knowledge/decisions/).
 </dd>
 </dl>
+<p>The score is (1 + ln occurrences) x idf, so repeating a word raises
+its rank slowly: a word used everywhere does not outrank one confined to
+a few items. Numbers, ordinals and common adverbs (one, first, also,
+already, every, never) are never candidates. See DR-0085.</p>
 <p>Spelling variants of the same underlying term (<code>chunking</code>/
 <code>chunkings</code>/<code>chunked</code>) are merged into one
 candidate before scoring, not after – individually each might fall below
 the occurrence or distinctiveness floor even though the combined
 mentions clearly signal one real concept. The merged candidate’s name is
 its highest- occurrence spelling; other spellings are printed inline,
-<code>chunking (+chunkings, chunked)</code>. Always on, no flag. A
-candidate term that’s instead a fuzzy near-miss of an
+<code>chunking (+chunkings, chunked)</code>. Words are merged only when
+they are forms of one word (same stem), never because they are one
+letter apart: change and chance stay two candidates (DR-0085). Always
+on, no flag. A candidate term that’s instead a fuzzy near-miss of an
 <em>already-known</em> concept is excluded from candidacy outright –
 that’s <code>fuzzy-tag</code>’s job, not this command’s – and reported
 separately in a trailing

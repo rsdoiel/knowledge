@@ -29,15 +29,17 @@ drifted independently) read-only and writes their deduped union to a
 fresh -out file, which must not already exist. It never modifies -a or
 -b; placing the merged file into position is left to you. Every table
 travels — projects, concepts, sources, observations, decision records
-and record relations, plus the four join tables — so a table that would
-lose rows says so in the per-table summary rather than merging quietly
-short. A concept’s kind (DR-0078) travels with it and follows the same
-last-writer-wins rule as its description. Story events do not travel:
-they are derived from manuscript files, so the merged database has none
-until kb document ingest is run on the same paths. Each side is copied
-to a scratch file and brought up to the current schema before ATTACHing,
-so a database predating decision records (or any other table) still
-merges instead of failing outright.</p>
+and record relations, plus the join tables, among them the citation
+tables document_sources and record_sources (DR-0081) — so a table that
+would lose rows says so in the per-table summary rather than merging
+quietly short. A concept’s kind (DR-0078) travels with it and follows
+the same last-writer-wins rule as its description. Story events and the
+story knowledge (learns and knows) kept with them do not travel: they
+are derived from manuscript files, so the merged database has none until
+kb document ingest is run on the same paths. Each side is copied to a
+scratch file and brought up to the current schema before ATTACHing, so a
+database predating decision records (or any other table) still merges
+instead of failing outright.</p>
 <p>Unlike every other verb, merge operates entirely on the explicit
 -a/-b/-out paths — a –db is refused, and it never opens (or creates) the
 ambient ./agents/knowledge.db.</p>

@@ -19,53 +19,84 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.24">knowledge 0.0.24</h2>
-<p>Foul Papers can build on kb: story front matter and Fountain scenes
-become story events, concepts have a kind, and
-<code>kb story timeline</code> and <code>kb story check</code> list and
-check them. The decisions are DR-0075, DR-0078 and DR-0079 (all
-accepted).</p>
-<p>Story events. A scene file with a narrative key in its front matter
-(<code>event</code>, <code>story_time</code>, <code>pov</code>,
-<code>characters</code>, <code>foreshadows</code>,
-<code>pays_off</code>, <code>precedes</code>; <code>status</code> and
-<code>place</code> ride along), or a Fountain scene with a scene number
-(<code>INT. KITCHEN - DAY #12A#</code>) whose metadata is a one-line
-boneyard after the heading
-(<code>/* story: story_time=1969-10-29; pov=Anna */</code>), is a story
-event. <code>story_time</code> is a date, a month, a year,
-<code>circa 1890</code>, <code>ordinal: 12</code>, or
-<code>after:</code>/<code>before:</code> another event’s label with an
-optional offset (<code>after: the-fire +3d</code>). Events are derived
-from the files by every <code>kb document ingest</code>, an unchanged
-file included, and do not travel through export, import, merge or
-check-db: after an import, run <code>kb document ingest</code> on the
-same paths.</p>
-<p>Timeline and check. <code>kb story timeline --project P</code> lists
-the events in story order, or <code>--narrative</code> in reading order;
-where the order after the row above is not established it says so
-(<code>~</code>) and never guesses.
-<code>kb story check --project P</code> reports unnumbered scenes,
-duplicate and dangling labels, times it could not read or resolve,
-orders the dates contradict, cycles, a character in two places on one
-day, and foreshadowing out of order. It changes nothing and exits 0
-unless <code>--strict</code>.</p>
-<p>Concepts have a kind. <code>character</code>, <code>place</code>,
-<code>theme</code> or <code>other</code> (the default):
-<code>kb concept add --kind</code>, <code>kb concept set-kind</code>,
-<code>kb concept list --kind</code>. The kind travels through export,
-import, merge and check-db.</p>
-<p>Wikilinks accept a display alias.
-<code>[[the-long-fire/Anna|Anna]]</code> links the concept before the
-bar and shows the text after it.</p>
-<p>Requires fountain 1.0.3, which parses boneyards and scene numbers.
-For packagers and Foul Papers: the library exports
-<code>StoryEvents</code>, <code>StoryTimeline</code>,
-<code>StoryCheck</code>, <code>ParseStoryTime</code>,
-<code>ResolveStoryTime</code>, <code>SetConceptKind</code>,
-<code>ConceptsOfKind</code>, <code>ConceptKinds</code>,
-<code>WikilinkTarget</code> and the story fields of
-<code>ParsedDocument</code>.</p>
+<h2 id="knowledge-0.0.25">knowledge 0.0.25</h2>
+<p>Foul Papers can ask what a character knows, a Markdown manuscript can
+hold many scenes, documents and records can cite sources, and the
+interface starts at once on any terminal. The decisions are DR-0080 to
+DR-0085 (all accepted).</p>
+<p>Story knowledge. A scene says what a character finds out with
+<code>learns</code> and what they already knew with <code>knows</code>,
+each a list of <code>"Character: fact"</code> (a YAML list in front
+matter; the key repeats once per fact in a Fountain boneyard or a
+Markdown story comment).
+<code>kb story who-knows CHARACTER [SCENE] --project P</code> lists what
+the character has learned, in story order, up to a scene; facts learned
+only in scenes whose order is not established are listed apart and never
+guessed. <code>kb story who-learns FACT --project P</code> lists who
+learns a fact and where. The scene is positional; DR-0075’s
+<code>--at</code> is gone. Three advisory <code>kb story check</code>
+kinds: <code>knowledge-before-learned</code>, <code>unknown-fact</code>
+(two long facts one edit apart) and <code>late-source</code> (a source
+cited as <code>evidence</code>, published after the event). Story
+knowledge is derived from the files, like story events, and does not
+travel through export, import, merge or check-db: after an import, run
+<code>kb document ingest</code> on the same paths.</p>
+<p>Many scenes in one Markdown file. A heading with a scene id is a
+scene and a story event: <code>## The fire {#12A}</code>, or
+<code>id=12A</code> in a story comment on the next line. The file’s
+front matter is the default for every scene. <code>kb story check</code>
+reports Markdown scene problems. A <code>#</code> line inside a fenced
+code block no longer splits a section (this changes the sections of
+existing documents; re-ingest reports the removed headings once), and a
+heading’s closing <code>#</code> marks and <code>{#id}</code> are no
+longer part of its title.</p>
+<p>Provenance. Documents and decision records cite sources through an
+optional <code>sources:</code> front matter key (a DOI, a URL, or
+<code>source:ID</code>) or
+<code>kb source link --document|--record</code>. A search hit says which
+works support it, which version was read, and whether one was retracted.
+Sources are a search kind (<code>kb search /sources TERM</code>). The
+new link tables travel through merge, export, import and check-db.
+<code>observations.source_doi</code> is no longer written;
+<code>kb observation add --source-doi</code> finds or makes the source
+and links it.</p>
+<p>Interface. The interactive interface moved to the Bubble Tea v2 stack
+(DR-0084). The old library asked the terminal for its colours before
+<code>kb</code> ran and waited up to five seconds for an answer; on a
+terminal that never replied the first screen came five seconds late. It
+now draws at once. Behaviour is otherwise unchanged.</p>
+<p>Small fixes. A record’s search passage is the paragraph the match is
+in, without its label or the title (a short record used to come back
+whole). <code>kb document ingest</code> offers the frontmatter editor to
+a file with a frontmatter block but no title, asking only about the
+fields it lacks, and the interface’s ingest plan says when a file has no
+title. The viewer’s find marks the match inside its line, and the
+pattern that strips colour before the find (it matched no real escape)
+is fixed, so a search for <code>35</code> no longer hits every coloured
+line. The review queue’s <code>/</code> filters and <code>S</code>
+searches, as on every list, and <code>S</code> on the sources list
+searches sources. The <code>document ingest</code> help shows the shell
+loop for a directory of notes.</p>
+<p>Concept suggestions. <code>kb concept suggest</code> ranks by a
+damped frequency (DR-0085): numbers and common adverbs no longer head
+the list, and <code>change</code> is no longer grouped with
+<code>chance</code>. The stoplist gains numbers, ordinals and common
+adverbs, and the frontmatter keyword scorer shares it. Scores are about
+twenty where they were several hundred.</p>
+<p>The setup, update and review knowledge-base skills describe the story
+verbs, concept kinds, provenance links and <code>kb stats</code>, and
+are pinned to 0.0.25. <code>make</code> no longer leaves the website
+list empty (<code>HTML_PAGES</code>), and <code>publish.bash</code>
+stops on a diverged branch.</p>
+<p>For packagers and Foul Papers: the library exports
+<code>WhoKnows</code>, <code>WhoLearns</code>, <code>KnownFact</code>,
+<code>WhoKnowsResult</code>, <code>Learner</code>,
+<code>ErrAmbiguousScene</code>, <code>ParseKnowledgeItem</code>,
+<code>FactKey</code>, <code>ParseStoryComment</code>,
+<code>HitProvenance</code>, <code>LinkDocumentSource</code>,
+<code>LinkRecordSource</code>, <code>ParseSourceRefs</code> and
+<code>SourceCitations</code>. <code>KBSearchResult</code> is no longer
+comparable with <code>==</code>. Requires fountain 1.0.3.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>
