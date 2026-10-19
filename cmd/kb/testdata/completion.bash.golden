@@ -100,7 +100,7 @@ _kb() {
             if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show remove retract link check-retractions" -- "$cur") )
             fi ;;
         story)
-            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "timeline check" -- "$cur") )
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "timeline check who-knows who-learns" -- "$cur") )
             fi ;;
     esac
     return 0

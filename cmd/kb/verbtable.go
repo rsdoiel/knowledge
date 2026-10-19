@@ -195,8 +195,8 @@ var verbTable = []verbSpec{
 		sub("retract", classChanging), sub("link", classAdditive), leaf("check-retractions", classChanging, mi("Check retractions…", "look sources up for retractions", 3, "", "kb source check-retractions")),
 	}, Flags: []string{"--doi", "--url", "--authors", "--published", "--publisher", "--rights", "--version", "--relationship", "--document", "--record", "--hash"}},
 	{Name: "stats", Summary: "row, link and check counts for the database, and a line per project", Class: classRead},
-	{Name: "story", Summary: "story timeline and continuity checks for a writing project", Subverbs: []subverbSpec{
-		sub("timeline", classRead), sub("check", classRead),
+	{Name: "story", Summary: "story timeline, continuity checks and who knows what for a writing project", Subverbs: []subverbSpec{
+		sub("timeline", classRead), sub("check", classRead), sub("who-knows", classRead), sub("who-learns", classRead),
 	}, Flags: []string{"--project", "--narrative", "--strict"}},
 	{Name: "summary", Summary: "a formatted overview of every project and its most recent observations", Class: classRead,
 		Flags: []string{"--project"}},

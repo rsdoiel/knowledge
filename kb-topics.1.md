@@ -48,7 +48,7 @@ stats
 : row, link and check counts, and a line per project
 
 story
-: a writing project's story timeline and continuity report
+: a writing project's story timeline, continuity report and who knows what
 
 export
 : write a portable JSON-L snapshot. import shares this page

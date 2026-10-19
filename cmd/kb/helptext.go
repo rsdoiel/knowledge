@@ -1556,13 +1556,17 @@ const StoryHelpText = `%{app_name}-story(1) user manual | version {version} {rel
 
 # NAME
 
-{app_name}-story — the story timeline and continuity report for a writing project
+{app_name}-story — the story timeline, continuity report and who knows what for a writing project
 
 # SYNOPSIS
 
 {app_name} story timeline --project P [--narrative]
 
 {app_name} story check --project P [--strict]
+
+{app_name} story who-knows CHARACTER [SCENE] --project P
+
+{app_name} story who-learns FACT --project P
 
 # DESCRIPTION
 
@@ -1572,8 +1576,8 @@ those files: a Fountain scene with a scene number (INT. KITCHEN - DAY #12A#),
 a Markdown heading with a scene id (## The fire {#12A}, or id=12A in a story
 comment under it; see kb-document(1)), or a file whose front matter has a
 narrative key (event, story_time, pov, characters, foreshadows, pays_off,
-precedes, learns, knows). Both verbs only read, and both
-need --project.
+precedes, learns, knows). Every verb only reads, and every one
+needs --project.
 
 timeline
 : list the project's events. By default they are in story order: an event comes
@@ -1612,6 +1616,29 @@ check
   exit status is 0 however many findings there are. With --strict it is 1 when
   there are any. --json gives a list of kind, document and message.
 
+who-knows
+: list what a character learns, in story order, with the scene each fact is
+  learned in. With a SCENE (a scene number such as 12A, or an event label) only
+  the facts learned at or before that scene are listed, the scene itself
+  included. Facts learned only in scenes whose order against SCENE is not
+  established (overlapping times, or no time at all) are listed apart, under
+  "Not ordered against SCENE", and are never guessed either way. A fact comes
+  from a learns item of the form "Character: fact" in a scene (see
+  {app_name}-document(1)); knows rows are use, not learning, so they are never
+  listed, but a character who has only knows rows is found, with nothing learned.
+  Story order is the only order: a flashback told late is placed where it
+  happens. A fact learned in several scenes is listed once, at the earliest.
+  The character is matched without regard to case. --json gives character,
+  scene, facts and unordered, each fact with fact, learned_in, scene_id and
+  document.
+
+who-learns
+: list who learns a fact, and in which scene, in story order. The fact is
+  matched without regard to case or spacing. A character who learns it twice is
+  listed once, at the earliest. A fact that is only used (a knows item) has no
+  learner and is not found. --json gives fact and learners, each with character,
+  learned_in, scene_id and document.
+
 # EXIT STATUS
 
 The workspace convention, as described in {app_name}(1).
@@ -1620,11 +1647,13 @@ The workspace convention, as described in {app_name}(1).
 : the report was written (check, without --strict, whatever it found)
 
 1
-: an unknown project; or check --strict found something
+: an unknown project; check --strict found something; or, for who-knows and
+  who-learns, a character, scene or fact that names nothing
 
 2
 : a missing --project, an unknown subverb or flag, a flag the subverb does not
-  take (--narrative on check, --strict on timeline), or a surplus argument
+  take (--narrative on check, --strict on timeline), a missing or surplus
+  argument, a blank fact, or a scene name that matches several events
 
 # SEE ALSO
 
@@ -2614,7 +2643,7 @@ stats
 : row, link and check counts, and a line per project
 
 story
-: a writing project's story timeline and continuity report
+: a writing project's story timeline, continuity report and who knows what
 
 export
 : write a portable JSON-L snapshot. import shares this page

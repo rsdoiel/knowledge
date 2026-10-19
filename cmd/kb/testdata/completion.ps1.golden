@@ -112,7 +112,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
                 else { $null }
             }
             'story' {
-                if ($n -eq 1) { @('timeline', 'check') }
+                if ($n -eq 1) { @('timeline', 'check', 'who-knows', 'who-learns') }
                 else { $null }
             }
             default      { $null }

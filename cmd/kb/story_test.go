@@ -241,3 +241,161 @@ func TestHelp_DescribesLearnsAndKnowsAndTheirPortability(t *testing.T) {
 		}
 	}
 }
+
+// ─── kb story who-knows and who-learns (DR-0083 item 5) ──────────────────────
+
+func knowsKB(t *testing.T) *knowledge.KnowledgeBase {
+	t.Helper()
+	kb, _ := storyKB(t, map[string]string{
+		"a.md": sceneDoc("later", "2024-07-01", "learns: [\"Anna: the debt\"]\n"),
+		"b.md": sceneDoc("earlier", "1998-05-02", "learns: [\"Anna: the letter is forged\", \"Cass: the letter is forged\"]\nknows: [\"Cass: the key\"]\n"),
+		"c.md": "---\ntitle: c\nevent: floating\nlearns: [\"Anna: a secret\"]\n---\n\ntext\n",
+	})
+	return kb
+}
+
+func TestCmdStory_WhoKnowsAtASceneListsKnownAndUnorderedFacts(t *testing.T) {
+	kb := knowsKB(t)
+	var out bytes.Buffer
+	if err := cmdStory(kb, nil, false, []string{"who-knows", "Anna", "later", "--project", "work"}, &out); err != nil {
+		t.Fatalf("story who-knows: %v", err)
+	}
+	s := out.String()
+	known, unordered, _ := strings.Cut(s, "Not ordered against")
+	if !strings.Contains(known, "the letter is forged") || !strings.Contains(known, "the debt") || strings.Contains(known, "a secret") {
+		t.Errorf("known part = %q", known)
+	}
+	if !strings.Contains(s, "Not ordered against later") || !strings.Contains(unordered, "a secret") {
+		t.Errorf("output = %q, want the undated secret listed as not ordered against later", s)
+	}
+	// The scene may come after the flag.
+	out.Reset()
+	if err := cmdStory(kb, nil, false, []string{"who-knows", "--project", "work", "Anna", "earlier"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "the debt") || !strings.Contains(out.String(), "the letter is forged") {
+		t.Errorf("at earlier = %q", out.String())
+	}
+}
+
+func TestCmdStory_WhoKnowsWithNoSceneListsEverythingInStoryOrder(t *testing.T) {
+	kb := knowsKB(t)
+	var out bytes.Buffer
+	if err := cmdStory(kb, nil, false, []string{"who-knows", "Anna", "--project", "work"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	i, j := strings.Index(s, "the letter is forged"), strings.Index(s, "the debt")
+	if i < 0 || j < 0 || i > j || strings.Contains(s, "Not ordered") {
+		t.Errorf("output = %q, want the forgery (1998) before the debt (2024) and no unordered section", s)
+	}
+}
+
+func TestCmdStory_WhoKnowsJSON(t *testing.T) {
+	kb := knowsKB(t)
+	var out bytes.Buffer
+	if err := cmdStory(kb, nil, true, []string{"who-knows", "Anna", "earlier", "--project", "work"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Character string `json:"character"`
+		Scene     string `json:"scene"`
+		Facts     []struct {
+			Fact      string `json:"fact"`
+			LearnedIn string `json:"learned_in"`
+			Document  string `json:"document"`
+		} `json:"facts"`
+		Unordered []struct {
+			Fact string `json:"fact"`
+		} `json:"unordered"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("json = %q: %v", out.String(), err)
+	}
+	if got.Character != "Anna" || got.Scene != "earlier" || len(got.Facts) != 1 || got.Facts[0].Fact != "the letter is forged" ||
+		got.Facts[0].LearnedIn != "earlier" || got.Facts[0].Document == "" || len(got.Unordered) != 1 || got.Unordered[0].Fact != "a secret" {
+		t.Errorf("json = %+v", got)
+	}
+	out.Reset()
+	if err := cmdStory(kb, nil, true, []string{"who-knows", "Cass", "--project", "work"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"unordered": []`) {
+		t.Errorf("empty lists should be [] and not null: %q", out.String())
+	}
+}
+
+func TestCmdStory_WhoLearnsListsLearnersInStoryOrder(t *testing.T) {
+	kb := knowsKB(t)
+	var out bytes.Buffer
+	if err := cmdStory(kb, nil, false, []string{"who-learns", "The letter is  FORGED", "--project", "work"}, &out); err != nil {
+		t.Fatalf("story who-learns: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "Anna") || !strings.Contains(s, "Cass") || strings.Index(s, "Anna") > strings.Index(s, "Cass") || !strings.Contains(s, "earlier") {
+		t.Errorf("output = %q", s)
+	}
+	out.Reset()
+	if err := cmdStory(kb, nil, true, []string{"who-learns", "the debt", "--project", "work"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Fact     string `json:"fact"`
+		Learners []struct {
+			Character string `json:"character"`
+			LearnedIn string `json:"learned_in"`
+			Document  string `json:"document"`
+		} `json:"learners"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("json = %q: %v", out.String(), err)
+	}
+	if got.Fact != "the debt" || len(got.Learners) != 1 || got.Learners[0].Character != "Anna" || got.Learners[0].LearnedIn != "later" || got.Learners[0].Document == "" {
+		t.Errorf("json = %+v", got)
+	}
+}
+
+func TestStory_KnowledgeExitCodes(t *testing.T) {
+	noTerminal(t)
+	files := map[string]string{
+		"a.md":  sceneDoc("later", "2024-07-01", "learns: [\"Anna: the debt\"]\n"),
+		"t1.md": sceneDoc("twin", "2024-08-01", ""),
+		"t2.md": sceneDoc("twin", "2024-08-02", ""),
+	}
+	setup := [][]string{{"project", "add", "P", "d"}}
+	for _, f := range []string{"a.md", "t1.md", "t2.md"} {
+		setup = append(setup, []string{"document", "ingest", "--no-prompt", f, "--project", "P"})
+	}
+	for _, tc := range []verbCase{
+		{name: "who-knows ok", setup: setup, files: files, args: []string{"story", "who-knows", "Anna", "--project", "P"}, want: classOK},
+		{name: "who-knows at a scene ok", setup: setup, files: files, args: []string{"story", "who-knows", "Anna", "later", "--project", "P"}, want: classOK},
+		{name: "who-knows no character", setup: setup, files: files, args: []string{"story", "who-knows", "--project", "P"}, want: classUsage},
+		{name: "who-knows no project", setup: setup, files: files, args: []string{"story", "who-knows", "Anna"}, want: classUsage},
+		{name: "who-knows surplus argument", setup: setup, files: files, args: []string{"story", "who-knows", "Anna", "later", "extra", "--project", "P"}, want: classUsage},
+		{name: "who-knows bad flag", setup: setup, files: files, args: []string{"story", "who-knows", "Anna", "--project", "P", "--bogus"}, want: classUsage},
+		{name: "who-knows --narrative is not taken", setup: setup, files: files, args: []string{"story", "who-knows", "Anna", "--project", "P", "--narrative"}, want: classUsage},
+		{name: "who-knows ambiguous scene", setup: setup, files: files, args: []string{"story", "who-knows", "Anna", "twin", "--project", "P"}, want: classUsage},
+		{name: "who-knows unknown character", setup: setup, files: files, args: []string{"story", "who-knows", "Nobody", "--project", "P"}, want: classNegative},
+		{name: "who-knows unknown scene", setup: setup, files: files, args: []string{"story", "who-knows", "Anna", "nowhere", "--project", "P"}, want: classNegative},
+		{name: "who-knows unknown project", args: []string{"story", "who-knows", "Anna", "--project", "nosuch"}, want: classNegative},
+		{name: "who-learns ok", setup: setup, files: files, args: []string{"story", "who-learns", "the debt", "--project", "P"}, want: classOK},
+		{name: "who-learns no fact", setup: setup, files: files, args: []string{"story", "who-learns", "--project", "P"}, want: classUsage},
+		{name: "who-learns no project", setup: setup, files: files, args: []string{"story", "who-learns", "the debt"}, want: classUsage},
+		{name: "who-learns surplus argument", setup: setup, files: files, args: []string{"story", "who-learns", "the debt", "extra", "--project", "P"}, want: classUsage},
+		{name: "who-learns blank fact", setup: setup, files: files, args: []string{"story", "who-learns", "  ", "--project", "P"}, want: classUsage},
+		{name: "who-learns unknown fact", setup: setup, files: files, args: []string{"story", "who-learns", "no such fact", "--project", "P"}, want: classNegative},
+		{name: "who-learns unknown project", args: []string{"story", "who-learns", "the debt", "--project", "nosuch"}, want: classNegative},
+	} {
+		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
+	}
+}
+
+func TestHelp_DescribesWhoKnowsAndWhoLearns(t *testing.T) {
+	text := strings.Join(strings.Fields(StoryHelpText), " ")
+	for _, want := range []string{"who-knows CHARACTER [SCENE] --project P", "who-learns FACT --project P", "story order",
+		"knows rows are use", "Not ordered against SCENE"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("kb story help does not mention %q", want)
+		}
+	}
+}
