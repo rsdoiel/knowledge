@@ -79,6 +79,15 @@ Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`. Entries are add
   Behaviour is unchanged: every key, screen and legend is as before. `termenv` is no longer a dependency. The terminal
   tests read an emulated screen, because the new renderer redraws only what changed.
 
+- **`kb concept suggest` ranks by damped frequency and groups variants by stem** (DR-0085; partly supersedes DR-0028 and
+  DR-0034). The score is `(1 + ln occurrences) x idf`; it was `occurrences x idf`, which put function words first. On the
+  workspace database the old top ten was `one`, `database`, `file`, `workspace`, `already`, `harvey`, `scene`, `two`, `change`,
+  `every`; the new first ten are `sensor`, `sitemap`, `css`, `prismml-eng`, `chunk`, `scene`, `element`, `pagefind`, `distance`,
+  `feed`. Numbers, ordinals and common adverbs (`one`, `first`, `also`, `already`, `every`, `never`) join the stoplist, which the
+  frontmatter keyword scorer shares. Variants are grouped only when they are forms of one word: `change` is no longer grouped with
+  `chance` and `charge`, nor `context` with `content`. A typo no longer merges into its correct word in `suggest` (the near-existing
+  report and `fuzzy-tag` still use edit distance). Scores are about twenty where they were several hundred.
+
 ### Fixed
 
 - **The small known problems of v0.0.23 to v0.0.24 (T6).** A record's search passage is the paragraph the match is in, without

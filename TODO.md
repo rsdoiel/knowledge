@@ -691,6 +691,7 @@ trip was also checked and is clean: 14 tables' row counts identical.
   wrapped existing link. Breaking for scripts: needs an upgrade note.
 
 - [ ] **Programmatic corpus-improvement techniques, as the corpus grows.** **No target; after manuscripts are in the corpus.**
+  **2026-10-19 (v0.0.25, DR-0085): ranking and grouping of `concept suggest` fixed (damped score, longer stoplist, grouping by stem). Still open: story metadata (`characters`, `place`) as a source of concept names once a manuscript is in the corpus; related documents by shared concepts; any model-based extraction. See `notes/corpus-improvement-2026-10-19.md`.**
   Raised 2026-09-18 while discussing the MADR item below: decision records
   already benefit from being surfaced through multiple routes (frontmatter,
   `[[wikilinks]]`, `relates_to`), and documents are new and still being

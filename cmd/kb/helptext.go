@@ -1035,13 +1035,20 @@ suggest
   20). Never writes anything -- a suggestion becomes a real concept only
   when a human runs concept add. See DR-0028 (knowledge/decisions/).
 
+  The score is (1 + ln occurrences) x idf, so repeating a word raises its
+  rank slowly: a word used everywhere does not outrank one confined to a few
+  items. Numbers, ordinals and common adverbs (one, first, also, already,
+  every, never) are never candidates. See DR-0085.
+
   Spelling variants of the same underlying term (` + "`chunking`" + `/
   ` + "`chunkings`" + `/` + "`chunked`" + `) are merged into one candidate before
   scoring, not after -- individually each might fall below the occurrence
   or distinctiveness floor even though the combined mentions clearly
   signal one real concept. The merged candidate's name is its highest-
   occurrence spelling; other spellings are printed inline,
-  ` + "`chunking (+chunkings, chunked)`" + `. Always on, no flag. A candidate
+  ` + "`chunking (+chunkings, chunked)`" + `. Words are merged only when they are
+  forms of one word (same stem), never because they are one letter apart:
+  change and chance stay two candidates (DR-0085). Always on, no flag. A candidate
   term that's instead a fuzzy near-miss of an *already-known* concept is
   excluded from candidacy outright -- that's ` + "`fuzzy-tag`" + `'s job, not
   this command's -- and reported separately in a trailing

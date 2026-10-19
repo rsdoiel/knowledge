@@ -531,3 +531,12 @@ func TestCmdConcept_UsageListsDelete(t *testing.T) {
 		t.Errorf("err = %v, want the usage line to list delete", err)
 	}
 }
+
+func TestHelp_ConceptSuggestStatesTheScoreAndTheGrouping(t *testing.T) {
+	text := ConceptHelpText
+	for _, want := range []string{"(1 + ln occurrences) x idf", "same stem", "DR-0085"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("concept help lacks %q", want)
+		}
+	}
+}
