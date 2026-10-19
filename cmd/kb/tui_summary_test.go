@@ -360,3 +360,21 @@ func TestBinary_TUISummariseWithAnExternalEditor(t *testing.T) {
 		t.Errorf("exit = %d, want 0:\n%s", code, screen.text())
 	}
 }
+
+// On the review queue `/` filters the list like every other list, and S is the
+// way to search (TODO, v0.0.22: the queue still used `/` for the search).
+func TestReviewQueue_SlashFiltersAndSSearches(t *testing.T) {
+	m, _, _ := summaryModel(t)
+	m, _ = press(t, m, ch('/'))
+	if m.searching {
+		t.Fatalf("/ opened the search on the review queue; on a list it filters")
+	}
+	if v := m.View(); !strings.Contains(v, "Filter:") {
+		t.Errorf("the legend should show the filter prompt:\n%s", v)
+	}
+	m, _ = press(t, m, keyEsc)
+	m, _ = press(t, m, ch('S'))
+	if !m.searching {
+		t.Errorf("S should open the search from the review queue:\n%s", m.View())
+	}
+}

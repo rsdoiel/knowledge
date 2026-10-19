@@ -120,9 +120,6 @@ func (m *tuiModel) updateReviewQueue(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openGroup("document")
 	case "esc":
 		return m, nil
-	case "/":
-		m.startSearch()
-		return m, nil
 	case "a":
 		m.scopeAll = !m.scopeAll
 		m.reloadReviewQueue()
