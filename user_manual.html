@@ -317,45 +317,12 @@ the way. It replaces the old flat <code>DECISIONS.md</code>, which was
 split into records when this module became the format’s first conversion
 pilot; <code>kb search</code> reaches the reasoning inside them, not
 just their titles</li>
-<li><a
-href="module-extraction-design.html">module-extraction-design.md</a> /
-<a href="module-extraction-plan.html">-plan.md</a> — pulling this module
-out of <code>harvey</code></li>
-<li><a href="cli-tui-design.html">cli-tui-design.md</a> / <a
-href="cli-tui-plan.html">-plan.md</a> — the <code>kb</code> CLI and
-TUI</li>
-<li><a href="debug-logging-design.html">debug-logging-design.md</a> / <a
-href="debug-logging-plan.html">-plan.md</a> — the <code>--debug</code>
-JSONL trace</li>
-<li><a href="jsonl-export-design.html">jsonl-export-design.md</a> / <a
-href="jsonl-export-plan.html">-plan.md</a> — the
-<code>export</code>/<code>import</code> JSON-L format and
-identity/conflict rules</li>
-<li><a
-href="decision-records-design.html">decision-records-design.md</a> / <a
-href="decision-records-plan.html">-plan.md</a> — <code>ingest</code>,
-<code>record</code> and <code>index</code>: decision records as
-first-class rows</li>
-<li><a
-href="records-portability-design.html">records-portability-design.md</a>
-/ <a href="records-portability-plan.html">-plan.md</a> — carrying
-records and their relations through <code>merge</code>,
-<code>export</code> and <code>import</code></li>
-<li><a
-href="wikilink-tagging-design.html">wikilink-tagging-design.md</a> / <a
-href="wikilink-tagging-plan.html">-plan.md</a> — <code>[[Name]]</code>
-inline tagging and frontmatter tags resolving to concepts at ingest
-time</li>
-<li><a
-href="concept-tag-retrieval-design.html">concept-tag-retrieval-design.md</a>
-/ <a href="concept-tag-retrieval-plan.html">-plan.md</a> —
-<code>MatchConceptNames</code>/<code>RecallByConceptNames</code>, an
-embedder-free retrieval path for small models</li>
-<li><a
-href="narrative-documents-design.html">narrative-documents-design.md</a>
-/ <a href="narrative-documents-plan.html">-plan.md</a> — the
-<code>documents</code> entity, graduated abstraction levels, and the
-summary review workflow</li>
+<li>The design briefs and implementation plans behind each part (the CLI
+and TUI, the <code>--debug</code> trace, the JSONL export, decision
+records, wikilink tagging, concept recall, narrative documents, the
+story model, provenance) are kept with the project’s decision records in
+the workspace, under <code>agents/projects/knowledge/design/</code> and
+<code>plans/</code>, not in this repository.</li>
 </ul>
 <hr />
 <h2 id="cant-find-what-you-need">Can’t Find What You Need?</h2>

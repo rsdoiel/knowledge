@@ -89,15 +89,7 @@ A complete command line always runs and prints, on a terminal or not. Only an in
 These documents record why `kb` is shaped the way it is — useful if you're extending it, not required to use it:
 
 - **[decisions/index.md](decisions/index.md)** — the decision-record corpus: every architecture/UX decision this module has made, each with its rejected alternatives and the real bugs found along the way. It replaces the old flat `DECISIONS.md`, which was split into records when this module became the format's first conversion pilot; `kb search` reaches the reasoning inside them, not just their titles
-- [module-extraction-design.md](module-extraction-design.md) / [-plan.md](module-extraction-plan.md) — pulling this module out of `harvey`
-- [cli-tui-design.md](cli-tui-design.md) / [-plan.md](cli-tui-plan.md) — the `kb` CLI and TUI
-- [debug-logging-design.md](debug-logging-design.md) / [-plan.md](debug-logging-plan.md) — the `--debug` JSONL trace
-- [jsonl-export-design.md](jsonl-export-design.md) / [-plan.md](jsonl-export-plan.md) — the `export`/`import` JSON-L format and identity/conflict rules
-- [decision-records-design.md](decision-records-design.md) / [-plan.md](decision-records-plan.md) — `ingest`, `record` and `index`: decision records as first-class rows
-- [records-portability-design.md](records-portability-design.md) / [-plan.md](records-portability-plan.md) — carrying records and their relations through `merge`, `export` and `import`
-- [wikilink-tagging-design.md](wikilink-tagging-design.md) / [-plan.md](wikilink-tagging-plan.md) — `[[Name]]` inline tagging and frontmatter tags resolving to concepts at ingest time
-- [concept-tag-retrieval-design.md](concept-tag-retrieval-design.md) / [-plan.md](concept-tag-retrieval-plan.md) — `MatchConceptNames`/`RecallByConceptNames`, an embedder-free retrieval path for small models
-- [narrative-documents-design.md](narrative-documents-design.md) / [-plan.md](narrative-documents-plan.md) — the `documents` entity, graduated abstraction levels, and the summary review workflow
+- The design briefs and implementation plans behind each part (the CLI and TUI, the `--debug` trace, the JSONL export, decision records, wikilink tagging, concept recall, narrative documents, the story model, provenance) are kept with the project's decision records in the workspace, under `agents/projects/knowledge/design/` and `plans/`, not in this repository.
 
 ---
 
