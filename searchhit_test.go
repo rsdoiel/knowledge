@@ -109,3 +109,47 @@ func TestSearch_ConceptAndProjectHitsHaveNoPassageFields(t *testing.T) {
 		t.Errorf("concept hit: %+v", h)
 	}
 }
+
+// A short record fits in one snippet, so its passage was the title and the start
+// of the body as well as the match (TODO, v0.0.23). The passage is the paragraph
+// the match is in, without its label, which Section already carries.
+func TestSearch_AShortRecordsPassageIsTheMatchingParagraphOnly(t *testing.T) {
+	kb := searchHitFixture(t)
+	rs, err := kb.Search("toast")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := findHit(t, rs, "record", func(r KBSearchResult) bool { return r.Label == "DR-0001" })
+	if h.Passage != "Use «toast» for breakfast every day." {
+		t.Errorf("passage = %q, want just the Decision paragraph, label removed", h.Passage)
+	}
+	if h.Section != "Decision" {
+		t.Errorf("section = %q", h.Section)
+	}
+	// A match in the title keeps the title as the passage.
+	w := findHit(t, rs, "record", func(r KBSearchResult) bool { return r.Label == "DR-0002" })
+	if !strings.Contains(w.Passage, "«Toast»") || w.Section != "title" {
+		t.Errorf("title match: passage %q section %q", w.Passage, w.Section)
+	}
+}
+
+func TestSearch_ALongParagraphPassageIsCutAroundTheMatch(t *testing.T) {
+	kb := openTestKB(t)
+	p, _ := kb.AddProject("alpha", "")
+	body := "\n**Context.** " + strings.Repeat("Background words repeat here. ", 20) + "The marmalade decides it. " + strings.Repeat("Afterwards more words follow. ", 20) + "\n"
+	if _, err := kb.AddRecord(Record{RecordID: "0003", ProjectID: p, Scope: "project", Path: "decisions/0003-z.md",
+		Title: "Jam", Date: "2026-10-03", Status: "accepted", Kind: "decision", Body: body, Checksum: "c3"}); err != nil {
+		t.Fatal(err)
+	}
+	rs, err := kb.Search("marmalade")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := findHit(t, rs, "record", func(KBSearchResult) bool { return true })
+	if !strings.Contains(h.Passage, "«marmalade»") || len([]rune(h.Passage)) > 240 || !strings.HasPrefix(h.Passage, "…") || !strings.HasSuffix(h.Passage, "…") {
+		t.Errorf("passage = %q (%d runes), want a short excerpt cut on both sides", h.Passage, len([]rune(h.Passage)))
+	}
+	if h.Section != "Context" {
+		t.Errorf("section = %q", h.Section)
+	}
+}
