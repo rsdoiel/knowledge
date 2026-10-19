@@ -271,6 +271,11 @@ func (m *tuiModel) planDocumentIngest() (tea.Model, tea.Cmd) {
 			if err != nil {
 				return nil, err
 			}
+			// The prompt the command line offers a note cannot run here: it would
+			// read the program's own keyboard. Say so, and where the same help is.
+			if raw, rerr := os.ReadFile(v[0]); rerr == nil && wantsFrontmatter(m.kb, v[0], raw) {
+				text += "\nThis file has no title in frontmatter. Documents → Frontmatter… adds one (kb document frontmatter " + shellWord(v[0]) + ").\n"
+			}
 			eq := "kb document ingest " + shellWord(v[0]) + " --project " + shellWord(strings.TrimSpace(v[1]))
 			if v[2] != "" {
 				eq += " --title " + shellWord(v[2])

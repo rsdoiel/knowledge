@@ -251,6 +251,39 @@ func TestPlan_DocumentIngestIsAFormThenAPlan(t *testing.T) {
 	}
 }
 
+// The command line offers a note frontmatter on a terminal; the interface cannot
+// (the prompt would read the program's own keyboard), so the plan says that the
+// file lacks it and where to add it (TODO, v0.0.23).
+func TestPlan_DocumentIngestSaysWhenTheFileHasNoTitleAndWhereToAddOne(t *testing.T) {
+	for name, tc := range map[string]struct {
+		body string
+		hint bool
+	}{
+		"no frontmatter block":  {"# Second\n\nA note.\n", true},
+		"a block with no title": {"---\nauthor: Jane\n---\n\n# Second\n\nA note.\n", true},
+		"a block with a title":  {"---\ntitle: Second\n---\n\n# Second\n\nA note.\n", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, root, _ := planModel(t)
+			fresh := filepath.Join(root, "docs", "second.md")
+			if err := os.WriteFile(fresh, []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			m = openLeaf(t, m, "Documents", "Ingest a document…")
+			m, _ = press(t, m, append(typed(fresh), keyEnter)...)
+			m, _ = press(t, m, keyEnter)
+			m, _ = press(t, m, keyEnter)
+			if m.state != viewPlan {
+				t.Fatalf("state %s:\n%s", viewStateNames[m.state], m.View())
+			}
+			has := strings.Contains(m.View(), "Documents → Frontmatter…")
+			if has != tc.hint {
+				t.Errorf("hint shown = %v, want %v:\n%s", has, tc.hint, m.View())
+			}
+		})
+	}
+}
+
 // ─── the table and the legend ────────────────────────────────────────────────
 
 func TestPlan_TheDocumentRowsAreAllBuilt(t *testing.T) {

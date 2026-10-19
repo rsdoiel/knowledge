@@ -194,7 +194,9 @@ j and k, with nothing written. y applies it by running the same command without
 --dry-run, and the result is shown with the command that does the same; n, q and Esc
 leave with nothing done, and Enter does nothing, so a habitual key cannot write. With
 every scope the project is asked first; Ingest a document asks for the file, the
-project and an optional title. Documents → Frontmatter… is still the command line.
+project and an optional title, and says when the file has no title in frontmatter
+(the offer the command line makes on a terminal cannot run inside the interface);
+Documents → Frontmatter… adds one.
 
 Documents → Review queue lists the sections waiting for a person, gist first, with
 each one's size, tag density and confidence. Enter on one is a unit of two steps. The
