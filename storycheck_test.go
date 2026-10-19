@@ -252,3 +252,180 @@ func TestMarkdownWarningKind_MatchesTheMessagesTheParserBuilds(t *testing.T) {
 		t.Errorf("a front matter YAML error is not a scene report, got %q", k)
 	}
 }
+
+// ─── knowledge checks (DR-0083 item 7) ───────────────────────────────────────
+
+func ingestScenes(t *testing.T, kb *KnowledgeBase, pid int64, files ...[2]string) {
+	t.Helper()
+	for _, f := range files {
+		ingestStory(t, kb, pid, writeTempFile(t, f[0], f[1]))
+	}
+}
+
+func TestStoryCheck_KnowledgeBeforeLearned(t *testing.T) {
+	cases := []struct {
+		name  string
+		files [][2]string
+		want  int
+	}{
+		{"a knows before the learns", [][2]string{
+			{"a.md", scene("early", "2024-01-01", "knows: [\"Anna: the debt\"]\n")},
+			{"b.md", scene("late", "2024-03-01", "learns: [\"Anna: the debt\"]\n")}}, 1},
+		{"the character's case does not matter", [][2]string{
+			{"a.md", scene("early", "2024-01-01", "knows: [\"anna: The  Debt\"]\n")},
+			{"b.md", scene("late", "2024-03-01", "learns: [\"Anna: the debt\"]\n")}}, 1},
+		{"a knows with no learns is backstory", [][2]string{
+			{"a.md", scene("early", "2024-01-01", "knows: [\"Anna: the debt\"]\n")}}, 0},
+		{"a knows after the learns", [][2]string{
+			{"a.md", scene("early", "2024-01-01", "learns: [\"Anna: the debt\"]\n")},
+			{"b.md", scene("late", "2024-03-01", "knows: [\"Anna: the debt\"]\n")}}, 0},
+		{"learns and knows in one scene", [][2]string{
+			{"a.md", scene("one", "2024-01-01", "learns: [\"Anna: the debt\"]\nknows: [\"Anna: the debt\"]\n")}}, 0},
+		{"scenes not ordered against each other", [][2]string{
+			{"a.md", scene("x", "2024-01-01", "knows: [\"Anna: the debt\"]\n")},
+			{"b.md", scene("y", "2024-01-01", "learns: [\"Anna: the debt\"]\n")}}, 0},
+		{"a flashback told after, happening before", [][2]string{
+			{"a.md", scene("told-first", "2024-01-01", "knows: [\"Anna: the debt\"]\n")},
+			{"b.md", scene("flashback", "1998-05-02", "learns: [\"Anna: the debt\"]\n")}}, 0},
+		{"one learns before and one after", [][2]string{
+			{"a.md", scene("early", "2024-01-01", "learns: [\"Anna: the debt\"]\n")},
+			{"b.md", scene("mid", "2024-02-01", "knows: [\"Anna: the debt\"]\n")},
+			{"c.md", scene("late", "2024-03-01", "learns: [\"Anna: the debt\"]\n")}}, 0},
+		{"another character's knows is not Anna's", [][2]string{
+			{"a.md", scene("early", "2024-01-01", "knows: [\"Bram: the debt\"]\n")},
+			{"b.md", scene("late", "2024-03-01", "learns: [\"Anna: the debt\"]\n")}}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kb := openTestKB(t)
+			pid, _ := kb.AddProject("work", "")
+			ingestScenes(t, kb, pid, tc.files...)
+			got := findKind(checkOf(t, kb, pid), "knowledge-before-learned")
+			if len(got) != tc.want {
+				t.Fatalf("findings = %+v, want %d", got, tc.want)
+			}
+			if tc.want == 1 {
+				m := got[0].Message
+				for _, w := range []string{"early", "late", "the debt"} {
+					if !strings.Contains(FactKey(m), w) { // the fact is quoted as written
+						t.Errorf("message %q does not name %q", m, w)
+					}
+				}
+				if !strings.HasSuffix(got[0].Document, "a.md") {
+					t.Errorf("Document = %q, want the knows scene's file", got[0].Document)
+				}
+			}
+		})
+	}
+}
+
+func TestStoryCheck_UnknownFactCatchesATypoOfALongFact(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b string
+		want int
+	}{
+		{"one edit apart", "Anna: the letter is forged", "Bram: the leter is forged", 1},
+		{"one insertion", "Anna: the letter is forged", "Bram: the letter is forgedd", 1},
+		{"equal keys are one fact", "Anna: the letter is forged", "Bram: The  Letter is forged", 0},
+		{"two edits apart", "Anna: the letter is forged", "Bram: the leter is forgd", 0},
+		{"short facts are skipped", "Anna: the debt", "Bram: the dent", 0},
+		{"one long, one short", "Anna: the letter is forged", "Bram: the letter", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kb := openTestKB(t)
+			pid, _ := kb.AddProject("work", "")
+			ingestScenes(t, kb, pid,
+				[2]string{"a.md", scene("one", "2024-01-01", "learns: [\""+tc.a+"\"]\n")},
+				[2]string{"b.md", scene("two", "2024-02-01", "knows: [\""+tc.b+"\"]\n")})
+			got := findKind(checkOf(t, kb, pid), "unknown-fact")
+			if len(got) != tc.want {
+				t.Fatalf("findings = %+v, want %d", got, tc.want)
+			}
+			if tc.want == 1 {
+				_, fa, _ := ParseKnowledgeItem(tc.a)
+				_, fb, _ := ParseKnowledgeItem(tc.b)
+				if !strings.Contains(got[0].Message, fa) || !strings.Contains(got[0].Message, fb) {
+					t.Errorf("message %q should name both facts", got[0].Message)
+				}
+			}
+		})
+	}
+}
+
+func TestEditDistanceIsOne(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"abc", "abc", false}, // equal is distance zero: not "one edit apart"
+		{"abc", "abd", true}, {"abc", "ab", true}, {"abc", "abcd", true}, {"abc", "xbc", true},
+		{"abc", "axc", true}, {"abc", "axd", false}, {"abc", "a", false}, {"", "a", true}, {"", "", false},
+		{"abcd", "acbd", false},
+	} {
+		if got := editDistanceIsOne(tc.a, tc.b); got != tc.want {
+			t.Errorf("editDistanceIsOne(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+func TestStoryCheck_LateSource(t *testing.T) {
+	cases := []struct {
+		name         string
+		time         string
+		date         string
+		relationship string
+		want         int
+	}{
+		{"evidence dated after the event", "1969-10-29", "1975-01-01", "evidence", 1},
+		{"evidence dated a month later", "1969-10-29", "1969-11", "evidence", 1},
+		{"a cited source is never flagged", "1969-10-29", "1975-01-01", "cited", 0},
+		{"no published date", "1969-10-29", "", "evidence", 0},
+		{"the same day", "1969-10-29", "1969-10-29", "evidence", 0},
+		{"earlier", "1969-10-29", "1960", "evidence", 0},
+		{"a year-only date within the event's year cannot be said to be later", "1969-10-29", "1969", "evidence", 0},
+		{"a year-only date after the event's year", "1969-10-29", "1970", "evidence", 1},
+		{"an ordinal event has no calendar", "ordinal: 3", "1975", "evidence", 0},
+		{"an event with no interval", "after: nowhere", "1975", "evidence", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kb := openTestKB(t)
+			pid, _ := kb.AddProject("work", "")
+			ingestScenes(t, kb, pid, [2]string{"a.md", scene("the-war", tc.time, "")})
+			docs, _ := kb.Documents(pid)
+			sid, err := kb.AddSource(Source{Title: "A Later History", PublishedDate: tc.date})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := kb.LinkDocumentSource(docs[0].ID, sid, tc.relationship, "", ""); err != nil {
+				t.Fatal(err)
+			}
+			got := findKind(checkOf(t, kb, pid), "late-source")
+			if len(got) != tc.want {
+				t.Fatalf("findings = %+v, want %d", got, tc.want)
+			}
+			if tc.want == 1 {
+				m := got[0].Message
+				for _, w := range []string{"the-war", "A Later History", tc.date} {
+					if !strings.Contains(m, w) {
+						t.Errorf("message %q does not name %q", m, w)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestStoryCheck_KnowledgeKindsAreOrderedAndNamedInTheDocComment(t *testing.T) {
+	have := map[string]bool{}
+	for _, k := range storyFindingOrder {
+		have[k] = true
+	}
+	for _, k := range []string{"knowledge-before-learned", "unknown-fact", "late-source"} {
+		if !have[k] {
+			t.Errorf("storyFindingOrder lacks %q", k)
+		}
+	}
+}

@@ -192,7 +192,8 @@ func TestHelp_DescribesTheMarkdownSceneSyntaxAndEveryReport(t *testing.T) {
 		}
 	}
 	for _, kind := range []string{"scene-comment-no-id", "scene-id-disagreement", "scene-id-repeated",
-		"scene-comment-syntax", "fountain-style-heading", "front-matter-ignored"} {
+		"scene-comment-syntax", "fountain-style-heading", "front-matter-ignored",
+		"knowledge-before-learned", "unknown-fact", "late-source"} {
 		if !strings.Contains(StoryHelpText, kind) {
 			t.Errorf("kb story help does not name the %s report", kind)
 		}
@@ -393,9 +394,27 @@ func TestStory_KnowledgeExitCodes(t *testing.T) {
 func TestHelp_DescribesWhoKnowsAndWhoLearns(t *testing.T) {
 	text := strings.Join(strings.Fields(StoryHelpText), " ")
 	for _, want := range []string{"who-knows CHARACTER [SCENE] --project P", "who-learns FACT --project P", "story order",
-		"knows rows are use", "Not ordered against SCENE"} {
+		"knows rows are use", "Not ordered against SCENE", "source link --document", "--relationship evidence"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("kb story help does not mention %q", want)
 		}
+	}
+}
+
+func TestCmdStory_CheckReportsAKnowledgeProblemAndStrictGatesIt(t *testing.T) {
+	kb, _ := storyKB(t, map[string]string{
+		"a.md": sceneDoc("early", "2024-01-01", "knows: [\"Anna: the debt\"]\n"),
+		"b.md": sceneDoc("late", "2024-03-01", "learns: [\"Anna: the debt\"]\n"),
+	})
+	var out bytes.Buffer
+	if err := cmdStory(kb, nil, false, []string{"check", "--project", "work"}, &out); err != nil {
+		t.Fatalf("advisory check failed: %v", err)
+	}
+	if !strings.Contains(out.String(), "knowledge-before-learned") {
+		t.Errorf("report = %q", out.String())
+	}
+	out.Reset()
+	if err := cmdStory(kb, nil, false, []string{"check", "--project", "work", "--strict"}, &out); err == nil {
+		t.Error("--strict with a knowledge finding must fail")
 	}
 }

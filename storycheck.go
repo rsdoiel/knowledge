@@ -14,7 +14,7 @@ import (
   - Kind is one of "missing-file", "unnumbered-scene", "scene-comment-no-id", "scene-id-disagreement", "scene-id-repeated",
     "scene-comment-syntax", "fountain-style-heading", "front-matter-ignored", "duplicate-label",
   - "unresolved-time", "unparseable-time", "unknown-reference", "contradiction",
-  - "cycle", "two-places" or "foreshadow-order". Document is the file path, and
+  - "cycle", "two-places", "foreshadow-order", "knowledge-before-learned", "unknown-fact" or "late-source". Document is the file path, and
   - Message says what and where.
     *
   - Example:
@@ -32,6 +32,7 @@ type StoryFinding struct {
 var storyFindingOrder = []string{
 	"missing-file", "unnumbered-scene", "duplicate-label", "unparseable-time", "unresolved-time",
 	"unknown-reference", "contradiction", "cycle", "two-places", "foreshadow-order",
+	"knowledge-before-learned", "unknown-fact", "late-source",
 }
 
 func storyEventName(e StoryEvent) string {
@@ -72,6 +73,16 @@ func storyEventName(e StoryEvent) string {
  *   - foreshadow-order: within one document, a scene that foreshadows an
  *     earlier scene, or pays off a later one. Across documents the reading
  *     order is not known and nothing is said.
+ *   - knowledge-before-learned: a scene says a character knows a fact, and every
+ *     scene where that character learns it is provably later in story order. A
+ *     knows with no learns anywhere is backstory and is not reported, nor is one
+ *     whose learning is unordered against it (DR-0083).
+ *   - unknown-fact: two different facts, each of at least 12 characters, that are
+ *     one edit apart, which is probably one fact typed twice. Reported, never
+ *     merged.
+ *   - late-source: a document cites a source with the relationship "evidence"
+ *     whose published_date is after the end of one of the document's events. A
+ *     source with no date, or an event with no calendar interval, gives nothing.
  *
  * Parameters:
  *   projectID (int64) — the project.
@@ -281,6 +292,12 @@ func (kb *KnowledgeBase) StoryCheck(projectID int64) ([]StoryFinding, error) {
 			}
 		}
 	}
+
+	more, err := kb.knowledgeFindings(projectID, evs, g, path)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, more...)
 
 	rank := map[string]int{}
 	for i, k := range storyFindingOrder {

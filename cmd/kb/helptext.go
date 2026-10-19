@@ -1612,7 +1612,20 @@ check
   scene-comment-syntax (an unknown key, or a word with no "=", in a story
   comment), fountain-style-heading (a heading ending #12A#, which is text and
   not an id; reported once per file) and front-matter-ignored (an event or
-  story_time, learns or knows in front matter, ignored because the file has scene ids). The report is advice: the
+  story_time, learns or knows in front matter, ignored because the file has scene ids).
+  Three kinds read what characters learn and know (DR-0083):
+  knowledge-before-learned (a scene says a character knows a fact, and every
+  scene where the character learns it is later in story order; a knows with no
+  learns anywhere is backstory, and a learns that is not ordered against the
+  knows is not reported), unknown-fact (two different facts of at least 12
+  characters that are one edit apart, probably one fact typed twice; they are
+  reported and never merged) and late-source (a document cites a source with the
+  relationship "evidence" whose published date is after the end of one of the
+  document's events; a source with no date, or an event with no calendar
+  interval, is silent). late-source does nothing until a citation is labelled:
+  {app_name} source link --document ID SOURCE_ID --relationship evidence (a
+  "cited" link, which is what the sources: front matter makes, is never
+  reported). The report is advice: the
   exit status is 0 however many findings there are. With --strict it is 1 when
   there are any. --json gives a list of kind, document and message.
 
