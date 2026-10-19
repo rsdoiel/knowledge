@@ -112,8 +112,9 @@ match is reported, never deleted.
 ingest
 : parse and segment PATH, creating the document and its sections on first
   ingest, or reconciling a changed file against its existing rows. On a
-  terminal, a file with no frontmatter block (a note, say) is first offered
-  one: `title`, `author` and `dateCreated` are proposed one at a time as for
+  terminal, a file with no frontmatter block (a note, say), or with a block that
+  has no title, is first offered one (a block's other keys are kept, and only
+  the fields it lacks are asked about): `title`, `author` and `dateCreated` are proposed one at a time as for
   the frontmatter subverb below (Enter accepts, text replaces, - skips, q
   stops), then the known concepts the text mentions as `keywords`, and the
   file is written only after a final confirmation. A new concept is never
@@ -121,7 +122,7 @@ ingest
   was, and the note is ingested as before. `--no-prompt` turns the offer off;
   it is also off with `--dry-run`, with the global `--json`, and whenever
   standard input or output is not a terminal, and nothing makes it appear in
-  those cases. A file that already has a frontmatter block is never offered one.
+  those cases. A file whose frontmatter block has a title is never offered one.
 
 list
 : print matching documents, one per line

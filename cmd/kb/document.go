@@ -225,12 +225,13 @@ func cmdDocumentIngest(kb *knowledge.KnowledgeBase, jsonOut bool, args []string,
 		return notFoundf("unknown project %q", project)
 	}
 
-	// A note with no frontmatter block is offered one, on a terminal only: not
+	// A note with no frontmatter block, or a block with no title, is offered one,
+	// on a terminal only: not
 	// with --no-prompt, --dry-run or --json (the output is for a program), and
 	// never when there is no terminal to ask. Nothing a caller passes can force
 	// the prompt on, as with the accepted record status (DR-0061).
 	if !noPrompt && !dryRun && !jsonOut && atTerminal(out) {
-		if raw, rerr := os.ReadFile(path); rerr == nil && !hasFrontmatterBlock(raw) {
+		if raw, rerr := os.ReadFile(path); rerr == nil && wantsFrontmatter(kb, path, raw) {
 			if _, eerr := editFrontmatter(kb, promptIn, out, path); eerr != nil {
 				return eerr
 			}

@@ -245,3 +245,60 @@ func TestDocumentIngest_CancellingTheEditorStillIngestsTheNote(t *testing.T) {
 		t.Error("file changed after cancelling")
 	}
 }
+
+// A file that has a frontmatter block but no title is offered a title too; the
+// fields it already has are kept and not asked about (TODO, v0.0.23).
+const blockNoTitle = "---\nauthor: Jane Doe\ndescription: kept as is\n---\n\n# Ownership verification\n\nToast was checked.\n"
+
+func TestDocumentIngest_AFileWithABlockButNoTitleIsOfferedATitle(t *testing.T) {
+	kb := openTestKB(t)
+	kb.AddProject("P", "")
+	path := writeNote(t, "2026-09-29-ownership.md", blockNoTitle)
+	// title: accept; dateCreated: skip; confirm. Author is already set, so it is not asked.
+	asTerminal(t, "\n-\ny\n")
+	out, err := ingestNote(t, kb, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "has frontmatter but no title") || strings.Contains(out, "author [") || strings.Contains(out, "author:") {
+		t.Errorf("prompts:\n%s", out)
+	}
+	got := string(mustRead(t, path))
+	for _, want := range []string{"title: Ownership verification", "author: Jane Doe", "description: kept as is", "# Ownership verification", "Toast was checked."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("file lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Count(got, "---\n") != 2 || !strings.HasPrefix(got, "---\n") {
+		t.Errorf("want exactly one frontmatter block:\n%s", got)
+	}
+	if docs, _ := kb.Documents(0); len(docs) != 1 || docs[0].Title != "Ownership verification" || docs[0].Author != "Jane Doe" {
+		t.Errorf("documents = %+v", docs)
+	}
+}
+
+func TestDocumentIngest_ABlankTitleIsOfferedAndABrokenBlockIsLeftAlone(t *testing.T) {
+	for name, body := range map[string]string{
+		"a blank title": "---\ntitle: \"\"\n---\n\n# Heading\n\ntext\n",
+		"bad yaml":      "---\ntitle: [unclosed\n---\n\n# Heading\n\ntext\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			kb := openTestKB(t)
+			kb.AddProject("P", "")
+			path := writeNote(t, "n.md", body)
+			asTerminal(t, "\n\n\n\ny\n")
+			out, err := ingestNote(t, kb, path)
+			if err != nil {
+				t.Fatalf("ingest must not fail: %v", err)
+			}
+			// A blank title counts as no title and is offered one; bad YAML is left to ingest's own warning.
+			offered := strings.Contains(out, "title [")
+			if name == "bad yaml" && (offered || string(mustRead(t, path)) != body) {
+				t.Errorf("a broken block was edited or prompted:\n%s", out)
+			}
+			if name == "a blank title" && !offered {
+				t.Errorf("a blank title was not offered:\n%s", out)
+			}
+		})
+	}
+}

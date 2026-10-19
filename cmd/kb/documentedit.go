@@ -34,8 +34,28 @@ func promptLine(r *bufio.Reader, out io.Writer, prompt string) (answer string, o
 	return strings.TrimSpace(line), true
 }
 
-/** editFrontmatter offers frontmatter for a file that has none, one field at a
- * time, and writes it only after the person confirms. It proposes with
+// wantsFrontmatter reports whether a file should be offered the editor: it has
+// no frontmatter block, or it has one with no title (absent or blank). A block
+// that cannot be read is left to ingest, which warns about it.
+func wantsFrontmatter(kb *knowledge.KnowledgeBase, path string, raw []byte) bool {
+	if !hasFrontmatterBlock(raw) {
+		return true
+	}
+	res, err := kb.ProposeFrontmatter(path, raw, nil)
+	if err != nil {
+		return false
+	}
+	for _, f := range res.Fields {
+		if f.Field == "title" {
+			return f.Current == ""
+		}
+	}
+	return false
+}
+
+/** editFrontmatter offers frontmatter for a file that has none, or has a block
+ * with no title, one field at a time, asking only about the fields the file
+ * does not already have, and writes it only after the person confirms. It proposes with
  * ProposeFrontmatter (title from the first heading, author from a byline or git,
  * dateCreated from a YYYY-MM-DD in the file name, git or the file's time) and
  * offers the known concepts the text mentions as keywords. It never creates a
@@ -66,17 +86,24 @@ func editFrontmatter(kb *knowledge.KnowledgeBase, in io.Reader, out io.Writer, p
 		return false, err
 	}
 	r := bufio.NewReader(in)
-	fmt.Fprintf(out, "%s has no frontmatter. Enter accepts, text replaces, - skips, q stops.\n", path)
+	has := "no frontmatter"
+	if hasFrontmatterBlock(raw) {
+		has = "frontmatter but no title"
+	}
+	fmt.Fprintf(out, "%s has %s. Enter accepts, text replaces, - skips, q stops.\n", path, has)
 
 	set := map[string]string{}
 	var order []string
 	for _, field := range []string{"title", "author", "dateCreated"} {
-		var proposed string
+		var proposed, current string
 		var signals []knowledge.FrontmatterSignal
 		for _, f := range res.Fields {
 			if f.Field == field {
-				proposed, signals = f.Proposed, f.Signals
+				proposed, current, signals = f.Proposed, f.Current, f.Signals
 			}
+		}
+		if current != "" {
+			continue // the file already has it: not asked, not changed
 		}
 		if len(signals) > 1 {
 			var parts []string
