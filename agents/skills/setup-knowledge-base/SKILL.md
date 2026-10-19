@@ -11,7 +11,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.8.0
-  kb_version: 0.0.24
+  kb_version: 0.0.25
 variables:
   DB_PATH:
     type: string
@@ -43,14 +43,14 @@ matches any live database in this workspace. This rewrite supersedes it.
 
 ---
 
-## Schema reference (current, as of `knowledge` v0.0.10)
+## Schema reference (current, as of `knowledge` v0.0.25)
 
 | Object                        | Kind  | Purpose                                                       |
 |--------------------------------|-------|----------------------------------------------------------------|
 | `projects`                     | table | One row per experiment/project (name, description, status, `updated_at`, uuid, origin_host) |
 | `observations`                 | table | Timestamped notes/findings/decisions/questions/hypotheses per project. Immutable — corrected by superseding, never edited in place |
 | `observation_relations`        | table | `supersedes` edges between observations (DR-0023) — how a correction is expressed |
-| `concepts`                     | table | Named ideas/terms (optionally scholarly identifiers: DOI, ORCID, ROR, FundRef), now with `updated_at` |
+| `concepts`                     | table | Named ideas/terms (optionally scholarly identifiers: DOI, ORCID, ROR, FundRef), with `updated_at` and a `kind` (`character`, `place`, `theme`, `other`; v0.0.24) |
 | `sources`                      | table | Citable documents/resources, with retraction tracking          |
 | `records`                      | table | Decision records — one row per `decisions/NNNN-slug.md` file, indexed by `kb ingest` |
 | `record_relations`             | table | `supersedes`/`relates_to` edges between records                |
@@ -58,12 +58,16 @@ matches any live database in this workspace. This rewrite supersedes it.
 | `documents`                    | table | Narrative/article documents (Markdown, Fountain, plain text) ingested via `kb document ingest` |
 | `document_sections`            | table | One row per document's gist plus one per structural section (scene/heading), each with its own summary lifecycle |
 | `document_section_concepts`    | table | Links document sections → concepts, from `[[wikilink]]` tags, frontmatter `keywords`, and (v0.0.10) density linking — an already-known concept mentioned more than once outside code spans |
+| `document_sources`, `record_sources` | table | Link a document or a decision record to a cited source, with a relationship label (v0.0.25; `kb source link --document|--record`, or a `sources:` front-matter key) |
+| `story_events`                 | table | Derived: one row per scene or event in a writing project's manuscripts, rebuilt by every `kb document ingest`; does **not** travel through export, import, merge or check-db (v0.0.24) |
+| `story_knowledge`              | table | Derived: what each character learns or already knows in each event (`learns`/`knows` keys), rebuilt with `story_events` and likewise local (v0.0.25) |
 | `observation_concepts`         | table | Links observations → concepts (many-to-many)                   |
 | `project_concepts`             | table | Links projects → concepts (many-to-many)                       |
 | `observation_sources`          | table | Links observations → sources, with a relationship label        |
 | `project_summary`              | view  | Projects with their concept tags (comma-separated)              |
 | `kb_fts`                       | FTS5  | Full-text index over projects/observations/concepts/records and *reviewed* document summaries (if compiled in) |
 
+`concepts.kind` values: `character`, `place`, `theme`, `other` (default).
 `projects.status` values: `concept` → `active` → `paused` / `concluded`.
 `observations.kind` values: `note`, `finding`, `decision`, `question`, `hypothesis`.
 `records.status` values: `proposed` → `accepted` / `superseded` / `rejected` / `cancelled` (`cancelled` = pursued or explored, then abandoned, and need not have been accepted; `rejected` = considered and not pursued).

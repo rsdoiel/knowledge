@@ -132,3 +132,24 @@ func TestMakefile_ShipsAndInstallsTheSkills(t *testing.T) {
 		t.Error("`make install` must not install skills: they go in the user's agent configuration, so that is opt-in")
 	}
 }
+
+// The skills describe the story verbs, concept kinds and kb stats as released
+// (T4 of v0.0.25); a phrase going missing fails the build.
+func TestSkills_DescribeTheV0025Features(t *testing.T) {
+	want := map[string][]string{
+		"update-knowledge-base": {"story who-knows", "story who-learns", "story timeline", "story check", "concept set-kind", "--kind", "source link --document", "learns", "knows", "{#12A}"},
+		"review-knowledge-base": {"kb stats", "story check", "story:<project>"},
+		"setup-knowledge-base":  {"story_events", "story_knowledge", "document_sources", "concepts.kind"},
+	}
+	for name, phrases := range want {
+		raw, err := os.ReadFile(repoFile("agents", "skills", name, "SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range phrases {
+			if !strings.Contains(string(raw), p) {
+				t.Errorf("%s does not mention %q", name, p)
+			}
+		}
+	}
+}

@@ -19,7 +19,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.24
+  kb_version: 0.0.25
 variables:
   DB_PATH:
     type: string
@@ -96,6 +96,15 @@ rejects the forms below, and some of them would fail without a word under a
   never sees the prompt; pass `--no-prompt` anyway when a script may be given a
   terminal. A search hit carries a record's reference, status and the matching
   passage, and `kb stats` counts rows, links and checks without SQL.
+- **v0.0.25 (nothing here needs it; the minimum stays 0.0.19):** a writing project's
+  manuscript files give `kb` a story: `kb story timeline|check|who-knows|who-learns`
+  read it (see `ACTION = story`). A Markdown heading with a scene id is a scene
+  (`## The fire {#12A}`). Concepts have a kind (`character`, `place`, `theme`,
+  `other`): `concept add --kind`, `concept set-kind`, `concept list --kind`. A
+  document or record can cite sources (`source link --document ID SOURCE_ID`, or a
+  `sources:` front-matter key), and a search hit says where its text was cited from.
+  `concept suggest` ranks by a damped frequency and lists fewer function words. The
+  interactive interface starts at once on a terminal that does not answer the colour query.
 
 ---
 
@@ -119,6 +128,9 @@ rejects the forms below, and some of them would fail without a word under a
 | `concept-recall`             | Lists what the knowledge base holds about the concepts named in some text, read-only (`kb concept recall`, kb >= v0.0.15) |
 | `source`                     | Adds a row to `sources` (`kb source add`)                          |
 | `record`                     | Scaffolds and ingests a decision record (`kb record new` + `kb ingest`) |
+| `concept-set-kind`           | Changes what a concept names: `character`, `place`, `theme` or `other` (`kb concept set-kind`, kb >= v0.0.24) |
+| `story`                      | Reads a writing project's story: timeline, continuity check, who knows what (`kb story`, kb >= v0.0.24; `who-knows` and `who-learns` kb >= v0.0.25) |
+| `source-link-document`       | Records that a document or record cites a source (`kb source link --document|--record`, kb >= v0.0.25) |
 | `record-fuzzy-tag`           | Reports near-miss spellings of known concepts in decision records, and with `--write` adds them to `tags:` (`kb record fuzzy-tag`, kb >= v0.0.15) |
 | `document`                   | Ingests a narrative/article — Markdown, Fountain, or plain text (`kb document ingest`) |
 | `document-draft`             | Writes a gist or section summary for an ingested document (`kb document draft`) |
@@ -202,6 +214,9 @@ If `ACTION` is not set, ask the user:
 > 20. show a concept and what links to it (read-only, kb >= v0.0.15)
 > 21. recall what the knowledge base holds about the concepts in some text (read-only, kb >= v0.0.15)
 > 22. fuzzy-tag a project's decision records (kb >= v0.0.15)
+> 23. set a concept's kind (kb >= v0.0.24)
+> 24. read a writing project's story: timeline, check, who knows what (read-only, kb >= v0.0.24)
+> 25. record that a document or decision record cites a source (kb >= v0.0.25)
 
 ---
 
@@ -286,6 +301,11 @@ Prompt for:
 Re-running with a name that already exists updates its description (and
 identifier, if one wasn't already set) in place rather than duplicating.
 
+**Kind (kb >= v0.0.24).** Add `--kind character|place|theme|other` (default `other`)
+to say what the concept names; it matters for a writing project, where a character
+or a place is a different thing from a theme. Re-adding a concept never resets its
+kind; change it with `ACTION = concept-set-kind`.
+
 ---
 
 ### ACTION = concept-show
@@ -347,9 +367,12 @@ is filtered out rather than scored.
 
 **It never writes to the database**, and this is the point rather than a
 limitation — a suggestion becomes a concept only when a human runs
-`kb concept add`. Expect roughly half the list to be noise: run live
-against a real corpus it mixed genuinely useful terms with generic nouns
-like `row`, `name` and `table` (DR-0028). Present the ranked list and let
+`kb concept add`. Expect part of the list to be noise: run live
+against a real corpus it mixed useful terms with generic nouns like `row`,
+`name` and `table` (DR-0028). From kb v0.0.25 the score is a damped frequency
+(DR-0085): numbers and common adverbs no longer top the list, and variants are
+merged only when they are forms of one word (`change`, `changes`, `changed`),
+not when they are one letter apart (`change`, `chance`). Present the ranked list and let
 the user pick; do not loop `concept add` over the output.
 
 **Spelling variants are clustered before scoring (kb >= v0.0.11, DR-0034).**
@@ -581,6 +604,10 @@ field seeds an initial gist summary automatically, already `drafted` (see
 `document-promote` below to make it searchable). PDF is not yet supported
 and reports an explicit error, not silent mishandling.
 
+A Markdown heading with a scene id (`## The fire {#12A}`) is a scene and a
+story event; see `ACTION = story`. `kb document ingest` takes one file; for a
+directory of notes, loop: `for f in notes/*.md; do kb document ingest "$f" --project P; done`.
+
 Re-running on a changed file is safe: unchanged sections are left alone,
 a changed section is flagged `summary_stale` rather than losing its
 summary, and a removed heading is reported, never deleted.
@@ -625,6 +652,81 @@ kb document review promote SECTION_ID      # the user runs this
 ```
 
 Fails if the section hasn't been drafted yet (run `document-draft` first).
+
+---
+
+### ACTION = concept-set-kind
+
+**Requires kb >= v0.0.24.** Prompt for `CONCEPT_NAME` and `KIND` (`character`,
+`place`, `theme` or `other`).
+
+```bash
+"$KB" --db "$DB_PATH" concept set-kind "CONCEPT_NAME" "KIND"
+"$KB" --db "$DB_PATH" concept list --kind character     # check
+```
+
+An unknown kind is exit 2 and nothing is written. A kind travels with the
+concept through export, import, merge and check-db.
+
+---
+
+### ACTION = story
+
+**Read-only. Requires kb >= v0.0.24; `who-knows` and `who-learns` need >= v0.0.25.**
+A writing project is a `kb` project whose manuscript files were ingested with
+`ACTION = document`. The story is derived from those files: a Fountain scene with a
+scene number (`INT. KITCHEN - DAY #12A#`), a Markdown heading with a scene id
+(`## The fire {#12A}`), or a file whose front matter has a narrative key (`event`,
+`story_time`, `pov`, `characters`, `foreshadows`, `pays_off`, `precedes`, `learns`,
+`knows`). Every verb needs `--project`. Re-ingest after editing a manuscript; the
+story is rebuilt from the files each time, and does not travel through export,
+import, merge or check-db.
+
+Prompt for `PROJECT_NAME` and which question:
+
+```bash
+"$KB" --db "$DB_PATH" story timeline --project "PROJECT_NAME"              # story order; add --narrative for reading order
+"$KB" --db "$DB_PATH" story check --project "PROJECT_NAME"                # continuity problems; --strict makes them exit 1
+"$KB" --db "$DB_PATH" story who-knows "CHARACTER" "SCENE" --project "PROJECT_NAME"   # SCENE optional
+"$KB" --db "$DB_PATH" story who-learns "FACT" --project "PROJECT_NAME"
+```
+
+- `timeline` marks a row `~` where its order after the row above is not
+  established, `?` where it has no date and no relation, `!` in a cycle. Never read a
+  `~` row as ordered.
+- `check` reports; it changes nothing and exits 0 unless `--strict`. Show the findings
+  as printed; they are advisory (a finding such as `two-places` or `unknown-fact`
+  may be deliberate).
+- `who-knows` lists the facts a character has learned at or before a scene, in story
+  order; facts learned only in scenes whose order against that scene is not
+  established are listed apart, as not ordered. A scene is a scene number or an event
+  label. `who-learns` lists who learns a fact, and where.
+- What a character learns is written in the scene's metadata: `learns: ["Anna: the
+  letter is forged"]` (a fact the character finds out in this scene) and `knows:
+  ["Cass: the debt"]` (already known, relied on here). In a Fountain boneyard or a
+  Markdown story comment the key repeats once per fact: `learns=Anna: a; learns=Bram: b`.
+  Two facts that differ by one character produce an `unknown-fact` finding: a typo is
+  reported, never guessed.
+- Exit codes: 0 for a result (an empty one too), 1 for an unknown project,
+  character, scene or fact, 2 for a missing or surplus argument or an ambiguous scene.
+
+---
+
+### ACTION = source-link-document
+
+**Requires kb >= v0.0.25.** Records that a document or a decision record cites a source.
+Prompt for the document id (`kb document list`) or record reference, `SOURCE_ID`
+(`kb source list`), and optionally a `RELATIONSHIP` label. The label `evidence` has a
+meaning: `kb story check` reports `late-source` when a source cited as `evidence` was
+published after the end of an event in that document.
+
+```bash
+"$KB" --db "$DB_PATH" source link --document DOC_ID SOURCE_ID --relationship evidence
+"$KB" --db "$DB_PATH" source link --record PROJECT/DR-NNNN SOURCE_ID
+```
+
+A file can instead list its sources in a `sources:` front-matter key, which ingest
+links. Search hits then say which source the passage was cited from.
 
 ---
 

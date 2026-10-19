@@ -1,6 +1,6 @@
-%kb-concept(1) user manual | version 0.0.24 05516e2
+%kb-concept(1) user manual | version 0.0.25 d5d8964
 % R. S. Doiel
-% 2026-10-17
+% 2026-10-19
 
 # NAME
 

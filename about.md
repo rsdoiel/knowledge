@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.24
+version: 0.0.25
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -39,7 +39,7 @@ date_released: 2026-10-17
 About this software
 ===================
 
-## knowledge 0.0.24
+## knowledge 0.0.25
 
 Foul Papers can build on kb: story front matter and Fountain scenes become story events, concepts have a kind, and `kb story timeline` and `kb story check` list and check them. The decisions are DR-0075, DR-0078 and DR-0079 (all accepted).
 

@@ -14,7 +14,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.24
+  kb_version: 0.0.25
 variables:
   DB_PATH:
     type: string
@@ -82,6 +82,12 @@ rejects the forms below, and some of them would fail without a word under a
   never sees the prompt; pass `--no-prompt` anyway when a script may be given a
   terminal. A search hit carries a record's reference, status and the matching
   passage, and `kb stats` counts rows, links and checks without SQL.
+- **v0.0.25 (nothing here needs it; the minimum stays 0.0.19):** `kb stats` is the
+  way to count; use it in place of the `sqlite3` counts below where it covers the
+  question. `kb story check --project P` reports continuity problems in a writing
+  project's manuscript (see `FOCUS = story:<project>`). `concept suggest` ranks by a
+  damped frequency, so the candidate list holds fewer function words and fewer
+  wrongly merged variants (DR-0085).
 
 ---
 
@@ -102,6 +108,8 @@ rejects the forms below, and some of them would fail without a word under a
 | `observations`          | Last 20 observations across all projects (raw read-only query — see below) |
 | `concepts`              | All concepts (`kb concept list`)                                       |
 | `concept-candidates`    | Candidate *new* concepts mined from the corpus, read-only (`kb concept suggest`) |
+| `stats`                 | Row, link and check counts without SQL (`kb stats`, kb >= v0.0.23) |
+| `story:<project>`       | A writing project's timeline problems and continuity check, read-only (`kb story check`, kb >= v0.0.24) |
 | `sync-check`            | Whether the database and its JSONL dump agree by content, with a recommendation (`kb check-db`, kb >= v0.0.15) |
 | `index-check`           | Whether any corpus's `decisions/index.md` is stale (`kb index ROOT --all --check`) |
 | `records`               | Decision record summary (`kb record list`)                             |
@@ -220,6 +228,10 @@ Ranked by corpus-wide distinctiveness — mentioned several times, confined to
 relatively few items — over every record body and document section body.
 Scope with `--project NAME`.
 
+From kb v0.0.25 the score is `(1 + ln occurrences) x idf` and numbers and common
+adverbs are not candidates; variants are merged only when they are forms of one
+word. Still present the list as suggestions, not findings.
+
 Two things to say plainly when reporting it, rather than presenting the
 list as findings. It is a mechanical pass, **roughly half signal**: run
 live against the real corpus it returned genuinely useful terms alongside
@@ -244,6 +256,30 @@ grounding`). With `--json` the shape is `{"candidates": [...],
 "near_existing": [...]}`, where before v0.0.11 it was a bare array. Fixed in kb v0.0.12 (DR-0036): a first-letter rule removes those three false pairs, and stops `preference` clustering into `reference`.
 
 ---
+
+### Counts (`FOCUS` = `all` or `stats`)
+
+```bash
+"$KB" --db "$DB_PATH" stats
+```
+
+Rows per table, links per join table, and checks (observations without a project,
+concepts and sources nothing links to, records and documents without a project).
+`concepts_without_links` and `sources_without_links` are not errors; report them as
+counts. Prefer this to hand-written `count(*)` queries.
+
+### Story check (`FOCUS` = `story:<project>`)
+
+```bash
+"$KB" --db "$DB_PATH" story check --project "PROJECT"
+"$KB" --db "$DB_PATH" story timeline --project "PROJECT"
+```
+
+Read-only, and only for a project whose manuscript files were ingested with
+`kb document ingest`. List the findings as printed, grouped by kind; they are
+advisory (`two-places`, `unknown-fact` and `knowledge-before-learned` may be
+deliberate), so do not call them errors. A `~` row in the timeline is an order that
+is not established; never present it as ordered. An unknown project is exit 1.
 
 ### Sync check (`FOCUS` = `all` or `sync-check`)
 
