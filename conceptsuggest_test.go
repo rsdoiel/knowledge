@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -309,9 +310,63 @@ func TestSuggestConcepts_ReportsNearExistingSpellings(t *testing.T) {
 }
 
 func TestCandidateTerms_StripsCodeDropsStopwordsAndRecordIDs(t *testing.T) {
-	got := CandidateTerms("The Chunking and `hidden` code, see DR-0013 and adr-0004; also chunking.\n```\nfenced\n```")
-	want := []string{"chunking", "code", "see", "also", "chunking"}
+	got := CandidateTerms("The Chunking and `hidden` code, see DR-0013 and adr-0004; later chunking.\n```\nfenced\n```")
+	want := []string{"chunking", "code", "see", "later", "chunking"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("CandidateTerms = %v, want %v (lowercased, in order, repeats kept)", got, want)
+	}
+}
+
+// ─── DR-0085: damped frequency, a longer stoplist ───────────────────────────
+
+func TestScoreCandidateTerms_ARepeatedEverywhereWordDoesNotOutrankAConfinedOne(t *testing.T) {
+	// "common" is in half the items and used 40 times; "rare" is in 3 items,
+	// 6 times. Under occurrences x idf the volume of "common" won.
+	var items []string
+	for i := 0; i < 60; i++ {
+		s := "filler text here"
+		switch {
+		case i < 30 && i < 10:
+			s += " common common common common"
+		case i < 30:
+			s += " common"
+		}
+		if i >= 50 && i < 53 {
+			s += " rare rare"
+		}
+		items = append(items, s)
+	}
+	got, _ := scoreCandidateTerms(items, nil)
+	rank := map[string]int{}
+	for i, c := range got {
+		rank[c.Term] = i
+	}
+	if _, ok := rank["rare"]; !ok {
+		t.Fatalf("candidates = %+v, want rare among them", got)
+	}
+	if rank["rare"] >= rank["common"] {
+		t.Errorf("ranks = %+v, want rare (3 items) above common (30 items, used more)", rank)
+	}
+}
+
+func TestScoreCandidateTerms_ScoreIsDampedFrequencyTimesIdf(t *testing.T) {
+	items := []string{"gadget gadget gadget gadget", "other words", "more words", "last words"}
+	got, _ := scoreCandidateTerms(items, nil)
+	var score float64
+	for _, c := range got {
+		if c.Term == "gadget" {
+			score = c.Score
+		}
+	}
+	want := (1 + math.Log(4)) * math.Log(4.0/1.0)
+	if math.Abs(score-want) > 1e-9 {
+		t.Errorf("score = %v, want (1+ln 4) x ln(4/1) = %v", score, want)
+	}
+}
+
+func TestCandidateTerms_DropsNumbersAndCommonAdverbs(t *testing.T) {
+	got := CandidateTerms("one two already every nothing without because against rather never still chunking")
+	if len(got) != 1 || got[0] != "chunking" {
+		t.Errorf("CandidateTerms = %v, want only chunking", got)
 	}
 }

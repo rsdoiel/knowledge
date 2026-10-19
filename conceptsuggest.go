@@ -88,7 +88,11 @@ func init() {
 		are was were been being have has had does did doing will would
 		shall should may might must can could you your yours they them
 		their theirs she her hers him his its our ours who whom which what
-		about over out off down up`) {
+		about over out off down up
+		one two three four five six seven eight nine ten first second third
+		also already always every rather nothing never still without because
+		against now yet else either whether though however instead within
+		between among upon`) {
 		suggestStopwords[w] = true
 	}
 }
@@ -139,6 +143,10 @@ func CandidateTerms(text string) []string {
 // short, common word colliding with a word used in a different sense
 // inside quoted code is exactly the false-positive shape found there.
 //
+// The score is (1 + ln occurrences) x idf (DR-0085): repetition raises a
+// term's rank, slowly, so a word used everywhere no longer outranks a word
+// confined to a few items.
+//
 // Returned sorted by score descending, term ascending on a tie, for
 // deterministic output; nil for an empty corpus or when nothing survives
 // the filters.
@@ -169,7 +177,7 @@ func scoreCandidateTerms(items []string, known map[string]bool) (candidates []Co
 		}
 		out = append(out, ConceptCandidate{
 			Term: c.Seed, Variants: c.Variants,
-			Occurrences: c.Occurrences, Items: df, Score: float64(c.Occurrences) * idf,
+			Occurrences: c.Occurrences, Items: df, Score: (1 + math.Log(float64(c.Occurrences))) * idf,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

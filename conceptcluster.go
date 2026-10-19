@@ -191,7 +191,7 @@ func clusterCandidateTerms(occurrences map[string]int, itemCounts map[string]map
 			if tok == seed || assigned[tok] {
 				continue
 			}
-			if _, ok := fuzzyTermsClose(seed, tok, fuzzyClusterDistance); !ok {
+			if !sameStem(seed, tok) {
 				continue
 			}
 			assigned[tok] = true
@@ -204,6 +204,31 @@ func clusterCandidateTerms(occurrences map[string]int, itemCounts map[string]map
 		clusters = append(clusters, cluster)
 	}
 	return clusters
+}
+
+// sameStem reports whether a and b are forms of one word: the same first
+// letter, and a stem in common once one suffix is removed and a dropped final
+// e restored (DR-0085). change, changes, changed and changing share "change";
+// change and chance, or context and content, share nothing. Edit distance is
+// not used, so a different word one letter away is not a variant.
+func sameStem(a, b string) bool {
+	if len(a) < minFuzzyTermLength || len(b) < minFuzzyTermLength || a[0] != b[0] {
+		return false
+	}
+	stems := func(w string) map[string]bool {
+		out := map[string]bool{w: true, w + "e": true}
+		if s := StripCommonSuffix(w); s != w {
+			out[s], out[s+"e"] = true, true
+		}
+		return out
+	}
+	sb := stems(b)
+	for s := range stems(a) {
+		if sb[s] {
+			return true
+		}
+	}
+	return false
 }
 
 // cloneIndexSet copies m so a cluster's Items set can be mutated without

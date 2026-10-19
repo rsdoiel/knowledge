@@ -328,3 +328,25 @@ func TestFuzzyTermsClose_StemmedTierStillCatchesRealInflections(t *testing.T) {
 		}
 	}
 }
+
+// ─── DR-0085: variants are grouped by stem, not by edit distance ────────────
+
+func TestClusterCandidateTerms_GroupsByStemAndNotByDistance(t *testing.T) {
+	cases := []struct {
+		a, b  string
+		joins bool
+	}{
+		{"change", "changes", true}, {"change", "changed", true}, {"change", "changing", true},
+		{"compile", "compiled", true}, {"existing", "exists", true}, {"writes", "writing", true},
+		{"change", "chance", false}, {"change", "charge", false}, {"existing", "exited", false},
+		{"writes", "waiting", false}, {"prompt", "promoted", false}, {"context", "content", false},
+	}
+	for _, c := range cases {
+		occ := map[string]int{c.a: 5, c.b: 3}
+		items := map[string]map[int]bool{c.a: idxSet(0, 1), c.b: idxSet(2, 3)}
+		clusters := clusterCandidateTerms(occ, items, map[string]bool{c.a: true, c.b: true})
+		if joined := len(clusters) == 1; joined != c.joins {
+			t.Errorf("%s / %s: clusters = %+v, joins = %v, want %v", c.a, c.b, clusters, joined, c.joins)
+		}
+	}
+}
