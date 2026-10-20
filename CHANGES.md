@@ -7,6 +7,10 @@ release notes; maintained going forward.
 
 ### Changed
 
+- **The story verbs are faster on long works.** `StoryTimeline` and `WhoKnows` asked "is this reachable?" with a walk of
+  the whole order graph for every row; they now look for a direct edge first. At 3000 scenes `story timeline` takes
+  2.2 s (was 13.9 s) and `who-knows` 4.4 s (was 16.0 s); the answers are unchanged. `KB_SCALE=300,1000,3000 go test
+  -run TestScale_StoryVerbs -v` times them.
 - **`unknown-fact` no longer asks the typo question about a figure** (DR-0086, refining DR-0083 item 7). Two facts of
   at least 12 characters whose one edit is a digit (`41 coins`, `42 coins`; a digit added or dropped too) are now
   reported as `fact-number-differs`, asking whether it is the same figure or a continuity slip. Any other one-edit
