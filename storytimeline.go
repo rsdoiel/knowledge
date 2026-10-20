@@ -123,6 +123,11 @@ func newStoryGraph(evs []StoryEvent) *storyGraph {
 
 // reaches reports whether to can be reached from from along before edges.
 func (g *storyGraph) reaches(from, to int) bool {
+	for _, n := range g.before[from] { // the usual answer: a direct edge, found without a walk
+		if n == to {
+			return true
+		}
+	}
 	seen := make([]bool, len(g.evs))
 	stack := []int{from}
 	for len(stack) > 0 {
