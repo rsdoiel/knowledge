@@ -193,7 +193,7 @@ func TestHelp_DescribesTheMarkdownSceneSyntaxAndEveryReport(t *testing.T) {
 	}
 	for _, kind := range []string{"scene-comment-no-id", "scene-id-disagreement", "scene-id-repeated",
 		"scene-comment-syntax", "fountain-style-heading", "front-matter-ignored",
-		"knowledge-before-learned", "unknown-fact", "late-source"} {
+		"knowledge-before-learned", "unknown-fact", "fact-number-differs", "late-source"} {
 		if !strings.Contains(StoryHelpText, kind) {
 			t.Errorf("kb story help does not name the %s report", kind)
 		}

@@ -3,6 +3,15 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+### Changed
+
+- **`unknown-fact` no longer asks the typo question about a figure** (DR-0086, refining DR-0083 item 7). Two facts of
+  at least 12 characters whose one edit is a digit (`41 coins`, `42 coins`; a digit added or dropped too) are now
+  reported as `fact-number-differs`, asking whether it is the same figure or a continuity slip. Any other one-edit
+  pair, a digit swapped for a letter included, stays `unknown-fact`.
+
 ## v0.0.25 — 2026-10-19
 
 Plan: `agents/projects/knowledge/plans/release-plan-v0.0.25.md`.

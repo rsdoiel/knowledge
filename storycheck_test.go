@@ -354,6 +354,50 @@ func TestStoryCheck_UnknownFactCatchesATypoOfALongFact(t *testing.T) {
 	}
 }
 
+func TestStoryCheck_FactsDifferingInADigitAreANumberNotATypo(t *testing.T) {
+	cases := []struct {
+		name         string
+		a, b         string
+		wantTypo     int
+		wantNumberAt int
+	}{
+		{"a digit replaced", "Anna: the vault holds 41 coins", "Bram: the vault holds 42 coins", 0, 1},
+		{"a digit added", "Anna: the vault holds 41 coins", "Bram: the vault holds 410 coins", 0, 1},
+		{"a digit dropped", "Anna: the vault holds 41 coins", "Bram: the vault holds 4 coins", 0, 1},
+		{"a letter replaced is still a typo", "Anna: the vault is in room 12A", "Bram: the vault is in room 12B", 1, 0},
+		{"a digit swapped for a letter is a typo", "Anna: the vault holds 41 coins", "Bram: the vault holds 4l coins", 1, 0},
+		{"two digits apart is neither", "Anna: the vault holds 41 coins", "Bram: the vault holds 52 coins", 0, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kb := openTestKB(t)
+			pid, _ := kb.AddProject("work", "")
+			ingestScenes(t, kb, pid,
+				[2]string{"a.md", scene("one", "2024-01-01", "learns: [\""+tc.a+"\"]\n")},
+				[2]string{"b.md", scene("two", "2024-02-01", "knows: [\""+tc.b+"\"]\n")})
+			fs := checkOf(t, kb, pid)
+			if got := findKind(fs, "unknown-fact"); len(got) != tc.wantTypo {
+				t.Errorf("unknown-fact = %+v, want %d", got, tc.wantTypo)
+			}
+			got := findKind(fs, "fact-number-differs")
+			if len(got) != tc.wantNumberAt {
+				t.Fatalf("fact-number-differs = %+v, want %d", got, tc.wantNumberAt)
+			}
+			if tc.wantNumberAt == 1 {
+				_, fa, _ := ParseKnowledgeItem(tc.a)
+				_, fb, _ := ParseKnowledgeItem(tc.b)
+				m := got[0].Message
+				if !strings.Contains(m, fa) || !strings.Contains(m, fb) {
+					t.Errorf("message %q should name both facts", m)
+				}
+				if strings.Contains(m, "typed twice") {
+					t.Errorf("message %q asks the typo question about a number", m)
+				}
+			}
+		})
+	}
+}
+
 func TestEditDistanceIsOne(t *testing.T) {
 	for _, tc := range []struct {
 		a, b string
@@ -423,7 +467,7 @@ func TestStoryCheck_KnowledgeKindsAreOrderedAndNamedInTheDocComment(t *testing.T
 	for _, k := range storyFindingOrder {
 		have[k] = true
 	}
-	for _, k := range []string{"knowledge-before-learned", "unknown-fact", "late-source"} {
+	for _, k := range []string{"knowledge-before-learned", "unknown-fact", "fact-number-differs", "late-source"} {
 		if !have[k] {
 			t.Errorf("storyFindingOrder lacks %q", k)
 		}

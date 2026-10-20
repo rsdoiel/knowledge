@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 )
 
-// knowledgeFindings are the three checks of DR-0083 item 7: a character used a
-// fact before learning it, two facts that are probably one, and evidence dated
-// after the event it is cited for. They are advisory, like every other kind.
+// knowledgeFindings are the checks of DR-0083 item 7 and DR-0086: a character
+// used a fact before learning it, two facts that are probably one (or that
+// differ in a figure), and evidence dated after the event it is cited for. They are advisory, like every other kind.
 func (kb *KnowledgeBase) knowledgeFindings(projectID int64, evs []StoryEvent, g *storyGraph, path map[int64]string) ([]StoryFinding, error) {
 	rows, err := kb.storyKnowledgeRows(projectID)
 	if err != nil {
@@ -80,6 +81,10 @@ func (kb *KnowledgeBase) knowledgeFindings(projectID int64, evs []StoryEvent, g 
 		for _, b := range keys[i+1:] {
 			if len([]rune(b)) >= minTypoFactLength && editDistanceIsOne(a, b) {
 				fa, fb := facts[a], facts[b]
+				if editIsDigit(a, b) {
+					add("fact-number-differs", fa.doc, "%q (%s) and %q (%s) differ only in a digit; the same figure, or a continuity slip?", fa.fact, fa.scene, fb.fact, fb.scene)
+					continue
+				}
 				add("unknown-fact", fa.doc, "%q (%s) is one edit from %q (%s); is it one fact typed twice?", fa.fact, fa.scene, fb.fact, fb.scene)
 			}
 		}
@@ -153,4 +158,23 @@ func editDistanceIsOne(a, b string) bool {
 		return string(x[i:]) == string(y[i:])
 	}
 	return string(x[i+1:]) == string(y[i:]) // inserted: skip x[i]
+}
+
+// editIsDigit reports whether the one edit between a and b, which
+// editDistanceIsOne has already found, is a digit on both sides: a digit
+// replaced by a digit, or a digit inserted or deleted. A digit swapped for a
+// letter is a typo and gives false.
+func editIsDigit(a, b string) bool {
+	x, y := []rune(a), []rune(b)
+	if len(x) < len(y) {
+		x, y = y, x
+	}
+	i := 0
+	for i < len(y) && x[i] == y[i] {
+		i++
+	}
+	if len(x) == len(y) {
+		return unicode.IsDigit(x[i]) && unicode.IsDigit(y[i])
+	}
+	return unicode.IsDigit(x[i])
 }

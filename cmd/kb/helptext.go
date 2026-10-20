@@ -1635,13 +1635,16 @@ check
   comment), fountain-style-heading (a heading ending #12A#, which is text and
   not an id; reported once per file) and front-matter-ignored (an event or
   story_time, learns or knows in front matter, ignored because the file has scene ids).
-  Three kinds read what characters learn and know (DR-0083):
+  Four kinds read what characters learn and know (DR-0083, DR-0086):
   knowledge-before-learned (a scene says a character knows a fact, and every
   scene where the character learns it is later in story order; a knows with no
   learns anywhere is backstory, and a learns that is not ordered against the
   knows is not reported), unknown-fact (two different facts of at least 12
   characters that are one edit apart, probably one fact typed twice; they are
-  reported and never merged) and late-source (a document cites a source with the
+  reported and never merged), fact-number-differs (the same, where the one
+  edit is a digit, as in 41 coins and 42 coins: two figures that may be two
+  facts or a continuity slip, so the question is asked of the writer and the
+  facts are never merged) and late-source (a document cites a source with the
   relationship "evidence" whose published date is after the end of one of the
   document's events; a source with no date, or an event with no calendar
   interval, is silent). late-source does nothing until a citation is labelled:

@@ -14,7 +14,7 @@ import (
   - Kind is one of "missing-file", "unnumbered-scene", "scene-comment-no-id", "scene-id-disagreement", "scene-id-repeated",
     "scene-comment-syntax", "fountain-style-heading", "front-matter-ignored", "duplicate-label",
   - "unresolved-time", "unparseable-time", "unknown-reference", "contradiction",
-  - "cycle", "two-places", "foreshadow-order", "knowledge-before-learned", "unknown-fact" or "late-source". Document is the file path, and
+  - "cycle", "two-places", "foreshadow-order", "knowledge-before-learned", "unknown-fact", "fact-number-differs" or "late-source". Document is the file path, and
   - Message says what and where.
     *
   - Example:
@@ -32,7 +32,7 @@ type StoryFinding struct {
 var storyFindingOrder = []string{
 	"missing-file", "unnumbered-scene", "duplicate-label", "unparseable-time", "unresolved-time",
 	"unknown-reference", "contradiction", "cycle", "two-places", "foreshadow-order",
-	"knowledge-before-learned", "unknown-fact", "late-source",
+	"knowledge-before-learned", "unknown-fact", "fact-number-differs", "late-source",
 }
 
 func storyEventName(e StoryEvent) string {
@@ -80,6 +80,9 @@ func storyEventName(e StoryEvent) string {
  *   - unknown-fact: two different facts, each of at least 12 characters, that are
  *     one edit apart, which is probably one fact typed twice. Reported, never
  *     merged.
+ *   - fact-number-differs: the same, where the one edit is a digit ("41 coins",
+ *     "42 coins"): two figures that may be two facts or a continuity slip, not a
+ *     typo. Reported, never merged.
  *   - late-source: a document cites a source with the relationship "evidence"
  *     whose published_date is after the end of one of the document's events. A
  *     source with no date, or an event with no calendar interval, gives nothing.
