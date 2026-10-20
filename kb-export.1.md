@@ -1,6 +1,6 @@
-%kb-export(1) user manual | version 0.0.25 5c44617
+%kb-export(1) user manual | version 0.0.26 448d9a9
 % R. S. Doiel
-% 2026-10-19
+% 2026-10-20
 
 # NAME
 

@@ -3,7 +3,7 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased
+## v0.0.26 — 2026-10-20
 
 ### Changed
 

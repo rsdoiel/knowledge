@@ -153,3 +153,17 @@ func TestSkills_DescribeTheV0025Features(t *testing.T) {
 		}
 	}
 }
+
+// The skills name the kind that reports a figure that differs between two
+// scenes (DR-0086, v0.0.26), so an agent does not call it a typo.
+func TestSkills_DescribeFactNumberDiffers(t *testing.T) {
+	for _, name := range []string{"update-knowledge-base", "review-knowledge-base"} {
+		raw, err := os.ReadFile(repoFile("agents", "skills", name, "SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), "fact-number-differs") {
+			t.Errorf("%s does not mention fact-number-differs", name)
+		}
+	}
+}

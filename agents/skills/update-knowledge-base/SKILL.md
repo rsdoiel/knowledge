@@ -19,7 +19,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.25
+  kb_version: 0.0.26
 variables:
   DB_PATH:
     type: string
@@ -105,6 +105,10 @@ rejects the forms below, and some of them would fail without a word under a
   `sources:` front-matter key), and a search hit says where its text was cited from.
   `concept suggest` ranks by a damped frequency and lists fewer function words. The
   interactive interface starts at once on a terminal that does not answer the colour query.
+- **v0.0.26 (nothing here needs it; the minimum stays 0.0.19):** `kb story check` reports two
+  facts that differ only in a digit (`41 coins`, `42 coins`) as `fact-number-differs`, a
+  question for the writer (the same figure, or a continuity slip), and no longer as an
+  `unknown-fact` typo. `kb story timeline` and `who-knows` are faster on long works.
 
 ---
 
@@ -706,7 +710,8 @@ Prompt for `PROJECT_NAME` and which question:
   ["Cass: the debt"]` (already known, relied on here). In a Fountain boneyard or a
   Markdown story comment the key repeats once per fact: `learns=Anna: a; learns=Bram: b`.
   Two facts that differ by one character produce an `unknown-fact` finding: a typo is
-  reported, never guessed.
+  reported, never guessed. If the one character is a digit (kb >= v0.0.26) the finding is
+  `fact-number-differs` instead: the same figure, or a continuity slip?
 - Exit codes: 0 for a result (an empty one too), 1 for an unknown project,
   character, scene or fact, 2 for a missing or surplus argument or an ambiguous scene.
 

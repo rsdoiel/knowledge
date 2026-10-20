@@ -14,7 +14,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.25
+  kb_version: 0.0.26
 variables:
   DB_PATH:
     type: string
@@ -88,6 +88,9 @@ rejects the forms below, and some of them would fail without a word under a
   project's manuscript (see `FOCUS = story:<project>`). `concept suggest` ranks by a
   damped frequency, so the candidate list holds fewer function words and fewer
   wrongly merged variants (DR-0085).
+- **v0.0.26 (nothing here needs it; the minimum stays 0.0.19):** `kb story check` reports
+  facts that differ only in a digit as `fact-number-differs` (the same figure, or a
+  continuity slip?), apart from the `unknown-fact` typo finding.
 
 ---
 
@@ -277,8 +280,8 @@ counts. Prefer this to hand-written `count(*)` queries.
 
 Read-only, and only for a project whose manuscript files were ingested with
 `kb document ingest`. List the findings as printed, grouped by kind; they are
-advisory (`two-places`, `unknown-fact` and `knowledge-before-learned` may be
-deliberate), so do not call them errors. A `~` row in the timeline is an order that
+advisory (`two-places`, `unknown-fact`, `fact-number-differs` and
+`knowledge-before-learned` may be deliberate), so do not call them errors. A `~` row in the timeline is an order that
 is not established; never present it as ordered. An unknown project is exit 1.
 
 ### Sync check (`FOCUS` = `all` or `sync-check`)
