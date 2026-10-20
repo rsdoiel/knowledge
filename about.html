@@ -19,84 +19,20 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="knowledge-0.0.25">knowledge 0.0.25</h2>
-<p>Foul Papers can ask what a character knows, a Markdown manuscript can
-hold many scenes, documents and records can cite sources, and the
-interface starts at once on any terminal. The decisions are DR-0080 to
-DR-0085 (all accepted).</p>
-<p>Story knowledge. A scene says what a character finds out with
-<code>learns</code> and what they already knew with <code>knows</code>,
-each a list of <code>"Character: fact"</code> (a YAML list in front
-matter; the key repeats once per fact in a Fountain boneyard or a
-Markdown story comment).
-<code>kb story who-knows CHARACTER [SCENE] --project P</code> lists what
-the character has learned, in story order, up to a scene; facts learned
-only in scenes whose order is not established are listed apart and never
-guessed. <code>kb story who-learns FACT --project P</code> lists who
-learns a fact and where. The scene is positional; DR-0075’s
-<code>--at</code> is gone. Three advisory <code>kb story check</code>
-kinds: <code>knowledge-before-learned</code>, <code>unknown-fact</code>
-(two long facts one edit apart) and <code>late-source</code> (a source
-cited as <code>evidence</code>, published after the event). Story
-knowledge is derived from the files, like story events, and does not
-travel through export, import, merge or check-db: after an import, run
-<code>kb document ingest</code> on the same paths.</p>
-<p>Many scenes in one Markdown file. A heading with a scene id is a
-scene and a story event: <code>## The fire {#12A}</code>, or
-<code>id=12A</code> in a story comment on the next line. The file’s
-front matter is the default for every scene. <code>kb story check</code>
-reports Markdown scene problems. A <code>#</code> line inside a fenced
-code block no longer splits a section (this changes the sections of
-existing documents; re-ingest reports the removed headings once), and a
-heading’s closing <code>#</code> marks and <code>{#id}</code> are no
-longer part of its title.</p>
-<p>Provenance. Documents and decision records cite sources through an
-optional <code>sources:</code> front matter key (a DOI, a URL, or
-<code>source:ID</code>) or
-<code>kb source link --document|--record</code>. A search hit says which
-works support it, which version was read, and whether one was retracted.
-Sources are a search kind (<code>kb search /sources TERM</code>). The
-new link tables travel through merge, export, import and check-db.
-<code>observations.source_doi</code> is no longer written;
-<code>kb observation add --source-doi</code> finds or makes the source
-and links it.</p>
-<p>Interface. The interactive interface moved to the Bubble Tea v2 stack
-(DR-0084). The old library asked the terminal for its colours before
-<code>kb</code> ran and waited up to five seconds for an answer; on a
-terminal that never replied the first screen came five seconds late. It
-now draws at once. Behaviour is otherwise unchanged.</p>
-<p>Small fixes. A record’s search passage is the paragraph the match is
-in, without its label or the title (a short record used to come back
-whole). <code>kb document ingest</code> offers the frontmatter editor to
-a file with a frontmatter block but no title, asking only about the
-fields it lacks, and the interface’s ingest plan says when a file has no
-title. The viewer’s find marks the match inside its line, and the
-pattern that strips colour before the find (it matched no real escape)
-is fixed, so a search for <code>35</code> no longer hits every coloured
-line. The review queue’s <code>/</code> filters and <code>S</code>
-searches, as on every list, and <code>S</code> on the sources list
-searches sources. The <code>document ingest</code> help shows the shell
-loop for a directory of notes.</p>
-<p>Concept suggestions. <code>kb concept suggest</code> ranks by a
-damped frequency (DR-0085): numbers and common adverbs no longer head
-the list, and <code>change</code> is no longer grouped with
-<code>chance</code>. The stoplist gains numbers, ordinals and common
-adverbs, and the frontmatter keyword scorer shares it. Scores are about
-twenty where they were several hundred.</p>
-<p>The setup, update and review knowledge-base skills describe the story
-verbs, concept kinds, provenance links and <code>kb stats</code>, and
-are pinned to 0.0.25. <code>make</code> no longer leaves the website
-list empty (<code>HTML_PAGES</code>), and <code>publish.bash</code>
-stops on a diverged branch.</p>
-<p>For packagers and Foul Papers: the library exports
-<code>WhoKnows</code>, <code>WhoLearns</code>, <code>KnownFact</code>,
-<code>WhoKnowsResult</code>, <code>Learner</code>,
-<code>ErrAmbiguousScene</code>, <code>ParseKnowledgeItem</code>,
-<code>FactKey</code>, <code>ParseStoryComment</code>,
-<code>HitProvenance</code>, <code>LinkDocumentSource</code>,
-<code>LinkRecordSource</code>, <code>ParseSourceRefs</code> and
-<code>SourceCitations</code>. <code>KBSearchResult</code> is no longer
-comparable with <code>==</code>. Requires fountain 1.0.3.</p>
+<h2 id="knowledge-0.0.26">knowledge 0.0.26</h2>
+<p>Story checks and long manuscripts. <code>kb story check</code> now
+reports two facts that differ only in a digit (<code>41 coins</code>,
+<code>42 coins</code>) as <code>fact-number-differs</code>, a question
+for the writer (the same figure, or a continuity slip?), and keeps
+<code>unknown-fact</code> for typos (DR-0086).
+<code>kb story timeline</code> and <code>who-knows</code> are several
+times faster on long works: at 3000 scenes the timeline takes 2.2 s (was
+13.9 s) and <code>who-knows</code> 4.4 s (was 16.0 s), with the same
+answers. <code>go test</code> has a <code>KB_SCALE</code> timing test
+for them.</p>
+<p>The setup, update and review knowledge-base skills describe the new
+finding and are pinned to 0.0.26; the minimum <code>kb</code> they need
+stays 0.0.19. Requires fountain 1.0.3.</p>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>

@@ -209,13 +209,15 @@ the character has learned, in story order, up to a scene; facts learned
 only in scenes whose order is not established are listed apart and never
 guessed. <code>kb story who-learns FACT --project P</code> lists who
 learns a fact and where. The scene is positional; DR-0075’s
-<code>--at</code> is gone. Three advisory <code>kb story check</code>
+<code>--at</code> is gone. Four advisory <code>kb story check</code>
 kinds: <code>knowledge-before-learned</code>, <code>unknown-fact</code>
-(two long facts one edit apart) and <code>late-source</code> (a source
-cited as <code>evidence</code>, published after the event). Story
-knowledge is derived from the files, like story events, and does not
-travel through export, import, merge or check-db: after an import, run
-<code>kb document ingest</code> on the same paths.</p>
+(two long facts one edit apart), <code>fact-number-differs</code> (the
+edit is a digit: the same figure, or a continuity slip?) and
+<code>late-source</code> (a source cited as <code>evidence</code>,
+published after the event). Story knowledge is derived from the files,
+like story events, and does not travel through export, import, merge or
+check-db: after an import, run <code>kb document ingest</code> on the
+same paths.</p>
 <p>Many scenes in one Markdown file. A heading with a scene id is a
 scene and a story event: <code>## The fire {#12A}</code>, or
 <code>id=12A</code> in a story comment on the next line. The file’s

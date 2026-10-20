@@ -21,6 +21,25 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.26-2026-10-20">v0.0.26 — 2026-10-20</h2>
+<h3 id="changed">Changed</h3>
+<ul>
+<li><strong>The story verbs are faster on long works.</strong>
+<code>StoryTimeline</code> and <code>WhoKnows</code> asked “is this
+reachable?” with a walk of the whole order graph for every row; they now
+look for a direct edge first. At 3000 scenes <code>story timeline</code>
+takes 2.2 s (was 13.9 s) and <code>who-knows</code> 4.4 s (was 16.0 s);
+the answers are unchanged.
+<code>KB_SCALE=300,1000,3000 go test   -run TestScale_StoryVerbs -v</code>
+times them.</li>
+<li><strong><code>unknown-fact</code> no longer asks the typo question
+about a figure</strong> (DR-0086, refining DR-0083 item 7). Two facts of
+at least 12 characters whose one edit is a digit (<code>41 coins</code>,
+<code>42 coins</code>; a digit added or dropped too) are now reported as
+<code>fact-number-differs</code>, asking whether it is the same figure
+or a continuity slip. Any other one-edit pair, a digit swapped for a
+letter included, stays <code>unknown-fact</code>.</li>
+</ul>
 <h2 id="v0.0.25-2026-10-19">v0.0.25 — 2026-10-19</h2>
 <p>Plan:
 <code>agents/projects/knowledge/plans/release-plan-v0.0.25.md</code>.</p>
@@ -144,7 +163,7 @@ cite, and a source hit lists the projects that cite it.
 <code>Open</code> indexes the sources of an older database.</li>
 </ul></li>
 </ul>
-<h3 id="changed">Changed</h3>
+<h3 id="changed-1">Changed</h3>
 <ul>
 <li><p><strong>The interface runs on the Bubble Tea v2 stack</strong>
 (DR-0084; Bubble Tea 2.1, Bubbles 2.2, Lip Gloss 2.0). The old library
@@ -303,7 +322,7 @@ package</strong> (<code>storyapi_test.go</code>): ingest a manuscript,
 give characters a kind, list events, check, move to a second database
 and rebuild there, delete a document.</li>
 </ul>
-<h3 id="changed-1">Changed</h3>
+<h3 id="changed-2">Changed</h3>
 <ul>
 <li><strong>fountain 1.0.3 is required.</strong> It types boneyards and
 carries the scene number; <code>go.mod</code> takes the release. A
@@ -399,7 +418,7 @@ version.</li>
 <code>KBSearchResult</code> carries <code>Ref</code>,
 <code>Status</code>, <code>Passage</code> and <code>Section</code>.</li>
 </ul>
-<h3 id="changed-2">Changed</h3>
+<h3 id="changed-3">Changed</h3>
 <ul>
 <li><strong><code>kb completion bash -install</code> adds a line to the
 bash startup file</strong> (<code>~/.bashrc</code>; on macOS the first
@@ -537,7 +556,7 @@ unchanged): <code>SearchScoped</code> with <code>SearchScope</code>,
 and <code>KBSearchResult</code> carries <code>SourceID</code> and
 <code>ProjectID</code>.</li>
 </ul>
-<h3 id="changed-3">Changed</h3>
+<h3 id="changed-4">Changed</h3>
 <ul>
 <li><strong><code>/</code> no longer starts the search</strong>;
 <code>S</code> does, and the screens’ legends name <code>/ filter</code>
@@ -587,7 +606,7 @@ text says where the project and tier come from. The
 <code>kb index</code> and <code>kb record fmt</code> examples are
 corrected too.</li>
 </ul>
-<h3 id="changed-4">Changed</h3>
+<h3 id="changed-5">Changed</h3>
 <ul>
 <li><strong>The built-in record viewer can find text:</strong>
 <code>/</code> finds (case-insensitive), <code>n</code> and
@@ -769,7 +788,7 @@ terminal has reported a size.</li>
 and a legend that is wider than the window drops its spacing, then its
 movement hint, instead of losing its last key.</li>
 </ul>
-<h3 id="changed-5">Changed</h3>
+<h3 id="changed-6">Changed</h3>
 <ul>
 <li><strong><code>cmt</code> is no longer part of
 <code>make</code>.</strong> <code>make build</code> compiles the program
@@ -862,7 +881,7 @@ record. Tested at unit level with a pager seam, and on a pseudo-terminal
 with a pager that waits for a key, showing the terminal is handed over
 and taken back.</li>
 </ul>
-<h3 id="changed-6">Changed</h3>
+<h3 id="changed-7">Changed</h3>
 <ul>
 <li><strong>The TUI opens at a menu, in a frame, with tabs</strong>
 (DR-0066 and its 2026-10-09 amendment). Bare <code>kb</code> on a
@@ -952,7 +971,7 @@ Everything was written and tested red first. The release shipped before
 the race detector was run; it was run afterwards, on darwin/arm64 (Go
 1.26.5) at the release commit <code>258600d</code>, and both packages
 pass (the Linux-only pseudo-terminal tests skip there).</p>
-<h3 id="changed-7">Changed</h3>
+<h3 id="changed-8">Changed</h3>
 <ul>
 <li><p><strong><code>kb record set-status</code> follows a transition
 table</strong> (DR-0060). It used to write any status on any record. Now
@@ -1066,7 +1085,7 @@ every <code>proposed</code> record in scope, oldest first, with the
 other <code>list</code> filters. <code>--status</code> is a usage
 error.</li>
 </ul>
-<h3 id="changed-8">Changed</h3>
+<h3 id="changed-9">Changed</h3>
 <ul>
 <li><strong>Listings name records by reference.</strong>
 <code>record list</code> starts each line with
@@ -1238,7 +1257,7 @@ purpose.</li>
 <code>RecallByText</code> adds a project filter, the project and matched
 concepts on every hit, and the list of linked projects.</li>
 </ul>
-<h3 id="changed-9">Changed</h3>
+<h3 id="changed-10">Changed</h3>
 <ul>
 <li><strong><code>kb project add</code> refuses a name that already
 exists</strong> (DR-0055): exit 1,
@@ -1345,7 +1364,7 @@ that is not absolute, and a <code>--doi</code> that is not the bare
 <code>check-retractions</code> sends the DOI to Retraction Watch, and a
 mistyped one used to read as “not retracted”.</li>
 </ul>
-<h3 id="changed-10">Changed</h3>
+<h3 id="changed-11">Changed</h3>
 <ul>
 <li><strong>Bulk commands do everything they can, then exit with the
 class of the first failure</strong> instead of 0: <code>kb ingest</code>
@@ -1558,7 +1577,7 @@ go before the verb, a name that begins with a dash follows
 <code>--</code>, and free text after a verb’s fixed arguments is taken
 as typed. EXIT STATUS now says exactly what 1 and 2 mean.</li>
 </ul>
-<h3 id="changed-11">Changed</h3>
+<h3 id="changed-12">Changed</h3>
 <ul>
 <li><strong>Usage errors exit 2</strong> (they exited 1; DR-0040).
 <code>kb -help</code> had always documented 2 for “usage error”, but
@@ -1806,7 +1825,7 @@ vocabulary (DR-0038): adopted, then abandoned. It differs from
 record’s body, by convention. <code>kb help record</code> documents
 it.</li>
 </ul>
-<h3 id="changed-12">Changed</h3>
+<h3 id="changed-13">Changed</h3>
 <ul>
 <li><strong>Concept names that begin or end in punctuation now
 match</strong> (DR-0037). <code>C++</code>, <code>F#</code> and
@@ -1992,7 +2011,7 @@ and fenced blocks, is auto-linked. <code>tag_density</code> is
 deliberately left counting the unfiltered text — it is the raw signal
 the threshold is applied to, not the threshold’s output.</li>
 </ul>
-<h3 id="changed-13">Changed</h3>
+<h3 id="changed-14">Changed</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> now completes for a project
 that owns records (DR-0026), lifting v0.0.9’s outright refusal. The fix
@@ -2238,7 +2257,7 @@ every portability path, per the project’s standing rule that a table
 missing from the merge summary is a table whose loss goes
 unreported.</li>
 </ul>
-<h3 id="changed-14">Changed</h3>
+<h3 id="changed-15">Changed</h3>
 <ul>
 <li>The independent hand-rolled CLI flag/positional parsers in
 <code>ingest</code>, <code>record</code>, <code>source</code>, and the
@@ -2297,7 +2316,7 @@ start a workspace (DR-0021, DR-0022).</p>
 location for a new record, relative to <code>--root</code> like every
 other stored record path.</li>
 </ul>
-<h3 id="changed-15">Changed</h3>
+<h3 id="changed-16">Changed</h3>
 <ul>
 <li><code>kb record new --project P</code> (no <code>--dir</code>) now
 writes to <code>agents/projects/P/decisions/</code> instead of
@@ -2370,7 +2389,7 @@ field on <code>KBSearchResult</code>.</li>
 <li>Man pages for <code>kb-ingest(1)</code>, <code>kb-record(1)</code>,
 <code>kb-index(1)</code>.</li>
 </ul>
-<h3 id="changed-16">Changed</h3>
+<h3 id="changed-17">Changed</h3>
 <ul>
 <li><code>kb search</code> labels a hit by its source table rather than
 its own kind, so a decision record reads <code>[record]</code> rather
