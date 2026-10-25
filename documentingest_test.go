@@ -467,3 +467,72 @@ func TestIngestDocument_WikilinkAliasLinksTargetNotDisplay(t *testing.T) {
 		}
 	}
 }
+
+// A wikilink CleanName refuses (a control character) is not a tag, and used to be
+// dropped without a word, where record ingest reports it (DR-0046, "left as they
+// are"; reproduced 2026-10-25). The document still ingests; the result says which
+// link was skipped.
+func TestIngestDocument_ARefusedWikilinkIsReportedAndTheRestIsTagged(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	path := writeTempFile(t, "a.md", "## First\n\nSee [[bad\x01name]] and [[good name]], and [[bad\x01name]] again.\n\nIn code: `[[code\x01only]]`.\n")
+
+	res, err := kb.IngestDocument(pid, path, DocumentIngestOptions{})
+	if err != nil {
+		t.Fatalf("IngestDocument: %v", err)
+	}
+	if res.Action != "added" {
+		t.Fatalf("Action = %q, want added: a refused link must not fail the document", res.Action)
+	}
+	if len(res.TagWarnings) != 1 {
+		t.Fatalf("TagWarnings = %q, want one (the same link twice is one warning, and a link in a code span is none)", res.TagWarnings)
+	}
+	if w := res.TagWarnings[0]; !strings.Contains(w, `bad\x01name`) || !strings.Contains(w, "control character") {
+		t.Errorf("warning = %q, want the link quoted and the reason", w)
+	}
+	concepts, err := kb.Concepts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var good bool
+	for _, c := range concepts {
+		if c.Name == "good name" {
+			good = true
+		}
+	}
+	if !good {
+		t.Errorf("concepts = %+v, want the good link tagged beside the refused one", concepts)
+	}
+}
+
+func TestIngestDocument_TagWarningsNeedARefusalAndAChangedFile(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	fine := writeTempFile(t, "fine.md", ingestFixture)
+	if res, _ := kb.IngestDocument(pid, fine, DocumentIngestOptions{}); len(res.TagWarnings) != 0 {
+		t.Errorf("a file with no refused link has TagWarnings %q", res.TagWarnings)
+	}
+	bad := writeTempFile(t, "bad.md", "## First\n\n[[bad\x01name]]\n")
+	if res, _ := kb.IngestDocument(pid, bad, DocumentIngestOptions{DryRun: true}); len(res.TagWarnings) != 1 {
+		t.Errorf("a dry run should report the refused link too, got %q", res.TagWarnings)
+	}
+	if _, err := kb.IngestDocument(pid, bad, DocumentIngestOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := kb.IngestDocument(pid, bad, DocumentIngestOptions{}); res.Action != "skipped" || len(res.TagWarnings) != 0 {
+		t.Errorf("an unchanged file: Action %q, TagWarnings %q; want skipped and none", res.Action, res.TagWarnings)
+	}
+}
+
+func TestIngestDocument_ARefusedFrontmatterKeywordIsReported(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	path := writeTempFile(t, "k.md", "---\ntitle: K\nkeywords:\n  - ok one\n  - \"bad\\x01kw\"\n---\n\n## First\n\nText.\n")
+	res, err := kb.IngestDocument(pid, path, DocumentIngestOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.TagWarnings) != 1 || !strings.Contains(res.TagWarnings[0], "keyword") {
+		t.Errorf("TagWarnings = %q, want one naming the keyword", res.TagWarnings)
+	}
+}

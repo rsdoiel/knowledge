@@ -51,8 +51,12 @@ list, show
 add
 : register a source; --doi/--url set its identifier (doi takes priority
   if both are given); adding one whose identifier already exists returns
-  the existing source's id instead of duplicating it. The title is trimmed
-  and must not be blank. --published must be YYYY, YYYY-MM or YYYY-MM-DD and
+  the existing source's id instead of duplicating it. The title is made one
+  line, as a project or concept name is: it is trimmed and every run of
+  whitespace in it (a newline, a tab) becomes one space, so a hard-wrapped paste
+  is stored as one line. A blank title, or one holding a control character, is
+  refused (exit 2); a title already stored, and one read by import, is not
+  rewritten. --published must be YYYY, YYYY-MM or YYYY-MM-DD and
   a real date. --url must be an absolute URL with a scheme and a host. --doi
   must be the bare form 10.NNNN/suffix; a pasted doi: or https://doi.org/
   prefix is refused rather than rewritten, because a mistyped DOI would

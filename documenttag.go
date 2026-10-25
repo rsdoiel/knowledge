@@ -73,14 +73,21 @@ var frontmatterBlockPattern = regexp.MustCompile(`(?s)^---\n.*?\n---`)
 // firstH1Heading's (documents.go) own "first H1 only" semantics.
 var firstH1HeadingPattern = regexp.MustCompile(`(?m)^#[ \t]+.*$`)
 
-// alreadyWikilinked reports whether name (case-insensitively) already
-// appears inside some [[...]] span in text -- the idempotency check that
+// alreadyWikilinked reports whether name (case-insensitively, any run of
+// whitespace between its words) already appears inside some [[...]] span in text -- the idempotency check that
 // makes a second `kb document tag` run on an unchanged file a no-op for
 // this concept, the same "second run skips unchanged" discipline `kb
 // ingest` and `kb document ingest` already apply, just checked structurally
 // here rather than by comparing a checksum.
 func alreadyWikilinked(text, name string) bool {
-	pattern := regexp.MustCompile(`(?i)\[\[\s*` + regexp.QuoteMeta(name) + `\s*\]\]`)
+	// The words are joined by \s+, not matched as written, so a link hard-wrapped
+	// over lines ([[a<newline>b]]) is present as the concept "a b": ingest reads
+	// it that way through CleanName (DR-0046).
+	words := strings.Fields(name)
+	for i, w := range words {
+		words[i] = regexp.QuoteMeta(w)
+	}
+	pattern := regexp.MustCompile(`(?i)\[\[\s*` + strings.Join(words, `\s+`) + `\s*\]\]`)
 	return pattern.MatchString(text)
 }
 

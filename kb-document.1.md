@@ -132,6 +132,12 @@ ingest
 
   Add --no-prompt to ingest them all without being asked.
 
+  A wikilink or frontmatter keyword that is not a valid concept name (one holding
+  a control character) is not a tag: the document is ingested without it and the
+  summary prints a `tag warning:` line naming it (`tag_warnings` with --json),
+  once for each distinct link, exit 0. A file that has not changed (skipped) is
+  not reported again.
+
 list
 : print matching documents, one per line
 
@@ -172,7 +178,8 @@ tag
   applies); --concept NAME,... forces exactly those names regardless of
   occurrence count, but each must already be a known concept, checked
   before any file is touched. A name already wikilinked anywhere in a file
-  is left alone, so a second run is a no-op; YAML frontmatter and the
+  is left alone, so a second run is a no-op (a link hard-wrapped over lines, as
+  [[deterministic<newline>output]], counts as the name written on one line); YAML frontmatter and the
   document's own first H1 heading (its title) are never written into
   either, even if a concept name genuinely occurs there. --dry-run reports
   without writing. See DR-0029 (knowledge/decisions/).

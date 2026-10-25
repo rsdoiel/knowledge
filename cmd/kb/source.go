@@ -93,10 +93,12 @@ func cmdSourceAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args 
 		return err
 	}
 	if jsonOut {
+		// The title as stored: AddSource tidies it, so the flag's text may differ.
+		title := strings.Join(strings.Fields(s.Title), " ")
 		return printJSON(out, struct {
 			ID    int64  `json:"id"`
 			Title string `json:"title"`
-		}{ID: id, Title: s.Title})
+		}{ID: id, Title: title})
 	}
 	fmt.Fprintf(out, "source added (id=%d)\n", id)
 	return nil

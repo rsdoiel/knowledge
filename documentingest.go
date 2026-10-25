@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -70,6 +71,9 @@ type DocumentIngestResult struct {
 	// (DR-0081 item 4).
 	SourcesLinked  int      `json:"sources_linked,omitempty"`
 	SourceWarnings []string `json:"source_warnings,omitempty"`
+	// TagWarnings the wikilinks and keywords CleanName refused (a control
+	// character): they are not tags, and the document is ingested without them.
+	TagWarnings []string `json:"tag_warnings,omitempty"`
 }
 
 /** IngestDocument parses the file at path and creates or reconciles its
@@ -145,6 +149,9 @@ func (kb *KnowledgeBase) IngestDocument(projectID int64, path string, opts Docum
 			}
 		}
 	}
+	if summary.Action != "skipped" {
+		summary.TagWarnings = refusedTags(parsed)
+	}
 	drafts, dupWarnings := dedupeStoryDrafts(storyEventDrafts(parsed))
 	summary.StoryWarnings = append(summary.StoryWarnings, parsed.StoryWarnings...)
 	summary.StoryWarnings = append(summary.StoryWarnings, dupWarnings...)
@@ -209,6 +216,33 @@ func tagDensity(kb *KnowledgeBase, text string) (int, error) {
 		return 0, err
 	}
 	return len(names), nil
+}
+
+// refusedTags lists the wikilinks and frontmatter keywords of a parsed document
+// that CleanName refuses, each once, in the order met, so the ingest can say what
+// tagSection skipped (record ingest warns the same way). A link inside a code span
+// is an example of the syntax and is not looked at, as in tagSection.
+func refusedTags(parsed *ParsedDocument) []string {
+	var out []string
+	seen := map[string]bool{}
+	check := func(what, raw string) {
+		if strings.TrimSpace(raw) == "" || seen[raw] {
+			return
+		}
+		if _, err := CleanName("concept", raw); err != nil {
+			seen[raw] = true
+			out = append(out, fmt.Sprintf("skipped %s %q: %v", what, raw, err))
+		}
+	}
+	for _, sec := range parsed.Sections {
+		for _, m := range wikilinkPattern.FindAllStringSubmatch(StripCodeSpans(sec.Body), -1) {
+			check("tag", WikilinkTarget(m[1]))
+		}
+	}
+	for _, kw := range parsed.Keywords {
+		check("keyword", kw)
+	}
+	return out
 }
 
 // tagSection resolves every [[Name]] wikilink in text, plus every entry in

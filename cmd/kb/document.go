@@ -276,6 +276,9 @@ func cmdDocumentIngest(kb *knowledge.KnowledgeBase, jsonOut bool, args []string,
 	for _, w := range summary.SourceWarnings {
 		fmt.Fprintln(out, "source warning:", w)
 	}
+	for _, w := range summary.TagWarnings {
+		fmt.Fprintln(out, "tag warning:", w)
+	}
 	return nil
 }
 

@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -205,5 +206,50 @@ func TestImportSource_NotHeldToAddSourceChecks(t *testing.T) {
 	}
 	if n := countRows(t, dst, "sources"); n != 1 {
 		t.Errorf("imported sources = %d, want 1", n)
+	}
+}
+
+// A title is one line, as a project or concept name is (DR-0046): a hard-wrapped
+// or pasted title is stored with its whitespace collapsed, and a control character
+// is refused. Found 2026-10-25: `kb source add $'Line one\nline two'` stored the
+// newline, which breaks a list row.
+func TestAddSource_TitleIsOneLine(t *testing.T) {
+	kb := openTestKB(t)
+	for in, want := range map[string]string{
+		"Line one\nline two": "Line one line two",
+		"  Tabbed\ttitle  ":  "Tabbed title",
+		"Two  spaces":        "Two spaces",
+		"Non breaking space": "Non breaking space",
+		"CRLF\r\nwrapped":    "CRLF wrapped",
+	} {
+		id, err := kb.AddSource(Source{Title: in})
+		if err != nil {
+			t.Errorf("AddSource(%q): %v", in, err)
+			continue
+		}
+		sources, _ := kb.ListSources()
+		var got string
+		for _, s := range sources {
+			if s.ID == id {
+				got = s.Title
+			}
+		}
+		if got != want {
+			t.Errorf("AddSource(%q) stored %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestAddSource_TitleWithAControlCharacterIsRefused(t *testing.T) {
+	kb := openTestKB(t)
+	before := countRows(t, kb, "sources")
+	for _, title := range []string{"Esc\x1b[31m red", "Nul\x00byte", "Bell\x07"} {
+		_, err := kb.AddSource(Source{Title: title})
+		if err == nil || !errors.Is(err, ErrInvalid) {
+			t.Errorf("AddSource(%q) = %v, want an ErrInvalid error", title, err)
+		}
+	}
+	if got := countRows(t, kb, "sources"); got != before {
+		t.Errorf("sources rows = %d, want %d: a refused title must not insert", got, before)
 	}
 }

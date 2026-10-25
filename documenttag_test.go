@@ -40,6 +40,29 @@ func TestInsertWikilink_SkipsWhenAlreadyWikilinked(t *testing.T) {
 	}
 }
 
+func TestInsertWikilink_SkipsWhenTheExistingLinkIsWrappedOverLines(t *testing.T) {
+	for name, text := range map[string]string{
+		"newline":     "See [[deterministic\noutput]] here. Deterministic output again.",
+		"indented":    "See [[deterministic\n   output]] here. Deterministic output again.",
+		"tab":         "See [[deterministic\toutput]] here. Deterministic output again.",
+		"repeated":    "See [[deterministic   output]] here. Deterministic output again.",
+		"padded ends": "See [[ deterministic\noutput\n]] here. Deterministic output again.",
+	} {
+		got, inserted := insertWikilink(text, "deterministic output")
+		if inserted || got != text {
+			t.Errorf("%s: inserted=%v, got %q; the concept is already linked", name, inserted, got)
+		}
+	}
+}
+
+func TestInsertWikilink_ALinkToADifferentNameDoesNotCountAsPresent(t *testing.T) {
+	text := "See [[deterministic\noutputs]] here. Deterministic output again."
+	got, inserted := insertWikilink(text, "deterministic output")
+	if !inserted || !strings.Contains(got, "[[Deterministic output]]") {
+		t.Errorf("inserted=%v, got %q; a different concept's link must not block it", inserted, got)
+	}
+}
+
 func TestInsertWikilink_DoesNotMatchInsideCodeSpan(t *testing.T) {
 	got, inserted := insertWikilink("saw `const format = x` here, nothing else about format", "format")
 	if !inserted {

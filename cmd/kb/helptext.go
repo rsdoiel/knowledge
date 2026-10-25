@@ -204,11 +204,15 @@ Documents → Frontmatter… adds one.
 
 Documents → Review queue lists the sections waiting for a person, gist first, with
 each one's size, tag density and confidence. Enter on one is a unit of two steps. The
-summary is written: in $VISUAL or $EDITOR with the interface suspended (the file starts
-with a few # lines, which are removed), or, with neither set, in a text area (Enter
-accepts, Ctrl-J starts a new line, Esc cancels). An empty or unchanged text is
-refused. Then it is shown above its source and y saves it as written by a person
-and promotes it; e writes it again; n, q and Esc leave with nothing done, and what
+summary is written: in $VISUAL or $EDITOR with the interface suspended, or, with neither
+set, in a text area (Enter accepts, Ctrl-J starts a new line, Esc cancels). Only the
+summary is edited, and it starts empty (or as the draft, when e writes one again): in
+the editor's file a few # lines at the top are removed, and the section's text sits
+below a line that begins "# ---- source text", for reference, which that line and
+everything under it leaves out; in the text area the section's text is shown under
+the box. An empty or unchanged text is refused. Then it is shown above its source,
+the whole summary in a pane that scrolls (Tab moves j and k between the summary and
+the source), and y saves it as written by a person and promotes it; e writes it again; n, q and Esc leave with nothing done, and what
 was approved earlier stays. A section that already has a draft starts at the second
 step, so a draft is read beside its source before it is promoted, and promoted as it
 is keeps its author. A gist is written from the document's sections in order. The
@@ -588,6 +592,12 @@ ingest
 
   Add --no-prompt to ingest them all without being asked.
 
+  A wikilink or frontmatter keyword that is not a valid concept name (one holding
+  a control character) is not a tag: the document is ingested without it and the
+  summary prints a ` + "`tag warning:`" + ` line naming it (` + "`tag_warnings`" + ` with --json),
+  once for each distinct link, exit 0. A file that has not changed (skipped) is
+  not reported again.
+
 list
 : print matching documents, one per line
 
@@ -628,7 +638,8 @@ tag
   applies); --concept NAME,... forces exactly those names regardless of
   occurrence count, but each must already be a known concept, checked
   before any file is touched. A name already wikilinked anywhere in a file
-  is left alone, so a second run is a no-op; YAML frontmatter and the
+  is left alone, so a second run is a no-op (a link hard-wrapped over lines, as
+  [[deterministic<newline>output]], counts as the name written on one line); YAML frontmatter and the
   document's own first H1 heading (its title) are never written into
   either, even if a concept name genuinely occurs there. --dry-run reports
   without writing. See DR-0029 (knowledge/decisions/).
@@ -764,7 +775,7 @@ add
   word in the description.
 
 list
-: list every project (bare rows — see {app_name}-format(1) for an
+: list every project (bare rows — see {app_name} format in {app_name}-search(1) for an
   assembled Markdown view with linked concepts/observations included)
 
 show
@@ -1287,8 +1298,12 @@ list, show
 add
 : register a source; --doi/--url set its identifier (doi takes priority
   if both are given); adding one whose identifier already exists returns
-  the existing source's id instead of duplicating it. The title is trimmed
-  and must not be blank. --published must be YYYY, YYYY-MM or YYYY-MM-DD and
+  the existing source's id instead of duplicating it. The title is made one
+  line, as a project or concept name is: it is trimmed and every run of
+  whitespace in it (a newline, a tab) becomes one space, so a hard-wrapped paste
+  is stored as one line. A blank title, or one holding a control character, is
+  refused (exit 2); a title already stored, and one read by import, is not
+  rewritten. --published must be YYYY, YYYY-MM or YYYY-MM-DD and
   a real date. --url must be an absolute URL with a scheme and a host. --doi
   must be the bare form 10.NNNN/suffix; a pasted doi: or https://doi.org/
   prefix is refused rather than rewritten, because a mistyped DOI would

@@ -40,7 +40,7 @@ add
   word in the description.
 
 list
-: list every project (bare rows — see kb-format(1) for an
+: list every project (bare rows — see kb format in kb-search(1) for an
   assembled Markdown view with linked concepts/observations included)
 
 show

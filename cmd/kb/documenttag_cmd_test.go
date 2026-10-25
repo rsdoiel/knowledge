@@ -243,3 +243,29 @@ func TestDocumentHelpText_DocumentsFrontmatter(t *testing.T) {
 		t.Error("DocumentHelpText does not document the frontmatter subcommand's synopsis")
 	}
 }
+
+// A link hard-wrapped over two lines is the concept "deterministic output" as far
+// as ingest is concerned (DR-0046), so tagging must see it as present and leave the
+// later plain mention alone. It used to link that mention as well (DR-0046, "left
+// as they are"; reproduced 2026-10-25).
+func TestCmdDocumentTag_AWrappedExistingLinkCountsAsPresent(t *testing.T) {
+	kb, root := openWorkspaceKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	if _, err := kb.AddConcept("deterministic output", ""); err != nil {
+		t.Fatalf("AddConcept: %v", err)
+	}
+	text := "See [[deterministic\noutput]] here.\n\nLater, deterministic output comes up again.\n"
+	path := writeDocFixture(t, root+"/docs", "a.md", text)
+	if _, err := kb.AddDocument(knowledge.Document{ProjectID: pid, Title: "a", Format: "text", Path: path}); err != nil {
+		t.Fatalf("AddDocument: %v", err)
+	}
+
+	if _, err := runDocument(t, kb, false, "tag", "--project", "alpha", "--concept", "deterministic output"); err != nil {
+		t.Fatalf("document tag: %v", err)
+	}
+
+	raw, _ := os.ReadFile(path)
+	if string(raw) != text {
+		t.Errorf("file content = %q, want it unchanged: the concept is already linked, wrapped", string(raw))
+	}
+}

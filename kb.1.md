@@ -200,11 +200,15 @@ Documents → Frontmatter… adds one.
 
 Documents → Review queue lists the sections waiting for a person, gist first, with
 each one's size, tag density and confidence. Enter on one is a unit of two steps. The
-summary is written: in $VISUAL or $EDITOR with the interface suspended (the file starts
-with a few # lines, which are removed), or, with neither set, in a text area (Enter
-accepts, Ctrl-J starts a new line, Esc cancels). An empty or unchanged text is
-refused. Then it is shown above its source and y saves it as written by a person
-and promotes it; e writes it again; n, q and Esc leave with nothing done, and what
+summary is written: in $VISUAL or $EDITOR with the interface suspended, or, with neither
+set, in a text area (Enter accepts, Ctrl-J starts a new line, Esc cancels). Only the
+summary is edited, and it starts empty (or as the draft, when e writes one again): in
+the editor's file a few # lines at the top are removed, and the section's text sits
+below a line that begins "# ---- source text", for reference, which that line and
+everything under it leaves out; in the text area the section's text is shown under
+the box. An empty or unchanged text is refused. Then it is shown above its source,
+the whole summary in a pane that scrolls (Tab moves j and k between the summary and
+the source), and y saves it as written by a person and promotes it; e writes it again; n, q and Esc leave with nothing done, and what
 was approved earlier stays. A section that already has a draft starts at the second
 step, so a draft is read beside its source before it is promoted, and promoted as it
 is keeps its author. A gist is written from the document's sections in order. The

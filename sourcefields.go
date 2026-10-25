@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // doiShape is the form of a bare DOI: the "10." directory indicator, a
@@ -50,12 +51,20 @@ func cleanSource(s Source) (Source, error) {
 	return s, nil
 }
 
-// cleanSourceTitle trims a source title and refuses a blank one, the same rule
-// CleanName applies to project and concept names.
+// cleanSourceTitle makes a source title one tidy line, the rule CleanName applies
+// to project and concept names (DR-0046): the ends are trimmed, every interior run
+// of whitespace (a newline, a tab, a non-breaking space) becomes one space, and a
+// blank title or one holding another control character is refused. A title with a
+// newline in it broke a list row, and one with an ESC reached the terminal as typed.
 func cleanSourceTitle(title string) (string, error) {
-	title = strings.TrimSpace(title)
+	title = strings.Join(strings.Fields(title), " ")
 	if title == "" {
 		return "", invalidf("knowledge: source title must not be empty")
+	}
+	for _, r := range title {
+		if unicode.IsControl(r) {
+			return "", invalidf("knowledge: source title must not contain the control character %U", r)
+		}
 	}
 	return title, nil
 }
