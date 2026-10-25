@@ -122,8 +122,11 @@ func TestSummary_TheEditorWritesTheSummaryAndYApproves(t *testing.T) {
 	if ed.calls != 1 || len(ed.argv) < 2 || ed.argv[0] != "myeditor" || ed.argv[1] != "-w" {
 		t.Fatalf("editor calls %d, argv %q; want myeditor -w FILE", ed.calls, ed.argv)
 	}
-	if !strings.HasPrefix(ed.file, "#") || !strings.Contains(ed.file, "streaming here") {
-		t.Errorf("the buffer should be a # header and the section text:\n%s", ed.file)
+	if !strings.HasPrefix(ed.file, "#") || !strings.Contains(ed.file, summarySourceMarker+"\n") {
+		t.Errorf("the buffer should be a # header, room for the summary and the source below a marker:\n%s", ed.file)
+	}
+	if above, below, _ := strings.Cut(ed.file, summarySourceMarker); strings.Contains(above, "streaming here") || !strings.Contains(below, "streaming here") {
+		t.Errorf("the section text belongs below the marker only:\n%s", ed.file)
 	}
 	m = doneEditor(t, m, cmd)
 	if m.state != viewSummary {
@@ -159,8 +162,8 @@ func TestSummary_TheEditorWritesTheSummaryAndYApproves(t *testing.T) {
 
 func TestSummary_AnUnchangedOrEmptyBufferIsRefused(t *testing.T) {
 	for name, write := range map[string]func(string) string{
-		"unchanged": nil,
-		"empty":     func(string) string { return "# only a comment\n" },
+		"empty":  nil,
+		"empty ": func(string) string { return "# only a comment\n" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			fakeEditorSeam(t, write)
@@ -168,7 +171,7 @@ func TestSummary_AnUnchangedOrEmptyBufferIsRefused(t *testing.T) {
 			t.Setenv("EDITOR", "ed")
 			m, cmd := press(t, m, keyEnter)
 			m = doneEditor(t, m, cmd)
-			if m.state != viewReviewQueue || !strings.Contains(m.View().Content, name) {
+			if m.state != viewReviewQueue || !strings.Contains(m.View().Content, strings.TrimSpace(name)) {
 				t.Errorf("state %s; want the queue and a refusal saying %q:\n%s", viewStateNames[m.state], name, m.View().Content)
 			}
 			if st, _, _ := sectionStatus(t, kb, it.ID); st != "unsummarized" {
@@ -178,17 +181,117 @@ func TestSummary_AnUnchangedOrEmptyBufferIsRefused(t *testing.T) {
 	}
 }
 
+// A person writes the summary above the source marker and leaves the rest: the
+// summary is only what they wrote, not the section text that was beside it.
+func TestSummary_OnlyWhatIsAboveTheSourceMarkerIsTheSummary(t *testing.T) {
+	fakeEditorSeam(t, func(old string) string {
+		return strings.Replace(old, summarySourceMarker, "My gist.\n\n"+summarySourceMarker, 1)
+	})
+	m, kb, it := summaryModel(t)
+	t.Setenv("EDITOR", "ed")
+	m, cmd := press(t, m, keyEnter)
+	m = doneEditor(t, m, cmd)
+	if m.state != viewSummary || !strings.Contains(m.View().Content, "y approve") {
+		t.Fatalf("state %s, want the review:\n%s", viewStateNames[m.state], m.View().Content)
+	}
+	m, _ = press(t, m, ch('y'))
+	if st, body, by := sectionStatus(t, kb, it.ID); st != "reviewed" || body != "My gist." || by != "human" {
+		t.Errorf("after y: %q %q by %q; want only the gist", st, body, by)
+	}
+}
+
+// Editing a draft shows it above the marker, so the person edits what will be saved.
+func TestSummary_EditingADraftKeepsTheSourceBelowTheMarker(t *testing.T) {
+	ed := fakeEditorSeam(t, nil)
+	m, kb, it := summaryModel(t)
+	t.Setenv("EDITOR", "ed")
+	if err := kb.DraftDocumentSummary(it.ID, "A model's draft.", "model", nil); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = press(t, m, ch('q'), ch('q'))
+	m = openLeaf(t, m, "Documents", "Review queue")
+	m, _ = press(t, m, keyEnter)
+	press(t, m, ch('e'))
+	above, below, ok := strings.Cut(ed.file, summarySourceMarker)
+	if !ok || !strings.Contains(above, "A model's draft.") || strings.Contains(above, "streaming here") || !strings.Contains(below, "streaming here") {
+		t.Errorf("the draft goes above the marker and the source below:\n%s", ed.file)
+	}
+}
+
+// The review shows the whole summary, scrolling when it is long, so a change made
+// anywhere in it can be seen before y saves it.
+func TestSummary_ALongSummaryCanBeScrolledInTheReview(t *testing.T) {
+	var lines []string
+	for i := 1; i <= 40; i++ {
+		lines = append(lines, "gist line "+strconv.Itoa(1000+i))
+	}
+	fakeEditorSeam(t, func(old string) string {
+		return strings.Replace(old, summarySourceMarker, strings.Join(lines, "\n")+"\n\n"+summarySourceMarker, 1)
+	})
+	m, kb, it := summaryModel(t)
+	t.Setenv("EDITOR", "ed")
+	m, cmd := press(t, m, keyEnter)
+	m = doneEditor(t, m, cmd)
+	if v := m.View().Content; !strings.Contains(v, "gist line 1001") || strings.Contains(v, "gist line 1040") {
+		t.Fatalf("the review should start at the top of the summary:\n%s", v)
+	}
+	m, _ = press(t, m, tea.KeyPressMsg{Code: tea.KeyTab})
+	for range 60 {
+		m, _ = press(t, m, ch('j'))
+	}
+	if v := m.View().Content; !strings.Contains(v, "gist line 1040") {
+		t.Fatalf("Tab then j should scroll to the end of the summary:\n%s", v)
+	}
+	m, _ = press(t, m, ch('y'))
+	if _, body, _ := sectionStatus(t, kb, it.ID); !strings.HasSuffix(body, "gist line 1040") || !strings.HasPrefix(body, "gist line 1001") {
+		t.Errorf("the whole summary should be saved, got %q", body)
+	}
+}
+
+// The debug log records the editor result, the notice that ends a unit, and the
+// draft and promote writes, so a lost summary can be followed.
+func TestSummary_TheDebugLogFollowsTheUnit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "debug.jsonl")
+	dl, err := NewDebugLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeEditorSeam(t, func(old string) string {
+		return strings.Replace(old, summarySourceMarker, "Logged gist.\n\n"+summarySourceMarker, 1)
+	})
+	m, _, _ := summaryModel(t)
+	m.dl = dl
+	t.Setenv("EDITOR", "ed")
+	m, cmd := press(t, m, keyEnter)
+	m = doneEditor(t, m, cmd)
+	m, _ = press(t, m, ch('y'))
+	// A second unit that ends in a refusal.
+	fakeEditorSeam(t, nil)
+	m, cmd = press(t, m, keyEnter)
+	doneEditor(t, m, cmd)
+	b, _ := os.ReadFile(path)
+	log := string(b)
+	for _, want := range []string{"tui_summary_editor_done", "tui_summary_draft", "tui_summary_promote", "tui_summary_notice", "the summary is empty"} {
+		if !strings.Contains(log, want) {
+			t.Errorf("the debug log lacks %q:\n%s", want, log)
+		}
+	}
+}
+
 func TestSummary_WithNoEditorTheBuiltInTextAreaIsUsed(t *testing.T) {
 	m, kb, it := summaryModel(t)
 	m, cmd := press(t, m, keyEnter)
 	if cmd != nil || m.state != viewSummary {
 		t.Fatalf("state %s (cmd %v); want the built-in text area", viewStateNames[m.state], cmd != nil)
 	}
-	if !strings.Contains(m.View().Content, "streaming here") {
-		t.Errorf("the text area should start from the section text:\n%s", m.View().Content)
+	// The text area starts empty, with the section text shown below it for reference.
+	if v := m.View().Content; !strings.Contains(v, "streaming here") {
+		t.Errorf("the section text should be shown beside the text area:\n%s", v)
+	}
+	if m.unit.edit.value() != "" {
+		t.Errorf("the text area starts with %q, want it empty", m.unit.edit.value())
 	}
 	// q is text here, and Esc cancels the unit.
-	m, _ = press(t, m, ctrlKey('u'))
 	m, _ = press(t, m, typed("quiet summary")...)
 	if m.state != viewSummary || !strings.Contains(m.View().Content, "quiet summary") {
 		t.Fatalf("typing left the text area (%s):\n%s", viewStateNames[m.state], m.View().Content)
@@ -198,7 +301,7 @@ func TestSummary_WithNoEditorTheBuiltInTextAreaIsUsed(t *testing.T) {
 		t.Fatalf("Enter should go on to the review:\n%s", m.View().Content)
 	}
 	m, _ = press(t, m, ch('y'))
-	if st, body, _ := sectionStatus(t, kb, it.ID); st != "reviewed" || !strings.HasSuffix(body, "quiet summary") {
+	if st, body, _ := sectionStatus(t, kb, it.ID); st != "reviewed" || body != "quiet summary" {
 		t.Errorf("after y: %q %q", st, body)
 	}
 }

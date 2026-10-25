@@ -33,6 +33,10 @@ var execEditor = func(argv []string, path string) tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return editorDoneMsg{err: err} })
 }
 
+// summarySourceMarker ends the part of the external editor's file that is the
+// summary: it and everything below it (the source, for reference) is dropped.
+const summarySourceMarker = "# ---- source text, for reference; this line and everything below it is ignored ----"
+
 // reviewQueueItem is one section waiting for a person.
 type reviewQueueItem struct{ it knowledge.DocumentReviewItem }
 
@@ -70,6 +74,8 @@ type summaryUnit struct {
 	edit      *editModel
 	tmp       string // the external editor's file
 	source    viewport.Model
+	sum       viewport.Model // the candidate summary, scrollable
+	focusSum  bool           // j/k scroll the summary rather than the source
 }
 
 // loadReviewQueue loads the queue for the scope: a project's, or every project's.
@@ -182,6 +188,12 @@ func (m *tuiModel) writeSummary(initial string) (tea.Model, tea.Cmd) {
 	u := m.unit
 	u.reviewing = false
 	m.setState(viewSummary)
+	// Only the summary is edited: a draft being revised, else nothing. The
+	// section text is reference, shown or placed below, never part of it.
+	mine := ""
+	if u.candidate != "" {
+		mine = initial
+	}
 	if argv := editorArgv(); argv != nil {
 		f, err := os.CreateTemp("", "kb-summary-*.md")
 		if err != nil {
@@ -189,7 +201,10 @@ func (m *tuiModel) writeSummary(initial string) (tea.Model, tea.Cmd) {
 		}
 		header := fmt.Sprintf("# Write the summary of this section below. Lines at the top that start with # are removed.\n# %s — %s (section %d)\n\n",
 			u.item.DocumentTitle, unitHeading(u.item), u.item.ID)
-		_, werr := f.WriteString(header + initial)
+		// The file holds the summary and only the summary: a draft being
+		// edited is in it, a fresh one starts empty, and the source text
+		// sits below the marker for reference and is dropped on the way back.
+		_, werr := f.WriteString(header + mine + "\n\n" + summarySourceMarker + "\n" + u.text + "\n")
 		f.Close()
 		if werr != nil {
 			os.Remove(f.Name())
@@ -199,9 +214,10 @@ func (m *tuiModel) writeSummary(initial string) (tea.Model, tea.Cmd) {
 		u.edit = nil
 		return m, execEditor(argv, f.Name())
 	}
-	e := newEdit(initial, false, m.cols()-8)
+	e := newEdit(mine, false, m.cols()-8)
 	e.allowSame = true
-	h := m.bodyHeight() - 6
+	// Half the body: the other half shows the source it summarises.
+	h := (m.bodyHeight() - 6) / 2
 	if h < 5 {
 		h = 5
 	}
@@ -210,8 +226,12 @@ func (m *tuiModel) writeSummary(initial string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// stripComments removes the header of # lines the editor's file started with.
+// stripComments removes everything from the source marker down and the header of
+// # lines the editor's file started with.
 func stripComments(s string) string {
+	if i := strings.Index(s, summarySourceMarker); i >= 0 {
+		s = s[:i]
+	}
 	lines := strings.Split(s, "\n")
 	i := 0
 	for i < len(lines) && strings.HasPrefix(lines[i], "#") {
@@ -229,6 +249,14 @@ func (m *tuiModel) handleEditorDone(msg editorDoneMsg) (tea.Model, tea.Cmd) {
 	b, err := os.ReadFile(u.tmp)
 	os.Remove(u.tmp)
 	u.tmp = ""
+	fields := map[string]any{"section": u.item.ID, "bytes": len(b), "summary_bytes": len(stripComments(string(b)))}
+	if msg.err != nil {
+		fields["editor_error"] = msg.err.Error()
+	}
+	if err != nil {
+		fields["read_error"] = err.Error()
+	}
+	m.dl.Log("tui_summary_editor_done", fields)
 	if msg.err != nil {
 		return m.leaveUnit("the editor failed (%v); nothing was changed", msg.err)
 	}
@@ -263,7 +291,15 @@ func (m *tuiModel) reviewSummary() (tea.Model, tea.Cmd) {
 	if h < 3 {
 		h = 3
 	}
-	vp := viewport.New(viewport.WithWidth(m.cols()-4), viewport.WithHeight(h))
+	sumLines := strings.Split(lipgloss.NewStyle().Width(m.cols()-4).Render(u.candidate), "\n")
+	sumH := len(sumLines)
+	if limit := max(3, h/2); sumH > limit {
+		sumH = limit
+	}
+	sv := viewport.New(viewport.WithWidth(m.cols()-4), viewport.WithHeight(sumH))
+	sv.SetContent(strings.Join(sumLines, "\n"))
+	u.sum, u.focusSum = sv, false
+	vp := viewport.New(viewport.WithWidth(m.cols()-4), viewport.WithHeight(max(3, h-sumH+4)))
 	vp.SetContent(lipgloss.NewStyle().Width(m.cols() - 4).Render(u.text))
 	u.source = vp
 	m.setState(viewSummary)
@@ -275,6 +311,7 @@ func (m *tuiModel) leaveUnit(format string, a ...any) (tea.Model, tea.Cmd) {
 	m.unit = nil
 	m.setState(viewReviewQueue)
 	m.notice = fmt.Sprintf(format, a...)
+	m.dl.Log("tui_summary_notice", map[string]any{"notice": m.notice})
 	return m, nil
 }
 
@@ -316,8 +353,14 @@ func (m *tuiModel) updateSummary(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.writeSummary(u.candidate)
 		case "n", "q", "esc":
 			return m.leaveUnit("cancelled; section %d is unchanged (summaries approved earlier are kept)", u.item.ID)
+		case "tab":
+			u.focusSum = !u.focusSum
 		case "j", "k", "up", "down", "space", "pgup", "pgdown":
-			u.source, _ = u.source.Update(k)
+			if u.focusSum {
+				u.sum, _ = u.sum.Update(k)
+			} else {
+				u.source, _ = u.source.Update(k)
+			}
 		}
 	}
 	return m, nil
@@ -329,11 +372,15 @@ func (m *tuiModel) approveSummary() (tea.Model, tea.Cmd) {
 	u := m.unit
 	id := u.item.ID
 	if u.edited || u.item.SummaryStatus != "drafted" {
-		if err := m.kb.DraftDocumentSummary(id, u.candidate, "human", nil); err != nil {
+		err := m.kb.DraftDocumentSummary(id, u.candidate, "human", nil)
+		m.dl.Log("tui_summary_draft", map[string]any{"section": id, "bytes": len(u.candidate), "error": errString(err)})
+		if err != nil {
 			return m.leaveUnit("%v", err)
 		}
 	}
-	if err := m.kb.PromoteDocumentSummary(id); err != nil {
+	err := m.kb.PromoteDocumentSummary(id)
+	m.dl.Log("tui_summary_promote", map[string]any{"section": id, "error": errString(err)})
+	if err != nil {
 		return m.leaveUnit("drafted, but not promoted: %v\nequivalent:  kb document review promote %d", err, id)
 	}
 	m.unit = nil
@@ -360,15 +407,20 @@ func (m *tuiModel) summaryScreen() (string, []string) {
 		if u.edit == nil {
 			return title, []string{"the editor is open"}
 		}
-		body := wrap("Write the summary; the section's text is below to start from. Enter accepts, Ctrl-J starts a new line, Esc cancels.")
-		return title, append(append(body, ""), strings.Split(u.edit.render(), "\n")...)
+		body := wrap("Write the summary; the section's text is below for reference. Enter accepts, Ctrl-J starts a new line, Esc cancels.")
+		body = append(append(body, ""), strings.Split(u.edit.render(), "\n")...)
+		src := wrap(u.text)
+		if limit := max(3, m.bodyHeight()-len(body)-4); len(src) > limit {
+			src = append(src[:limit], "…")
+		}
+		return title, append(append(body, "", "source:"), src...)
 	}
-	body := []string{"summary — what will be saved:"}
-	sum := wrap(u.candidate)
-	if len(sum) > 5 {
-		sum = append(sum[:4], "…")
+	label := "summary — what will be saved:"
+	if !u.sum.AtTop() || !u.sum.AtBottom() {
+		label += "  (Tab: scroll the summary, now " + map[bool]string{true: "on", false: "off"}[u.focusSum] + ")"
 	}
-	body = append(body, sum...)
+	body := []string{label}
+	body = append(body, strings.Split(strings.TrimRight(u.sum.View(), "\n"), "\n")...)
 	body = append(body, "", "source:")
 	body = append(body, strings.Split(strings.TrimRight(u.source.View(), "\n"), "\n")...)
 	return title, body
@@ -377,7 +429,7 @@ func (m *tuiModel) summaryScreen() (string, []string) {
 // summaryLegend names the keys of the unit's current step.
 func (m *tuiModel) summaryLegend() string {
 	if m.unit != nil && m.unit.reviewing {
-		return "↑/↓ j/k scroll source   y approve   e edit   n q Esc cancel   Ctrl-C quit"
+		return "↑/↓ j/k scroll   Tab summary/source   y approve   e edit   n q Esc cancel   Ctrl-C quit"
 	}
 	return "Enter accept   Ctrl-J newline   Esc cancel   Ctrl-C quit"
 }
@@ -403,4 +455,12 @@ func (m *tuiModel) openFromCommand(id int64) (tea.Model, tea.Cmd) {
 		return m.startSummary(it)
 	}
 	return m.refuse("section %d is not waiting for review (it does not exist, or is already reviewed)", id)
+}
+
+// errString is err's text, or "" for nil, for the debug log.
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
