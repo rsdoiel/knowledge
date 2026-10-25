@@ -13,7 +13,6 @@
     <li><a href="INSTALL.html">INSTALL</a></li>
     <li><a href="user_manual.html">User Manual</a></li>
     <li><a href="about.html">About</a></li>
-    <!-- <li><a href="search.html">Search</a></li> -->
     <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
 </ul>
 </nav>
@@ -21,6 +20,78 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="v0.0.27-2026-10-25">v0.0.27 — 2026-10-25</h2>
+<p>A bug fix release. Plan:
+<code>agents/projects/knowledge/plans/release-plan-v0.0.27.md</code>.
+Decision: DR-0087 (accepted), refining the “left as they are” paragraph
+of DR-0046.</p>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><p><strong>A gist could not be written and checked in the terminal
+interface.</strong> Documents → Review queue opened the editor on the
+whole document’s text for a gist, so the saved summary was the document
+with the author’s words somewhere in it, and the review screen showed
+only its first four lines, hiding the edit. Both editors (the external
+one and the built-in text area) now start empty, or as the draft when
+<code>e</code> writes one again, and show the section’s text for
+reference: below a <code># ---- source text</code> line in the file,
+which is dropped on the way back, or under the text area. The review
+shows the whole summary in a scrollable pane (<code>Tab</code> moves
+<code>j</code> and <code>k</code> between summary and source). The debug
+log records <code>tui_summary_editor_done</code>,
+<code>tui_summary_notice</code>, <code>tui_summary_draft</code> and
+<code>tui_summary_promote</code>. Found on document 9 of the author’s
+database.</p></li>
+<li><p><strong><code>kb document tag</code> linked a concept a second
+time</strong> when the first link was hard-wrapped over lines
+(<code>[[deterministic&lt;newline&gt;output]]</code>). The check for an
+existing link now joins the name’s words with <code>\s+</code>. It also
+applies to <code>kb document fuzzy-tag</code>.</p></li>
+<li><p><strong>A source title could hold a newline or an escape
+character.</strong> <code>AddSource</code> now makes a title one line
+(every run of whitespace becomes one space) and refuses a control
+character, exit 2, as a blank title was. A title already stored, and one
+read by <code>kb import</code>, are not rewritten.
+<code>source add --json</code> reports the title as stored.</p></li>
+<li><p><strong>A wikilink or keyword <code>CleanName</code> refuses was
+dropped without a word on document ingest.</strong> The result gains
+<code>TagWarnings</code> (<code>tag_warnings</code> with
+<code>--json</code>) and the text output a <code>tag warning:</code>
+line; the exit stays 0, and an unchanged file is not reported
+again.</p></li>
+<li><p><strong>Manual pages.</strong> <code>MAN_PAGES_1</code> is built
+from <code>KB_TOPICS</code> and not from a glob over the
+<code>.1.md</code> files, so a missing source file can no longer drop a
+page from <code>make man</code> and <code>make install</code> while the
+build succeeds; the section 3 and 7 lists use <code>$(wildcard)</code>
+and print no <code>ls</code> errors; a dead rule is gone.
+<code>kb(1)</code> SEE ALSO named 16 of the 21 pages and names all;
+<code>kb-project(1)</code> pointed at a <code>kb-format(1)</code> page
+that does not exist. Tests: <code>TestMakefile_*</code> and
+<code>TestManPages_KbSeeAlsoListsEveryPage</code>.
+<code>TestManPages_DoNotPointAtTODO</code> had never checked
+<code>kb(1)</code> (its help topic name was wrong) and now
+does.</p></li>
+<li><p><strong>The skills no longer carry compiled scripts.</strong>
+Each skill still had <code>scripts/compiled.bash</code> and
+<code>compiled.ps1</code> (workspace DR-0008 ended compiling skills on
+2026-10-23), and <code>make install-skills</code> copied them to every
+install. The six files are deleted, and
+<code>TestSkills_EachIsCompleteAndPinnedToThisRelease</code> now fails
+if a skill has a <code>scripts/</code> directory.</p></li>
+</ul>
+<h3 id="upgrade-note">Upgrade note</h3>
+<p>A script that passed a <code>source add</code> title with a newline
+or a tab now gets it on one line; one that passed a control character
+now gets exit 2. A program that decodes the <code>document ingest</code>
+JSON strictly must allow <code>tag_warnings</code>.</p>
+<h3 id="checked-and-not-changed">Checked and not changed</h3>
+<p><code>kb search -- -x</code> searches for <code>-x</code>: DR-0046’s
+note that it did not was out of date (fixed in <code>b2d33b4</code>,
+pinned by <code>TestSearch_DoubleDashSearchesADashLeadingTerm</code>). A
+help audit found every flag in every help topic accepted by the code
+(144 synopsis flags probed) and every verb-table subverb in its
+synopsis.</p>
 <h2 id="v0.0.26-2026-10-20">v0.0.26 — 2026-10-20</h2>
 <h3 id="changed">Changed</h3>
 <ul>
@@ -30,7 +101,7 @@ reachable?” with a walk of the whole order graph for every row; they now
 look for a direct edge first. At 3000 scenes <code>story timeline</code>
 takes 2.2 s (was 13.9 s) and <code>who-knows</code> 4.4 s (was 16.0 s);
 the answers are unchanged.
-<code>KB_SCALE=300,1000,3000 go test   -run TestScale_StoryVerbs -v</code>
+<code>KB_SCALE=300,1000,3000 go test -run TestScale_StoryVerbs -v</code>
 times them.</li>
 <li><strong><code>unknown-fact</code> no longer asks the typo question
 about a figure</strong> (DR-0086, refining DR-0083 item 7). Two facts of
@@ -123,9 +194,9 @@ A file with the key manages the <code>cited</code> links it made
 <code>kb source link</code> takes <code>--document DOC_ID</code> or
 <code>--record REF</code> as well as an observation id, with
 <code>--version</code> and <code>--hash</code>;
-<code>kb unlink   source</code> takes <code>--document</code> and
+<code>kb unlink source</code> takes <code>--document</code> and
 <code>--record</code>; <code>kb source list</code> and <code>show</code>
-say what cites each source; <code>kb source   remove</code> refuses a
+say what cites each source; <code>kb source remove</code> refuses a
 source any kind still cites. The tables travel on merge, export, import
 and <code>check-db</code>, which now report sixteen tables. Library:
 <code>LinkDocumentSource</code>, <code>LinkRecordSource</code>,
@@ -136,8 +207,8 @@ and <code>check-db</code>, which now report sixteen tables. Library:
 <code>SyncDocumentSources</code>, <code>SyncRecordSources</code>.</li>
 <li><strong><code>observations.source_doi</code> is no longer
 written.</strong> <code>AddObservationWithSource</code> (and
-<code>kb observation add   --source-doi</code>) finds or makes the
-source for the DOI, normalising a pasted <code>doi:</code> or
+<code>kb observation add --source-doi</code>) finds or makes the source
+for the DOI, normalising a pasted <code>doi:</code> or
 <code>doi.org</code> prefix, and links it; a malformed DOI writes
 nothing. The column is still read and exported, so older exports
 import.</li>
@@ -199,7 +270,7 @@ into its correct word in <code>suggest</code> (the near-existing report
 and <code>fuzzy-tag</code> still use edit distance). Scores are about
 twenty where they were several hundred.</p></li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li><strong>The small known problems of v0.0.23 to v0.0.24
 (T6).</strong> A record’s search passage is the paragraph the match is
@@ -440,7 +511,7 @@ called).</li>
 date.</strong> It was git’s first commit; it is now the date in the
 name, source <code>filename</code>.</li>
 </ul>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li><strong><code>kb completion bash -install</code> left a new Terminal
 window on macOS without completion.</strong> <code>/bin/bash</code> 3.2
@@ -467,7 +538,7 @@ frontmatter now asks questions. Pass <code>--no-prompt</code> to keep it
 silent; scripts and <code>--json</code> are unaffected.</li>
 <li>The skills in a workspace’s <code>agents/skills/</code> are not
 updated by this release: run
-<code>make install-skills   SKILLS_DIR=agents/skills</code> (or
+<code>make install-skills SKILLS_DIR=agents/skills</code> (or
 <code>~/.claude/skills</code>) to take the new ones.</li>
 </ul>
 <h2 id="v0.0.22-2026-10-14">v0.0.22 — 2026-10-14</h2>
@@ -480,7 +551,7 @@ is <code>design/tui-keys-and-write-flows-design.md</code>).</p>
 <ul>
 <li><strong><code>kb search SCOPE/[KIND] TERM</code>: search scoped by a
 path</strong> (DR-0073, DR-0074).
-<code>kb search harvey/ "exit   codes"</code> searches one project,
+<code>kb search harvey/ "exit codes"</code> searches one project,
 <code>harvey/records</code> one kind in it, <code>workspace/</code> the
 workspace tier only, and <code>/records</code> one kind everywhere.
 <code>kb search TERM</code> is unchanged, and a first word with no slash
@@ -571,7 +642,7 @@ changes.</li>
 <li><strong>A plan’s command wraps at spaces</strong>, so a long path no
 longer hides the end of it on the confirmation.</li>
 </ul>
-<h3 id="fixed-2">Fixed</h3>
+<h3 id="fixed-3">Fixed</h3>
 <ul>
 <li><strong>Dimmed menu rows named v0.0.20, a release that had
 shipped.</strong> A test now fails when a row that is not built names a
@@ -586,7 +657,7 @@ pager no longer depends on which programs are installed (knowledge
 DR-0071, a partial supersede of DR-0066 point 5). Written and tested red
 first; the race detector passed on darwin/arm64 at <code>13c96bf</code>,
 the last code commit.</p>
-<h3 id="fixed-3">Fixed</h3>
+<h3 id="fixed-4">Fixed</h3>
 <ul>
 <li><strong>Enter on a record in the interface returned straight to the
 list.</strong> <code>bat</code> was chosen as the pager when installed,
@@ -614,7 +685,7 @@ corrected too.</li>
 jump to the ends. Esc abandons a find.</li>
 <li><strong>kb highlights Markdown itself</strong> when showing a
 record, in the interface’s viewer and in
-<code>kb record   set-status REF</code> on a terminal. <code>bat</code>
+<code>kb record set-status REF</code> on a terminal. <code>bat</code>
 and <code>less</code> are no longer looked for; <code>$KB_PAGER</code>
 is the override and is used exactly as written (give <code>bat</code>
 <code>--paging=always</code>). <code>NO_COLOR</code> turns the colour
@@ -1261,7 +1332,7 @@ concepts on every hit, and the list of linked projects.</li>
 <ul>
 <li><strong><code>kb project add</code> refuses a name that already
 exists</strong> (DR-0055): exit 1,
-<code>project "NAME" already   exists (id=N)</code>, and nothing is
+<code>project "NAME" already exists (id=N)</code>, and nothing is
 written. It used to print “added”, exit 0, drop the requested status and
 description, and move <code>updated_at</code>. <strong>A script that
 re-ran <code>kb project add</code> and relied on exit 0 now gets
@@ -1278,7 +1349,7 @@ unchanged, guarded by golden tests captured before the move.</li>
 <li>Harvey’s <code>recallKB</code> calls <code>RecallByText</code>, the
 same call <code>kb concept recall</code> makes.</li>
 </ul>
-<h3 id="fixed-4">Fixed</h3>
+<h3 id="fixed-5">Fixed</h3>
 <ul>
 <li><strong><code>kb import</code> no longer rewrites an observation
 kind outside the vocabulary to <code>note</code></strong> (DR-0054). The
@@ -1328,9 +1399,9 @@ has concept links, source links or supersessions; <code>--force</code>
 removes them), <code>kb document delete ID</code> (refused while any
 section’s summary is reviewed, since that is human-gated data;
 <code>--force</code> deletes anyway) and
-<code>kb record   delete RECORD_ID</code> (only once the record’s file
-is gone, because <code>ingest</code> is additive and the file is the
-truth; <code>kb</code> never deletes a decision record from disk).
+<code>kb record delete RECORD_ID</code> (only once the record’s file is
+gone, because <code>ingest</code> is additive and the file is the truth;
+<code>kb</code> never deletes a decision record from disk).
 <code>kb unlink project|observation|source</code> is the inverse of
 <code>link</code> and <code>source link</code>. Each takes
 <code>--dry-run</code>, refuses with what and how many (exit 1), and
@@ -1404,7 +1475,7 @@ open, the debug log) are reported like any other error, so they honour
 first argument as a mistyped option (exit 2), and take a dash-leading
 term or path after <code>--</code>.</li>
 </ul>
-<h3 id="fixed-5">Fixed</h3>
+<h3 id="fixed-6">Fixed</h3>
 <ul>
 <li>Silent successes: <code>source retract 99</code> and
 <code>source remove 99</code> on an id that does not exist exited 0;
@@ -1441,14 +1512,14 @@ failed” now also has to handle 2 and the numbers above it.</p>
 <col style="width: 17%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th scope="col">What happened</th>
 <th scope="col">v0.0.13</th>
 <th scope="col">now</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>A bad value on the command line: unknown observation kind or project
 status, a blank name, a bad <code>--published</code>, <code>--url</code>
 or <code>--doi</code>, a negative <code>--limit</code>; an unknown
@@ -1457,54 +1528,54 @@ record status, trigger or kind given to <code>record new</code> or
 <td>1, or 0 (<code>record new</code>, <code>source add</code>)</td>
 <td>2</td>
 </tr>
-<tr class="even">
+<tr>
 <td>A named input or the workspace is missing (<code>ingest</code>,
 <code>import -in</code>, <code>merge</code>, <code>index</code>, no
 <code>agents/knowledge.db</code>)</td>
 <td>1</td>
 <td>66</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Wrong content: a malformed record, JSONL or document; a file that is
 not a knowledge base; a zero-byte merge input; a merge collision; a
 constraint violation</td>
 <td>1</td>
 <td>65</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ingest</code> with records that could not be ingested</td>
 <td>0</td>
 <td>65, 77 or the first failure’s class</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>An output cannot be created: <code>merge -out</code> exists,
 <code>export -out</code>, <code>init</code></td>
 <td>1</td>
 <td>73</td>
 </tr>
-<tr class="even">
+<tr>
 <td>An I/O error; a locked database; permission denied</td>
 <td>1</td>
 <td>74; 75; 77</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>check-retractions</code> with lookups that failed</td>
 <td>0</td>
 <td>69</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>source retract</code> or <code>remove</code> on an id that
 does not exist</td>
 <td>0</td>
 <td>1</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Not found, <code>search</code> finds nothing, a stale index, a
 concept or source still linked</td>
 <td>1</td>
 <td>1 (unchanged)</td>
 </tr>
-<tr class="even">
+<tr>
 <td>An internal error</td>
 <td>1</td>
 <td>70</td>
@@ -1596,7 +1667,7 @@ by auditing the diff.</li>
 <li><strong>Unknown flags and surplus arguments are refused</strong>
 (they were dropped; DR-0041). Of 25 verbs probed, 15 accepted a bogus
 flag and 19 ignored an extra argument; all 25 now refuse both. The
-damage was real: <code>source add T more   words</code> stored the title
+damage was real: <code>source add T more words</code> stored the title
 <code>T</code> and lost the rest,
 <code>record new --title A decision</code> kept only <code>A</code>,
 <code>source link 1 1 --relationship</code> with no value linked anyway,
@@ -1651,20 +1722,20 @@ database with such rows still loads.</li>
 <li><code>kb search ''</code> and <code>kb search ' '</code> are usage
 errors (exit 2, DR-0040, DR-0041), not <code>no results</code>.</li>
 </ul>
-<h3 id="fixed-6">Fixed</h3>
+<h3 id="fixed-7">Fixed</h3>
 <ul>
 <li><strong><code>kb project rename demo ''</code> corrupted a project
 that owns records</strong> (DR-0042). The command rewrites every owned
 record’s <code>project:</code> frontmatter before the library sees the
 new name, so a blank name wrote <code>project: ""</code> into each file,
 renamed the row to an empty string, and the next ingest hit
-<code>UNIQUE   constraint failed: records.uuid</code>, the deadlock
+<code>UNIQUE constraint failed: records.uuid</code>, the deadlock
 DR-0026 exists to prevent. The name is now cleaned before any file is
 staged, so the files and the row cannot disagree about it, and
 <code>--dry-run</code> refuses too. Found while verifying the name fix
 on a real scratch corpus.</li>
 <li><strong><code>kb merge</code> succeeded on inputs that do not
-exist</strong> (DR-0044). <code>kb merge -a x   -b y -out z</code> with
+exist</strong> (DR-0044). <code>kb merge -a x -b y -out z</code> with
 neither present exited 0, created zero-byte <code>x</code> and
 <code>y</code>, and wrote a schema-only <code>z</code>, so a mistyped
 <code>-a</code> merged an empty database and reported success. Cause:
@@ -1684,10 +1755,10 @@ identical merged content (518 rows compared).</li>
 <li><strong><code>kb VERB SUBVERB -help</code> did something different
 for every verb</strong> (DR-0041). <code>project add -help</code>
 printed <code>kb: flag: help requested</code> and exited 1,
-<code>project   show -help</code> looked up a project named
+<code>project show -help</code> looked up a project named
 <code>-help</code>, <code>document frontmatter -help</code> tried to
 open a file called <code>-help</code>, and
-<code>record list -help</code> said <code>unknown   flag</code>. It now
+<code>record list -help</code> said <code>unknown flag</code>. It now
 prints the verb’s page and exits 0, before any database is opened, so it
 works outside a workspace and creates nothing. A help flag after other
 flags (<code>project add --status active -help</code>) is answered too.
@@ -1769,7 +1840,7 @@ against the new one, byte for byte.</p>
 <h3 id="added-13">Added</h3>
 <ul>
 <li><strong>The workflow logic is now library API</strong> (DR-0035).
-<code>cmd/kb</code> is <code>package   main</code>, so everything
+<code>cmd/kb</code> is <code>package main</code>, so everything
 implemented there was reachable from exactly one caller, the
 <code>kb</code> binary. It moved into the root package as exported
 functions that take text or bytes and return results, never touching
@@ -1878,7 +1949,7 @@ event at the call boundary rather than one per internal KB call, and
 <code>concept suggest</code> logs the candidate count rather than the
 item count.</li>
 </ul>
-<h3 id="fixed-7">Fixed</h3>
+<h3 id="fixed-8">Fixed</h3>
 <ul>
 <li><strong>Output that changed between identical runs</strong>
 (DR-0037), found by repeating every verb and by an audit of each
@@ -1921,7 +1992,7 @@ real corruption bug before release — two near-misses in the same section
 spliced a later footnote marker <em>inside</em> an earlier one’s own
 definition text, from a single running byte-offset delta that
 overcorrected.</li>
-<li><code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords   NAME,...] [--set FIELD=VALUE] [--dry-run]</code>
+<li><code>kb document frontmatter PATH [--accept FIELD,...] [--accept-keywords NAME,...] [--set FIELD=VALUE] [--dry-run]</code>
 (DR-0033): propose-then- accept
 <code>title</code>/<code>author</code>/<code>dateCreated</code>/<code>dateModified</code>/<code>keywords</code>
 for one document, deriving signals from the document’s own prose and
@@ -1931,7 +2002,7 @@ git/filesystem provenance — this module’s first
 absent-only, never overwritten once present; <code>dateModified</code>
 is the one exception, always refreshed on an accepted run.
 <code>author</code> is a layered signal (a byline in the prose, then
-git’s earliest-commit author, then <code>git config   user.name</code>),
+git’s earliest-commit author, then <code>git config user.name</code>),
 shown together when they disagree rather than collapsed to one guess.
 <code>keywords</code> diffs the current list against known-concept
 mentions and new candidate terms distinctive to the document itself,
@@ -1960,7 +2031,7 @@ words (<code>table</code>+<code>stable</code>+<code>able</code>,
 <code>old</code>+<code>cold</code>+<code>told</code>+<code>hold</code>+<code>fold</code>),
 fixed with a length gate.</li>
 </ul>
-<h3 id="fixed-8">Fixed</h3>
+<h3 id="fixed-9">Fixed</h3>
 <ul>
 <li><code>kb search TERM</code> threw a raw SQLite error
 (<code>fts5: syntax error</code>) instead of a normal no-results outcome
@@ -2047,7 +2118,7 @@ this module became the decision- record format’s first conversion pilot.
 <code>kb(1)</code>’s DESCRIPTION and SEE ALSO now name records and
 documents too.</li>
 </ul>
-<h3 id="fixed-9">Fixed</h3>
+<h3 id="fixed-10">Fixed</h3>
 <ul>
 <li><code>kb merge</code> could silently keep a stale project or concept
 name, or drop a side outright, depending on merge order, because
@@ -2158,7 +2229,7 @@ export/import carry <code>observation_relations</code> from this
 release, not as a follow-on, per the standing rule that a table missing
 from the merge summary is a table whose loss goes unreported.</li>
 </ul>
-<h3 id="fixed-10">Fixed</h3>
+<h3 id="fixed-11">Fixed</h3>
 <ul>
 <li><code>kb record set-status</code> and
 <code>kb record supersede</code> now refresh a corpus’s
@@ -2176,7 +2247,7 @@ changes, which bit WorkLab twice.</li>
 corpora (clasm, WorkLab, caltechauthors), all in
 <code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
 exit code.</p>
-<h3 id="fixed-11">Fixed</h3>
+<h3 id="fixed-12">Fixed</h3>
 <ul>
 <li><code>kb ingest</code> no longer leaves stale edges behind on
 re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
@@ -2223,7 +2294,7 @@ field, into concepts linked via a new <code>record_concepts</code> table
 separate from <code>AddConcept</code>/<code>kb concept add</code>, which
 stays exact-match, since a human typing a concept name at the CLI is a
 deliberate act, unlike capitalization in prose).
-<code>kb record concepts   RECORD_ID</code> shows the result.</li>
+<code>kb record concepts RECORD_ID</code> shows the result.</li>
 <li>New <code>retrieval.go</code>: <code>MatchConceptNames</code> finds
 known concepts mentioned (whole-word, case-insensitive) in arbitrary
 text, and <code>RecallByConceptNames</code> returns observations,
@@ -2329,8 +2400,8 @@ given) now fails with a message pointing at <code>kb init</code> or
 doesn’t already exist, instead of silently creating one — fixes
 <code>kb record new</code>/<code>kb observation add</code>, run from
 inside a project directory, building a stray nested workspace. An
-explicit <code>--db   PATH</code> and <code>kb import</code> keep
-today’s open-or-create behavior unchanged.</li>
+explicit <code>--db PATH</code> and <code>kb import</code> keep today’s
+open-or-create behavior unchanged.</li>
 </ul>
 <h3 id="notes">Notes</h3>
 <ul>
@@ -2403,7 +2474,7 @@ specification: field order, flow-styled sequences, and a double-quoted
 string type for the seven fields the format requires quoted, so every
 writer produces byte-identical output.</li>
 </ul>
-<h3 id="fixed-12">Fixed</h3>
+<h3 id="fixed-13">Fixed</h3>
 <ul>
 <li>A record path read from the database is confined to the workspace
 root before it is read or written. <code>filepath.Join</code> cleans a

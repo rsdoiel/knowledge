@@ -13,7 +13,6 @@
     <li><a href="INSTALL.html">INSTALL</a></li>
     <li><a href="user_manual.html">User Manual</a></li>
     <li><a href="about.html">About</a></li>
-    <!-- <li><a href="search.html">Search</a></li> -->
     <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
 </ul>
 </nav>
@@ -43,13 +42,16 @@ observation_relations and record_relations.
 <dt>checks</dt>
 <dd>
 facts worth knowing, with a count. observations_without_project is
-normally 0. concepts_without_links counts concepts nothing links to,
-which is not an error (a concept can be added before it is used);
-kb-concept(1) delete removes one. sources_without_links counts sources
-no observation, document or record cites. records_without_project counts
-project-scope records with no project row, and documents_without_project
-counts documents with none; workspace-tier records have no project by
-design and are not counted.
+normally
+<ol start="0" type="1">
+<li>concepts_without_links counts concepts nothing links to, which is
+not an error (a concept can be added before it is used); kb-concept(1)
+delete removes one. sources_without_links counts sources no observation,
+document or record cites. records_without_project counts project-scope
+records with no project row, and documents_without_project counts
+documents with none; workspace-tier records have no project by design
+and are not counted.</li>
+</ol>
 </dd>
 <dt>projects</dt>
 <dd>
