@@ -446,11 +446,12 @@ the error on stderr carries the class name beside the number, for example
 # SEE ALSO
 
 {app_name}-project(1), {app_name}-observation(1), {app_name}-concept(1),
-{app_name}-link(1), {app_name}-source(1), {app_name}-search(1),
-{app_name}-merge(1), {app_name}-export(1), {app_name}-import(1),
-{app_name}-ingest(1), {app_name}-record(1), {app_name}-document(1),
-{app_name}-index(1), {app_name}-init(1), {app_name}-completion(1),
-{app_name}-topics(1)
+{app_name}-link(1), {app_name}-unlink(1), {app_name}-source(1),
+{app_name}-search(1), {app_name}-merge(1), {app_name}-check-db(1),
+{app_name}-stats(1), {app_name}-story(1), {app_name}-export(1),
+{app_name}-import(1), {app_name}-ingest(1), {app_name}-record(1),
+{app_name}-document(1), {app_name}-index(1), {app_name}-init(1),
+{app_name}-completion(1), {app_name}-verbs(1), {app_name}-topics(1)
 
 `
 

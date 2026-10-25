@@ -16,15 +16,19 @@ RELEASE_DATE = $(shell date +%Y-%m-%d)
 
 RELEASE_HASH=$(shell git log --pretty=format:'%h' -n 1)
 
-MAN_PAGES_1 = $(shell ls -1 *.1.md | sed -E 's/.1.md/.1/g')
+# The section 1 pages are kb and one page per help topic, taken from KB_TOPICS and
+# not from a glob over the .1.md files: a missing source file would otherwise drop
+# its page from `make man` and `make install` and the build would still succeed.
+# cmd/kb/manpages_test.go checks that every .1.md in the directory is listed.
+MAN_PAGES_1 = $(addsuffix .1,$(PROGRAMS) $(addprefix $(PROGRAMS)-,$(KB_TOPICS)))
 
-MAN_PAGES_3 = $(shell ls -1 *.3.md | sed -E 's/.3.md/.3/g')
+MAN_PAGES_3 = $(patsubst %.3.md,%.3,$(wildcard *.3.md))
 
-MAN_PAGES_7 = $(shell ls -1 *.7.md | sed -E 's/.7.md/.7/g')
+MAN_PAGES_7 = $(patsubst %.7.md,%.7,$(wildcard *.7.md))
 
 HTML_PAGES = $(shell find . -type f -not -path './bin/*' -not -path './.git/*' | grep -E '\.html$$')
 
-DOCS = $(shell ls -1 *.?.md)
+DOCS = $(wildcard *.?.md)
 
 # version.go is left out: it has a rule (cmt, under generate), and listing it
 # here would make every build run cmt through that rule.
@@ -96,10 +100,6 @@ kb-topics-help: $(PROGRAMS)
 	@for topic in $(KB_TOPICS); do \
 		./bin/kb $$topic -help >kb-$$topic.1.md; \
 	done
-
-$(MAN_PAGES): .FORCE
-	mkdir -p man/man1
-	pandoc $@.md --from markdown --to man -s >man/man1/$@
 
 CITATION.cff: .FORCE
 	cmt codemeta.json CITATION.cff

@@ -442,9 +442,10 @@ the error on stderr carries the class name beside the number, for example
 # SEE ALSO
 
 kb-project(1), kb-observation(1), kb-concept(1),
-kb-link(1), kb-source(1), kb-search(1),
-kb-merge(1), kb-export(1), kb-import(1),
-kb-ingest(1), kb-record(1), kb-document(1),
-kb-index(1), kb-init(1), kb-completion(1),
-kb-topics(1)
+kb-link(1), kb-unlink(1), kb-source(1),
+kb-search(1), kb-merge(1), kb-check-db(1),
+kb-stats(1), kb-story(1), kb-export(1),
+kb-import(1), kb-ingest(1), kb-record(1),
+kb-document(1), kb-index(1), kb-init(1),
+kb-completion(1), kb-verbs(1), kb-topics(1)
 
