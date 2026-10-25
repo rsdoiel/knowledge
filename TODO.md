@@ -3,7 +3,7 @@
 
 ## Bugs
 
-- [x] **Four bugs fixed 2026-10-25, unreleased (for v0.0.27; DR-0087, accepted).** (1) *The summary editors held the
+- [x] **Four bugs fixed 2026-10-25, released in v0.0.27 (DR-0087, accepted).** (1) *The summary editors held the
   source text:* for a gist the external editor's file and the built-in text area started with the whole document, so the
   saved summary was the document plus the author's words, and the review screen showed only its first four lines, hiding
   the edit; `e` then re-saved an unchanged candidate and the unit ended with "unchanged". Found by the author on document 9
@@ -19,14 +19,14 @@
   were red first. Items (2) to (4) were the "left as they are" paragraph of DR-0046; its first item, `kb search -- -x`,
   was already fixed by `b2d33b4` and needs nothing.
 
-- [x] **Manual page list and `kb(1)` SEE ALSO had drifted.** Fixed 2026-10-25, unreleased (for v0.0.27). `MAN_PAGES_1` is
+- [x] **Manual page list and `kb(1)` SEE ALSO had drifted.** Fixed 2026-10-25, released in v0.0.27. `MAN_PAGES_1` is
   built from `KB_TOPICS`; `$(wildcard)` for the 3 and 7 lists and `DOCS`; a dead rule removed; `kb(1)` SEE ALSO names all
   21 pages; `kb-project(1)` pointed at `kb-format(1)`, which is not a page. `TestManPages_DoNotPointAtTODO` never checked
   `kb(1)`. Tests: `TestMakefile_*`, `TestManPages_KbSeeAlsoListsEveryPage`. Left for a later release, as a brief:
   sections 5 and 7 and 13 pages without an EXIT STATUS section (`agents/projects/knowledge/design/man-page-sections-design.md`).
 
 - [x] **`make install-skills` copied each skill's `scripts/` directory (`compiled.bash`, `compiled.ps1`) into the target,
-  although skills are no longer compiled (workspace DR-0008).** Fixed 2026-10-25, unreleased (for v0.0.27). Found while
+  although skills are no longer compiled (workspace DR-0008).** Fixed 2026-10-25, released in v0.0.27. Found while
   installing to `../agents/skills`: six tracked files here, none in the workspace copies. The six files are deleted, the
   update skill no longer mentions "the compiled script", and `TestSkills_EachIsCompleteAndPinnedToThisRelease` now fails if
   a skill has a `scripts/` directory (it used to require one; red first).
