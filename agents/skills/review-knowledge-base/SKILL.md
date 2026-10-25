@@ -14,7 +14,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.26
+  kb_version: 0.0.27
 variables:
   DB_PATH:
     type: string
@@ -91,6 +91,9 @@ rejects the forms below, and some of them would fail without a word under a
 - **v0.0.26 (nothing here needs it; the minimum stays 0.0.19):** `kb story check` reports
   facts that differ only in a digit as `fact-number-differs` (the same figure, or a
   continuity slip?), apart from the `unknown-fact` typo finding.
+- **v0.0.27 (nothing here needs it; the minimum stays 0.0.19):** `kb document ingest`
+  prints a `tag warning:` line for a wikilink or keyword it skipped (a control
+  character); list any in the report, it is not a failure.
 
 ---
 

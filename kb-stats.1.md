@@ -1,6 +1,6 @@
-%kb-stats(1) user manual | version 0.0.26 37be1f4
+%kb-stats(1) user manual | version 0.0.27 124d213
 % R. S. Doiel
-% 2026-10-20
+% 2026-10-25
 
 # NAME
 

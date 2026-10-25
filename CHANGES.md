@@ -3,6 +3,53 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.27 — 2026-10-25
+
+A bug fix release. Plan: `agents/projects/knowledge/plans/release-plan-v0.0.27.md`. Decision: DR-0087 (accepted),
+refining the "left as they are" paragraph of DR-0046.
+
+### Fixed
+
+- **A gist could not be written and checked in the terminal interface.** Documents → Review queue opened the
+  editor on the whole document's text for a gist, so the saved summary was the document with the author's words
+  somewhere in it, and the review screen showed only its first four lines, hiding the edit. Both editors (the
+  external one and the built-in text area) now start empty, or as the draft when `e` writes one again, and show the
+  section's text for reference: below a `# ---- source text` line in the file, which is dropped on the way back,
+  or under the text area. The review shows the whole summary in a scrollable pane (`Tab` moves `j` and `k` between
+  summary and source). The debug log records `tui_summary_editor_done`, `tui_summary_notice`, `tui_summary_draft`
+  and `tui_summary_promote`. Found on document 9 of the author's database.
+- **`kb document tag` linked a concept a second time** when the first link was hard-wrapped over lines
+  (`[[deterministic<newline>output]]`). The check for an existing link now joins the name's words with `\s+`. It
+  also applies to `kb document fuzzy-tag`.
+- **A source title could hold a newline or an escape character.** `AddSource` now makes a title one line (every
+  run of whitespace becomes one space) and refuses a control character, exit 2, as a blank title was. A title
+  already stored, and one read by `kb import`, are not rewritten. `source add --json` reports the title as stored.
+- **A wikilink or keyword `CleanName` refuses was dropped without a word on document ingest.** The result gains
+  `TagWarnings` (`tag_warnings` with `--json`) and the text output a `tag warning:` line; the exit stays 0, and an
+  unchanged file is not reported again.
+- **Manual pages.** `MAN_PAGES_1` is built from `KB_TOPICS` and not from a glob over the `.1.md` files, so a missing
+  source file can no longer drop a page from `make man` and `make install` while the build succeeds; the section 3
+  and 7 lists use `$(wildcard)` and print no `ls` errors; a dead rule is gone. `kb(1)` SEE ALSO named 16 of the 21
+  pages and names all; `kb-project(1)` pointed at a `kb-format(1)` page that does not exist. Tests:
+  `TestMakefile_*` and `TestManPages_KbSeeAlsoListsEveryPage`. `TestManPages_DoNotPointAtTODO` had never checked
+  `kb(1)` (its help topic name was wrong) and now does.
+
+- **The skills no longer carry compiled scripts.** Each skill still had `scripts/compiled.bash` and
+  `compiled.ps1` (workspace DR-0008 ended compiling skills on 2026-10-23), and `make install-skills` copied them to
+  every install. The six files are deleted, and `TestSkills_EachIsCompleteAndPinnedToThisRelease` now fails if a skill
+  has a `scripts/` directory.
+
+### Upgrade note
+
+A script that passed a `source add` title with a newline or a tab now gets it on one line; one that passed a control
+character now gets exit 2. A program that decodes the `document ingest` JSON strictly must allow `tag_warnings`.
+
+### Checked and not changed
+
+`kb search -- -x` searches for `-x`: DR-0046's note that it did not was out of date (fixed in `b2d33b4`, pinned by
+`TestSearch_DoubleDashSearchesADashLeadingTerm`). A help audit found every flag in every help topic accepted by the
+code (144 synopsis flags probed) and every verb-table subverb in its synopsis.
+
 ## v0.0.26 — 2026-10-20
 
 ### Changed

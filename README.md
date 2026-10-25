@@ -76,9 +76,21 @@ kb document ingest notes/2026-09-29-worklog.md --project harvey
 
 ## Release Notes
 
-- version: 0.0.25
+- version: 0.0.27
 - status: active
-- released: 2026-10-19
+- released: 2026-10-25
+
+A bug fix release (DR-0087, accepted, refining DR-0046).
+
+Summaries. The editors in Documents → Review queue now edit only the summary. A gist used to open with the whole document's text in the editor, so what was saved was the document with a few words added, and the review showed only its first four lines. The editor's file (and the built-in text area) now starts empty, or as the draft, with the section's text below a marker line or under the box for reference; the review shows the whole summary in a pane that scrolls, `Tab` moving between summary and source. The debug log records the editor result, the notice that ends a unit, and the draft and promote writes.
+
+Names and links. A source title is made one line (whitespace collapsed; a control character is refused, exit 2). `kb document tag` and `fuzzy-tag` count a link hard-wrapped over lines as already present, so a second run no longer adds a second link. `kb document ingest` prints a `tag warning:` line (`tag_warnings` with `--json`, exit 0) for a wikilink or keyword it skipped.
+
+Manual pages. The page list comes from the topic list, so a missing source file can no longer drop a page unnoticed; `kb(1)` SEE ALSO names every page; a dangling `kb-format(1)` reference is fixed. The setup, update and review skills are pinned to 0.0.27.
+
+v0.0.26 (2026-10-20): `kb story check` reports facts that differ only in a digit as `fact-number-differs` (DR-0086), and `kb story timeline` and `who-knows` are several times faster on long works.
+
+v0.0.25 (2026-10-19):
 
 Foul Papers can ask what a character knows, a Markdown manuscript can hold many scenes, documents and records can cite sources, and the interface starts at once on any terminal. The decisions are DR-0080 to DR-0085 (all accepted).
 

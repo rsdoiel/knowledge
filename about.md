@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.26
+version: 0.0.27
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,17 +33,15 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-10-20
+date_released: 2026-10-25
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.26
+## knowledge 0.0.27
 
-Story checks and long manuscripts. `kb story check` now reports two facts that differ only in a digit (`41 coins`, `42 coins`) as `fact-number-differs`, a question for the writer (the same figure, or a continuity slip?), and keeps `unknown-fact` for typos (DR-0086). `kb story timeline` and `who-knows` are several times faster on long works: at 3000 scenes the timeline takes 2.2 s (was 13.9 s) and `who-knows` 4.4 s (was 16.0 s), with the same answers. `go test` has a `KB_SCALE` timing test for them.
-
-The setup, update and review knowledge-base skills describe the new finding and are pinned to 0.0.26; the minimum `kb` they need stays 0.0.19. Requires fountain 1.0.3.
+Bug fixes. The summary editors in the terminal interface (Documents → Review queue) now edit only the summary: the section text is shown below the editor's marker line or under the text area for reference, and the review shows the whole summary in a pane that scrolls (Tab moves between summary and source), so a gist written beside the document text is no longer saved with the document text in it; the debug log records the editor result, the notice that ends a unit and the draft and promote writes. A source title is made one line (whitespace collapsed, a control character refused, exit 2) (DR-0087). `kb document tag` and `fuzzy-tag` count a link hard-wrapped over lines as already present and no longer add a second link. `kb document ingest` reports a wikilink or keyword it had to skip (`tag warning:`, `tag_warnings` with --json, exit 0). The manual page list now comes from the topic list, kb(1) SEE ALSO names every page, and a test keeps them in step; help text corrected (a dangling kb-format(1) reference). The setup, update and review knowledge-base skills are pinned to 0.0.27; the minimum `kb` they need stays 0.0.19. Requires fountain 1.0.3.
 
 ## Authors
 

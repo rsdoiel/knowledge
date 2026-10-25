@@ -70,10 +70,11 @@ func TestSkills_EachIsCompleteAndPinnedToThisRelease(t *testing.T) {
 			if fm.Metadata.Version == "" || !strings.Contains(fm.Compatibility, "claude-code") || !strings.Contains(fm.Compatibility, "harvey") {
 				t.Errorf("version %q / compatibility %q incomplete", fm.Metadata.Version, fm.Compatibility)
 			}
-			for _, script := range []string{"compiled.bash", "compiled.ps1"} {
-				if _, err := os.Stat(filepath.Join(dir, "scripts", script)); err != nil {
-					t.Errorf("missing scripts/%s", script)
-				}
+			// A skill is SKILL.md only (workspace DR-0008): the compiled Bash and
+			// PowerShell scripts are gone, and make install-skills copies a skill's
+			// whole directory, so one left behind would reach every install.
+			if _, err := os.Stat(filepath.Join(dir, "scripts")); err == nil {
+				t.Errorf("%s still has a scripts/ directory; skills are no longer compiled (DR-0008)", name)
 			}
 		})
 	}

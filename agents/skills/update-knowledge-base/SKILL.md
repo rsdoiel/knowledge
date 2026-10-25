@@ -19,7 +19,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.26
+  kb_version: 0.0.27
 variables:
   DB_PATH:
     type: string
@@ -109,6 +109,11 @@ rejects the forms below, and some of them would fail without a word under a
   facts that differ only in a digit (`41 coins`, `42 coins`) as `fact-number-differs`, a
   question for the writer (the same figure, or a continuity slip), and no longer as an
   `unknown-fact` typo. `kb story timeline` and `who-knows` are faster on long works.
+- **v0.0.27 (nothing here needs it; the minimum stays 0.0.19):** `kb source add` stores a
+  title on one line (whitespace collapsed) and refuses one with a control character (exit 2).
+  `kb document tag` counts a link hard-wrapped over lines as already present. `kb document
+  ingest` prints a `tag warning:` line (`tag_warnings` with `--json`) for a wikilink or
+  keyword it had to skip; relay it to the person, it is not a failure (exit 0).
 
 ---
 
@@ -649,7 +654,7 @@ enforces this: `document review promote` exits 2 unless standard input and outpu
 are a terminal, with no flag or environment variable to turn that off. Do not try
 to work around it. Name the section and tell the user to run the command
 themselves (in Claude Code, `! kb document review promote SECTION_ID`); a person
-at a terminal, such as the compiled script run by hand, can run it directly.
+at a terminal can run it directly.
 
 ```bash
 kb document review promote SECTION_ID      # the user runs this
