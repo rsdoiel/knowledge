@@ -94,6 +94,8 @@
 
 ## Requested features
 
+- [ ] When using knowledge with a commercial LLM like claude, we have designs and plans that have a status that start as proposed and moves through an approval process. It seems like there should be an approval workflow similar do how decision records are proposed and approved.
+
 - [x] **Foul Papers asks of knowledge: the story foundation (knowledge DR-0075, accepted).** Done 2026-10-17,
   for v0.0.24. Wikilink alias, story front matter and Fountain boneyards, concept kinds, `story_events`,
   `kb story timeline` and `check`, and the library surface tested from outside the package (DR-0078 and
