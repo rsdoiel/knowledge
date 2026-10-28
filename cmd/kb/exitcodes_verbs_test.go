@@ -98,136 +98,156 @@ func seedLinked() [][]string {
 
 const goodRecord = "---\nid: \"0001\"\ntitle: \"ok\"\ndate: \"2026-09-25\"\nstatus: proposed\nkind: decision\ntrigger: design\nproject: P\nuuid: \"11111111-1111-7111-8111-111111111111\"\norigin_host: \"h\"\n---\n\nbody\n"
 
+// negativeVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var negativeVerbCases = []verbCase{
+	{name: "project show", args: []string{"project", "show", "nosuch"}},
+	{name: "project rename missing", setup: seedProject(), args: []string{"project", "rename", "nosuch", "x"}},
+	{name: "project rename onto an existing name", setup: [][]string{{"project", "add", "P", "d"}, {"project", "add", "Q", "d"}}, args: []string{"project", "rename", "P", "Q"}},
+	{name: "project set-status missing", args: []string{"project", "set-status", "nosuch", "active"}},
+	{name: "project concepts", args: []string{"project", "concepts", "nosuch"}},
+	{name: "concept delete missing", args: []string{"concept", "delete", "nosuch"}},
+	{name: "concept delete while linked", setup: seedLinked(), args: []string{"concept", "delete", "C"}},
+	{name: "concept rename missing", args: []string{"concept", "rename", "nosuch", "x"}},
+	{name: "concept rename onto an existing name", setup: [][]string{{"concept", "add", "A"}, {"concept", "add", "B"}}, args: []string{"concept", "rename", "A", "B"}},
+	{name: "document review promote of a section not drafted", setup: [][]string{{"project", "add", "P", "d"}, {"document", "ingest", "doc.md", "--project", "P"}}, files: map[string]string{"doc.md": "## S\n\nbody\n"}, args: []string{"document", "review", "promote", "1"}},
+	{name: "observation show", args: []string{"observation", "show", "99"}},
+	{name: "observation update", args: []string{"observation", "update", "99", "text"}},
+	{name: "observation list unknown project", args: []string{"observation", "list", "--project", "nosuch"}},
+	{name: "observation add unknown project", args: []string{"observation", "add", "--project", "nosuch", "note", "b"}},
+	{name: "source show", args: []string{"source", "show", "99"}},
+	{name: "source retract", args: []string{"source", "retract", "99", "note"}},
+	{name: "source remove", args: []string{"source", "remove", "99"}},
+	{name: "source remove while linked", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}, {"source", "add", "S"}, {"source", "link", "1", "1"}}, args: []string{"source", "remove", "1"}},
+	{name: "source link missing ids", args: []string{"source", "link", "99", "99"}},
+	{name: "link observation missing observation", setup: [][]string{{"concept", "add", "C"}}, args: []string{"link", "observation", "99", "C"}},
+	{name: "document review promote missing", args: []string{"document", "review", "promote", "99"}},
+	{name: "link project", setup: seedProject(), args: []string{"link", "project", "nosuch", "C"}},
+	{name: "link observation unknown concept", setup: seedLinked(), args: []string{"link", "observation", "1", "nosuch"}},
+	{name: "search finds nothing", args: []string{"search", "zzznotfound"}},
+	{name: "scoped search finds nothing", setup: seedProject(), args: []string{"search", "P/", "zzznotfound"}},
+	{name: "workspace observations have no members", setup: seedProject(), args: []string{"search", "workspace/observations", "x"}},
+	{name: "a project has no projects", setup: seedProject(), args: []string{"search", "P/projects", "x"}},
+	{name: "record show", args: []string{"record", "show", "9999"}},
+	{name: "record list unknown project", args: []string{"record", "list", "--project", "nosuch"}},
+	{name: "record list unknown status", args: []string{"record", "list", "--status", "acepted"}},
+	{name: "document show", args: []string{"document", "show", "99"}},
+	{name: "document list unknown project", args: []string{"document", "list", "--project", "nosuch"}},
+	{name: "document tag unknown project", args: []string{"document", "tag", "--project", "nosuch"}},
+	{name: "concept suggest unknown project", args: []string{"concept", "suggest", "--project", "nosuch"}},
+	{name: "record fuzzy-tag unknown project", args: []string{"record", "fuzzy-tag", "--project", "nosuch"}},
+	{name: "record fuzzy-tag unknown concept", setup: seedProject(), args: []string{"record", "fuzzy-tag", "--project", "P", "--concept", "nosuch"}},
+	{name: "concept show unknown name", args: []string{"concept", "show", "nosuch"}},
+	{name: "concept recall matches nothing", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "recall", "nothing", "here"}},
+	{name: "concept recall unknown project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "recall", "--concept", "C", "--project", "nosuch"}},
+	{name: "export unknown project", args: []string{"export", "-project", "nosuch"}},
+	{name: "index --check with no index", files: map[string]string{"recs/0001-ok.md": goodRecord}, args: []string{"index", "--check", "recs"}},
+}
+
 func TestVerbs_NegativeIsExit1(t *testing.T) {
-	for _, tc := range []verbCase{
-		{name: "project show", args: []string{"project", "show", "nosuch"}},
-		{name: "project rename missing", setup: seedProject(), args: []string{"project", "rename", "nosuch", "x"}},
-		{name: "project rename onto an existing name", setup: [][]string{{"project", "add", "P", "d"}, {"project", "add", "Q", "d"}}, args: []string{"project", "rename", "P", "Q"}},
-		{name: "project set-status missing", args: []string{"project", "set-status", "nosuch", "active"}},
-		{name: "project concepts", args: []string{"project", "concepts", "nosuch"}},
-		{name: "concept delete missing", args: []string{"concept", "delete", "nosuch"}},
-		{name: "concept delete while linked", setup: seedLinked(), args: []string{"concept", "delete", "C"}},
-		{name: "concept rename missing", args: []string{"concept", "rename", "nosuch", "x"}},
-		{name: "concept rename onto an existing name", setup: [][]string{{"concept", "add", "A"}, {"concept", "add", "B"}}, args: []string{"concept", "rename", "A", "B"}},
-		{name: "document review promote of a section not drafted", setup: [][]string{{"project", "add", "P", "d"}, {"document", "ingest", "doc.md", "--project", "P"}}, files: map[string]string{"doc.md": "## S\n\nbody\n"}, args: []string{"document", "review", "promote", "1"}},
-		{name: "observation show", args: []string{"observation", "show", "99"}},
-		{name: "observation update", args: []string{"observation", "update", "99", "text"}},
-		{name: "observation list unknown project", args: []string{"observation", "list", "--project", "nosuch"}},
-		{name: "observation add unknown project", args: []string{"observation", "add", "--project", "nosuch", "note", "b"}},
-		{name: "source show", args: []string{"source", "show", "99"}},
-		{name: "source retract", args: []string{"source", "retract", "99", "note"}},
-		{name: "source remove", args: []string{"source", "remove", "99"}},
-		{name: "source remove while linked", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}, {"source", "add", "S"}, {"source", "link", "1", "1"}}, args: []string{"source", "remove", "1"}},
-		{name: "source link missing ids", args: []string{"source", "link", "99", "99"}},
-		{name: "link observation missing observation", setup: [][]string{{"concept", "add", "C"}}, args: []string{"link", "observation", "99", "C"}},
-		{name: "document review promote missing", args: []string{"document", "review", "promote", "99"}},
-		{name: "link project", setup: seedProject(), args: []string{"link", "project", "nosuch", "C"}},
-		{name: "link observation unknown concept", setup: seedLinked(), args: []string{"link", "observation", "1", "nosuch"}},
-		{name: "search finds nothing", args: []string{"search", "zzznotfound"}},
-		{name: "scoped search finds nothing", setup: seedProject(), args: []string{"search", "P/", "zzznotfound"}},
-		{name: "workspace observations have no members", setup: seedProject(), args: []string{"search", "workspace/observations", "x"}},
-		{name: "a project has no projects", setup: seedProject(), args: []string{"search", "P/projects", "x"}},
-		{name: "record show", args: []string{"record", "show", "9999"}},
-		{name: "record list unknown project", args: []string{"record", "list", "--project", "nosuch"}},
-		{name: "record list unknown status", args: []string{"record", "list", "--status", "acepted"}},
-		{name: "document show", args: []string{"document", "show", "99"}},
-		{name: "document list unknown project", args: []string{"document", "list", "--project", "nosuch"}},
-		{name: "document tag unknown project", args: []string{"document", "tag", "--project", "nosuch"}},
-		{name: "concept suggest unknown project", args: []string{"concept", "suggest", "--project", "nosuch"}},
-		{name: "record fuzzy-tag unknown project", args: []string{"record", "fuzzy-tag", "--project", "nosuch"}},
-		{name: "record fuzzy-tag unknown concept", setup: seedProject(), args: []string{"record", "fuzzy-tag", "--project", "P", "--concept", "nosuch"}},
-		{name: "concept show unknown name", args: []string{"concept", "show", "nosuch"}},
-		{name: "concept recall matches nothing", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "recall", "nothing", "here"}},
-		{name: "concept recall unknown project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "recall", "--concept", "C", "--project", "nosuch"}},
-		{name: "export unknown project", args: []string{"export", "-project", "nosuch"}},
-		{name: "index --check with no index", files: map[string]string{"recs/0001-ok.md": goodRecord}, args: []string{"index", "--check", "recs"}},
-	} {
+	for _, tc := range negativeVerbCases {
 		tc.want = classNegative
 		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
 	}
 }
 
+// usageVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var usageVerbCases = []verbCase{
+	{name: "search unknown scope", args: []string{"search", "nosuch/", "x"}},
+	{name: "search unknown kind", setup: seedProject(), args: []string{"search", "P/papers", "x"}},
+	{name: "unknown observation kind", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "bogus", "b"}},
+	{name: "unknown project status", setup: seedProject(), args: []string{"project", "set-status", "P", "bogus"}},
+	{name: "blank project name", args: []string{"project", "add", ""}},
+	{name: "blank source title", args: []string{"source", "add", ""}},
+	{name: "bad source date", args: []string{"source", "add", "T", "--published", "notadate"}},
+	{name: "bad source url", args: []string{"source", "add", "T", "--url", "x y"}},
+	{name: "bad source doi", args: []string{"source", "add", "T", "--doi", "zzz"}},
+	{name: "record new unknown trigger", args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "bogus", "--dir", "d"}},
+	{name: "record new unknown kind", args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "design", "--kind", "bogus", "--dir", "d"}},
+	{name: "index --all with --stdout", args: []string{"index", "--all", "--stdout", "."}},
+	{name: "index --check with --stdout", args: []string{"index", "--check", "--stdout", "."}},
+	{name: "unknown subverb", args: []string{"project", "bogus"}},
+	{name: "malformed id", args: []string{"observation", "show", "abc"}},
+	{name: "unknown --accept-keywords value", files: map[string]string{"doc.md": "# T\n\nbody\n"}, args: []string{"document", "frontmatter", "doc.md", "--accept-keywords", "zzznotaconcept"}},
+	{name: "negative concept suggest limit", args: []string{"concept", "suggest", "--limit", "-1"}},
+	{name: "record fuzzy-tag without a project", args: []string{"record", "fuzzy-tag"}},
+	{name: "record fuzzy-tag surplus argument", setup: seedProject(), args: []string{"record", "fuzzy-tag", "--project", "P", "extra"}},
+	{name: "record fuzzy-tag bad flag", args: []string{"record", "fuzzy-tag", "--project", "P", "--bogus"}},
+	{name: "record list refuses --write", args: []string{"record", "list", "--write"}},
+	{name: "check-db surplus argument", setup: seedProject(), args: []string{"check-db", "extra"}},
+	{name: "check-db bad flag", setup: seedProject(), args: []string{"check-db", "--bogus"}},
+	{name: "stats surplus argument", setup: seedProject(), args: []string{"stats", "extra"}},
+	{name: "stats bad flag", setup: seedProject(), args: []string{"stats", "--bogus"}},
+	{name: "concept show without a name", args: []string{"concept", "show"}},
+	{name: "concept show surplus argument", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "extra"}},
+	{name: "concept show negative limit", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "--limit", "-1"}},
+	{name: "concept show bad flag", args: []string{"concept", "show", "C", "--bogus"}},
+	{name: "concept recall with no input", args: []string{"concept", "recall"}},
+	{name: "concept recall negative limit", args: []string{"concept", "recall", "x", "--limit", "-1"}},
+	{name: "concept recall bad flag", args: []string{"concept", "recall", "x", "--bogus"}},
+	{name: "unparseable date", args: []string{"record", "list", "--since", "yesterday"}},
+}
+
 func TestVerbs_UsageIsExit2(t *testing.T) {
-	for _, tc := range []verbCase{
-		{name: "search unknown scope", args: []string{"search", "nosuch/", "x"}},
-		{name: "search unknown kind", setup: seedProject(), args: []string{"search", "P/papers", "x"}},
-		{name: "unknown observation kind", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "bogus", "b"}},
-		{name: "unknown project status", setup: seedProject(), args: []string{"project", "set-status", "P", "bogus"}},
-		{name: "blank project name", args: []string{"project", "add", ""}},
-		{name: "blank source title", args: []string{"source", "add", ""}},
-		{name: "bad source date", args: []string{"source", "add", "T", "--published", "notadate"}},
-		{name: "bad source url", args: []string{"source", "add", "T", "--url", "x y"}},
-		{name: "bad source doi", args: []string{"source", "add", "T", "--doi", "zzz"}},
-		{name: "record new unknown trigger", args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "bogus", "--dir", "d"}},
-		{name: "record new unknown kind", args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "design", "--kind", "bogus", "--dir", "d"}},
-		{name: "index --all with --stdout", args: []string{"index", "--all", "--stdout", "."}},
-		{name: "index --check with --stdout", args: []string{"index", "--check", "--stdout", "."}},
-		{name: "unknown subverb", args: []string{"project", "bogus"}},
-		{name: "malformed id", args: []string{"observation", "show", "abc"}},
-		{name: "unknown --accept-keywords value", files: map[string]string{"doc.md": "# T\n\nbody\n"}, args: []string{"document", "frontmatter", "doc.md", "--accept-keywords", "zzznotaconcept"}},
-		{name: "negative concept suggest limit", args: []string{"concept", "suggest", "--limit", "-1"}},
-		{name: "record fuzzy-tag without a project", args: []string{"record", "fuzzy-tag"}},
-		{name: "record fuzzy-tag surplus argument", setup: seedProject(), args: []string{"record", "fuzzy-tag", "--project", "P", "extra"}},
-		{name: "record fuzzy-tag bad flag", args: []string{"record", "fuzzy-tag", "--project", "P", "--bogus"}},
-		{name: "record list refuses --write", args: []string{"record", "list", "--write"}},
-		{name: "check-db surplus argument", setup: seedProject(), args: []string{"check-db", "extra"}},
-		{name: "check-db bad flag", setup: seedProject(), args: []string{"check-db", "--bogus"}},
-		{name: "stats surplus argument", setup: seedProject(), args: []string{"stats", "extra"}},
-		{name: "stats bad flag", setup: seedProject(), args: []string{"stats", "--bogus"}},
-		{name: "concept show without a name", args: []string{"concept", "show"}},
-		{name: "concept show surplus argument", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "extra"}},
-		{name: "concept show negative limit", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "--limit", "-1"}},
-		{name: "concept show bad flag", args: []string{"concept", "show", "C", "--bogus"}},
-		{name: "concept recall with no input", args: []string{"concept", "recall"}},
-		{name: "concept recall negative limit", args: []string{"concept", "recall", "x", "--limit", "-1"}},
-		{name: "concept recall bad flag", args: []string{"concept", "recall", "x", "--bogus"}},
-		{name: "unparseable date", args: []string{"record", "list", "--since", "yesterday"}},
-	} {
+	for _, tc := range usageVerbCases {
 		tc.want = classUsage
 		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
 	}
 }
 
+// dataVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var dataVerbCases = []verbCase{
+	{name: "database file is not a database", files: map[string]string{"kb.db": "this is text, not a database, but long enough to be read as a header..\n"}, args: []string{"project", "list"}},
+	{name: "check-db against a malformed dump", setup: seedProject(), files: map[string]string{"kb.jsonl": "{\"type\": \n"}, args: []string{"check-db"}},
+	{name: "import of malformed JSONL", files: map[string]string{"in.jsonl": "{\"type\": \n"}, args: []string{"import", "-in", "in.jsonl"}},
+	{name: "merge input is zero bytes", setup: seedProject(), files: map[string]string{"z.db": ""}, args: []string{"merge", "-a", "z.db", "-b", "kb.db", "-out", "o.db"}},
+	{name: "index over a malformed record", files: map[string]string{"recs/0001-bad.md": "---\nid: \"0001\"\ntitle: \"\"\n---\nx\n"}, args: []string{"index", "recs"}},
+	{name: "document ingest of an unsupported pdf", setup: seedProject(), files: map[string]string{"a.pdf": "%PDF-1.4\n"}, args: []string{"document", "ingest", "a.pdf", "--project", "P"}},
+}
+
 func TestVerbs_DataIsExit65(t *testing.T) {
-	for _, tc := range []verbCase{
-		{name: "database file is not a database", files: map[string]string{"kb.db": "this is text, not a database, but long enough to be read as a header..\n"}, args: []string{"project", "list"}},
-		{name: "check-db against a malformed dump", setup: seedProject(), files: map[string]string{"kb.jsonl": "{\"type\": \n"}, args: []string{"check-db"}},
-		{name: "import of malformed JSONL", files: map[string]string{"in.jsonl": "{\"type\": \n"}, args: []string{"import", "-in", "in.jsonl"}},
-		{name: "merge input is zero bytes", setup: seedProject(), files: map[string]string{"z.db": ""}, args: []string{"merge", "-a", "z.db", "-b", "kb.db", "-out", "o.db"}},
-		{name: "index over a malformed record", files: map[string]string{"recs/0001-bad.md": "---\nid: \"0001\"\ntitle: \"\"\n---\nx\n"}, args: []string{"index", "recs"}},
-		{name: "document ingest of an unsupported pdf", setup: seedProject(), files: map[string]string{"a.pdf": "%PDF-1.4\n"}, args: []string{"document", "ingest", "a.pdf", "--project", "P"}},
-	} {
+	for _, tc := range dataVerbCases {
 		tc.want = classData
 		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
 	}
 }
 
+// noInputVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var noInputVerbCases = []verbCase{
+	{name: "ingest of a missing directory", args: []string{"ingest", "/nonexistent"}},
+	{name: "ingest of a file", files: map[string]string{"f.txt": "x"}, args: []string{"ingest", "f.txt"}},
+	{name: "document ingest of a missing file", setup: seedProject(), args: []string{"document", "ingest", "/nonexistent.md", "--project", "P"}},
+	{name: "import of a missing file", args: []string{"import", "-in", "/nonexistent.jsonl"}},
+	{name: "merge with a missing input", setup: seedProject(), args: []string{"merge", "-a", "/nonexistent.db", "-b", "kb.db", "-out", "o.db"}},
+	{name: "merge input is a directory", setup: seedProject(), files: map[string]string{"d/x": "x"}, args: []string{"merge", "-a", "d", "-b", "kb.db", "-out", "o.db"}},
+	{name: "index of a missing directory", args: []string{"index", "/nonexistent"}},
+	{name: "index of a file", files: map[string]string{"f.txt": "x"}, args: []string{"index", "f.txt"}},
+	{name: "check-db with no dump", setup: seedProject(), args: []string{"check-db"}},
+	{name: "check-db with --jsonl naming a missing file", setup: seedProject(), args: []string{"check-db", "--jsonl", "/nonexistent.jsonl"}},
+	{name: "no workspace here", noDB: true, args: []string{"project", "list"}},
+}
+
 func TestVerbs_NoInputIsExit66(t *testing.T) {
-	for _, tc := range []verbCase{
-		{name: "ingest of a missing directory", args: []string{"ingest", "/nonexistent"}},
-		{name: "ingest of a file", files: map[string]string{"f.txt": "x"}, args: []string{"ingest", "f.txt"}},
-		{name: "document ingest of a missing file", setup: seedProject(), args: []string{"document", "ingest", "/nonexistent.md", "--project", "P"}},
-		{name: "import of a missing file", args: []string{"import", "-in", "/nonexistent.jsonl"}},
-		{name: "merge with a missing input", setup: seedProject(), args: []string{"merge", "-a", "/nonexistent.db", "-b", "kb.db", "-out", "o.db"}},
-		{name: "merge input is a directory", setup: seedProject(), files: map[string]string{"d/x": "x"}, args: []string{"merge", "-a", "d", "-b", "kb.db", "-out", "o.db"}},
-		{name: "index of a missing directory", args: []string{"index", "/nonexistent"}},
-		{name: "index of a file", files: map[string]string{"f.txt": "x"}, args: []string{"index", "f.txt"}},
-		{name: "check-db with no dump", setup: seedProject(), args: []string{"check-db"}},
-		{name: "check-db with --jsonl naming a missing file", setup: seedProject(), args: []string{"check-db", "--jsonl", "/nonexistent.jsonl"}},
-		{name: "no workspace here", noDB: true, args: []string{"project", "list"}},
-	} {
+	for _, tc := range noInputVerbCases {
 		tc.want = classNoInput
 		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
 	}
 }
 
+// cantCreateVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var cantCreateVerbCases = []verbCase{
+	{name: "export into a missing directory", args: []string{"export", "-out", "/nonexistent/dir/o.jsonl"}},
+	{name: "merge -out already exists", setup: [][]string{{"project", "add", "P", "d"}, {"--db", "b.db", "project", "add", "Q", "d"}}, files: map[string]string{"o.db": "x"}, args: []string{"merge", "-a", "kb.db", "-b", "b.db", "-out", "o.db"}},
+	{name: "record new under a file", files: map[string]string{"blocker": "x"}, args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "design", "--dir", "blocker/sub", "--root", "."}},
+	{name: "init under a file", noDB: true, files: map[string]string{"blocker": "x"}, args: []string{"init", "blocker/sub"}},
+}
+
 func TestVerbs_CantCreateIsExit73(t *testing.T) {
-	for _, tc := range []verbCase{
-		{name: "export into a missing directory", args: []string{"export", "-out", "/nonexistent/dir/o.jsonl"}},
-		{name: "merge -out already exists", setup: [][]string{{"project", "add", "P", "d"}, {"--db", "b.db", "project", "add", "Q", "d"}}, files: map[string]string{"o.db": "x"}, args: []string{"merge", "-a", "kb.db", "-b", "b.db", "-out", "o.db"}},
-		{name: "record new under a file", files: map[string]string{"blocker": "x"}, args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "design", "--dir", "blocker/sub", "--root", "."}},
-		{name: "init under a file", noDB: true, files: map[string]string{"blocker": "x"}, args: []string{"init", "blocker/sub"}},
-	} {
+	for _, tc := range cantCreateVerbCases {
 		tc.want = classCantCreate
 		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
 	}
@@ -256,6 +276,36 @@ func TestVerbs_PermissionIsExit77(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(ro, 0o755) })
 	runVerbCase(t, verbCase{name: "init in a read-only directory", noDB: true, args: []string{"init", filepath.Join(ro, "sub")}, want: classNoPermission})
+}
+
+// A database file the operating system will not let kb open is 77 (no_permission),
+// as an unreadable import file and a read-only directory already are. SQLite
+// reports it as "unable to open database file", which says nothing about why, so
+// it used to fall to 74 (io) with every other SQLite failure (release-plan-v0.0.28.md, T3b).
+func TestVerbs_UnreadableDatabaseIsExit77(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	db := filepath.Join(dir, "kb.db")
+	var out, errOut bytes.Buffer
+	if code := mainRun([]string{"--db", db, "project", "add", "P", "d"}, &out, &errOut); code != 0 {
+		t.Fatalf("setup: exit %d: %s", code, errOut.String())
+	}
+	if err := os.Chmod(db, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(db, 0o644) })
+
+	for _, args := range [][]string{{"project", "list"}, {"search", "x"}, {"export"}} {
+		out.Reset()
+		errOut.Reset()
+		code := mainRun(append([]string{"--json", "--db", db}, args...), &out, &errOut)
+		if code != classNoPermission.Code {
+			t.Errorf("kb %s on an unreadable database: exit %d, want %d (no_permission); stderr: %.200s", strings.Join(args, " "), code, classNoPermission.Code, errOut.String())
+		}
+	}
 }
 
 // A direct, unprovoked pass over every class this table covers is not enough to

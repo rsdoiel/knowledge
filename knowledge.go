@@ -2,8 +2,10 @@ package knowledge
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
-	_ "github.com/glebarez/go-sqlite" // pure-Go SQLite driver; registers "sqlite" with database/sql
+	sqlite "github.com/glebarez/go-sqlite" // pure-Go SQLite driver; registers "sqlite" with database/sql
 )
 
 // schema is the DDL applied to a new or existing knowledge base.
@@ -345,6 +347,39 @@ func Open(dbPath string) (*KnowledgeBase, error) {
 	return openWithWorkspace(dbPath, workspaceFromDBPath(dbPath))
 }
 
+/** refusedByOS tells a database the operating system will not let us open from
+ * the other ways SQLite can fail to. SQLite reports both as "unable to open
+ * database file" and the driver gives no errno, so on that failure the file is
+ * tried with the OS directly; if the OS refuses, the permission error is joined
+ * to err so errors.Is(err, fs.ErrPermission) holds and a caller can tell a
+ * refused file from a broken one. Any other err is returned unchanged.
+ *
+ * Parameters:
+ *   dbPath (string) — the database file that failed to open.
+ *   err    (error)  — the error SQLite returned.
+ *
+ * Returns:
+ *   error — err, or err joined with the OS permission error.
+ *
+ * Example:
+ *   return fmt.Errorf("apply schema: %w", refusedByOS(path, err))
+ */
+func refusedByOS(dbPath string, err error) error {
+	var se *sqlite.Error
+	if !errors.As(err, &se) || se.Code()&0xff != 14 { // SQLITE_CANTOPEN
+		return err
+	}
+	f, openErr := os.OpenFile(dbPath, os.O_RDWR, 0)
+	if openErr == nil {
+		f.Close()
+		return err
+	}
+	if errors.Is(openErr, fs.ErrPermission) {
+		return errors.Join(err, openErr)
+	}
+	return err
+}
+
 // openWithWorkspace is Open with the workspace name supplied rather than
 // derived. Everywhere the database is where it came from, the path is the
 // evidence and Open's derivation is correct. A merge scratch copy is the one
@@ -362,7 +397,7 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 	db.SetMaxOpenConns(1) // SQLite WAL works best with a single writer
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("knowledge: apply schema: %w", err)
+		return nil, fmt.Errorf("knowledge: apply schema: %w", refusedByOS(dbPath, err))
 	}
 	for _, stmt := range kbAlterStmts {
 		_, _ = db.Exec(stmt)

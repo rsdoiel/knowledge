@@ -2,8 +2,11 @@ package knowledge
 
 import (
 	"database/sql"
+	"errors"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -2601,5 +2604,32 @@ func TestObservationConcepts_ListsTheLinkedConceptsInIDOrder(t *testing.T) {
 	none, err := kb.ObservationConcepts(9999)
 	if err != nil || len(none) != 0 {
 		t.Errorf("an observation with no links: %v, %v; want an empty list", none, err)
+	}
+}
+
+// A database file the operating system refuses to open is reported as a refusal
+// (errors.Is(err, fs.ErrPermission)), not only as SQLite's "unable to open
+// database file", so a caller can tell it from a broken file (release-plan-v0.0.28.md, T3b).
+func TestOpen_UnreadableDatabaseIsAPermissionError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+	path := filepath.Join(t.TempDir(), "kb.db")
+	kb, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb.Close()
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(path, 0o644) })
+
+	_, err = Open(path)
+	if err == nil {
+		t.Fatal("Open of a 0o000 database succeeded")
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("Open error = %v, want one that satisfies errors.Is(fs.ErrPermission)", err)
 	}
 }

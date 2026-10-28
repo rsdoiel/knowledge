@@ -256,6 +256,11 @@ func classify(err error) (exitClass, bool) {
 	}
 	var se3 *sqlite.Error
 	if errors.As(err, &se3) {
+		// The library joins the OS's refusal to a SQLite "unable to open" error
+		// (knowledge.refusedByOS); that is no_permission, not io.
+		if errors.Is(err, fs.ErrPermission) {
+			return classNoPermission, true
+		}
 		return sqliteClass(se3.Code()), true
 	}
 	// Content that would not decode is wrong content, whichever verb read it.
