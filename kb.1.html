@@ -480,8 +480,12 @@ answer for a known condition: report it
 </dd>
 <dt>73</dt>
 <dd>
-an output could not be created: the file exists, or its directory cannot
-be made (merge -out, export -out, init, index, record new)
+an output could not be created: merge -out already exists; or a
+directory or file cannot be made (export -out in a directory that is
+missing or naming a directory; init or record new under a path that is a
+file; index where index.md cannot be created). Not 73: export -out onto
+a file that exists replaces it, and init on a workspace that exists
+leaves it alone; both are 0
 </dd>
 <dt>74</dt>
 <dd>
@@ -493,7 +497,13 @@ the database is locked. Retrying later may succeed
 </dd>
 <dt>77</dt>
 <dd>
-the operating system refused access
+the operating system refused access, including a database file or a
+record file that cannot be opened
+</dd>
+<dt>78</dt>
+<dd>
+not used: kb reads no configuration file, only the environment variables
+under WORKSPACE AND ENVIRONMENT
 </dd>
 </dl>
 <h1 id="see-also">SEE ALSO</h1>

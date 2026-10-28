@@ -214,7 +214,8 @@ bad flag, a missing –project, or a surplus argument, and on any record
 verb a –concept or –write it does not take; 65 a record file that is
 malformed or whose tags: is in a form the edit will not change (nothing
 is written); 66 a record’s file is missing, or there is no workspace
-here; 74 a write failed part way (writes already made are undone).</p>
+here; 73 record new cannot create the record’s directory or file; 74 a
+write failed part way (writes already made are undone).</p>
 <h1 id="vocabularies">VOCABULARIES</h1>
 <p>These are the documented values. They are reported against, not
 enforced: an unknown value parses and carries a warning, because a typo
@@ -224,15 +225,18 @@ run.</p>
 <dt>status</dt>
 <dd>
 proposed, accepted, superseded, rejected, cancelled
-rejected means the decisions were considered and not pursued. superseded
-means a later record replaced them. cancelled means the work was pursued
-or explored and then abandoned; it need not have been accepted first.
-Its reasoning still stands and is where anyone revisiting the question
-should start, but it is not live. Say why in the record’s body, since
-“the need was met another way” and “deprioritised” tell a later reader
-different things; there is no field for it. Use kb record set-status ID
-cancelled, without writing a replacement record.
 </dd>
+</dl>
+<p>rejected means the decisions were considered and not pursued.
+superseded means a later record replaced them. cancelled means the work
+was pursued or explored and then abandoned; it need not have been
+accepted first. Its reasoning still stands and is where anyone
+revisiting the question should start, but it is not live. Say why in the
+record’s body, since “the need was met another way” and “deprioritised”
+tell a later reader different things; there is no field for it. Use kb
+record set-status ID cancelled, without writing a replacement
+record.</p>
+<dl>
 <dt>kind</dt>
 <dd>
 decision, correction, refinement
@@ -319,6 +323,9 @@ kb record supersede clasm/DR-0159 clasm/DR-0160 --partial</code></pre>
 kb record new --title &quot;Run from inside the project&quot; --trigger design
 kb record new --project clasm --title &quot;Filed under the old layout&quot; --trigger request --dir clasm/decisions
 kb record fmt agents/projects/clasm/decisions --dry-run</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1), kb-ingest(1), kb-index(1), kb-document(1), kb-concept(1),
+kb-source(1)</p>
 </section>
 <footer>
 <p>knowledge</p>

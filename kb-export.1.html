@@ -51,13 +51,40 @@ resulting file can be pasted, emailed, or committed to git, then applied
 elsewhere with import. This is the no-file-access alternative to merge;
 when both databases are reachable as files, merge is the more thorough
 tool (it also detects and can reconcile name collisions).</p>
-<p>Exit status: 73 when -out cannot be created (it names a directory, or
-its directory is missing), 77 when the OS refuses, 74 if a write fails
-part way, 1 for a -project that does not exist.</p>
 <p>With –json, a text confirmation is only meaningful once -out is given
 (the JSON-L stream itself has already gone to stdout otherwise): it
 becomes a {“lines_written”: N, “path”: “…”} object instead of the plain
 text line.</p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1).</p>
+<dl>
+<dt>0</dt>
+<dd>
+the dump was written. An -out that names a file that already exists
+replaces it
+</dd>
+<dt>1</dt>
+<dd>
+-project names a project that does not exist
+</dd>
+<dt>2</dt>
+<dd>
+a bad flag, or a surplus argument
+</dd>
+<dt>73</dt>
+<dd>
+-out cannot be created: it names a directory, or its directory is
+missing
+</dd>
+<dt>74</dt>
+<dd>
+a write failed part way, for example a full disk
+</dd>
+<dt>77</dt>
+<dd>
+the operating system refused the write to -out
+</dd>
+</dl>
 <h1 id="see-also">SEE ALSO</h1>
 <p>kb(1), kb-import(1), kb-merge(1)</p>
 </section>

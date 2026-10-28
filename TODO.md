@@ -3,6 +3,15 @@
 
 ## Bugs
 
+- [ ] **Hold the older manual pages to the exit status check.** `TestManPages_ExitStatusMatchesTheVerbTests` covers
+  the thirteen pages written for v0.0.28. `concept`, `record`, `check-db`, `stats`, `story`, `completion` and
+  `document` name codes whose proofs are in per-verb test files (`conceptshowrecall_test.go` and others); list them
+  in `provedElsewhere` with the test name, or add the cases to `exitcodes_verbs_test.go`. Found 2026-10-28.
+- [ ] **Two TUI binary tests time out at 10 s on the Pi** (`TestBinary_TUIIngestPlanThenApplyOnATerminal`,
+  `TestBinary_TUIDeleteAProjectByTypingItsName`), also on a clean `main`. Cause not investigated; they may need a
+  pseudo-terminal this machine does not give them. Found 2026-10-28.
+- [x] **An unreadable database file exited 74, not 77.** Fixed 2026-10-28, released in v0.0.28.
+
 - [x] **Four bugs fixed 2026-10-25, released in v0.0.27 (DR-0087, accepted).** (1) *The summary editors held the
   source text:* for a gist the external editor's file and the built-in text area started with the whole document, so the
   saved summary was the document plus the author's words, and the review screen showed only its first four lines, hiding

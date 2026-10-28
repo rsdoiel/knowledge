@@ -116,9 +116,9 @@ with no match is reported, never deleted.</p>
 <dl>
 <dt>ingest</dt>
 <dd>
-parse and segment PATH, creating the document and its sections on first
-ingest, or reconciling a changed file against its existing rows. On a
-terminal, a file with no frontmatter block (a note, say), or with a
+<p>parse and segment PATH, creating the document and its sections on
+first ingest, or reconciling a changed file against its existing rows.
+On a terminal, a file with no frontmatter block (a note, say), or with a
 block that has no title, is first offered one (a block’s other keys are
 kept, and only the fields it lacks are asked about): <code>title</code>,
 <code>author</code> and <code>dateCreated</code> are proposed one at a
@@ -135,16 +135,18 @@ never offered one. There is no directory form: ingest takes one file,
 and kb ingest is for decision records and skips dated notes. To bring a
 directory of notes in, loop over its files, and each one that lacks a
 title is offered the editor in turn (q skips the editor for that file,
-which is still ingested):
-<pre><code>for f in notes/*.md; do kb document ingest &quot;$f&quot; --project P; done</code></pre>
-Add –no-prompt to ingest them all without being asked.
-A wikilink or frontmatter keyword that is not a valid concept name (one
-holding a control character) is not a tag: the document is ingested
+which is still ingested):</p>
+<p>for f in notes/*.md; do kb document ingest “$f” –project P; done</p>
+</dd>
+</dl>
+<p>Add –no-prompt to ingest them all without being asked.</p>
+<p>A wikilink or frontmatter keyword that is not a valid concept name
+(one holding a control character) is not a tag: the document is ingested
 without it and the summary prints a <code>tag warning:</code> line
 naming it (<code>tag_warnings</code> with –json), once for each distinct
 link, exit 0. A file that has not changed (skipped) is not reported
-again.
-</dd>
+again.</p>
+<dl>
 <dt>list</dt>
 <dd>
 print matching documents, one per line

@@ -76,17 +76,13 @@ kb document ingest notes/2026-09-29-worklog.md --project harvey
 
 ## Release Notes
 
-- version: 0.0.27
+- version: 0.0.28
 - status: active
-- released: 2026-10-25
+- released: 2026-10-28
 
-A bug fix release (DR-0087, accepted, refining DR-0046).
+An exit status and manual page release. Every manual page now has an EXIT STATUS and a SEE ALSO section: the thirteen pages that lacked EXIT STATUS list the codes they return (workspace DR-0003), and tests keep those pages and the verb tests in step. An unreadable database file now exits 77 (no_permission) and not 74 (io); `knowledge.Open` returns an error that satisfies `errors.Is(err, fs.ErrPermission)` for it. `kb(1)` says what 73 and 77 are and that 78 is unused. The setup, update and review skills are pinned to 0.0.28.
 
-Summaries. The editors in Documents → Review queue now edit only the summary. A gist used to open with the whole document's text in the editor, so what was saved was the document with a few words added, and the review showed only its first four lines. The editor's file (and the built-in text area) now starts empty, or as the draft, with the section's text below a marker line or under the box for reference; the review shows the whole summary in a pane that scrolls, `Tab` moving between summary and source. The debug log records the editor result, the notice that ends a unit, and the draft and promote writes.
-
-Names and links. A source title is made one line (whitespace collapsed; a control character is refused, exit 2). `kb document tag` and `fuzzy-tag` count a link hard-wrapped over lines as already present, so a second run no longer adds a second link. `kb document ingest` prints a `tag warning:` line (`tag_warnings` with `--json`, exit 0) for a wikilink or keyword it skipped.
-
-Manual pages. The page list comes from the topic list, so a missing source file can no longer drop a page unnoticed; `kb(1)` SEE ALSO names every page; a dangling `kb-format(1)` reference is fixed. The setup, update and review skills are pinned to 0.0.27.
+v0.0.27 (2026-10-25): the summary editors edit only the summary; a source title is one line; `kb document tag` counts a wrapped link as present; `kb document ingest` reports a skipped link (`tag warning:`); the manual page list comes from the topic list (DR-0087).
 
 v0.0.26 (2026-10-20): `kb story check` reports facts that differ only in a digit as `fact-number-differs` (DR-0086), and `kb story timeline` and `who-knows` are several times faster on long works.
 

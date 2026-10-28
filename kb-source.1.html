@@ -94,6 +94,33 @@ is left alone, and the command exits 69 after printing the counts. Run
 it again when the service is reachable
 </dd>
 </dl>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1).</p>
+<dl>
+<dt>0</dt>
+<dd>
+done. check-retractions with nothing to check is 0
+</dd>
+<dt>1</dt>
+<dd>
+no source, observation, document or record has the id or reference given
+(show, retract, remove, link); or remove of a source that an
+observation, a document or a record still cites
+</dd>
+<dt>2</dt>
+<dd>
+a missing or surplus argument, a malformed id, a blank title or one
+holding a control character, a DOI, URL or date that does not parse,
+–document given with –record, or an unknown subcommand
+</dd>
+<dt>69</dt>
+<dd>
+check-retractions could not reach the retraction service for at least
+one source. It checks every source first and prints the counts; a source
+it could not look up is counted as not checked and its last-checked date
+is left alone, so run it again when the service is reachable
+</dd>
+</dl>
 <h1 id="see-also">SEE ALSO</h1>
 <p>kb-observation(1)</p>
 </section>

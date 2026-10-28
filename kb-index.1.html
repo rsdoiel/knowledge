@@ -107,6 +107,47 @@ kb index agents/decisions --stdout | head
 kb index agents/decisions --check
 kb index . --all
 kb index . --all --check</code></pre>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1).</p>
+<dl>
+<dt>0</dt>
+<dd>
+index.md was written, or –check found it current, or –all found every
+corpus refreshed or current
+</dd>
+<dt>1</dt>
+<dd>
+–check, and index.md is missing or differs from what the records would
+produce (a normal “no”, so it fits a pre-commit hook); or –all, and the
+only trouble is stale indexes
+</dd>
+<dt>2</dt>
+<dd>
+no PATH, more than one PATH, –all without a ROOT, –all or –check with
+–stdout, or a bad flag (–db included: index never opens the database)
+</dd>
+<dt>65</dt>
+<dd>
+a record that cannot be parsed. With –all, this is the class of the
+first corpus that could not be indexed, since a failure is more serious
+than drift
+</dd>
+<dt>66</dt>
+<dd>
+PATH (or ROOT) is not a directory, or does not exist
+</dd>
+<dt>73</dt>
+<dd>
+index.md cannot be created, for example a directory stands where it goes
+</dd>
+<dt>77</dt>
+<dd>
+the operating system refused to let index read the records or write
+index.md
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1), kb-ingest(1), kb-record(1)</p>
 </section>
 <footer>
 <p>knowledge</p>

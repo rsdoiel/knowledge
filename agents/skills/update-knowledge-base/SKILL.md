@@ -19,7 +19,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.27
+  kb_version: 0.0.28
 variables:
   DB_PATH:
     type: string
@@ -114,6 +114,9 @@ rejects the forms below, and some of them would fail without a word under a
   `kb document tag` counts a link hard-wrapped over lines as already present. `kb document
   ingest` prints a `tag warning:` line (`tag_warnings` with `--json`) for a wikilink or
   keyword it had to skip; relay it to the person, it is not a failure (exit 0).
+- **v0.0.28 (nothing here needs it; the minimum stays 0.0.19):** every manual page has an
+  EXIT STATUS section (`kb help VERB`), and an unreadable database file now exits 77, not 74.
+  Report either as a failure; neither changes what a command does.
 
 ---
 

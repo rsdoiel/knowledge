@@ -3,6 +3,55 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.28 — 2026-10-28
+
+An exit status and manual page release. Plan: `agents/projects/knowledge/plans/release-plan-v0.0.28.md`. It
+carries out workspace DR-0003's rule that a tool documents the codes it can return under EXIT STATUS in its
+manual, and it goes out ahead of the offline semantic search work (DR-0088, DR-0089).
+
+### Fixed
+
+- **An unreadable database file exited 74 (io) instead of 77 (no_permission).** SQLite reports a file the
+  operating system refused as "unable to open database file" and the driver gives no errno, so the error fell
+  to io with every other SQLite failure. `knowledge.Open` now tries the file with the OS when SQLite cannot open
+  it and joins the permission error, so `errors.Is(err, fs.ErrPermission)` holds for harvey and Foul Papers as
+  well, and `kb` exits 77 as it already did for an unreadable import file or a read-only directory. Found while
+  documenting the exit codes; tests `TestVerbs_UnreadableDatabaseIsExit77` and
+  `TestOpen_UnreadableDatabaseIsAPermissionError`, red first.
+
+### Changed
+
+- **Every manual page has an EXIT STATUS and a SEE ALSO section.** Thirteen pages had no EXIT STATUS (`export`,
+  `import`, `index`, `ingest`, `init`, `link`, `merge`, `observation`, `project`, `search`, `source`, `unlink`
+  and `topics`) and five had no SEE ALSO (`ingest`, `index`, `init`, `record`, `topics`). Each page lists the
+  codes it returns and links `kb(1)` for the table; a verb that handles a file of its own (`export`, `import`,
+  `merge`, `index`, `ingest`, `init`) also lists the file classes (65, 66, 73, 74, 77). The sentences that
+  carried a code list in prose (`export`, `import`, `merge`) are replaced by the section.
+- **`kb(1)` EXIT STATUS** says what 73 is: `merge -out` already existing; `export -out` in a missing directory or
+  naming a directory; `init` or `record new` under a path that is a file; `index` where `index.md` cannot be
+  created. `export -out` onto an existing file replaces it and `init` on an existing workspace is 0, neither is
+  73. 77 names the database and record files; 78 is stated as unused (`kb` reads no configuration file, only the
+  `KB_*` variables). `kb-record(1)` lists 73 for `record new`.
+
+### Added (tests)
+
+- `cmd/kb/manpages_exitstatus_test.go`: every page has EXIT STATUS and SEE ALSO; no page names a code outside the
+  DR-0003 table; and for the thirteen pages written here, a code a page names is provoked by a verb test and a
+  class a test provokes is on the page (75, which needs a second writer, is exempt; 65, 66, 74 and 77 are listed
+  only for the file-handling verbs). The older pages (`concept`, `record`, `check-db`, `stats`, `story`,
+  `completion`, `document`) are not yet held to the second rule.
+- Provoked cases the tables lacked: `unlink` (it had none), `observation delete` and `project delete` while in
+  use, `export` 74 and 77, `index` 73 and 77, `ingest` 77, an unreadable database, and 25 usage cases across
+  `link`, `unlink`, `project`, `observation`, `source`, `search`, `export`, `import`, `merge`, `ingest`, `index`,
+  `init` and `help`. The case tables in `exitcodes_verbs_test.go` are package variables so the page check can read
+  them; usage cases run without a terminal, so an incomplete command is the usage error it should be and does not
+  open the interface when the suite is run from one.
+- The skills are pinned to 0.0.28 (the minimum `kb` they need stays 0.0.19; nothing in them depends on this
+  release).
+
+Known: `TestBinary_TUIIngestPlanThenApplyOnATerminal` and `TestBinary_TUIDeleteAProjectByTypingItsName` time out
+at 10 seconds on a Raspberry Pi 5, also on a clean `main`; cause not investigated.
+
 ## v0.0.27 — 2026-10-25
 
 A bug fix release. Plan: `agents/projects/knowledge/plans/release-plan-v0.0.27.md`. Decision: DR-0087 (accepted),

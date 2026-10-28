@@ -44,6 +44,31 @@ ignored.</p>
 <h1 id="examples">EXAMPLES</h1>
 <pre class="shell"><code>kb init
 kb init ~/NewWorkspace</code></pre>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1).</p>
+<dl>
+<dt>0</dt>
+<dd>
+PATH/agents/knowledge.db was created, or it already existed and was left
+untouched (init is idempotent)
+</dd>
+<dt>2</dt>
+<dd>
+more than one PATH, a bad flag, or a -db
+</dd>
+<dt>73</dt>
+<dd>
+the workspace cannot be created: a path component is a file, or the
+directory cannot be made
+</dd>
+<dt>77</dt>
+<dd>
+the operating system refused to let init create the directory or the
+database
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1), kb-import(1), kb-ingest(1)</p>
 </section>
 <footer>
 <p>knowledge</p>

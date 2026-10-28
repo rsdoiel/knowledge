@@ -25,6 +25,24 @@
 <h1 id="description">DESCRIPTION</h1>
 <p>Links are many-to-many and idempotent — linking the same pair twice
 is a silent no-op.</p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1).</p>
+<dl>
+<dt>0</dt>
+<dd>
+the link now exists. Linking a pair that is already linked is a no-op
+and also 0
+</dd>
+<dt>1</dt>
+<dd>
+the project, observation or concept named does not exist
+</dd>
+<dt>2</dt>
+<dd>
+a missing or surplus argument, a malformed observation id, or an unknown
+subcommand
+</dd>
+</dl>
 <h1 id="see-also">SEE ALSO</h1>
 <p>kb-project(1), kb-observation(1), kb-concept(1), kb-unlink(1)</p>
 </section>

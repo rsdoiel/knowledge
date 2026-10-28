@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.27
+version: 0.0.28
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,15 +33,15 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-10-25
+date_released: 2026-10-28
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.27
+## knowledge 0.0.28
 
-Bug fixes. The summary editors in the terminal interface (Documents → Review queue) now edit only the summary: the section text is shown below the editor's marker line or under the text area for reference, and the review shows the whole summary in a pane that scrolls (Tab moves between summary and source), so a gist written beside the document text is no longer saved with the document text in it; the debug log records the editor result, the notice that ends a unit and the draft and promote writes. A source title is made one line (whitespace collapsed, a control character refused, exit 2) (DR-0087). `kb document tag` and `fuzzy-tag` count a link hard-wrapped over lines as already present and no longer add a second link. `kb document ingest` reports a wikilink or keyword it had to skip (`tag warning:`, `tag_warnings` with --json, exit 0). The manual page list now comes from the topic list, kb(1) SEE ALSO names every page, and a test keeps them in step; help text corrected (a dangling kb-format(1) reference). The setup, update and review knowledge-base skills are pinned to 0.0.27; the minimum `kb` they need stays 0.0.19. Requires fountain 1.0.3.
+Exit status and manual pages. Every manual page now has an EXIT STATUS and a SEE ALSO section: the thirteen that lacked EXIT STATUS (export, import, index, ingest, init, link, merge, observation, project, search, source, unlink and topics) now list the codes they return (workspace DR-0003), and tests keep those pages and the verb tests in step, in both directions. An unreadable database file now exits 77 (no_permission) and not 74 (io); knowledge.Open returns an error that satisfies errors.Is(err, fs.ErrPermission) for it. kb(1)'s EXIT STATUS says what 73 and 77 are (export -out onto an existing file replaces it and init on an existing workspace is 0, neither is 73) and that 78 is unused; kb-record(1) lists 73. The setup, update and review knowledge-base skills are pinned to 0.0.28; the minimum kb they need stays 0.0.19. Requires fountain 1.0.3.
 
 ## Authors
 
