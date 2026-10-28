@@ -1476,11 +1476,8 @@ files; anything else is refused before any file is touched. A mistyped -a
 therefore fails, instead of merging an empty database in its place and
 leaving a zero-byte file at the typo. A zero-byte file is refused even when a
 -wal file sits beside it: SQLite discards that -wal on opening an empty main
-file, so merge refuses first and leaves the -wal untouched. The exit status
-says which: 66 for an input that does not exist or is not a file, 65 for a
-zero-byte file or one that is not a knowledge base, 2 for -a and -b naming the
-same file, 73 when -out already exists, and 65 for an identity collision
-reported without -force.
+file, so merge refuses first and leaves the -wal untouched. Each refusal has
+its own exit status, listed under EXIT STATUS.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a
@@ -1502,6 +1499,28 @@ per-table tables summary, instead of the plain-text report.
 To find out whether a database and the JSONL dump beside it have drifted, before
 deciding whether to merge, import or export, use {app_name}-check-db(1). It is
 read-only and shares merge's rules for what counts as the same row.
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the merged file was written. Content divergences are reported and are still 0;
+  collisions reconciled by -force are too
+
+2
+: -a, -b or -out missing, a surplus argument, a bad flag, a --db (merge never
+  opens the ambient database), or -a and -b naming the same file
+
+65
+: an input that is zero bytes or is not a knowledge base; or an identity
+  collision, which is reported and aborts the merge unless -force is given
+
+66
+: an input that does not exist, is a directory, or is not a regular file
+
+73
+: -out already exists, or its directory cannot be made
 
 # SEE ALSO
 
@@ -1836,14 +1855,33 @@ with import. This is the no-file-access alternative to merge; when both
 databases are reachable as files, merge is the more thorough tool (it
 also detects and can reconcile name collisions).
 
-Exit status: 73 when -out cannot be created (it names a directory, or its
-directory is missing), 77 when the OS refuses, 74 if a write fails part way, 1
-for a -project that does not exist.
-
 With --json, a text confirmation is only meaningful once -out is given
 (the JSON-L stream itself has already gone to stdout otherwise): it
 becomes a {"lines_written": N, "path": "..."} object instead of the plain
 text line.
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the dump was written. An -out that names a file that already exists replaces
+  it
+
+1
+: -project names a project that does not exist
+
+2
+: a bad flag, or a surplus argument
+
+73
+: -out cannot be created: it names a directory, or its directory is missing
+
+74
+: a write failed part way, for example a full disk
+
+77
+: the operating system refused the write to -out
 
 # SEE ALSO
 
@@ -1906,9 +1944,7 @@ because the cache is built fresh from this file's own uuids on the way in.
 Unresolvable references (a uuid the file never defines a parent for) and
 unrecognized record types are skipped, not fatal — only malformed JSON
 aborts the import. The returned summary reports, per record type, how many
-lines were read, newly imported, or skipped. Exit status: 65 for malformed JSON
-or a row the schema rejects, 66 when -in does not exist, 77 when it cannot be
-read, 74 for a read that fails part way.
+lines were read, newly imported, or skipped.
 
 An observation whose kind is outside the current vocabulary (note, finding,
 decision, question, hypothesis) is imported with its kind unchanged and
@@ -1916,6 +1952,32 @@ reported as a "warning:" line (a "Warnings" list under --json). It is never
 rewritten to note, and the run still exits 0: a value written before the
 vocabulary was enforced should stay a fixable row, not fail the import or
 change silently. check-db therefore agrees with the dump for such a row.
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the stream was applied. Lines skipped, record types not recognised, and
+  observations whose kind is outside the vocabulary (a warning) are still 0;
+  the summary says what was read, imported and skipped
+
+2
+: a bad flag, or a surplus argument
+
+65
+: a line of malformed JSON, a row the schema rejects, or a concept kind outside
+  the vocabulary (the whole file is refused before anything is written)
+
+66
+: -in does not exist
+
+74
+: -in could not be read to the end, for example it is a directory, or the read
+  failed part way
+
+77
+: the operating system refused to let -in be read
 
 # SEE ALSO
 

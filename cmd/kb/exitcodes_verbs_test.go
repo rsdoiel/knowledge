@@ -278,6 +278,30 @@ func TestVerbs_PermissionIsExit77(t *testing.T) {
 	runVerbCase(t, verbCase{name: "init in a read-only directory", noDB: true, args: []string{"init", filepath.Join(ro, "sub")}, want: classNoPermission})
 }
 
+// export has two ways to fail after it has started writing: the OS refuses the
+// output (77) and the write fails part way (74). Both are in kb-export(1)'s EXIT
+// STATUS, so both are provoked here. /dev/full accepts the open and fails every
+// write with ENOSPC.
+func TestVerbs_ExportWriteFailures(t *testing.T) {
+	t.Run("OS refuses -out", func(t *testing.T) {
+		if os.Getuid() == 0 {
+			t.Skip("running as root: permissions are not enforced")
+		}
+		ro := filepath.Join(t.TempDir(), "ro")
+		if err := os.Mkdir(ro, 0o555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(ro, 0o755) })
+		runVerbCase(t, verbCase{name: "export into a read-only directory", args: []string{"export", "-out", filepath.Join(ro, "o.jsonl")}, want: classNoPermission})
+	})
+	t.Run("write fails part way", func(t *testing.T) {
+		if _, err := os.Stat("/dev/full"); err != nil {
+			t.Skip("no /dev/full on this system")
+		}
+		runVerbCase(t, verbCase{name: "export onto a full device", setup: seedProject(), args: []string{"export", "-out", "/dev/full"}, want: classIO})
+	})
+}
+
 // A database file the operating system will not let kb open is 77 (no_permission),
 // as an unreadable import file and a read-only directory already are. SQLite
 // reports it as "unable to open database file", which says nothing about why, so

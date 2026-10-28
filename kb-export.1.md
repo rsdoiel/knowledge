@@ -44,14 +44,33 @@ with import. This is the no-file-access alternative to merge; when both
 databases are reachable as files, merge is the more thorough tool (it
 also detects and can reconcile name collisions).
 
-Exit status: 73 when -out cannot be created (it names a directory, or its
-directory is missing), 77 when the OS refuses, 74 if a write fails part way, 1
-for a -project that does not exist.
-
 With --json, a text confirmation is only meaningful once -out is given
 (the JSON-L stream itself has already gone to stdout otherwise): it
 becomes a {"lines_written": N, "path": "..."} object instead of the plain
 text line.
+
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: the dump was written. An -out that names a file that already exists replaces
+  it
+
+1
+: -project names a project that does not exist
+
+2
+: a bad flag, or a surplus argument
+
+73
+: -out cannot be created: it names a directory, or its directory is missing
+
+74
+: a write failed part way, for example a full disk
+
+77
+: the operating system refused the write to -out
 
 # SEE ALSO
 

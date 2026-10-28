@@ -38,11 +38,8 @@ files; anything else is refused before any file is touched. A mistyped -a
 therefore fails, instead of merging an empty database in its place and
 leaving a zero-byte file at the typo. A zero-byte file is refused even when a
 -wal file sits beside it: SQLite discards that -wal on opening an empty main
-file, so merge refuses first and leaves the -wal untouched. The exit status
-says which: 66 for an input that does not exist or is not a file, 65 for a
-zero-byte file or one that is not a knowledge base, 2 for -a and -b naming the
-same file, 73 when -out already exists, and 65 for an identity collision
-reported without -force.
+file, so merge refuses first and leaves the -wal untouched. Each refusal has
+its own exit status, listed under EXIT STATUS.
 
 If a project or concept with the same name exists in both files under
 different internal identities (a collision — typically from before a
@@ -64,6 +61,28 @@ per-table tables summary, instead of the plain-text report.
 To find out whether a database and the JSONL dump beside it have drifted, before
 deciding whether to merge, import or export, use kb-check-db(1). It is
 read-only and shares merge's rules for what counts as the same row.
+
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: the merged file was written. Content divergences are reported and are still 0;
+  collisions reconciled by -force are too
+
+2
+: -a, -b or -out missing, a surplus argument, a bad flag, a --db (merge never
+  opens the ambient database), or -a and -b naming the same file
+
+65
+: an input that is zero bytes or is not a knowledge base; or an identity
+  collision, which is reported and aborts the merge unless -force is given
+
+66
+: an input that does not exist, is a directory, or is not a regular file
+
+73
+: -out already exists, or its directory cannot be made
 
 # SEE ALSO
 
