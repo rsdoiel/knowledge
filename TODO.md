@@ -8,8 +8,21 @@
   `document` name codes whose proofs are in per-verb test files (`conceptshowrecall_test.go` and others); list them
   in `provedElsewhere` with the test name, or add the cases to `exitcodes_verbs_test.go`. Found 2026-10-28.
 - [ ] **Two TUI binary tests time out at 10 s on the Pi** (`TestBinary_TUIIngestPlanThenApplyOnATerminal`,
-  `TestBinary_TUIDeleteAProjectByTypingItsName`), also on a clean `main`. Cause not investigated; they may need a
-  pseudo-terminal this machine does not give them. Found 2026-10-28.
+  `TestBinary_TUIDeleteAProjectByTypingItsName`), also on a clean `main`. **Must be fixed before the next release.**
+  First lead (2026-10-28, not confirmed): the screen does render, so the program works. The test waits for an exact
+  string (`quokka to confirm: quokka`, `concept: created Fresh`) and the screen the test prints shows the dialog's text
+  wrapped mid-word (`...linked to nothi` / `ng`) with the typed name on a different row from the prompt. So the pseudo-terminal
+  is probably a different width from what the program lays out for, or the emulator wraps differently, and an expected
+  string that crosses a row break never matches. Check the size the test gives the pty against the size the program reads
+  (`ptyemu_test.go`, `tui_remove_test.go:365`, `tui_plan_test.go:328`), and whether the tests pass on another machine
+  (macmini-rd.local). Fix by sizing the pty explicitly, or by matching row by row. Found 2026-10-28.
+- [ ] **Draft an upstream issue for Hugot** (`knights-analytics/hugot`, not filed; the author files it). v0.8.3's pure-Go
+  backend ignores `WithGoMLXBatchBuckets` and `WithGoMLXSequenceBuckets` (padding is applied only when the runtime is XLA,
+  `backends/backend.go`), keeps one compiled executable per distinct (batch, sequence length) for the life of the session,
+  and errors once a configured cache limit is reached. A 893-row index of length-sorted batches reached 14.2 GB resident and
+  was OOM-killed on a 16 GB Pi 5. Our workaround is in `semantic/embedder.go` (`maxShapes`). Evidence: kb observation 537,
+  `agents/projects/knowledge/plans/semantic-search-plan.md` T7 notes, `TestEmbedBoundsTheShapesItKeepsCompiled`. Model the
+  draft on `tmp/hugot-spike/gomlx-issue-draft.md`. Added 2026-10-28.
 - [x] **An unreadable database file exited 74, not 77.** Fixed 2026-10-28, released in v0.0.28.
 
 - [x] **Four bugs fixed 2026-10-25, released in v0.0.27 (DR-0087, accepted).** (1) *The summary editors held the
