@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	sqlite "github.com/glebarez/go-sqlite"
 )
@@ -65,6 +66,12 @@ CREATE TABLE IF NOT EXISTS vector_chunks (
     text         TEXT    NOT NULL,
     vector       BLOB    NOT NULL,
     PRIMARY KEY (source_type, source_id, chunk_index, model)
+);
+CREATE TABLE IF NOT EXISTS vectors_lock (
+    id           INTEGER PRIMARY KEY CHECK (id = 1),
+    owner        TEXT    NOT NULL,
+    claimed_at   INTEGER NOT NULL,
+    heartbeat_at INTEGER NOT NULL
 );
 `
 
@@ -127,6 +134,7 @@ type Vectors struct {
 	db   *sql.DB
 	path string
 	meta VectorsMeta
+	now  func() time.Time // the clock the lock reads; tests replace it
 }
 
 /** VectorsPath returns where the sidecar for a database lives: beside it, named
@@ -219,7 +227,7 @@ func openVectorsFile(path string, create Embedder) (*Vectors, error) {
 		return nil, fmt.Errorf("knowledge: open %s: %w", path, err)
 	}
 	db.SetMaxOpenConns(1)
-	v := &Vectors{db: db, path: path}
+	v := &Vectors{db: db, path: path, now: time.Now}
 	fail := func(err error) (*Vectors, error) {
 		db.Close()
 		var se *sqlite.Error
@@ -228,6 +236,8 @@ func openVectorsFile(path string, create Embedder) (*Vectors, error) {
 		}
 		return nil, fmt.Errorf("knowledge: vector index %s: %w", path, refusedByOS(path, err))
 	}
+	// A second kb opening the file while one is writing waits briefly rather than failing.
+	_, _ = db.Exec(`PRAGMA busy_timeout = 5000`)
 	if _, err := db.Exec(vectorsSchema); err != nil {
 		return fail(err)
 	}

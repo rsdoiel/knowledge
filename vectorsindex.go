@@ -60,6 +60,8 @@ type embedWork struct {
  * is gone, or has no text, loses its chunks. Embedding happens in batches and
  * each finished row is committed, so an interrupted run, by error or by
  * cancelling ctx, has lost at most the batch in flight and a rerun carries on.
+ * It holds the sidecar's lock for the whole run (ErrLocked when another run has
+ * it) and refreshes it after each batch, aborting if the lock was taken over.
  * It never builds an index for a different model: that is ErrModelMismatch, and
  * the remedy is ResetVectors.
  *
@@ -71,7 +73,7 @@ type embedWork struct {
  *
  * Returns:
  *   EmbedResult — what was done, valid also when an error is returned
- *   error — ctx's error when cancelled; ErrModelMismatch; the embedder's error;
+ *   error — ctx's error when cancelled; ErrModelMismatch; ErrLocked; the embedder's error;
  *     a database error
  *
  * Example:
@@ -93,6 +95,11 @@ func (kb *KnowledgeBase) EmbedIndex(ctx context.Context, v *Vectors, e Embedder,
 	if chunkRunes <= 0 {
 		chunkRunes = DefaultChunkRunes
 	}
+	lock, err := v.Lock()
+	if err != nil {
+		return res, err
+	}
+	defer lock.Release()
 	corpus, err := kb.EmbedCorpus(SearchScope{})
 	if err != nil {
 		return res, err
@@ -195,6 +202,11 @@ func (kb *KnowledgeBase) EmbedIndex(ctx context.Context, v *Vectors, e Embedder,
 				return fmt.Errorf("knowledge: model %s returned %d vectors for %d texts", e.Model(), len(out), j-i)
 			}
 			copy(vecs[i:j], out)
+		}
+		// Still the owner of the lock? Checked after the slow part and before any
+		// write, so a run that stalled and lost its claim writes nothing.
+		if err := lock.Heartbeat(); err != nil {
+			return err
 		}
 		fresh := make([]map[int][]float32, len(pending))
 		for i, r := range refs {
