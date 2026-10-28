@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	knowledge "github.com/rsdoiel/knowledge"
@@ -133,13 +134,27 @@ func modelErr(err error) error {
 // modelResult prints what install and fetch did.
 func modelResult(out io.Writer, jsonOut bool, verb string, in models.Installed, root models.Root) error {
 	_, canUse := knowledge.RegisteredEmbedder()
+	// A workspace install re-checks that the models stay out of git.
+	added := []string{}
+	if root.Scope == "workspace" {
+		ws := filepath.Dir(filepath.Dir(root.Path)) // root.Path is WORKSPACE/agents/models
+		a, err := ensureIgnored(ws)
+		if err != nil {
+			return fmt.Errorf("%s: updating .gitignore: %w", verb, err)
+		}
+		warnIfTracked(ws, "agents/models/")
+		if a != nil {
+			added = a
+		}
+	}
 	if jsonOut {
 		return printJSON(out, map[string]any{
 			"verb": verb, "name": in.Name, "dir": in.Dir, "scope": root.Scope,
-			"licence": in.Licence, "usable_in_this_build": canUse,
+			"licence": in.Licence, "usable_in_this_build": canUse, "gitignore_added": added,
 		})
 	}
 	fmt.Fprintf(out, "%s: %s installed in %s (%s, licence %s)\n", verb, in.Name, in.Dir, root.Scope, in.Licence)
+	reportIgnored(out, added)
 	if !canUse {
 		advise("this build of kb has no semantic search, so it cannot use the model; the files are in place for the semantic build")
 	}

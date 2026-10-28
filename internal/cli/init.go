@@ -72,10 +72,23 @@ func cmdInit(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []str
 	}
 	newKB.Close()
 
+	// A git workspace keeps the models and the vector index out of its history.
+	added, err := ensureIgnored(absRoot)
+	if err != nil {
+		return fmt.Errorf("init: updating .gitignore: %w", err)
+	}
+	for _, p := range derivedPaths {
+		warnIfTracked(absRoot, p)
+	}
+	if added == nil {
+		added = []string{}
+	}
+
 	if jsonOut {
 		return printJSON(out, map[string]any{
 			"path":                dbPath,
 			"already_initialized": alreadyInitialized,
+			"gitignore_added":     added,
 		})
 	}
 	if alreadyInitialized {
@@ -83,5 +96,6 @@ func cmdInit(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []str
 	} else {
 		fmt.Fprintf(out, "initialized empty knowledge base at %s\n", dbPath)
 	}
+	reportIgnored(out, added)
 	return nil
 }

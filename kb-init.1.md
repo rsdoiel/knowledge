@@ -30,6 +30,12 @@ init is idempotent. Run again against an already-initialized workspace, it
 reports that and leaves the existing database untouched; it never truncates
 or overwrites data.
 
+When the workspace is inside a git work tree, init also makes sure PATH/.gitignore
+lists agents/models/ and agents/knowledge.vectors.db, the downloaded embedding
+models and the semantic-search index, which are large and rebuilt. It adds only the
+lines that are missing, says so, and leaves a .gitignore that has them alone.
+Outside a git work tree it does nothing of the kind and assumes no git.
+
 # OPTIONS
 
 None beyond the standard options. The global -db option does not apply: init

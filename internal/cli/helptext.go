@@ -2770,6 +2770,12 @@ init is idempotent. Run again against an already-initialized workspace, it
 reports that and leaves the existing database untouched; it never truncates
 or overwrites data.
 
+When the workspace is inside a git work tree, init also makes sure PATH/.gitignore
+lists agents/models/ and agents/knowledge.vectors.db, the downloaded embedding
+models and the semantic-search index, which are large and rebuilt. It adds only the
+lines that are missing, says so, and leaves a .gitignore that has them alone.
+Outside a git work tree it does nothing of the kind and assumes no git.
+
 # OPTIONS
 
 None beyond the standard options. The global -db option does not apply: init
@@ -2860,9 +2866,10 @@ first to replace it.
 
 -workspace
 : install into WORKSPACE/agents/models/ instead of the user directory. The
-  workspace is the one found at or above the current directory. Add
-  agents/models/ to .gitignore: the files are large and are not part of the
-  knowledge.
+  workspace is the one found at or above the current directory. In a
+  git work tree {app_name} adds agents/models/ to the workspace's .gitignore
+  if it is missing (the files are large and are not part of the knowledge), and
+  warns if git already tracks them.
 
 -dir DIR
 : install into, and look in, DIR instead (KB_MODEL_DIR does the same).
