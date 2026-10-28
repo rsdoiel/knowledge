@@ -83,3 +83,16 @@ verbs
 The conventional spelling for this page is "help index". It is "help topics"
 here because index is itself a verb, so "kb help index" is that verb's
 manual page and cannot also be the topic list.
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: the topic list was printed
+
+2
+: kb help was given a name that is not a topic
+
+# SEE ALSO
+
+kb(1), kb-verbs(1)

@@ -207,6 +207,7 @@ var usageVerbCases = []verbCase{
 	{name: "concept recall negative limit", args: []string{"concept", "recall", "x", "--limit", "-1"}},
 	{name: "concept recall bad flag", args: []string{"concept", "recall", "x", "--bogus"}},
 	{name: "unparseable date", args: []string{"record", "list", "--since", "yesterday"}},
+	{name: "help for a name that is not a topic", args: []string{"help", "nosuch"}},
 	{name: "link without a subverb", args: []string{"link"}},
 	{name: "link observation without a concept", args: []string{"link", "observation", "1"}},
 	{name: "link observation surplus argument", args: []string{"link", "observation", "1", "C", "extra"}},

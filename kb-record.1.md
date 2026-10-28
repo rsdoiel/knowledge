@@ -300,3 +300,6 @@ kb record new --project clasm --title "Filed under the old layout" --trigger req
 kb record fmt agents/projects/clasm/decisions --dry-run
 ~~~
 
+# SEE ALSO
+
+kb(1), kb-ingest(1), kb-index(1), kb-document(1), kb-concept(1), kb-source(1)

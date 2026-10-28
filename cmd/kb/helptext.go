@@ -1516,6 +1516,22 @@ format
   project (no --project) — concepts and observations included inline,
   unlike the bare rows {app_name}-project(1)'s show/list return
 
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1). This page also covers
+summary and format.
+
+0
+: search found something, or summary or format printed its view
+
+1
+: search found nothing; a scope with no members (workspace/observations,
+  harvey/projects); or format --project names a project that does not exist
+
+2
+: no TERM, a first word that starts with a dash and is not after --, an unknown
+  flag, a scope or kind that does not exist, or a surplus argument to summary
+
 # SEE ALSO
 
 {app_name}-project(1), {app_name}-observation(1)
@@ -2557,6 +2573,9 @@ Start a new record, and bring a corpus into canonical form:
 {app_name} record fmt agents/projects/clasm/decisions --dry-run
 ~~~
 
+# SEE ALSO
+
+{app_name}(1), {app_name}-ingest(1), {app_name}-index(1), {app_name}-document(1), {app_name}-concept(1), {app_name}-source(1)
 `
 
 // IndexHelpText is the kb-index(1) man page.
@@ -2968,4 +2987,17 @@ verbs
 The conventional spelling for this page is "help index". It is "help topics"
 here because index is itself a verb, so "{app_name} help index" is that verb's
 manual page and cannot also be the topic list.
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the topic list was printed
+
+2
+: {app_name} help was given a name that is not a topic
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-verbs(1)
 `
