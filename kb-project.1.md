@@ -96,6 +96,24 @@ renamed on one machine and left untouched on another arrives as one renamed
 project, not two, regardless of merge/import order. See
 DR-0024/DR-0025/DR-0026 (knowledge/decisions/).
 
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: done
+
+1
+: no project has that name (show, concepts, set-status, set-description,
+  rename, delete); add or rename onto a name that already exists; or delete of
+  a project that still owns an observation, a record or a document (and, without
+  --force, one that is linked to concepts)
+
+2
+: a missing or surplus argument, a status outside the vocabulary (concept,
+  active, paused, concluded), the reserved name workspace for add or rename, a
+  flag typed after NAME that belongs before it, or an unknown subcommand
+
 # SEE ALSO
 
 kb-observation(1), kb-link(1), kb-search(1),

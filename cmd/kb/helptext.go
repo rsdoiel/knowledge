@@ -832,6 +832,24 @@ renamed on one machine and left untouched on another arrives as one renamed
 project, not two, regardless of merge/import order. See
 DR-0024/DR-0025/DR-0026 (knowledge/decisions/).
 
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: done
+
+1
+: no project has that name (show, concepts, set-status, set-description,
+  rename, delete); add or rename onto a name that already exists; or delete of
+  a project that still owns an observation, a record or a document (and, without
+  --force, one that is linked to concepts)
+
+2
+: a missing or surplus argument, a status outside the vocabulary (concept,
+  active, paused, concluded), the reserved name workspace for add or rename, a
+  flag typed after NAME that belongs before it, or an unknown subcommand
+
 # SEE ALSO
 
 {app_name}-observation(1), {app_name}-link(1), {app_name}-search(1),
@@ -904,6 +922,23 @@ Deletion is local to one database, with no tombstone: {app_name}-merge(1) and
 {app_name}-import(1) from a database that still has the row bring it back, so
 delete it there as well. ` + "`agents/knowledge.jsonl`" + ` is re-exported from the database,
 so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: done. Listing the sources of an observation that has none, or of an id that
+  matches nothing, is still 0
+
+1
+: no observation has that id (show, update, delete); the project named
+  to add or list does not exist; or delete of an observation that still has
+  concept links, source links or supersession relations, which --force removes
+
+2
+: a missing or surplus argument, a malformed id, a kind outside the vocabulary
+  (note, finding, decision, question, hypothesis), or an unknown subcommand
 
 # SEE ALSO
 
@@ -1211,6 +1246,21 @@ To remove a concept from everything at once, see {app_name}-concept(1)'s delete.
 Like every delete, an unlink is local to one database: {app_name}-merge(1) and
 {app_name}-import(1) from a database that still has the link bring it back.
 
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the link was removed
+
+1
+: the link does not exist, or the project, concept, observation, document,
+  record or source named does not exist. Unlinking a pair twice is 1 the second
+  time
+
+2
+: a missing or surplus argument, a malformed id, or an unknown subcommand
+
 # SEE ALSO
 
 {app_name}-link(1), {app_name}-source(1), {app_name}-concept(1), {app_name}-observation(1)
@@ -1237,6 +1287,21 @@ const LinkHelpText = `%{app_name}-link(1) user manual | version {version} {relea
 
 Links are many-to-many and idempotent — linking the same pair twice is a
 silent no-op.
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the link now exists. Linking a pair that is already linked is a no-op and
+  also 0
+
+1
+: the project, observation or concept named does not exist
+
+2
+: a missing or surplus argument, a malformed observation id, or an unknown
+  subcommand
 
 # SEE ALSO
 
@@ -1327,6 +1392,29 @@ check-retractions
   retracted": it is counted as not checked, its last-checked date is left alone,
   and the command exits 69 after printing the counts. Run it again when the
   service is reachable
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: done. check-retractions with nothing to check is 0
+
+1
+: no source, observation, document or record has the id or reference given
+  (show, retract, remove, link); or remove of a source that an observation, a
+  document or a record still cites
+
+2
+: a missing or surplus argument, a malformed id, a blank title or one holding a
+  control character, a DOI, URL or date that does not parse, --document given
+  with --record, or an unknown subcommand
+
+69
+: check-retractions could not reach the retraction service for at least one
+  source. It checks every source first and prints the counts; a source it could
+  not look up is counted as not checked and its last-checked date is left alone,
+  so run it again when the service is reachable
 
 # SEE ALSO
 

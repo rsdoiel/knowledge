@@ -80,6 +80,29 @@ check-retractions
   and the command exits 69 after printing the counts. Run it again when the
   service is reachable
 
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: done. check-retractions with nothing to check is 0
+
+1
+: no source, observation, document or record has the id or reference given
+  (show, retract, remove, link); or remove of a source that an observation, a
+  document or a record still cites
+
+2
+: a missing or surplus argument, a malformed id, a blank title or one holding a
+  control character, a DOI, URL or date that does not parse, --document given
+  with --record, or an unknown subcommand
+
+69
+: check-retractions could not reach the retraction service for at least one
+  source. It checks every source first and prints the counts; a source it could
+  not look up is counted as not checked and its last-checked date is left alone,
+  so run it again when the service is reachable
+
 # SEE ALSO
 
 kb-observation(1)

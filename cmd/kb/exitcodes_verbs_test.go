@@ -34,6 +34,13 @@ type verbCase struct {
 
 func runVerbCase(t *testing.T, tc verbCase) {
 	t.Helper()
+	// A usage case is a scripted command line with no terminal: an incomplete
+	// command is the usage error it has always been, and does not open the
+	// interface (DR-0066). Other classes keep the real terminal check, which the
+	// two "document review promote" cases above depend on.
+	if tc.want == classUsage {
+		noTerminal(t)
+	}
 	dir := t.TempDir()
 	t.Chdir(dir)
 	for name, body := range tc.files {
@@ -146,6 +153,15 @@ var negativeVerbCases = []verbCase{
 	{name: "concept recall unknown project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "recall", "--concept", "C", "--project", "nosuch"}},
 	{name: "export unknown project", args: []string{"export", "-project", "nosuch"}},
 	{name: "index --check with no index", files: map[string]string{"recs/0001-ok.md": goodRecord}, args: []string{"index", "--check", "recs"}},
+	{name: "unlink observation not linked", setup: [][]string{{"project", "add", "P", "d"}, {"concept", "add", "C"}, {"observation", "add", "--project", "P", "note", "b"}}, args: []string{"unlink", "observation", "1", "C"}},
+	{name: "unlink observation twice", setup: append(seedLinked(), []string{"unlink", "observation", "1", "C"}), args: []string{"unlink", "observation", "1", "C"}},
+	{name: "unlink missing observation", setup: [][]string{{"concept", "add", "C"}}, args: []string{"unlink", "observation", "99", "C"}},
+	{name: "unlink unknown concept", setup: seedLinked(), args: []string{"unlink", "observation", "1", "nosuch"}},
+	{name: "unlink project not linked", setup: append(seedProject(), []string{"concept", "add", "C"}), args: []string{"unlink", "project", "P", "C"}},
+	{name: "unlink missing project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"unlink", "project", "nosuch", "C"}},
+	{name: "unlink source not linked", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}, {"source", "add", "S"}}, args: []string{"unlink", "source", "1", "1"}},
+	{name: "observation delete while linked", setup: seedLinked(), args: []string{"observation", "delete", "1"}},
+	{name: "project delete while it owns an observation", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}}, args: []string{"project", "delete", "P"}},
 }
 
 func TestVerbs_NegativeIsExit1(t *testing.T) {
@@ -191,6 +207,30 @@ var usageVerbCases = []verbCase{
 	{name: "concept recall negative limit", args: []string{"concept", "recall", "x", "--limit", "-1"}},
 	{name: "concept recall bad flag", args: []string{"concept", "recall", "x", "--bogus"}},
 	{name: "unparseable date", args: []string{"record", "list", "--since", "yesterday"}},
+	{name: "link without a subverb", args: []string{"link"}},
+	{name: "link observation without a concept", args: []string{"link", "observation", "1"}},
+	{name: "link observation surplus argument", args: []string{"link", "observation", "1", "C", "extra"}},
+	{name: "link unknown subverb", args: []string{"link", "concept", "1", "C"}},
+	{name: "unlink without a subverb", args: []string{"unlink"}},
+	{name: "unlink project without a concept", args: []string{"unlink", "project", "P"}},
+	{name: "unlink unknown subverb", args: []string{"unlink", "bogus", "1", "C"}},
+	{name: "project add of the reserved name", args: []string{"project", "add", "workspace"}},
+	{name: "observation show surplus argument", args: []string{"observation", "show", "1", "2"}},
+	{name: "source list surplus argument", args: []string{"source", "list", "extra"}},
+	{name: "source link without a source", args: []string{"source", "link", "1"}},
+	{name: "search without a term", args: []string{"search"}},
+	{name: "search with an unknown flag", args: []string{"search", "-bogus", "x"}},
+	{name: "export surplus argument", args: []string{"export", "extra"}},
+	{name: "export bad flag", args: []string{"export", "-bogus"}},
+	{name: "import surplus argument", args: []string{"import", "extra"}},
+	{name: "import bad flag", args: []string{"import", "-bogus"}},
+	{name: "merge without its flags", args: []string{"merge"}},
+	{name: "merge of a file with itself", setup: seedProject(), args: []string{"merge", "-a", "kb.db", "-b", "kb.db", "-out", "o.db"}},
+	{name: "ingest without a path", args: []string{"ingest"}},
+	{name: "ingest bad flag", args: []string{"ingest", "--bogus", "."}},
+	{name: "index without a path", args: []string{"index"}},
+	{name: "init with two paths", noDB: true, args: []string{"init", "a", "b"}},
+	{name: "init refuses --db", noDB: true, args: []string{"--db", "x.db", "init"}},
 }
 
 func TestVerbs_UsageIsExit2(t *testing.T) {

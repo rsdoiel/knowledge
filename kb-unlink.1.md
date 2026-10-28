@@ -31,6 +31,21 @@ To remove a concept from everything at once, see kb-concept(1)'s delete.
 Like every delete, an unlink is local to one database: kb-merge(1) and
 kb-import(1) from a database that still has the link bring it back.
 
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: the link was removed
+
+1
+: the link does not exist, or the project, concept, observation, document,
+  record or source named does not exist. Unlinking a pair twice is 1 the second
+  time
+
+2
+: a missing or surplus argument, a malformed id, or an unknown subcommand
+
 # SEE ALSO
 
 kb-link(1), kb-source(1), kb-concept(1), kb-observation(1)

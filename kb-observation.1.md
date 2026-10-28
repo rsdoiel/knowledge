@@ -62,6 +62,23 @@ kb-import(1) from a database that still has the row bring it back, so
 delete it there as well. `agents/knowledge.jsonl` is re-exported from the database,
 so a delete reaches a database rebuilt from it. See DR-0050 (knowledge/decisions/).
 
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: done. Listing the sources of an observation that has none, or of an id that
+  matches nothing, is still 0
+
+1
+: no observation has that id (show, update, delete); the project named
+  to add or list does not exist; or delete of an observation that still has
+  concept links, source links or supersession relations, which --force removes
+
+2
+: a missing or surplus argument, a malformed id, a kind outside the vocabulary
+  (note, finding, decision, question, hypothesis), or an unknown subcommand
+
 # SEE ALSO
 
 kb-project(1), kb-link(1), kb-source(1)
