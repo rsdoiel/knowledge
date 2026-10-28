@@ -1,4 +1,4 @@
-%kb-ingest(1) user manual | version 0.0.28 e1e6da0
+%kb-ingest(1) user manual | version 0.0.28 c100b07
 % R. S. Doiel
 % 2026-10-28
 
