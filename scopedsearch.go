@@ -106,6 +106,102 @@ const projectConceptIDs = `
 	SELECT rc.concept_id FROM record_concepts rc
 	  JOIN records r ON r.id = rc.record_id WHERE r.project_id = ?`
 
+// scopeFilter is a SearchScope turned into a restriction on kb_fts rows.
+type scopeFilter struct {
+	where string // an " AND (...)" fragment over kb_fts, or "" for no restriction
+	args  []any
+	limit int
+}
+
+/** scopeFilter validates a scope and builds the restriction it puts on kb_fts
+ * rows, shared by SearchScoped and the semantic-search corpus so there is one
+ * definition of what a scope contains. allowed is the kinds the caller can
+ * serve (SearchKinds for lexical search); a kind outside it is ErrInvalid. When
+ * always is true the restriction is built even for an unscoped search with no
+ * kinds, so a caller that serves fewer kinds than the index holds is limited to them.
+ */
+func (kb *KnowledgeBase) scopeFilter(scope SearchScope, allowed []string, always bool) (scopeFilter, error) {
+	if scope.Project != "" && scope.Workspace {
+		return scopeFilter{}, invalidf("knowledge: a search scope is a project or the workspace tier, not both")
+	}
+	if scope.Limit < 0 {
+		return scopeFilter{}, invalidf("knowledge: search limit %d is negative", scope.Limit)
+	}
+	limit := scope.Limit
+	if limit == 0 {
+		limit = 50
+	}
+	for _, k := range scope.Kinds {
+		if _, ok := searchKindSource[k]; !ok {
+			return scopeFilter{}, invalidf("knowledge: unknown search kind %q (one of %s)", k, strings.Join(SearchKinds, ", "))
+		}
+		if !containsString(allowed, k) {
+			return scopeFilter{}, invalidf("knowledge: kind %q cannot be searched this way (one of %s)", k, strings.Join(allowed, ", "))
+		}
+	}
+	var pid int64
+	if scope.Project != "" {
+		err := kb.db.QueryRow(`SELECT id FROM projects WHERE name = ?`, scope.Project).Scan(&pid)
+		if err == sql.ErrNoRows {
+			return scopeFilter{}, notFoundf("knowledge: project %q not found", scope.Project)
+		}
+		if err != nil {
+			return scopeFilter{}, fmt.Errorf("knowledge: search scope: %w", err)
+		}
+	}
+	scoped := scope.Project != "" || scope.Workspace
+
+	// The kinds that can have members in this scope.
+	requested := scope.Kinds
+	if len(requested) == 0 {
+		requested = allowed
+	}
+	var kinds []string
+	for _, k := range requested {
+		switch {
+		case k == "observations" && scope.Workspace:
+		case k == "projects" && scoped:
+		default:
+			kinds = append(kinds, k)
+		}
+	}
+	if len(kinds) == 0 {
+		return scopeFilter{}, noMembersf("%s", noMembersReason(scope))
+	}
+
+	// where is "" for the global, all-kinds search, which is Search's own query.
+	var where string
+	var args []any
+	if scoped || len(scope.Kinds) > 0 || always {
+		var ors []string
+		for _, k := range kinds {
+			st := searchKindSource[k]
+			switch {
+			case !scoped:
+				ors = append(ors, "kb_fts.source_type = '"+st+"'")
+			case k == "concepts" && scope.Workspace:
+				ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN
+					(SELECT rc.concept_id FROM record_concepts rc JOIN records r ON r.id = rc.record_id WHERE r.project_id IS NULL))`)
+			case k == "concepts":
+				ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectConceptIDs+`))`)
+				args = append(args, pid, pid, pid)
+			case k == "sources" && scope.Workspace:
+				ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+workspaceSourceIDs+`))`)
+			case k == "sources":
+				ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectSourceIDs+`))`)
+				args = append(args, pid, pid, pid)
+			case scope.Workspace:
+				ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = 0)")
+			default:
+				ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = ?)")
+				args = append(args, pid)
+			}
+		}
+		where = " AND (" + strings.Join(ors, " OR ") + ")"
+	}
+	return scopeFilter{where: where, args: args, limit: limit}, nil
+}
+
 /** SearchScoped performs the full-text search of Search, restricted to a scope
  * and to kinds, with the restriction applied in the query so a limit never
  * hides a match in scope behind a better-ranked one outside it. It returns the
@@ -136,82 +232,11 @@ func (kb *KnowledgeBase) SearchScoped(term string, scope SearchScope) (*ScopedSe
 	if !kb.ftsAvailable {
 		return nil, fmt.Errorf("full-text search is not available (FTS5 not compiled in)")
 	}
-	if scope.Project != "" && scope.Workspace {
-		return nil, invalidf("knowledge: a search scope is a project or the workspace tier, not both")
+	f, err := kb.scopeFilter(scope, SearchKinds, false)
+	if err != nil {
+		return nil, err
 	}
-	if scope.Limit < 0 {
-		return nil, invalidf("knowledge: search limit %d is negative", scope.Limit)
-	}
-	limit := scope.Limit
-	if limit == 0 {
-		limit = 50
-	}
-	for _, k := range scope.Kinds {
-		if _, ok := searchKindSource[k]; !ok {
-			return nil, invalidf("knowledge: unknown search kind %q (one of %s)", k, strings.Join(SearchKinds, ", "))
-		}
-	}
-	var pid int64
-	if scope.Project != "" {
-		err := kb.db.QueryRow(`SELECT id FROM projects WHERE name = ?`, scope.Project).Scan(&pid)
-		if err == sql.ErrNoRows {
-			return nil, notFoundf("knowledge: project %q not found", scope.Project)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("knowledge: search scope: %w", err)
-		}
-	}
-	scoped := scope.Project != "" || scope.Workspace
-
-	// The kinds that can have members in this scope.
-	requested := scope.Kinds
-	if len(requested) == 0 {
-		requested = SearchKinds
-	}
-	var kinds []string
-	for _, k := range requested {
-		switch {
-		case k == "observations" && scope.Workspace:
-		case k == "projects" && scoped:
-		default:
-			kinds = append(kinds, k)
-		}
-	}
-	if len(kinds) == 0 {
-		return nil, noMembersf("%s", noMembersReason(scope))
-	}
-
-	// where is "" for the global, all-kinds search, which is Search's own query.
-	var where string
-	var args []any
-	if scoped || len(scope.Kinds) > 0 {
-		var ors []string
-		for _, k := range kinds {
-			st := searchKindSource[k]
-			switch {
-			case !scoped:
-				ors = append(ors, "kb_fts.source_type = '"+st+"'")
-			case k == "concepts" && scope.Workspace:
-				ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN
-					(SELECT rc.concept_id FROM record_concepts rc JOIN records r ON r.id = rc.record_id WHERE r.project_id IS NULL))`)
-			case k == "concepts":
-				ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectConceptIDs+`))`)
-				args = append(args, pid, pid, pid)
-			case k == "sources" && scope.Workspace:
-				ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+workspaceSourceIDs+`))`)
-			case k == "sources":
-				ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectSourceIDs+`))`)
-				args = append(args, pid, pid, pid)
-			case scope.Workspace:
-				ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = 0)")
-			default:
-				ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = ?)")
-				args = append(args, pid)
-			}
-		}
-		where = " AND (" + strings.Join(ors, " OR ") + ")"
-	}
-
+	where, args, limit := f.where, f.args, f.limit
 	out, err := kb.runScoped(term, where, args, limit)
 	if err != nil {
 		out, err = kb.runScoped(quotedPhrase(term), where, args, limit)
