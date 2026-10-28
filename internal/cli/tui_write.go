@@ -1,0 +1,439 @@
+package cli
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"regexp"
+	"strings"
+	"unicode/utf8"
+
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
+
+// ansiPattern matches the colour escapes the highlighter writes, so the find
+// searches the text a person sees.
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// pagerDoneMsg says the pager (or the built-in viewer) has finished showing a
+// record. purpose is "read" or "status": a status review goes on to the chooser.
+type pagerDoneMsg struct {
+	purpose string
+	err     error
+}
+
+// execPager shows raw in the pager argv, with the TUI suspended while it runs, and
+// delivers a pagerDoneMsg when it ends. It is a variable so tests can stand in for
+// a terminal program.
+var execPager = func(argv []string, raw []byte, purpose string) tea.Cmd {
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin = bytes.NewReader(raw)
+	return tea.ExecProcess(cmd, func(err error) tea.Msg { return pagerDoneMsg{purpose: purpose, err: err} })
+}
+
+/** selectedRecordRef returns the qualified reference of the record under the
+ * cursor on the Records screen or a project's Records tab.
+ *
+ * Returns:
+ *   ref (string) — such as clasm/DR-0001
+ *   ok (bool) — false when no record is selected (an empty list, another screen)
+ *
+ * Example:
+ *   if ref, ok := m.selectedRecordRef(); ok { ... }
+ */
+func (m *tuiModel) selectedRecordRef() (ref string, ok bool) {
+	switch m.state {
+	case viewRecordScope:
+		if it, found := m.scopeList.SelectedItem().(scopedRecordItem); found {
+			return it.e.Ref, true
+		}
+	case viewRecords:
+		if it, found := m.recordList.SelectedItem().(recordItem); found {
+			return refOf(it.r, projectNames(m.kb)).String(), true
+		}
+	}
+	return "", false
+}
+
+/** showSelected starts reading the selected record (purpose "read") or setting its
+ * status (purpose "status"): the record file is shown in the pager with the TUI
+ * suspended, or in the built-in viewer when there is no pager, and a status review
+ * goes on to the chooser afterwards. A record with no move to make says so before
+ * anything is shown.
+ *
+ * Parameters:
+ *   purpose (string) — "read" or "status"
+ *
+ * Returns:
+ *   (tea.Model, tea.Cmd) — the model and the command that runs the pager, if any
+ *
+ * Example:
+ *   return m.showSelected("status")
+ */
+func (m *tuiModel) showSelected(purpose string) (tea.Model, tea.Cmd) {
+	ref, ok := m.selectedRecordRef()
+	if !ok {
+		return m, nil
+	}
+	return m.showRecord(ref, purpose)
+}
+
+// showRecord shows the record with that reference for reading or for a status
+// review: in $KB_PAGER when it is set, else in the built-in viewer, highlighted.
+func (m *tuiModel) showRecord(ref, purpose string) (tea.Model, tea.Cmd) {
+	rec, err := resolveRecordForWrite(m.kb, ref, recordFlags{})
+	if err != nil {
+		m.notice = err.Error()
+		return m, nil
+	}
+	rf, raw, err := loadRecordFile(recordRoot(m.kb, recordFlags{}), rec)
+	if err != nil {
+		m.notice = err.Error()
+		return m, nil
+	}
+	m.reviewRec, m.reviewRef, m.reviewBack, m.reviewRaw = rec, ref, m.state, raw
+	m.reviewFrom = rf.Record.Status
+	m.reviewOptions = reviewOptions(rf.Record.Status, len(rf.SupersededBy) > 0)
+	if purpose == "status" && len(m.reviewOptions) == 0 {
+		m.notice = fmt.Sprintf("%s is %s, which is final; there is no move to make", ref, rf.Record.Status)
+		return m, nil
+	}
+	if argv := pagerCommand(os.Getenv); argv != nil {
+		return m, execPager(argv, raw, purpose)
+	}
+	m.openViewer(purpose)
+	return m, nil
+}
+
+// afterPager goes on from a finished pager or viewer: a status review to the
+// chooser, a read back to where it began.
+func (m *tuiModel) afterPager(purpose string) (tea.Model, tea.Cmd) {
+	if purpose != "status" {
+		m.setState(m.reviewBack)
+		return m, nil
+	}
+	m.review = newReview(m.reviewRef, m.reviewFrom, m.reviewOptions)
+	m.setState(viewReview)
+	return m, nil
+}
+
+// handlePagerDone takes the pager's answer. A pager that exits non-zero (a person
+// quitting it) is not a failure; one that could not start is, and the record is
+// shown in the built-in viewer instead.
+func (m *tuiModel) handlePagerDone(msg pagerDoneMsg) (tea.Model, tea.Cmd) {
+	var exitErr *exec.ExitError
+	if msg.err != nil && !errors.As(msg.err, &exitErr) {
+		m.notice = fmt.Sprintf("the pager could not run (%v); showing the record here", msg.err)
+		m.openViewer(msg.purpose)
+		return m, nil
+	}
+	return m.afterPager(msg.purpose)
+}
+
+// openViewer shows the record in the built-in scrolling viewer: the fallback when
+// there is no pager.
+func (m *tuiModel) openViewer(purpose string) {
+	// With no window size yet (a terminal that has not reported one) the viewer
+	// still shows a screenful instead of nothing.
+	h := m.bodyHeight()
+	if h <= 0 {
+		h = 20
+	}
+	vp := viewport.New(viewport.WithWidth(m.cols()-4), viewport.WithHeight(h))
+	width := m.cols() - 4
+	var wrapped string
+	if (purpose == "read" || purpose == "status") && m.colourOn() {
+		wrapped = wrapHighlighted(string(m.reviewRaw), width)
+	} else {
+		wrapped = lipgloss.NewStyle().Width(width).Render(string(m.reviewRaw))
+	}
+	vp.SetContent(wrapped)
+	m.text = vp
+	m.textPlain = strings.Split(ansiPattern.ReplaceAllString(wrapped, ""), "\n")
+	m.textLines = strings.Split(wrapped, "\n")
+	m.textMarks = m.colourOn()
+	m.finding, m.findQuery, m.findHits, m.findCur = false, "", nil, 0
+	m.textPurpose = purpose
+	m.setState(viewText)
+}
+
+// updateText handles a key in the built-in viewer. The arrows, j and k, and the
+// page keys scroll; g and G jump to the ends; / finds text and n and N move
+// between the matches; q finishes (and continues to the chooser for a status
+// review). While a term is being typed every key is text, and Esc abandons it.
+func (m *tuiModel) updateText(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.finding {
+		switch {
+		case isEsc(msg):
+			m.finding = false
+			m.findInput.Blur()
+		case msg.Code == tea.KeyEnter:
+			m.finding = false
+			m.findInput.Blur()
+			m.findQuery = m.findInput.Value()
+			m.findHits = findLines(m.textPlain, m.findQuery)
+			m.findCur = 0
+			m.refreshFindMarks()
+			switch {
+			case m.findQuery == "":
+			case len(m.findHits) == 0:
+				m.notice = fmt.Sprintf("no match for %q", m.findQuery)
+			default:
+				// The first match at or below the top of the screen.
+				for i, h := range m.findHits {
+					if h >= m.text.YOffset() {
+						m.findCur = i
+						break
+					}
+				}
+				m.text.SetYOffset(m.findHits[m.findCur])
+			}
+		default:
+			var cmd tea.Cmd
+			m.findInput, cmd = m.findInput.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	}
+	switch msg.String() {
+	case "q":
+		return m.afterPager(m.textPurpose)
+	case "esc":
+		return m, nil
+	case "g":
+		m.text.GotoTop()
+		return m, nil
+	case "G":
+		m.text.GotoBottom()
+		return m, nil
+	case "/":
+		m.finding = true
+		m.findInput.SetValue("")
+		m.findInput.Focus()
+		return m, nil
+	case "n", "N":
+		if len(m.findHits) == 0 {
+			if m.findQuery != "" {
+				m.notice = fmt.Sprintf("no match for %q", m.findQuery)
+			}
+			return m, nil
+		}
+		step := 1
+		if msg.String() == "N" {
+			step = len(m.findHits) - 1
+		}
+		m.findCur = (m.findCur + step) % len(m.findHits)
+		m.text.SetYOffset(m.findHits[m.findCur])
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.text, cmd = m.text.Update(msg)
+	return m, cmd
+}
+
+// findLines returns the indexes of the lines that contain term, ignoring case.
+// An empty term matches nothing.
+func findLines(lines []string, term string) []int {
+	if term == "" {
+		return nil
+	}
+	term = strings.ToLower(term)
+	var hits []int
+	for i, l := range lines {
+		if strings.Contains(strings.ToLower(l), term) {
+			hits = append(hits, i)
+		}
+	}
+	return hits
+}
+
+// reverseOn and reverseOff turn reverse video on and off around a find match.
+const (
+	reverseOn  = "\x1b[7m"
+	reverseOff = "\x1b[27m"
+)
+
+/** markMatches puts reverse video around every match of term in a line of the
+ * viewer, ignoring case. The line may carry the colour escapes the highlighter
+ * writes: a match is found in the text a person sees, and where a colour starts
+ * or ends inside a match the reverse video is turned on again after it, because
+ * a reset would cancel it.
+ *
+ * Parameters:
+ *   line (string) — one viewer line, with or without colour escapes
+ *   term (string) — the text to mark; empty marks nothing
+ *
+ * Returns:
+ *   string — line with the matches marked; the text is unchanged
+ *
+ * Example:
+ *   markMatches("the needle is here", "needle") // "the \x1b[7mneedle\x1b[27m is here"
+ */
+func markMatches(line, term string) string {
+	if term == "" {
+		return line
+	}
+	plain := []rune(ansiPattern.ReplaceAllString(line, ""))
+	want := []rune(term)
+	var spans [][2]int // [start, end) in plain, in order, not overlapping
+	for i := 0; i+len(want) <= len(plain); {
+		if strings.EqualFold(string(plain[i:i+len(want)]), term) {
+			spans = append(spans, [2]int{i, i + len(want)})
+			i += len(want)
+			continue
+		}
+		i++
+	}
+	if len(spans) == 0 {
+		return line
+	}
+	var b strings.Builder
+	p, next, in := 0, 0, false
+	rest := line
+	for rest != "" {
+		if in && p >= spans[next][1] {
+			b.WriteString(reverseOff)
+			in = false
+			next++
+		}
+		if loc := ansiPattern.FindStringIndex(rest); loc != nil && loc[0] == 0 {
+			b.WriteString(rest[:loc[1]])
+			if in {
+				b.WriteString(reverseOn) // a reset inside the match would cancel it
+			}
+			rest = rest[loc[1]:]
+			continue
+		}
+		if !in && next < len(spans) && p == spans[next][0] {
+			b.WriteString(reverseOn)
+			in = true
+		}
+		r, size := utf8.DecodeRuneInString(rest)
+		b.WriteRune(r)
+		rest = rest[size:]
+		p++
+	}
+	if in {
+		b.WriteString(reverseOff)
+	}
+	return b.String()
+}
+
+// refreshFindMarks redraws the viewer with the current find term marked in every
+// line that has it, or unmarked when there is no term. It keeps the scroll place.
+// Marks are reverse video, so they are only written where colour is: on a
+// terminal that is plain (NO_COLOR, a dumb terminal) the find moves the screen
+// and says which match it is on, as before.
+func (m *tuiModel) refreshFindMarks() {
+	if !m.textMarks || len(m.textLines) == 0 {
+		return
+	}
+	lines := m.textLines
+	if m.findQuery != "" && len(m.findHits) > 0 {
+		lines = append([]string(nil), m.textLines...)
+		for _, h := range m.findHits {
+			lines[h] = markMatches(lines[h], m.findQuery)
+		}
+	}
+	at := m.text.YOffset()
+	m.text.SetContent(strings.Join(lines, "\n"))
+	m.text.SetYOffset(at)
+}
+
+// updateReview hands a key to the embedded chooser and confirmation (T3) and
+// finishes when they have an answer. The embedded model asks the program to quit
+// when it is done; that is ignored, since this is only one screen of it.
+func (m *tuiModel) updateReview(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.review.Update(msg)
+	if m.review.phase == phaseDone {
+		return m.finishReview()
+	}
+	return m, nil
+}
+
+// finishReview applies a confirmed choice through applyRecordStatus, the function
+// the command line uses, so the two cannot disagree about what a status change is,
+// and says what was done and the command that does the same. A cancel, and a move
+// the record's file now refuses, are notices and write nothing.
+func (m *tuiModel) finishReview() (tea.Model, tea.Cmd) {
+	chosen, confirmed := m.review.result()
+	m.setState(m.reviewBack)
+	if !confirmed {
+		m.notice = fmt.Sprintf("cancelled; %s is unchanged", m.reviewRef)
+		return m, nil
+	}
+	var sink bytes.Buffer
+	if err := applyRecordStatus(m.kb, false, recordFlags{}, &sink, m.reviewRec, chosen); err != nil {
+		m.notice = err.Error()
+		return m, nil
+	}
+	m.reloadRecords()
+	m.notice = fmt.Sprintf("✓ %s status set to %s\nequivalent:  kb record set-status %s %s", m.reviewRef, chosen, m.reviewRef, chosen)
+	return m, nil
+}
+
+// reloadRecords refreshes the list the record is shown in after a write, keeping
+// the cursor on the same record.
+func (m *tuiModel) reloadRecords() {
+	switch m.state {
+	case viewRecordScope:
+		if err := m.loadRecordScope(); err != nil {
+			m.setErr(err)
+			return
+		}
+		for i, it := range m.scopeList.Items() {
+			if r, ok := it.(scopedRecordItem); ok && r.e.Ref == m.reviewRef {
+				m.scopeList.Select(i)
+			}
+		}
+	case viewRecords:
+		if err := m.loadRecords(); err != nil {
+			m.setErr(err)
+			return
+		}
+		for i, it := range m.recordList.Items() {
+			if r, ok := it.(recordItem); ok && r.r.RecordID == m.reviewRec.RecordID {
+				m.recordList.Select(i)
+			}
+		}
+	}
+}
+
+// reviewScreen is the status review's screen: the record, then the chooser or the
+// confirmation.
+func (m *tuiModel) reviewScreen() (string, []string) {
+	return "Set status — " + m.reviewRef, []string{m.reviewRef + "  " + m.reviewRec.Title, "", m.review.render()}
+}
+
+// reviewLegend names the keys of the current phase of the review.
+func (m *tuiModel) reviewLegend() string {
+	if m.review != nil && m.review.phase == phaseConfirm {
+		return "y apply   n q Esc cancel   Ctrl-C quit"
+	}
+	return "press a status key   q Esc cancel   Ctrl-C quit"
+}
+
+// textLegend names the keys of the built-in viewer, or shows the find prompt
+// while a term is being typed.
+func (m *tuiModel) textLegend() string {
+	if m.finding {
+		return "Find: " + m.findInput.View() + "   Enter find   Esc cancel"
+	}
+	keys := "↑/↓ j/k scroll   space page   g G ends   / find"
+	if len(m.findHits) > 0 {
+		keys += fmt.Sprintf("   n N next/prev (%d/%d)", m.findCur+1, len(m.findHits))
+	}
+	if m.textPurpose == "status" {
+		return keys + "   q continue to choose a status"
+	}
+	return keys + "   q back"
+}
+
+// textScreen is the built-in viewer's screen.
+func (m *tuiModel) textScreen() (string, []string) {
+	return m.reviewRef, strings.Split(strings.TrimRight(m.text.View(), "\n"), "\n")
+}

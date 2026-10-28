@@ -1,0 +1,426 @@
+package cli
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// X2 of exit-codes-plan.md: every place kb can fail is classified (workspace
+// DR-0003, knowledge DR-0047). This table provokes one failure of each class
+// per verb that can produce it, on a scratch database, and asserts the exit
+// code and the class name in the JSON error. It also asserts that nothing falls
+// through to 70: an error nobody classified is a gap, and here it is a failing
+// test rather than a silent exit 1.
+
+// verbCase is one provoked failure. setup runs first, each entry a kb command
+// that must succeed; files creates fixture files in the scratch directory.
+type verbCase struct {
+	name  string
+	setup [][]string
+	files map[string]string
+	args  []string
+	want  exitClass
+	// noDB runs the command without --db, from an empty directory.
+	noDB bool
+	// bulk marks a command that does everything it can and prints its counts
+	// before it exits with the class of the first failure (DR-0003 rule 4), so
+	// stdout is not empty on a failure.
+	bulk bool
+}
+
+func runVerbCase(t *testing.T, tc verbCase) {
+	t.Helper()
+	// A usage case is a scripted command line with no terminal: an incomplete
+	// command is the usage error it has always been, and does not open the
+	// interface (DR-0066). Other classes keep the real terminal check, which the
+	// two "document review promote" cases above depend on.
+	if tc.want == classUsage {
+		noTerminal(t)
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	for name, body := range tc.files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	base := []string{}
+	if !tc.noDB {
+		base = []string{"--db", filepath.Join(dir, "kb.db")}
+		for _, s := range tc.setup {
+			var out, errOut bytes.Buffer
+			full := append(append([]string{}, base...), s...)
+			if len(s) > 0 && s[0] == "--db" { // a setup command naming its own database
+				full = s
+			}
+			if code := mainRun(full, &out, &errOut); code != 0 {
+				t.Fatalf("setup %v: exit %d: %s", s, code, errOut.String())
+			}
+		}
+	}
+	// merge, index and init never open the ambient database and refuse --db.
+	if len(tc.args) > 0 && (tc.args[0] == "merge" || tc.args[0] == "index" || tc.args[0] == "init") {
+		base = nil
+	}
+	var out, errOut bytes.Buffer
+	args := append(append([]string{"--json"}, base...), tc.args...)
+	code := mainRun(args, &out, &errOut)
+
+	if code != tc.want.Code {
+		t.Errorf("kb %s: exit %d, want %d (%s); stderr: %.200s", strings.Join(tc.args, " "), code, tc.want.Code, tc.want.Name, errOut.String())
+	}
+	if code == classInternal.Code {
+		t.Errorf("kb %s: exit 70, an error nothing classified: %.200s", strings.Join(tc.args, " "), errOut.String())
+	}
+	if s := strings.TrimSpace(errOut.String()); strings.HasPrefix(s, "{") {
+		var env struct {
+			Class string `json:"class"`
+			Code  int    `json:"code"`
+		}
+		if err := json.Unmarshal([]byte(s), &env); err != nil {
+			t.Errorf("stderr is not one JSON object: %.200q (%v)", s, err)
+		} else if env.Class != tc.want.Name || env.Code != tc.want.Code {
+			t.Errorf("envelope class %q code %d, want %q %d", env.Class, env.Code, tc.want.Name, tc.want.Code)
+		}
+	}
+	if out.Len() != 0 && tc.want != classOK && !tc.bulk {
+		t.Errorf("stdout = %.100q, want it empty on a failure", out.String())
+	}
+}
+
+func seedProject() [][]string {
+	return [][]string{{"project", "add", "P", "d"}}
+}
+
+func seedLinked() [][]string {
+	return [][]string{
+		{"project", "add", "P", "d"}, {"concept", "add", "C"},
+		{"observation", "add", "--project", "P", "note", "body"}, {"link", "observation", "1", "C"},
+	}
+}
+
+const goodRecord = "---\nid: \"0001\"\ntitle: \"ok\"\ndate: \"2026-09-25\"\nstatus: proposed\nkind: decision\ntrigger: design\nproject: P\nuuid: \"11111111-1111-7111-8111-111111111111\"\norigin_host: \"h\"\n---\n\nbody\n"
+
+// negativeVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var negativeVerbCases = []verbCase{
+	{name: "project show", args: []string{"project", "show", "nosuch"}},
+	{name: "project rename missing", setup: seedProject(), args: []string{"project", "rename", "nosuch", "x"}},
+	{name: "project rename onto an existing name", setup: [][]string{{"project", "add", "P", "d"}, {"project", "add", "Q", "d"}}, args: []string{"project", "rename", "P", "Q"}},
+	{name: "project set-status missing", args: []string{"project", "set-status", "nosuch", "active"}},
+	{name: "project concepts", args: []string{"project", "concepts", "nosuch"}},
+	{name: "concept delete missing", args: []string{"concept", "delete", "nosuch"}},
+	{name: "concept delete while linked", setup: seedLinked(), args: []string{"concept", "delete", "C"}},
+	{name: "concept rename missing", args: []string{"concept", "rename", "nosuch", "x"}},
+	{name: "concept rename onto an existing name", setup: [][]string{{"concept", "add", "A"}, {"concept", "add", "B"}}, args: []string{"concept", "rename", "A", "B"}},
+	{name: "document review promote of a section not drafted", setup: [][]string{{"project", "add", "P", "d"}, {"document", "ingest", "doc.md", "--project", "P"}}, files: map[string]string{"doc.md": "## S\n\nbody\n"}, args: []string{"document", "review", "promote", "1"}},
+	{name: "observation show", args: []string{"observation", "show", "99"}},
+	{name: "observation update", args: []string{"observation", "update", "99", "text"}},
+	{name: "observation list unknown project", args: []string{"observation", "list", "--project", "nosuch"}},
+	{name: "observation add unknown project", args: []string{"observation", "add", "--project", "nosuch", "note", "b"}},
+	{name: "source show", args: []string{"source", "show", "99"}},
+	{name: "source retract", args: []string{"source", "retract", "99", "note"}},
+	{name: "source remove", args: []string{"source", "remove", "99"}},
+	{name: "source remove while linked", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}, {"source", "add", "S"}, {"source", "link", "1", "1"}}, args: []string{"source", "remove", "1"}},
+	{name: "source link missing ids", args: []string{"source", "link", "99", "99"}},
+	{name: "link observation missing observation", setup: [][]string{{"concept", "add", "C"}}, args: []string{"link", "observation", "99", "C"}},
+	{name: "document review promote missing", args: []string{"document", "review", "promote", "99"}},
+	{name: "link project", setup: seedProject(), args: []string{"link", "project", "nosuch", "C"}},
+	{name: "link observation unknown concept", setup: seedLinked(), args: []string{"link", "observation", "1", "nosuch"}},
+	{name: "search finds nothing", args: []string{"search", "zzznotfound"}},
+	{name: "scoped search finds nothing", setup: seedProject(), args: []string{"search", "P/", "zzznotfound"}},
+	{name: "workspace observations have no members", setup: seedProject(), args: []string{"search", "workspace/observations", "x"}},
+	{name: "a project has no projects", setup: seedProject(), args: []string{"search", "P/projects", "x"}},
+	{name: "record show", args: []string{"record", "show", "9999"}},
+	{name: "record list unknown project", args: []string{"record", "list", "--project", "nosuch"}},
+	{name: "record list unknown status", args: []string{"record", "list", "--status", "acepted"}},
+	{name: "document show", args: []string{"document", "show", "99"}},
+	{name: "document list unknown project", args: []string{"document", "list", "--project", "nosuch"}},
+	{name: "document tag unknown project", args: []string{"document", "tag", "--project", "nosuch"}},
+	{name: "concept suggest unknown project", args: []string{"concept", "suggest", "--project", "nosuch"}},
+	{name: "record fuzzy-tag unknown project", args: []string{"record", "fuzzy-tag", "--project", "nosuch"}},
+	{name: "record fuzzy-tag unknown concept", setup: seedProject(), args: []string{"record", "fuzzy-tag", "--project", "P", "--concept", "nosuch"}},
+	{name: "concept show unknown name", args: []string{"concept", "show", "nosuch"}},
+	{name: "concept recall matches nothing", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "recall", "nothing", "here"}},
+	{name: "concept recall unknown project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "recall", "--concept", "C", "--project", "nosuch"}},
+	{name: "export unknown project", args: []string{"export", "-project", "nosuch"}},
+	{name: "index --check with no index", files: map[string]string{"recs/0001-ok.md": goodRecord}, args: []string{"index", "--check", "recs"}},
+	{name: "unlink observation not linked", setup: [][]string{{"project", "add", "P", "d"}, {"concept", "add", "C"}, {"observation", "add", "--project", "P", "note", "b"}}, args: []string{"unlink", "observation", "1", "C"}},
+	{name: "unlink observation twice", setup: append(seedLinked(), []string{"unlink", "observation", "1", "C"}), args: []string{"unlink", "observation", "1", "C"}},
+	{name: "unlink missing observation", setup: [][]string{{"concept", "add", "C"}}, args: []string{"unlink", "observation", "99", "C"}},
+	{name: "unlink unknown concept", setup: seedLinked(), args: []string{"unlink", "observation", "1", "nosuch"}},
+	{name: "unlink project not linked", setup: append(seedProject(), []string{"concept", "add", "C"}), args: []string{"unlink", "project", "P", "C"}},
+	{name: "unlink missing project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"unlink", "project", "nosuch", "C"}},
+	{name: "unlink source not linked", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}, {"source", "add", "S"}}, args: []string{"unlink", "source", "1", "1"}},
+	{name: "observation delete while linked", setup: seedLinked(), args: []string{"observation", "delete", "1"}},
+	{name: "project delete while it owns an observation", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}}, args: []string{"project", "delete", "P"}},
+}
+
+func TestVerbs_NegativeIsExit1(t *testing.T) {
+	for _, tc := range negativeVerbCases {
+		tc.want = classNegative
+		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
+	}
+}
+
+// usageVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var usageVerbCases = []verbCase{
+	{name: "search unknown scope", args: []string{"search", "nosuch/", "x"}},
+	{name: "search unknown kind", setup: seedProject(), args: []string{"search", "P/papers", "x"}},
+	{name: "unknown observation kind", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "bogus", "b"}},
+	{name: "unknown project status", setup: seedProject(), args: []string{"project", "set-status", "P", "bogus"}},
+	{name: "blank project name", args: []string{"project", "add", ""}},
+	{name: "blank source title", args: []string{"source", "add", ""}},
+	{name: "bad source date", args: []string{"source", "add", "T", "--published", "notadate"}},
+	{name: "bad source url", args: []string{"source", "add", "T", "--url", "x y"}},
+	{name: "bad source doi", args: []string{"source", "add", "T", "--doi", "zzz"}},
+	{name: "record new unknown trigger", args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "bogus", "--dir", "d"}},
+	{name: "record new unknown kind", args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "design", "--kind", "bogus", "--dir", "d"}},
+	{name: "index --all with --stdout", args: []string{"index", "--all", "--stdout", "."}},
+	{name: "index --check with --stdout", args: []string{"index", "--check", "--stdout", "."}},
+	{name: "unknown subverb", args: []string{"project", "bogus"}},
+	{name: "malformed id", args: []string{"observation", "show", "abc"}},
+	{name: "unknown --accept-keywords value", files: map[string]string{"doc.md": "# T\n\nbody\n"}, args: []string{"document", "frontmatter", "doc.md", "--accept-keywords", "zzznotaconcept"}},
+	{name: "negative concept suggest limit", args: []string{"concept", "suggest", "--limit", "-1"}},
+	{name: "record fuzzy-tag without a project", args: []string{"record", "fuzzy-tag"}},
+	{name: "record fuzzy-tag surplus argument", setup: seedProject(), args: []string{"record", "fuzzy-tag", "--project", "P", "extra"}},
+	{name: "record fuzzy-tag bad flag", args: []string{"record", "fuzzy-tag", "--project", "P", "--bogus"}},
+	{name: "record list refuses --write", args: []string{"record", "list", "--write"}},
+	{name: "check-db surplus argument", setup: seedProject(), args: []string{"check-db", "extra"}},
+	{name: "check-db bad flag", setup: seedProject(), args: []string{"check-db", "--bogus"}},
+	{name: "stats surplus argument", setup: seedProject(), args: []string{"stats", "extra"}},
+	{name: "stats bad flag", setup: seedProject(), args: []string{"stats", "--bogus"}},
+	{name: "concept show without a name", args: []string{"concept", "show"}},
+	{name: "concept show surplus argument", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "extra"}},
+	{name: "concept show negative limit", setup: [][]string{{"concept", "add", "C"}}, args: []string{"concept", "show", "C", "--limit", "-1"}},
+	{name: "concept show bad flag", args: []string{"concept", "show", "C", "--bogus"}},
+	{name: "concept recall with no input", args: []string{"concept", "recall"}},
+	{name: "concept recall negative limit", args: []string{"concept", "recall", "x", "--limit", "-1"}},
+	{name: "concept recall bad flag", args: []string{"concept", "recall", "x", "--bogus"}},
+	{name: "unparseable date", args: []string{"record", "list", "--since", "yesterday"}},
+	{name: "help for a name that is not a topic", args: []string{"help", "nosuch"}},
+	{name: "link without a subverb", args: []string{"link"}},
+	{name: "link observation without a concept", args: []string{"link", "observation", "1"}},
+	{name: "link observation surplus argument", args: []string{"link", "observation", "1", "C", "extra"}},
+	{name: "link unknown subverb", args: []string{"link", "concept", "1", "C"}},
+	{name: "unlink without a subverb", args: []string{"unlink"}},
+	{name: "unlink project without a concept", args: []string{"unlink", "project", "P"}},
+	{name: "unlink unknown subverb", args: []string{"unlink", "bogus", "1", "C"}},
+	{name: "project add of the reserved name", args: []string{"project", "add", "workspace"}},
+	{name: "observation show surplus argument", args: []string{"observation", "show", "1", "2"}},
+	{name: "source list surplus argument", args: []string{"source", "list", "extra"}},
+	{name: "source link without a source", args: []string{"source", "link", "1"}},
+	{name: "search without a term", args: []string{"search"}},
+	{name: "search with an unknown flag", args: []string{"search", "-bogus", "x"}},
+	{name: "export surplus argument", args: []string{"export", "extra"}},
+	{name: "export bad flag", args: []string{"export", "-bogus"}},
+	{name: "import surplus argument", args: []string{"import", "extra"}},
+	{name: "import bad flag", args: []string{"import", "-bogus"}},
+	{name: "merge without its flags", args: []string{"merge"}},
+	{name: "merge of a file with itself", setup: seedProject(), args: []string{"merge", "-a", "kb.db", "-b", "kb.db", "-out", "o.db"}},
+	{name: "ingest without a path", args: []string{"ingest"}},
+	{name: "ingest bad flag", args: []string{"ingest", "--bogus", "."}},
+	{name: "index without a path", args: []string{"index"}},
+	{name: "init with two paths", noDB: true, args: []string{"init", "a", "b"}},
+	{name: "init refuses --db", noDB: true, args: []string{"--db", "x.db", "init"}},
+}
+
+func TestVerbs_UsageIsExit2(t *testing.T) {
+	for _, tc := range usageVerbCases {
+		tc.want = classUsage
+		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
+	}
+}
+
+// dataVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var dataVerbCases = []verbCase{
+	{name: "database file is not a database", files: map[string]string{"kb.db": "this is text, not a database, but long enough to be read as a header..\n"}, args: []string{"project", "list"}},
+	{name: "check-db against a malformed dump", setup: seedProject(), files: map[string]string{"kb.jsonl": "{\"type\": \n"}, args: []string{"check-db"}},
+	{name: "import of malformed JSONL", files: map[string]string{"in.jsonl": "{\"type\": \n"}, args: []string{"import", "-in", "in.jsonl"}},
+	{name: "merge input is zero bytes", setup: seedProject(), files: map[string]string{"z.db": ""}, args: []string{"merge", "-a", "z.db", "-b", "kb.db", "-out", "o.db"}},
+	{name: "index over a malformed record", files: map[string]string{"recs/0001-bad.md": "---\nid: \"0001\"\ntitle: \"\"\n---\nx\n"}, args: []string{"index", "recs"}},
+	{name: "document ingest of an unsupported pdf", setup: seedProject(), files: map[string]string{"a.pdf": "%PDF-1.4\n"}, args: []string{"document", "ingest", "a.pdf", "--project", "P"}},
+}
+
+func TestVerbs_DataIsExit65(t *testing.T) {
+	for _, tc := range dataVerbCases {
+		tc.want = classData
+		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
+	}
+}
+
+// noInputVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var noInputVerbCases = []verbCase{
+	{name: "ingest of a missing directory", args: []string{"ingest", "/nonexistent"}},
+	{name: "ingest of a file", files: map[string]string{"f.txt": "x"}, args: []string{"ingest", "f.txt"}},
+	{name: "document ingest of a missing file", setup: seedProject(), args: []string{"document", "ingest", "/nonexistent.md", "--project", "P"}},
+	{name: "import of a missing file", args: []string{"import", "-in", "/nonexistent.jsonl"}},
+	{name: "merge with a missing input", setup: seedProject(), args: []string{"merge", "-a", "/nonexistent.db", "-b", "kb.db", "-out", "o.db"}},
+	{name: "merge input is a directory", setup: seedProject(), files: map[string]string{"d/x": "x"}, args: []string{"merge", "-a", "d", "-b", "kb.db", "-out", "o.db"}},
+	{name: "index of a missing directory", args: []string{"index", "/nonexistent"}},
+	{name: "index of a file", files: map[string]string{"f.txt": "x"}, args: []string{"index", "f.txt"}},
+	{name: "check-db with no dump", setup: seedProject(), args: []string{"check-db"}},
+	{name: "check-db with --jsonl naming a missing file", setup: seedProject(), args: []string{"check-db", "--jsonl", "/nonexistent.jsonl"}},
+	{name: "no workspace here", noDB: true, args: []string{"project", "list"}},
+}
+
+func TestVerbs_NoInputIsExit66(t *testing.T) {
+	for _, tc := range noInputVerbCases {
+		tc.want = classNoInput
+		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
+	}
+}
+
+// cantCreateVerbCases are the failures of one class, one per line, that the verbs are
+// provoked into; manpages_exitstatus_test.go reads them to check the manual pages.
+var cantCreateVerbCases = []verbCase{
+	{name: "export into a missing directory", args: []string{"export", "-out", "/nonexistent/dir/o.jsonl"}},
+	{name: "merge -out already exists", setup: [][]string{{"project", "add", "P", "d"}, {"--db", "b.db", "project", "add", "Q", "d"}}, files: map[string]string{"o.db": "x"}, args: []string{"merge", "-a", "kb.db", "-b", "b.db", "-out", "o.db"}},
+	{name: "record new under a file", files: map[string]string{"blocker": "x"}, args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "design", "--dir", "blocker/sub", "--root", "."}},
+	{name: "index where index.md is a directory", files: map[string]string{"recs/index.md/keep": "x"}, args: []string{"index", "recs"}},
+	{name: "init under a file", noDB: true, files: map[string]string{"blocker": "x"}, args: []string{"init", "blocker/sub"}},
+}
+
+func TestVerbs_CantCreateIsExit73(t *testing.T) {
+	for _, tc := range cantCreateVerbCases {
+		tc.want = classCantCreate
+		t.Run(tc.name, func(t *testing.T) { runVerbCase(t, tc) })
+	}
+}
+
+func TestVerbs_IOIsExit74(t *testing.T) {
+	tc := verbCase{name: "import of a directory", files: map[string]string{"d/x": "x"}, args: []string{"import", "-in", "d"}, want: classIO}
+	runVerbCase(t, tc)
+}
+
+func TestVerbs_PermissionIsExit77(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "locked.jsonl")
+	if err := os.WriteFile(locked, []byte("{}\n"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o644) })
+	runVerbCase(t, verbCase{name: "import of an unreadable file", args: []string{"import", "-in", locked}, want: classNoPermission})
+
+	ro := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(ro, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(ro, 0o755) })
+	runVerbCase(t, verbCase{name: "init in a read-only directory", noDB: true, args: []string{"init", filepath.Join(ro, "sub")}, want: classNoPermission})
+}
+
+// export has two ways to fail after it has started writing: the OS refuses the
+// output (77) and the write fails part way (74). Both are in kb-export(1)'s EXIT
+// STATUS, so both are provoked here. /dev/full accepts the open and fails every
+// write with ENOSPC.
+func TestVerbs_ExportWriteFailures(t *testing.T) {
+	t.Run("OS refuses -out", func(t *testing.T) {
+		if os.Getuid() == 0 {
+			t.Skip("running as root: permissions are not enforced")
+		}
+		ro := filepath.Join(t.TempDir(), "ro")
+		if err := os.Mkdir(ro, 0o555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(ro, 0o755) })
+		runVerbCase(t, verbCase{name: "export into a read-only directory", args: []string{"export", "-out", filepath.Join(ro, "o.jsonl")}, want: classNoPermission})
+	})
+	t.Run("write fails part way", func(t *testing.T) {
+		if _, err := os.Stat("/dev/full"); err != nil {
+			t.Skip("no /dev/full on this system")
+		}
+		runVerbCase(t, verbCase{name: "export onto a full device", setup: seedProject(), args: []string{"export", "-out", "/dev/full"}, want: classIO})
+	})
+}
+
+// index and ingest name a directory, and the OS can refuse them: index cannot
+// write index.md into a read-only directory, ingest cannot read a record file.
+// Both are 77, as kb-index(1) and kb-ingest(1) say.
+func TestVerbs_IndexAndIngestOSRefusals(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+	ro := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(ro, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(ro, 0o755) })
+	runVerbCase(t, verbCase{name: "index into a read-only directory", args: []string{"index", ro}, want: classNoPermission})
+
+	recs := t.TempDir()
+	locked := filepath.Join(recs, "0001-ok.md")
+	if err := os.WriteFile(locked, []byte(goodRecord), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o644) })
+	runVerbCase(t, verbCase{name: "ingest of a record file it may not read", args: []string{"ingest", recs}, want: classNoPermission, bulk: true})
+}
+
+// kb(1) says what 73 (cant_create) is, and the cases that look like it but are not:
+// export -out onto a file that exists replaces it, and init on a workspace that
+// exists leaves it alone. Both are 0. Pinned so the manual stays true (T4 of
+// release-plan-v0.0.28.md).
+func TestVerbs_ReplacingAnExportAndRepeatingInitAreExit0(t *testing.T) {
+	runVerbCase(t, verbCase{name: "export -out onto an existing file", setup: [][]string{{"project", "add", "P", "d"}, {"export", "-out", "o.jsonl"}}, args: []string{"export", "-out", "o.jsonl"}, want: classOK})
+	dir := t.TempDir()
+	for i := 0; i < 2; i++ {
+		var out, errOut bytes.Buffer
+		if code := mainRun([]string{"init", dir}, &out, &errOut); code != 0 {
+			t.Fatalf("init run %d: exit %d, want 0: %s", i+1, code, errOut.String())
+		}
+	}
+}
+
+// A database file the operating system will not let kb open is 77 (no_permission),
+// as an unreadable import file and a read-only directory already are. SQLite
+// reports it as "unable to open database file", which says nothing about why, so
+// it used to fall to 74 (io) with every other SQLite failure (release-plan-v0.0.28.md, T3b).
+func TestVerbs_UnreadableDatabaseIsExit77(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	db := filepath.Join(dir, "kb.db")
+	var out, errOut bytes.Buffer
+	if code := mainRun([]string{"--db", db, "project", "add", "P", "d"}, &out, &errOut); code != 0 {
+		t.Fatalf("setup: exit %d: %s", code, errOut.String())
+	}
+	if err := os.Chmod(db, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(db, 0o644) })
+
+	for _, args := range [][]string{{"project", "list"}, {"search", "x"}, {"export"}} {
+		out.Reset()
+		errOut.Reset()
+		code := mainRun(append([]string{"--json", "--db", db}, args...), &out, &errOut)
+		if code != classNoPermission.Code {
+			t.Errorf("kb %s on an unreadable database: exit %d, want %d (no_permission); stderr: %.200s", strings.Join(args, " "), code, classNoPermission.Code, errOut.String())
+		}
+	}
+}
+
+// A direct, unprovoked pass over every class this table covers is not enough to
+// prove the fallback is gone: this pins that an error nobody classified is now
+// 70 (DR-0047 item 4), the change X2 makes.
+func TestExitCodeFor_UnclassifiedIsInternalFromX2(t *testing.T) {
+	if unclassifiedFallback != classInternal {
+		t.Errorf("unclassifiedFallback = %v, want internal (70) once X2 is done", unclassifiedFallback)
+	}
+}

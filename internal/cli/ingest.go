@@ -1,0 +1,860 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+
+	knowledge "github.com/rsdoiel/knowledge"
+)
+
+func init() {
+	verbs["ingest"] = cmdIngest
+}
+
+// recordFilePattern matches a decision record filename: a four-digit id, a
+// dash, a slug. The generated index.md deliberately does not match.
+var recordFilePattern = regexp.MustCompile(`^[0-9]{4}-.*\.md$`)
+
+// datedNamePattern matches a name that starts with a date, YYYY-MM-DD. A dated
+// note (notes/2026-09-29-worklog.md) would otherwise pass for record 2026.
+var datedNamePattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}([-.]|$)`)
+
+// nonRecordDirs are the directories of the project layout (PROJECT_CYCLE.md)
+// that never hold decision records. The walk skips them below the directory it
+// was given; a directory named on the command line is read whatever it is called.
+var nonRecordDirs = map[string]bool{
+	"design": true, "plans": true, "feature_requests": true, "notes": true, "hand-off": true,
+}
+
+/** isRecordFileName reports whether a file name is a decision record's:
+ * NNNN-slug.md, and not a name that begins with a date.
+ *
+ * Parameters:
+ *   name (string) — a file name without its directory.
+ *
+ * Returns:
+ *   bool — true for 0042-use-sqlite.md; false for index.md and for
+ *   2026-09-29-worklog.md.
+ *
+ * Example:
+ *   isRecordFileName("0042-use-sqlite.md") // true
+ */
+func isRecordFileName(name string) bool {
+	return recordFilePattern.MatchString(name) && !datedNamePattern.MatchString(name)
+}
+
+// wikilinkPattern matches a [[Name]] inline concept tag. Simple and
+// non-nested by design decision — see wikilink-tagging-design.md decision 3.
+var wikilinkPattern = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
+
+// recordIDLikeWikilink matches a wikilink name that looks like it was meant
+// to cite a decision record ([[0007]] or [[DR-0007]]) rather than tag a
+// concept. relates_to and supersedes are how a record cites another record;
+// [[Name]] is how it tags a concept — but [[0007]] is the natural way to
+// write "see DR-0007", so it silently minted a concept named "0007" instead
+// of warning. See TODO.md "[[NNNN]] in a record body mints a junk concept".
+var recordIDLikeWikilink = regexp.MustCompile(`(?i)^(dr-)?[0-9]{4}$`)
+
+/** statusChange is a record whose status entered the database through a file
+ * and not through `kb record set-status` (DR-0068): either the file's status
+ * differs from the stored one ("edited"), or the record is new and already
+ * accepted ("arrived"). A report, never a block.
+ *
+ * Fields:
+ *   Ref  (string) — the qualified reference, such as clasm/DR-0012.
+ *   From (string) — the stored status; empty for an arrival.
+ *   To   (string) — the status in the file.
+ *   Kind (string) — "edited" or "arrived".
+ */
+type statusChange struct {
+	Ref  string `json:"ref"`
+	From string `json:"from,omitempty"`
+	To   string `json:"to"`
+	Kind string `json:"kind"`
+}
+
+// ingestSummary is what one ingest run reports, in both JSON and text form.
+// Unresolved, Malformed and Missing are the three ways a run can be
+// incomplete without being a failure.
+type ingestSummary struct {
+	Root       string   `json:"root"`
+	Path       string   `json:"path"`
+	DryRun     bool     `json:"dry_run"`
+	Added      int      `json:"added"`
+	Updated    int      `json:"updated"`
+	Skipped    int      `json:"skipped"`
+	Failed     int      `json:"failed"`
+	Supersedes int      `json:"supersedes"`
+	RelatesTo  int      `json:"relates_to"`
+	Warnings   []string `json:"warnings,omitempty"`
+	Unresolved []string `json:"unresolved,omitempty"`
+	Malformed  []string `json:"malformed,omitempty"`
+	Missing    []string `json:"missing,omitempty"`
+	Errors     []string `json:"errors,omitempty"`
+	// StatusChanges lists the statuses that arrived through a file (DR-0068).
+	StatusChanges []statusChange `json:"status_changes,omitempty"`
+	// ConceptsCreated lists the concepts the ingest created from [[wikilinks]] and
+	// tags, or with --dry-run would create (DR-0068): a typo makes one silently.
+	ConceptsCreated []string `json:"concepts_created,omitempty"`
+}
+
+// ingestedRecord is one file that made it through pass one, carrying what
+// pass two needs to resolve its references.
+type ingestedRecord struct {
+	file      *knowledge.RecordFile
+	dbID      int64 // 0 during --dry-run, where nothing is written
+	projectID int64
+}
+
+// identityKey is how a reference names a record: the project name (empty at
+// the workspace tier), the scope, and the record id.
+type identityKey struct {
+	project  string
+	scope    string
+	recordID string
+}
+
+// ingester carries one run's state across both passes.
+type ingester struct {
+	kb   *knowledge.KnowledgeBase
+	root string
+	// workspace is the base name of root, not of the database's location:
+	// --root may name a workspace other than the one the database sits in.
+	workspace string
+	dryRun    bool
+	summary   ingestSummary
+	byIdent   map[identityKey]*ingestedRecord
+	order     []*ingestedRecord
+	// firstFail is the first thing that went wrong, in path order. Ingest keeps
+	// going after a failure, so every record it can is ingested, but the command
+	// exits with this error's class (workspace DR-0003 rule 4, DR-0047 item 6).
+	firstFail   error
+	newConcepts map[string]bool // lower-cased names already noted as new this run
+}
+
+// noteFailure remembers the first failure so cmdIngest can exit with its class.
+func (ing *ingester) noteFailure(err error) {
+	if ing.firstFail == nil {
+		ing.firstFail = err
+	}
+}
+
+/** cmdIngest implements `kb ingest PATH [--dry-run] [--root DIR]`: it walks a
+ * directory tree of decision records, upserts each into the records table and
+ * the full-text index, and resolves their cross-references.
+ *
+ * Ingest is additive. A record whose file has vanished stays in the database
+ * and is reported, because pruning rows whose files are missing would destroy
+ * data on a partial or wrong-directory run. Ingest also never writes to a
+ * record file — only `kb record` does.
+ *
+ * Parameters:
+ *   kb      (*knowledge.KnowledgeBase) — the open knowledge base.
+ *   dl      (*DebugLog)                — debug log, may be nil.
+ *   jsonOut (bool)                     — emit the summary as JSON.
+ *   args    ([]string)                 — PATH plus --dry-run / --root DIR.
+ *   out     (io.Writer)                — where the summary is written.
+ *
+ * Returns:
+ *   error — on a usage error or an unreadable tree. An unresolvable
+ *           reference, a malformed one, or a single unparsable file are
+ *           reported in the summary, not returned.
+ *
+ * Example:
+ *   err := cmdIngest(kb, nil, false, []string{"agents/projects/clasm/decisions"}, os.Stdout)
+ */
+func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	path, root, dryRun, err := parseIngestFlags(args)
+	if err != nil {
+		return err
+	}
+	if root == "" {
+		root = defaultIngestRoot(kb.Path())
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("resolving --root %s: %w", root, err)
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolving %s: %w", path, err)
+	}
+	if fi, err := os.Stat(absPath); err != nil || !fi.IsDir() {
+		return noInputf("%s is not a directory", path)
+	}
+
+	ing := &ingester{
+		kb:        kb,
+		root:      absRoot,
+		workspace: filepath.Base(absRoot),
+		dryRun:    dryRun,
+		byIdent:   map[identityKey]*ingestedRecord{},
+		summary:   ingestSummary{Root: absRoot, Path: absPath, DryRun: dryRun},
+	}
+
+	files, err := collectRecordFiles(absPath)
+	if err != nil {
+		return err
+	}
+	ing.upsertAll(files)
+	ing.resolveAll()
+	ing.reportMissing(absPath)
+
+	dl.Log("ingest", map[string]any{
+		"path": absPath, "root": absRoot, "dry_run": dryRun,
+		"added": ing.summary.Added, "updated": ing.summary.Updated,
+		"skipped": ing.summary.Skipped, "failed": ing.summary.Failed,
+		"supersedes": ing.summary.Supersedes, "relates_to": ing.summary.RelatesTo,
+	})
+
+	if jsonOut {
+		if err := printJSON(out, ing.summary); err != nil {
+			return err
+		}
+	} else {
+		writeIngestText(out, ing.summary)
+	}
+	// The summary above is the report; a failure still exits non-zero, with the
+	// class of the first one, after every record that could be ingested was.
+	if ing.firstFail != nil {
+		// The listing above has the text; this line has the count and the class, and
+		// does not say the first failure a second time.
+		return classedAs(exitCodeFor(ing.firstFail), fmt.Errorf(
+			"ingest: %d error(s), listed above; every record that could be ingested was",
+			len(ing.summary.Errors)))
+	}
+	return nil
+}
+
+// parseIngestFlags pulls PATH, --root and --dry-run out of args.
+func parseIngestFlags(args []string) (path, root string, dryRun bool, err error) {
+	strFlags := map[string]*string{"--root": &root, "-root": &root}
+	boolFlags := map[string]*bool{"--dry-run": &dryRun, "-dry-run": &dryRun}
+	positional, err := splitFlags(args, strFlags, boolFlags)
+	if err != nil {
+		return "", "", false, err
+	}
+	switch len(positional) {
+	case 0:
+		return "", "", false, usageErrorf("ingest requires a PATH; see kb help ingest")
+	case 1:
+		return positional[0], root, dryRun, nil
+	default:
+		return "", "", false, usageErrorf("ingest takes a single PATH, got %q and %q", positional[0], positional[1])
+	}
+}
+
+// defaultIngestRoot returns the workspace root implied by the database's
+// location: the parent of the directory holding it, so that
+// --db agents/knowledge.db gives a root of the workspace itself. Paths are
+// stored relative to it, since absolute paths do not survive merge between
+// machines.
+func defaultIngestRoot(dbPath string) string {
+	return filepath.Dir(filepath.Dir(dbPath))
+}
+
+// collectRecordFilesIn returns the record files directly in dir, sorted, and
+// does not descend into subdirectories. A directory holding records is a
+// corpus and owns exactly one index.md, so `kb index` indexes the directory it
+// is pointed at: ~/WorkLab/agents/decisions gained a nested caltechauthors/
+// corpus, and recursing folded its DR-0001..0005 into the workspace tier's
+// index beside the workspace tier's own. ingest keeps the recursive walk
+// below, which is right for it -- it fills one database from a whole tree
+// rather than writing one file per directory.
+func collectRecordFilesIn(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", dir, err)
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() || !isRecordFileName(e.Name()) {
+			continue
+		}
+		files = append(files, filepath.Join(dir, e.Name()))
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+// collectRecordFiles walks dir and returns every record file, sorted, so that
+// a run is deterministic.
+func collectRecordFiles(dir string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && p != dir && nonRecordDirs[d.Name()] {
+			return fs.SkipDir
+		}
+		if d.IsDir() || !isRecordFileName(d.Name()) {
+			return nil
+		}
+		files = append(files, p)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walking %s: %w", dir, err)
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+// upsertAll is pass one: parse and store every record, without resolving any
+// reference. A record may cite one the walk has not reached yet.
+func (ing *ingester) upsertAll(files []string) {
+	for _, file := range files {
+		rf, err := knowledge.ParseRecordFile(file)
+		if err != nil {
+			ing.summary.Failed++
+			ing.summary.Errors = append(ing.summary.Errors, err.Error())
+			ing.noteFailure(asContent(err))
+			continue
+		}
+		name := ing.relativeTo(file)
+		for _, w := range rf.Warnings {
+			ing.summary.Warnings = append(ing.summary.Warnings, name+": "+w)
+		}
+		rf.Record.Path = name
+
+		projectID, err := ing.projectID(rf.ProjectName)
+		if err != nil {
+			ing.summary.Failed++
+			ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf("%s: %v", name, err))
+			ing.noteFailure(asContent(err))
+			continue
+		}
+		rf.Record.ProjectID = projectID
+		rf.Record.Workspace = ing.workspace
+
+		rec := &ingestedRecord{file: rf, projectID: projectID}
+		existing, err := ing.kb.RecordByIdentity(ing.workspace, projectID, rf.Record.Scope, rf.Record.RecordID)
+		moved := err == nil && existing.Path != rf.Record.Path
+		if err == nil {
+			if problem := identityCollision(existing, &rf.Record, name); problem != "" {
+				ing.summary.Failed++
+				ing.summary.Errors = append(ing.summary.Errors, problem)
+				ing.noteFailure(dataErrorf("%s", problem))
+				continue
+			}
+			// A path change alongside a body change is genuinely ambiguous —
+			// a slug may have been regenerated, or two files may claim one
+			// id — and worth flagging. A path change alone is an ordinary
+			// move, handled below without a warning that would otherwise
+			// read like a possible collision.
+			if moved && existing.Checksum != rf.Record.Checksum {
+				ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+					"%s: DR-%s was stored at %s; a slug may have been regenerated, or two files may claim one id",
+					name, rf.Record.RecordID, existing.Path))
+			}
+		}
+		// A status that enters through a file is reported (DR-0068), not blocked:
+		// the file is the source of truth. It is noted here, where both the stored
+		// and the incoming record are in hand, and recorded below once the write
+		// has succeeded (or in a dry run, where nothing is written).
+		var change *statusChange
+		ref := statusChangeRef(rf.ProjectName, rf.Record.RecordID)
+		switch {
+		case err == nil && existing.Checksum == rf.Record.Checksum:
+			ing.summary.Skipped++
+			rec.dbID = existing.ID
+			if !ing.dryRun && moved {
+				if uerr := ing.kb.UpdateRecordPath(existing.ID, rf.Record.Path); uerr != nil {
+					ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf(
+						"%s: update path: %v", name, uerr))
+					ing.noteFailure(uerr)
+				}
+			}
+		case err == nil:
+			ing.summary.Updated++
+			if existing.Status != rf.Record.Status {
+				change = &statusChange{Ref: ref, From: existing.Status, To: rf.Record.Status, Kind: "edited"}
+			}
+		default:
+			ing.summary.Added++
+			if rf.Record.Status == "accepted" {
+				change = &statusChange{Ref: ref, To: rf.Record.Status, Kind: "arrived"}
+			}
+		}
+
+		if !ing.dryRun && rec.dbID == 0 {
+			id, err := ing.kb.AddRecord(rf.Record)
+			if err != nil {
+				// It was counted as added above; it was not, so it is only a failure.
+				ing.summary.Added--
+				ing.summary.Failed++
+				ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf("%s: %v", name, err))
+				ing.noteFailure(asContent(err))
+				continue
+			}
+			rec.dbID = id
+		}
+		if change != nil {
+			ing.summary.StatusChanges = append(ing.summary.StatusChanges, *change)
+		}
+		ing.linkInitiative(rf, projectID)
+		ing.linkWikilinkTags(rf, rec.dbID)
+		ing.linkSources(rf, rec.dbID)
+
+		ing.byIdent[identityKey{rf.ProjectName, rf.Record.Scope, rf.Record.RecordID}] = rec
+		ing.order = append(ing.order, rec)
+	}
+}
+
+// identityCollision reports whether an incoming record is a *different*
+// record wearing an identity that is already taken, in which case storing it
+// would destroy the existing one.
+//
+// The case this exists for is the workspace tier. Every workspace has an
+// agents/decisions/, and a workspace-tier record's identity is
+// (NULL project, "workspace", record_id) — unique only within one workspace.
+// Ingesting two workspaces' tiers into one database would otherwise overwrite
+// the first with the second and report it as a routine update.
+//
+// uuid is what settles it: it is a record's stable identity across machines,
+// so two non-empty and differing uuids mean two records. Where either uuid is
+// empty the check cannot conclude anything and stays silent; the caller warns
+// on a changed path instead, since a slug is cosmetic and may be regenerated.
+//
+// This is interim. The real fix is to carry the workspace's own name so that a
+// workspace-tier identity is complete, which would also retire the NULL
+// project_id this works around.
+func identityCollision(existing, incoming *knowledge.Record, name string) string {
+	if existing.UUID == "" || incoming.UUID == "" || existing.UUID == incoming.UUID {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%s: DR-%s already exists with a different uuid (%s stored at %s, incoming %s); "+
+			"refusing to overwrite it, since two records cannot share one identity",
+		name, incoming.RecordID, existing.UUID, existing.Path, incoming.UUID)
+}
+
+// projectID resolves a frontmatter project name to a row, creating the
+// project when it is not yet known. The workspace tier has no project and
+// resolves to 0, stored as a NULL project_id.
+func (ing *ingester) projectID(name string) (int64, error) {
+	if name == "" {
+		return 0, nil
+	}
+	// ProjectByName reports "not found" as (nil, nil), not as an error.
+	if p, err := ing.kb.ProjectByName(name); err == nil && p != nil {
+		return p.ID, nil
+	}
+	if ing.dryRun {
+		return 0, nil
+	}
+	return ing.kb.AddProject(name, "")
+}
+
+// linkInitiative materialises the initiative field as a concept linked to the
+// project, per design decision 3: project_concepts already expresses a
+// many-projects-to-one-effort grouping, so no new table is needed.
+func (ing *ingester) linkInitiative(rf *knowledge.RecordFile, projectID int64) {
+	if ing.dryRun || rf.Record.Initiative == "" || projectID == 0 {
+		return
+	}
+	conceptID, err := ing.kb.AddConcept(rf.Record.Initiative, "")
+	if err != nil {
+		return
+	}
+	_ = ing.kb.LinkProjectConcept(projectID, conceptID)
+}
+
+// linkSources makes the record's cited sources match its `sources:` key
+// (DR-0081 item 4). A record without the key manages no citations. Like the
+// tags, it runs for an added, updated or skipped record alike, so the links are
+// rebuilt on every run; a dry run only reports what the key's entries mean.
+// Entries that are not a bare DOI, an absolute URL or source:ID, or that name no
+// source, are warned about and skipped; they never fail the ingest.
+func (ing *ingester) linkSources(rf *knowledge.RecordFile, recordDBID int64) {
+	if !rf.SourcesPresent {
+		return
+	}
+	refs, warns := knowledge.ParseSourceRefs(rf.Sources)
+	for _, w := range warns {
+		ing.summary.Warnings = append(ing.summary.Warnings, rf.Record.Path+": "+w)
+	}
+	if ing.dryRun || recordDBID == 0 {
+		return
+	}
+	_, more, err := ing.kb.SyncRecordSources(recordDBID, refs)
+	for _, w := range more {
+		ing.summary.Warnings = append(ing.summary.Warnings, rf.Record.Path+": "+w)
+	}
+	if err != nil {
+		ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf("%s: link sources: %v", rf.Record.Path, err))
+	}
+}
+
+// linkWikilinkTags resolves [[Name]] tokens in the record body and every
+// entry in the frontmatter Tags list into concepts, linked to the record via
+// record_concepts. Both sources feed the same resolution call — see
+// wikilink-tagging-design.md decision 3. Name matching is case-insensitive
+// (decision 4: ResolveConceptName, not AddConcept) because capitalization in
+// prose is often just sentence position, not a deliberate distinction.
+//
+// Clears the record's existing links before re-adding its current set, so a
+// tag dropped from the file is actually dropped from the database — see
+// ClearRecordConcepts. Safe to call on every ingest run regardless of
+// whether the record was added, updated, or skipped as unchanged: an
+// unchanged file re-links the same names it already had.
+//
+// A name shaped like a record id ([[0007]], [[DR-0007]]) is warned about and
+// skipped rather than resolved: it almost always means the author meant to
+// cite a record via supersedes/relates_to, not tag a concept named "0007".
+func (ing *ingester) linkWikilinkTags(rf *knowledge.RecordFile, recordDBID int64) {
+	if !ing.dryRun {
+		if recordDBID == 0 {
+			return
+		}
+		if err := ing.kb.ClearRecordConcepts(recordDBID); err != nil {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: clear concept links: %v", rf.Record.Path, err))
+			return
+		}
+	}
+	seen := map[string]bool{}
+	var names []string
+	// A wikilink inside code is an example of the syntax, not a tag (DR-0037);
+	// the same rule document ingest applies.
+	// Names are cleaned first, so a hard-wrapped [[a<newline>b]] is the concept
+	// [[a b]] (DR-0046). A control character makes CleanName refuse: the link is
+	// not a tag, and is reported rather than failing the record.
+	addName := func(raw string) {
+		name, err := knowledge.CleanName("concept", raw)
+		if err != nil {
+			if strings.TrimSpace(raw) != "" {
+				ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+					"%s: skipped tag %q: %v", rf.Record.Path, raw, err))
+			}
+			return
+		}
+		if !seen[strings.ToLower(name)] {
+			seen[strings.ToLower(name)] = true
+			names = append(names, name)
+		}
+	}
+	for _, m := range wikilinkPattern.FindAllStringSubmatch(knowledge.StripCodeSpans(rf.Record.Body), -1) {
+		addName(knowledge.WikilinkTarget(m[1]))
+	}
+	for _, tag := range rf.Tags {
+		addName(tag)
+	}
+	for _, name := range names {
+		if recordIDLikeWikilink.MatchString(name) {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: [[%s]] looks like a record reference, not a concept tag; "+
+					"cite it via supersedes/relates_to instead — not linked as a concept",
+				rf.Record.Path, name))
+			continue
+		}
+		// A name that matches no concept creates one, silently, so the summary
+		// says which (DR-0068); a dry run says which it would create and writes
+		// nothing.
+		ing.noteNewConcept(name)
+		if ing.dryRun {
+			continue
+		}
+		conceptID, err := ing.kb.ResolveConceptName(name)
+		if err != nil {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: resolve concept %q: %v", rf.Record.Path, name, err))
+			continue
+		}
+		if err := ing.kb.LinkRecordConcept(recordDBID, conceptID); err != nil {
+			ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
+				"%s: link concept %q: %v", rf.Record.Path, name, err))
+		}
+	}
+}
+
+// noteNewConcept records a concept name that the database does not have yet, once
+// however often and in whatever case it is mentioned.
+func (ing *ingester) noteNewConcept(name string) {
+	key := strings.ToLower(name)
+	if ing.newConcepts[key] {
+		return
+	}
+	if ok, err := ing.kb.HasConcept(name); err != nil || ok {
+		return
+	}
+	if ing.newConcepts == nil {
+		ing.newConcepts = map[string]bool{}
+	}
+	ing.newConcepts[key] = true
+	ing.summary.ConceptsCreated = append(ing.summary.ConceptsCreated, name)
+}
+
+// relativeTo renders a file path relative to the workspace root, falling back
+// to the base name if the file lies outside the root entirely.
+func (ing *ingester) relativeTo(file string) string {
+	rel, err := filepath.Rel(ing.root, file)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return filepath.Base(file)
+	}
+	return rel
+}
+
+// resolveAll is pass two: every record is now stored, so forward references
+// resolve. Skipped records are resolved too — re-running is the documented
+// remedy for a reference whose target had not yet been ingested.
+//
+// Clears each record's own forward edges before re-adding its current set,
+// so a relation dropped from the frontmatter is actually dropped from the
+// database — see ClearRecordRelationsFrom. Without this, record_relations
+// only ever grew: any relation ever ingested was permanent, regardless of
+// whether the file still declared it.
+func (ing *ingester) resolveAll() {
+	for _, rec := range ing.order {
+		name := rec.file.Record.Path
+
+		if !ing.dryRun && rec.dbID != 0 {
+			if err := ing.kb.ClearRecordRelationsFrom(rec.dbID); err != nil {
+				ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf(
+					"%s: clear relations: %v", name, err))
+				ing.noteFailure(err)
+			}
+		}
+
+		// supersedes and superseded_by are same-tier only, so their entries
+		// are always bare. A qualified one is reported rather than resolved:
+		// writing both sides would mean writing into another repository.
+		for _, entry := range rec.file.Supersedes {
+			ing.relate(rec, entry, "supersedes", name, false)
+		}
+		for _, entry := range rec.file.SupersededBy {
+			if strings.Contains(entry, ":") {
+				ing.summary.Malformed = append(ing.summary.Malformed, fmt.Sprintf(
+					"%s: superseded_by entry %q is qualified, but supersession is same-tier only", name, entry))
+			}
+		}
+		for _, entry := range rec.file.RelatesTo {
+			ing.relate(rec, entry, "relates_to", name, true)
+		}
+	}
+}
+
+// relate resolves one reference and stores the edge. Nothing here is fatal:
+// an unresolvable target leaves the relation unwritten and adds a line to the
+// summary, because failing would make ingest order significant — which is
+// exactly what two passes exist to avoid.
+func (ing *ingester) relate(rec *ingestedRecord, entry, relationship, name string, allowQualified bool) {
+	key, ok := parseReference(entry, rec.file.ProjectName, rec.file.Record.Scope)
+	if !ok {
+		ing.summary.Malformed = append(ing.summary.Malformed, fmt.Sprintf(
+			"%s: %s entry %q is malformed", name, relationship, entry))
+		return
+	}
+	if !allowQualified && key.qualified {
+		ing.summary.Malformed = append(ing.summary.Malformed, fmt.Sprintf(
+			"%s: %s entry %q is qualified, but supersession is same-tier only", name, relationship, entry))
+		return
+	}
+
+	target, ok := ing.lookup(key.identityKey)
+	if !ok {
+		ing.summary.Unresolved = append(ing.summary.Unresolved, fmt.Sprintf(
+			"%s: %s entry %q has no matching record yet; re-run once it is ingested", name, relationship, entry))
+		return
+	}
+
+	switch relationship {
+	case "supersedes":
+		ing.summary.Supersedes++
+	case "relates_to":
+		ing.summary.RelatesTo++
+	}
+	if ing.dryRun || rec.dbID == 0 || target == 0 {
+		return
+	}
+	if err := ing.kb.AddRecordRelation(rec.dbID, target, relationship); err != nil {
+		ing.summary.Errors = append(ing.summary.Errors, fmt.Sprintf("%s: %v", name, err))
+		ing.noteFailure(err)
+	}
+}
+
+// reference is a parsed cross-reference plus whether it named a scope.
+type reference struct {
+	identityKey
+	qualified bool
+}
+
+// parseReference reads a `[<scope>:]<id>` entry. It splits on the first colon
+// only, and strips an optional leading DR- from the id rather than rejecting
+// it: a stray prefix in one cross-reference should not fail a run.
+func parseReference(entry, citingProject, citingScope string) (reference, bool) {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return reference{}, false
+	}
+
+	ref := reference{identityKey: identityKey{project: citingProject, scope: citingScope}}
+	id := entry
+	if i := strings.Index(entry, ":"); i >= 0 {
+		qualifier, rest := entry[:i], entry[i+1:]
+		if qualifier == "" || rest == "" {
+			return reference{}, false
+		}
+		ref.qualified = true
+		id = rest
+		if qualifier == "workspace" {
+			ref.project, ref.scope = "", "workspace"
+		} else {
+			ref.project, ref.scope = qualifier, "project"
+		}
+	}
+
+	id = strings.TrimPrefix(id, "DR-")
+	if id == "" {
+		return reference{}, false
+	}
+	ref.recordID = id
+	return ref, true
+}
+
+// lookup finds a referenced record, checking this run's parsed set first so
+// that --dry-run can resolve references against records it has not written.
+func (ing *ingester) lookup(key identityKey) (int64, bool) {
+	if rec, ok := ing.byIdent[key]; ok {
+		return rec.dbID, true
+	}
+	projectID := int64(0)
+	if key.scope != "workspace" {
+		p, err := ing.kb.ProjectByName(key.project)
+		if err != nil || p == nil {
+			return 0, false
+		}
+		projectID = p.ID
+	}
+	// A reference resolves within the citing record's own workspace;
+	// cross-workspace references are deliberately not expressible, for the
+	// same reason supersession is same-tier only.
+	r, err := ing.kb.RecordByIdentity(ing.workspace, projectID, key.scope, key.recordID)
+	if err != nil {
+		return 0, false
+	}
+	return r.ID, true
+}
+
+// reportMissing lists records whose file is no longer on disk. They are
+// reported, never deleted: pruning on a partial or wrong-directory run would
+// destroy data.
+//
+// A record whose file was genuinely deleted and one whose file simply moved
+// out of this run's prefix look identical from a stale row: both fail the
+// stat below. The message does not assert which one happened — see TODO.md
+// "the downstream remediation advice is actively dangerous", where this used
+// to name kb record remove as the fix and would have deleted five live
+// records that had only moved one directory over.
+func (ing *ingester) reportMissing(dir string) {
+	prefix := ing.relativeTo(dir)
+	records, err := ing.kb.RecordsUnderPath(prefix)
+	if err != nil {
+		return
+	}
+	names := projectNames(ing.kb)
+	for _, r := range records {
+		if _, err := os.Stat(filepath.Join(ing.root, r.Path)); err == nil {
+			continue
+		}
+		ing.summary.Missing = append(ing.summary.Missing, fmt.Sprintf(
+			"DR-%s (%s) is in the database but has no file at that path; "+
+				"if it moved, re-run ingest on its new location first — if it was deleted, "+
+				"`kb record delete %s` removes the row",
+			r.RecordID, r.Path, refOf(r, names)))
+	}
+}
+
+// writeIngestText prints the summary in human-readable form.
+func writeIngestText(out io.Writer, s ingestSummary) {
+	if s.DryRun {
+		fmt.Fprintf(out, "dry run, nothing written\n")
+	}
+	fmt.Fprintf(out, "%d added, %d updated, %d skipped, %d failed\n",
+		s.Added, s.Updated, s.Skipped, s.Failed)
+	fmt.Fprintf(out, "%d supersedes, %d relates_to\n", s.Supersedes, s.RelatesTo)
+	writeStatusChanges(out, s.StatusChanges)
+	writeNewConcepts(out, s.ConceptsCreated, s.DryRun)
+	for _, group := range []struct {
+		label string
+		lines []string
+	}{
+		{"unresolved", s.Unresolved},
+		{"malformed", s.Malformed},
+		{"missing", s.Missing},
+		{"warning", s.Warnings},
+		{"error", s.Errors},
+	} {
+		for _, line := range group.lines {
+			fmt.Fprintf(out, "%s: %s\n", group.label, line)
+		}
+	}
+}
+
+/** statusChangeRef is the qualified reference ingest prints for a record: its
+ * project name, or "workspace" for the workspace tier, and its id.
+ *
+ * Parameters:
+ *   projectName (string) — the frontmatter project; empty at the workspace tier
+ *   recordID (string) — the record id, such as "0012"
+ *
+ * Returns:
+ *   string — such as "clasm/DR-0012" or "workspace/DR-0003"
+ *
+ * Example:
+ *   statusChangeRef("", "0003") // "workspace/DR-0003"
+ */
+func statusChangeRef(projectName, recordID string) string {
+	scope := projectName
+	if scope == "" {
+		scope = "workspace"
+	}
+	return knowledge.Ref{Scope: scope, ID: recordID}.String()
+}
+
+// maxStatusLines is how many status changes the text summary lists. Ingesting a
+// whole tree into an empty database arrives every accepted record at once; the
+// JSON keeps them all and the text says how many it left out.
+const maxStatusLines = 20
+
+// writeStatusChanges prints the statuses that arrived through a file, one line
+// each, up to maxStatusLines.
+func writeStatusChanges(out io.Writer, changes []statusChange) {
+	for i, c := range changes {
+		if i == maxStatusLines {
+			fmt.Fprintf(out, "status: and %d more (kb -json ingest lists them all)\n", len(changes)-maxStatusLines)
+			return
+		}
+		if c.Kind == "arrived" {
+			fmt.Fprintf(out, "status: %s arrived %s\n", c.Ref, c.To)
+			continue
+		}
+		fmt.Fprintf(out, "status: %s %s -> %s (edited in file)\n", c.Ref, c.From, c.To)
+	}
+}
+
+// writeNewConcepts prints the concepts an ingest created, or would create, up to
+// maxStatusLines names; the JSON has them all.
+func writeNewConcepts(out io.Writer, names []string, dryRun bool) {
+	if len(names) == 0 {
+		return
+	}
+	verb := "created"
+	if dryRun {
+		verb = "would create"
+	}
+	shown := names
+	more := ""
+	if len(shown) > maxStatusLines {
+		more = fmt.Sprintf(" and %d more", len(names)-maxStatusLines)
+		shown = shown[:maxStatusLines]
+	}
+	fmt.Fprintf(out, "concept: %s %s%s\n", verb, strings.Join(shown, ", "), more)
+}
