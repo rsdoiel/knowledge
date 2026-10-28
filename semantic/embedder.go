@@ -6,8 +6,13 @@ package semantic
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/knights-analytics/hugot"
@@ -17,6 +22,17 @@ import (
 // miniLMDimensions is the vector length of all-MiniLM-L6-v2, the first and
 // provisional model (DR-0088).
 const miniLMDimensions = 384
+
+// maxTokens is the longest input the model accepts. The spike showed that one
+// longer input crashes the whole batch, so no text goes past it.
+const maxTokens = 512
+
+// batchSize is how many texts go through the pipeline together. Texts are
+// sorted by length first, so a batch pads to little more than its longest.
+const batchSize = 8
+
+// fingerprintFiles are the files that decide what a vector means.
+var fingerprintFiles = []string{"model.onnx", "tokenizer.json", "config.json"}
 
 /** Hugot is a knowledge.Embedder backed by Hugot's pure-Go session, so it
  * needs no cgo and no daemon. The model is loaded on the first call to Embed,
@@ -33,10 +49,14 @@ type Hugot struct {
 	session *hugot.Session
 	pipe    *pipelines.FeatureExtractionPipeline
 	err     error
+
+	fpOnce sync.Once
+	fp     string
 }
 
 /** NewHugot returns an embedder for the model in dir (a directory holding the
- * model's ONNX file and tokenizer). Nothing is read until Embed is called.
+ * model's ONNX file and tokenizer). Nothing is read until Embed or Fingerprint
+ * is called.
  *
  * Parameters:
  *   dir (string) — the model directory
@@ -55,12 +75,100 @@ func (h *Hugot) Model() string { return filepath.Base(h.dir) }
 /** Dimensions returns the length of the vectors Embed returns. */
 func (h *Hugot) Dimensions() int { return miniLMDimensions }
 
-/** Fingerprint identifies the model files. Until the model manager exists
- * (semantic-search-plan.md T5) it is the model directory's name.
+/** Fingerprint identifies the model files: the model's name and a hash of its
+ * ONNX file, tokenizer and config, so an index built by one set of files is
+ * not searched with another. It is computed once. When the files cannot be
+ * read the fingerprint is the name alone with a "?" suffix, which matches no
+ * index built from real files.
+ *
+ * Returns:
+ *   string — "name:hex" where hex is the first 16 digits of a SHA-256
+ *
+ * Example:
+ *   fmt.Println(e.Fingerprint()) // all-MiniLM-L6-v2:3f0c9a41b27d85e6
  */
-func (h *Hugot) Fingerprint() string { return h.Model() }
+func (h *Hugot) Fingerprint() string {
+	h.fpOnce.Do(func() {
+		sum := sha256.New()
+		for _, name := range fingerprintFiles {
+			f, err := os.Open(filepath.Join(h.dir, name))
+			if err != nil {
+				h.fp = h.Model() + "?"
+				return
+			}
+			fmt.Fprintf(sum, "%s\n", name)
+			_, err = io.Copy(sum, f)
+			f.Close()
+			if err != nil {
+				h.fp = h.Model() + "?"
+				return
+			}
+		}
+		h.fp = h.Model() + ":" + hex.EncodeToString(sum.Sum(nil))[:16]
+	})
+	return h.fp
+}
 
-/** Embed returns one vector per text, in order, loading the model on first use.
+// load opens the session and pipeline once. Vectors come back at unit length,
+// the same as the fake embedder's, so a dot product is a cosine.
+func (h *Hugot) load() error {
+	h.once.Do(func() {
+		h.session, h.err = hugot.NewGoSession(context.Background())
+		if h.err != nil {
+			return
+		}
+		h.pipe, h.err = h.session.NewPipeline(hugot.FeatureExtractionConfig{
+			ModelPath: h.dir,
+			Name:      "embed",
+			Options:   []hugot.FeatureExtractionOption{pipelines.WithNormalization()},
+		})
+	})
+	if h.err != nil {
+		return fmt.Errorf("loading model %s: %w", h.dir, h.err)
+	}
+	return nil
+}
+
+// tokenCount returns how many tokens the model sees for text, including its
+// special tokens.
+func (h *Hugot) tokenCount(text string) int {
+	return len(h.pipe.Model.Tokenizer.GoTokenizer.Tokenizer.EncodeWithAnnotations(text).IDs)
+}
+
+// guard returns text unchanged when it fits in maxTokens, otherwise the longest
+// prefix, cut on a space where it can, that does. Chunking keeps real input
+// well under the limit; this is the last defence against a crashed batch.
+func (h *Hugot) guard(text string) (string, int) {
+	n := h.tokenCount(text)
+	for n > maxTokens {
+		cut := len(text) * (maxTokens - 8) / n
+		if cut >= len(text) {
+			cut = len(text) - 1
+		}
+		for cut > 0 && text[cut]&0xC0 == 0x80 { // do not split a UTF-8 sequence
+			cut--
+		}
+		if sp := lastSpace(text[:cut]); sp > cut/2 {
+			cut = sp
+		}
+		text = text[:cut]
+		n = h.tokenCount(text)
+	}
+	return text, n
+}
+
+func lastSpace(s string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == ' ' || s[i] == '\n' {
+			return i
+		}
+	}
+	return -1
+}
+
+/** Embed returns one unit-length vector per text, in order, loading the model
+ * on first use. Texts are sorted by token length and run in batches of 8; a
+ * text over 512 tokens is cut to fit rather than sent whole.
  *
  * Parameters:
  *   texts ([]string) — the texts to embed
@@ -73,20 +181,40 @@ func (h *Hugot) Fingerprint() string { return h.Model() }
  *   vecs, err := e.Embed([]string{"a sentence"})
  */
 func (h *Hugot) Embed(texts []string) ([][]float32, error) {
-	h.once.Do(func() {
-		ctx := context.Background()
-		h.session, h.err = hugot.NewGoSession(ctx)
-		if h.err != nil {
-			return
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	if err := h.load(); err != nil {
+		return nil, err
+	}
+	type item struct {
+		at, tokens int
+		text       string
+	}
+	items := make([]item, len(texts))
+	for i, t := range texts {
+		g, n := h.guard(t)
+		items[i] = item{i, n, g}
+	}
+	sort.SliceStable(items, func(a, b int) bool { return items[a].tokens < items[b].tokens })
+
+	out := make([][]float32, len(texts))
+	for lo := 0; lo < len(items); lo += batchSize {
+		hi := min(lo+batchSize, len(items))
+		batch := make([]string, 0, hi-lo)
+		for _, it := range items[lo:hi] {
+			batch = append(batch, it.text)
 		}
-		h.pipe, h.err = h.session.NewPipeline(hugot.FeatureExtractionConfig{ModelPath: h.dir, Name: "embed"})
-	})
-	if h.err != nil {
-		return nil, fmt.Errorf("loading model %s: %w", h.dir, h.err)
+		res, err := h.pipe.RunPipeline(context.Background(), batch)
+		if err != nil {
+			return nil, fmt.Errorf("embedding with %s: %w", h.Model(), err)
+		}
+		if len(res.Embeddings) != len(batch) {
+			return nil, fmt.Errorf("embedding with %s: %d vectors for %d texts", h.Model(), len(res.Embeddings), len(batch))
+		}
+		for j, it := range items[lo:hi] {
+			out[it.at] = res.Embeddings[j]
+		}
 	}
-	out, err := h.pipe.RunPipeline(context.Background(), texts)
-	if err != nil {
-		return nil, fmt.Errorf("embedding with %s: %w", h.Model(), err)
-	}
-	return out.Embeddings, nil
+	return out, nil
 }

@@ -1,0 +1,8 @@
+github.com/gomlx/compute v0.1.16-0.20261028143122-acb940214a36 h1:+SodoYae2gL4/ocrGHSwdZ4fQ5kueuF4pBoreSrnuMI=
+github.com/gomlx/compute v0.1.16-0.20261028143122-acb940214a36/go.mod h1:+IyIusGBr70LPqKcULueB2VTTXmJ3HqOdPmRM8O1Sug=
+github.com/knights-analytics/hugot v0.8.3/go.mod h1:LHse10CcruDAB7tzEQmvCptgjZZTZsssrfEt3pPreYc=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/rsdoiel/knowledge v0.0.28/go.mod h1:YawUWQ19+HEqmDb+jzXGjc8cZAI1DQuujkY/acK1I2Y=
+golang.org/x/exp v0.0.0-20261013213113-2ab7f3cbc5fb h1:fMK59tNbIKghD6eTnk7DGfVtbK6JiHiFgpmBAWcPaco=
+golang.org/x/exp v0.0.0-20261013213113-2ab7f3cbc5fb/go.mod h1:DBoxwWhjaW8DJJw/YeM4zpeOKMC1FMXSblsYy+1mFSw=
