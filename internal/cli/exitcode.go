@@ -248,6 +248,13 @@ func classify(err error) (exitClass, bool) {
 	// files wraps it with classedAs(classData, ...) so the outermost class wins.
 	var inUse *knowledge.ConceptInUseError
 	switch {
+	// The vector index's markers, ahead of the generic ones they might also match.
+	case errors.Is(err, knowledge.ErrNoIndex):
+		return classNoInput, true
+	case errors.Is(err, knowledge.ErrModelMismatch):
+		return classData, true
+	case errors.Is(err, knowledge.ErrLocked):
+		return classTempFail, true
 	case errors.Is(err, knowledge.ErrNotFound), errors.Is(err, knowledge.ErrInUse),
 		errors.Is(err, knowledge.ErrConflict), errors.Is(err, knowledge.ErrNoMembers), errors.As(err, &inUse):
 		return classNegative, true

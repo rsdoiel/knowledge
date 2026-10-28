@@ -298,3 +298,36 @@ func TestEmbedIndex_AnEmbedderThatReturnsTheWrongNumberOfVectorsIsAnError(t *tes
 		t.Errorf("%d rows stored from a bad batch", len(rows))
 	}
 }
+
+func TestEmbedStatus_ReportsWhatARunWouldDoAndChangesNothing(t *testing.T) {
+	f, v, e := indexFixture(t)
+	n := corpusSize(t, f.kb)
+	st, err := f.kb.EmbedStatus(v, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Rows != n || st.RowsToEmbed != n || st.RowsUpToDate != 0 || st.ChunksStored != 0 || st.ChunksToEmbed < n {
+		t.Errorf("empty index: %+v, want %d rows to embed", st, n)
+	}
+	total := 0
+	for _, c := range st.RowsByType {
+		total += c
+	}
+	if total != n {
+		t.Errorf("RowsByType %v does not add up to %d", st.RowsByType, n)
+	}
+	if e.Calls() != 0 {
+		t.Error("EmbedStatus ran the embedder")
+	}
+	if rows, _ := v.IndexedRows(); len(rows) != 0 {
+		t.Error("EmbedStatus wrote to the sidecar")
+	}
+
+	if _, err := f.kb.EmbedIndex(context.Background(), v, e, EmbedOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = f.kb.EmbedStatus(v, 0)
+	if st.RowsToEmbed != 0 || st.RowsUpToDate != n || st.ChunksStored < n || st.ChunksToEmbed != 0 || st.RowsToRemove != 0 {
+		t.Errorf("after a run: %+v", st)
+	}
+}

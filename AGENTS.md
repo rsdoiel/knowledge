@@ -55,6 +55,7 @@ Each is `kb VERB`; the class is what it does to the database.
 | `check-db` | read | compare the database with its JSON-L dump |
 | `export`, `import`, `merge` | cli_only | portable snapshots and reconciling two databases |
 | `model` (`install fetch list`) | direct, read | manage the embedding model files semantic search needs; files only, no database, no network except `fetch` |
+| `embed` (`-status`, `-rebuild`) | direct | build and update the semantic-search index (`agents/knowledge.vectors.db`); semantic build only; write verbs keep it current when it exists |
 | `init`, `completion`, `verbs` | cli_only | create a workspace, shell completion, the verb table |
 
 ## Exit codes

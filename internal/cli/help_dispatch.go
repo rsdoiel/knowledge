@@ -71,6 +71,8 @@ func printHelp(out io.Writer, topic string) bool {
 		f(VerbsHelpText)
 	case "model":
 		f(ModelHelpText)
+	case "embed":
+		f(EmbedHelpText)
 	default:
 		return false
 	}

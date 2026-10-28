@@ -26,7 +26,7 @@ _kb() {
         w="${COMP_WORDS[i]}"
         case "$w" in
             --db|-db) dbarg=(--db "${COMP_WORDS[i+1]}"); (( i++ )) ;;
-            --a|--accept|--accept-keywords|--authors|--b|--by|--concept|--confidence|--db|--dir|--document|--doi|--format|--hash|--identifier-type|--identifier-value|--in|--initiative|--jsonl|--kind|--limit|--name|--narrative|--out|--project|--published|--publisher|--record|--relationship|--rights|--root|--set|--since|--source|--source-doi|--status|--strict|--title|--trigger|--url|--version) (( i++ )) ;;
+            --a|--accept|--accept-keywords|--authors|--b|--by|--concept|--confidence|--db|--dir|--document|--doi|--format|--hash|--identifier-type|--identifier-value|--in|--initiative|--jsonl|--kind|--limit|--name|--narrative|--out|--project|--published|--publisher|--rebuild|--record|--relationship|--rights|--root|--set|--since|--source|--source-doi|--status|--strict|--title|--trigger|--url|--version) (( i++ )) ;;
             -*) ;;
             *) pos+=("$w") ;;
         esac
@@ -45,7 +45,7 @@ _kb() {
         if [[ "$cur" == -* ]]; then
             COMPREPLY=( $(compgen -W "--db --debug --help -i --json --license --version" -- "$cur") )
         else
-            COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge model observation project record search source stats story summary unlink verbs" -- "$cur") )
+            COMPREPLY=( $(compgen -W "check-db completion concept document embed export format help import index ingest init link merge model observation project record search source stats story summary unlink verbs" -- "$cur") )
         fi
         return 0
     fi
@@ -55,6 +55,7 @@ _kb() {
         completion) COMPREPLY=( $(compgen -W "--install --uninstall --check" -- "$cur") ) ;;
         concept) COMPREPLY=( $(compgen -W "--identifier-type --identifier-value --kind --project --limit --force --dry-run" -- "$cur") ) ;;
         document) COMPREPLY=( $(compgen -W "--project --concept --dry-run --accept --accept-keywords --set --by --confidence --status --title --format --no-prompt" -- "$cur") ) ;;
+        embed) COMPREPLY=( $(compgen -W "--status --rebuild" -- "$cur") ) ;;
         export) COMPREPLY=( $(compgen -W "--project --out" -- "$cur") ) ;;
         format) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
         import) COMPREPLY=( $(compgen -W "--in" -- "$cur") ) ;;
@@ -74,7 +75,7 @@ _kb() {
         return 0
     fi
     case "$verb" in
-        help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document export format help import index ingest init link merge model observation project record search source stats story summary unlink verbs topics" -- "$cur") ) ;;
+        help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document embed export format help import index ingest init link merge model observation project record search source stats story summary unlink verbs topics" -- "$cur") ) ;;
         completion) [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "bash powershell" -- "$cur") ) ;;
         search)     [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "$(_kb_search_scopes)" -- "$cur") ) ;;
         concept)

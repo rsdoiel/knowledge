@@ -327,6 +327,23 @@ func (v *Vectors) Meta() VectorsMeta { return v.meta }
 /** Path returns the sidecar file's path. */
 func (v *Vectors) Path() string { return v.path }
 
+/** ChunkCount returns how many chunks the sidecar stores.
+ *
+ * Returns:
+ *   int — the count
+ *   error — a database error
+ *
+ * Example:
+ *   n, err := v.ChunkCount()
+ */
+func (v *Vectors) ChunkCount() (int, error) {
+	var n int
+	if err := v.db.QueryRow(`SELECT COUNT(*) FROM vector_chunks`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("knowledge: vector index %s: %w", v.path, err)
+	}
+	return n, nil
+}
+
 /** Close closes the sidecar. */
 func (v *Vectors) Close() error { return v.db.Close() }
 

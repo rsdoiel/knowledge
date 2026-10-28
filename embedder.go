@@ -37,6 +37,24 @@ type Embedder interface {
 	Embed(texts []string) ([][]float32, error)
 }
 
+/** Checker is an optional interface for an Embedder that can say, without
+ * loading anything, whether it is able to run: its model files are installed.
+ * kb asks before it starts embedding so a missing model is one clear error
+ * (exit 66, pointing to kb model fetch), not a failure part way through a run.
+ *
+ * Methods:
+ *   Available() error — nil when the embedder can run; otherwise an error that
+ *     wraps fs.ErrNotExist when the model is not installed
+ *
+ * Example:
+ *   if c, ok := e.(knowledge.Checker); ok {
+ *       if err := c.Available(); err != nil { return err }
+ *   }
+ */
+type Checker interface {
+	Available() error
+}
+
 var (
 	embedderMu sync.RWMutex
 	embedder   Embedder

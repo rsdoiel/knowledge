@@ -186,6 +186,7 @@ var provedElsewhere = map[string][]int{
 	"search": {1},                      // TestVerbs_NegativeIsExit1
 	"merge":  {65},                     // TestMerge_CollisionIsExit65
 	"model":  {65, 66, 69, 73, 74, 77}, // TestModel_ExitCodes
+	"embed":  {65, 66, 75},             // TestEmbed_ExitCodes
 }
 
 // checkedAgainstVerbTests are the pages written for v0.0.28. The older pages (concept,
@@ -195,7 +196,7 @@ var provedElsewhere = map[string][]int{
 // release-plan-v0.0.28.md, T4, follow-up.
 var checkedAgainstVerbTests = []string{
 	"export", "import", "index", "ingest", "init", "link", "merge",
-	"observation", "project", "search", "source", "unlink", "topics", "model",
+	"observation", "project", "search", "source", "unlink", "topics", "model", "embed",
 }
 
 // The page and the tests agree on every code but 0 and 2: a code a page names is

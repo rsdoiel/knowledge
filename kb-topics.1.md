@@ -75,6 +75,9 @@ init
 model
 : install, fetch and list the embedding models semantic search uses
 
+embed
+: build and update the semantic-search index
+
 completion
 : write or install a shell completion script for bash or PowerShell
 

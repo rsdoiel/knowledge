@@ -100,67 +100,20 @@ func (kb *KnowledgeBase) EmbedIndex(ctx context.Context, v *Vectors, e Embedder,
 		return res, err
 	}
 	defer lock.Release()
-	corpus, err := kb.EmbedCorpus(SearchScope{})
+	plan, err := kb.planEmbed(v, chunkRunes)
 	if err != nil {
 		return res, err
 	}
-
 	// Drop what is gone before embedding anything, so an interrupted run never
 	// leaves chunks for a deleted row.
-	inCorpus := make(map[RowKey]bool, len(corpus))
-	for _, r := range corpus {
-		inCorpus[RowKey{r.SourceType, r.SourceID}] = true
-	}
-	indexed, err := v.IndexedRows()
-	if err != nil {
-		return res, err
-	}
-	for _, k := range indexed {
-		if !inCorpus[k] {
-			if err := v.DeleteRow(k.SourceType, k.SourceID); err != nil {
-				return res, err
-			}
-			res.RowsRemoved++
-		}
-	}
-
-	var todo []embedWork
-	for _, r := range corpus {
-		chunks := Chunk(r.Text, chunkRunes)
-		stored, err := v.RowChunks(r.SourceType, r.SourceID)
-		if err != nil {
+	for _, k := range plan.remove {
+		if err := v.DeleteRow(k.SourceType, k.SourceID); err != nil {
 			return res, err
 		}
-		if len(chunks) == 0 {
-			if len(stored) > 0 {
-				if err := v.DeleteRow(r.SourceType, r.SourceID); err != nil {
-					return res, err
-				}
-				res.RowsRemoved++
-			} else {
-				res.RowsSkipped++
-			}
-			continue
-		}
-		reuse := make(map[string][]float32, len(stored))
-		for _, c := range stored {
-			reuse[c.Hash] = c.Vector
-		}
-		if len(stored) == len(chunks) {
-			same := true
-			for i, c := range chunks {
-				if stored[i].Hash != ChunkHash(c) {
-					same = false
-					break
-				}
-			}
-			if same {
-				res.RowsSkipped++
-				continue
-			}
-		}
-		todo = append(todo, embedWork{row: r, chunks: chunks, reuse: reuse})
+		res.RowsRemoved++
 	}
+	res.RowsSkipped = plan.skipped
+	todo := plan.work
 
 	var pending []embedWork
 	pendingTexts := 0
@@ -278,4 +231,130 @@ func ResetVectors(dbPath string, e Embedder) (*Vectors, error) {
 		}
 	}
 	return CreateVectors(dbPath, e)
+}
+
+// embedPlan is what EmbedIndex would do, worked out without changing anything.
+type embedPlan struct {
+	work    []embedWork // rows to embed, new or changed
+	remove  []RowKey    // rows whose chunks go: the row is gone, or has no text
+	skipped int         // rows already up to date
+	corpus  []CorpusRow // rows in the corpus
+}
+
+// planEmbed compares the corpus with what the sidecar stores. It reads both and
+// writes neither, so EmbedIndex and EmbedStatus cannot disagree about what is
+// missing.
+func (kb *KnowledgeBase) planEmbed(v *Vectors, chunkRunes int) (embedPlan, error) {
+	var plan embedPlan
+	corpus, err := kb.EmbedCorpus(SearchScope{})
+	if err != nil {
+		return plan, err
+	}
+	plan.corpus = corpus
+	inCorpus := make(map[RowKey]bool, len(corpus))
+	for _, r := range corpus {
+		inCorpus[RowKey{r.SourceType, r.SourceID}] = true
+	}
+	indexed, err := v.IndexedRows()
+	if err != nil {
+		return plan, err
+	}
+	for _, k := range indexed {
+		if !inCorpus[k] {
+			plan.remove = append(plan.remove, k)
+		}
+	}
+	for _, r := range corpus {
+		chunks := Chunk(r.Text, chunkRunes)
+		stored, err := v.RowChunks(r.SourceType, r.SourceID)
+		if err != nil {
+			return plan, err
+		}
+		if len(chunks) == 0 {
+			if len(stored) > 0 {
+				plan.remove = append(plan.remove, RowKey{r.SourceType, r.SourceID})
+			} else {
+				plan.skipped++
+			}
+			continue
+		}
+		reuse := make(map[string][]float32, len(stored))
+		for _, c := range stored {
+			reuse[c.Hash] = c.Vector
+		}
+		if len(stored) == len(chunks) {
+			same := true
+			for i, c := range chunks {
+				if stored[i].Hash != ChunkHash(c) {
+					same = false
+					break
+				}
+			}
+			if same {
+				plan.skipped++
+				continue
+			}
+		}
+		plan.work = append(plan.work, embedWork{row: r, chunks: chunks, reuse: reuse})
+	}
+	return plan, nil
+}
+
+/** EmbedStatus says how far the vector sidecar is from the corpus.
+ *
+ * Fields:
+ *   Rows          (int)            — rows in the corpus
+ *   RowsByType    (map[string]int) — corpus rows by kb_fts source_type
+ *   RowsUpToDate  (int)            — rows whose chunks are all stored
+ *   RowsToEmbed   (int)            — rows new or changed since they were embedded
+ *   RowsToRemove  (int)            — indexed rows that are gone or have no text
+ *   ChunksStored  (int)            — chunks in the sidecar
+ *   ChunksToEmbed (int)            — chunks a run would send to the embedder
+ */
+type EmbedStatus struct {
+	Rows, RowsUpToDate, RowsToEmbed, RowsToRemove, ChunksStored, ChunksToEmbed int
+	RowsByType                                                                 map[string]int
+}
+
+/** EmbedStatus reports what EmbedIndex would do, changing nothing and loading
+ * no model.
+ *
+ * Parameters:
+ *   v (*Vectors) — the sidecar to compare
+ *   chunkRunes (int) — the longest chunk; zero means DefaultChunkRunes
+ *
+ * Returns:
+ *   EmbedStatus — the counts
+ *   error — a database error
+ *
+ * Example:
+ *   st, err := kb.EmbedStatus(v, 0)
+ *   fmt.Printf("%d of %d rows not indexed\n", st.RowsToEmbed, st.Rows)
+ */
+func (kb *KnowledgeBase) EmbedStatus(v *Vectors, chunkRunes int) (EmbedStatus, error) {
+	if chunkRunes <= 0 {
+		chunkRunes = DefaultChunkRunes
+	}
+	plan, err := kb.planEmbed(v, chunkRunes)
+	if err != nil {
+		return EmbedStatus{}, err
+	}
+	st := EmbedStatus{
+		Rows: len(plan.corpus), RowsUpToDate: plan.skipped, RowsToEmbed: len(plan.work),
+		RowsToRemove: len(plan.remove), RowsByType: map[string]int{},
+	}
+	for _, w := range plan.work {
+		for _, c := range w.chunks {
+			if _, ok := w.reuse[ChunkHash(c)]; !ok {
+				st.ChunksToEmbed++
+			}
+		}
+	}
+	for _, r := range plan.corpus {
+		st.RowsByType[r.SourceType]++
+	}
+	if st.ChunksStored, err = v.ChunkCount(); err != nil {
+		return st, err
+	}
+	return st, nil
 }

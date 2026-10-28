@@ -44,5 +44,10 @@ func dispatch(verbs map[string]verbFunc, kb *knowledge.KnowledgeBase, dl *DebugL
 		printError(errOut, jsonOut, err)
 		return exitCodeFor(err).Code
 	}
+	// A write that changed embedded rows brings the semantic index along, when
+	// there is one; whatever happens, the command has already succeeded.
+	if kb != nil && changesCorpus(args) {
+		embedAfterWrite(kb)
+	}
 	return 0
 }

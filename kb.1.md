@@ -351,6 +351,10 @@ model
 : install, fetch and list the embedding models semantic search uses — see
   kb-model(1)
 
+embed
+: bring the semantic-search index in step with the knowledge base — see
+  kb-embed(1)
+
 completion
 : write a shell completion script for bash or PowerShell, or install it — see
   kb-completion(1)
@@ -463,5 +467,5 @@ kb-search(1), kb-merge(1), kb-check-db(1),
 kb-stats(1), kb-story(1), kb-export(1),
 kb-import(1), kb-ingest(1), kb-record(1),
 kb-document(1), kb-index(1), kb-init(1),
-kb-model(1), kb-completion(1), kb-verbs(1), kb-topics(1)
+kb-model(1), kb-embed(1), kb-completion(1), kb-verbs(1), kb-topics(1)
 

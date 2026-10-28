@@ -355,6 +355,10 @@ model
 : install, fetch and list the embedding models semantic search uses — see
   {app_name}-model(1)
 
+embed
+: bring the semantic-search index in step with the knowledge base — see
+  {app_name}-embed(1)
+
 completion
 : write a shell completion script for bash or PowerShell, or install it — see
   {app_name}-completion(1)
@@ -467,7 +471,7 @@ the error on stderr carries the class name beside the number, for example
 {app_name}-stats(1), {app_name}-story(1), {app_name}-export(1),
 {app_name}-import(1), {app_name}-ingest(1), {app_name}-record(1),
 {app_name}-document(1), {app_name}-index(1), {app_name}-init(1),
-{app_name}-model(1), {app_name}-completion(1), {app_name}-verbs(1), {app_name}-topics(1)
+{app_name}-model(1), {app_name}-embed(1), {app_name}-completion(1), {app_name}-verbs(1), {app_name}-topics(1)
 
 `
 
@@ -2813,6 +2817,111 @@ The workspace convention, as described in {app_name}(1).
 {app_name}(1), {app_name}-import(1), {app_name}-ingest(1)
 `
 
+// EmbedHelpText is the kb-embed(1) man page.
+const EmbedHelpText = `%{app_name}-embed(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-embed — bring the semantic-search index in step with the knowledge base
+
+# SYNOPSIS
+
+{app_name} embed
+
+{app_name} embed -status
+
+{app_name} embed -rebuild
+
+# DESCRIPTION
+
+Semantic search finds rows by meaning, not by their words. It needs an index: a
+vector for each passage of each observation, decision record, concept and
+reviewed document summary, kept in agents/knowledge.vectors.db beside the
+database. embed builds that index and keeps it current. It needs the semantic
+build of {app_name} and an installed model ({app_name}-model(1)); the plain build
+has no embedder and exits 2.
+
+Run with no flag, embed works out which rows are new or changed since they were
+embedded, embeds only those, and drops the entries of rows that are gone. A
+passage whose text did not change keeps its vector, so editing one paragraph of a
+long record embeds one passage. The first run over a large knowledge base takes
+minutes on a small machine; later runs take seconds.
+
+The work is committed a batch at a time. Interrupt it (Ctrl-C) and at most one
+batch is lost; run embed again to carry on where it stopped. Progress goes to
+standard error.
+
+-status
+: report, and change nothing: the rows by kind, the model the index was built
+  with, how many rows and passages are not indexed yet, and how many index
+  entries belong to rows that are gone. It loads no model and works in the plain
+  build too.
+
+-rebuild
+: delete the index and embed everything again. This is the remedy for an index
+  built by a different model (exit 65), and the way to start over.
+
+A command that writes rows ({app_name} observation add, ingest, record and
+concept changes, document review promote) also updates the index for the rows it
+changed, when an index exists and the model is installed; this never changes the
+command's result. When it cannot (no model, another embed running, a different
+model, or more than a few dozen rows after a merge or an import) the command
+says in one line that rows are not yet indexed. {app_name} merge, import and
+check-db leave the index alone, so rows they bring in are simply not indexed
+until the next embed. The interactive interface's own edits are caught up the
+same way.
+
+Only one embed writes the index at a time. A second gets exit 75 and may be run
+again later; a run that was killed does not block the index for more than five
+minutes.
+
+# OPTIONS
+
+The global -json option applies. The global -db option selects the database
+whose index is built.
+
+# FILES
+
+agents/knowledge.vectors.db
+: the index, beside the database; never part of the database or its JSON-L
+  export. {app_name} init adds it to .gitignore in a git workspace.
+
+# EXAMPLES
+
+~~~shell
+{app_name} model fetch
+{app_name} embed
+{app_name} embed -status
+{app_name} embed -rebuild
+~~~
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the index is current (nothing may have needed doing), or -status reported
+
+2
+: a bad flag or argument, -status with -rebuild, or a build without semantic search
+
+65
+: the index was built by a different model than the one installed (run
+  {app_name} embed -rebuild), or the index file is not a vector index
+
+66
+: the model is not installed (run {app_name} model fetch)
+
+75
+: another embed holds the index, or this one was interrupted; run it again
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-model(1), {app_name}-search(1)
+`
+
 // ModelHelpText is the kb-model(1) man page.
 const ModelHelpText = `%{app_name}-model(1) user manual | version {version} {release_hash}
 % R. S. Doiel
@@ -3122,6 +3231,9 @@ init
 
 model
 : install, fetch and list the embedding models semantic search uses
+
+embed
+: build and update the semantic-search index
 
 completion
 : write or install a shell completion script for bash or PowerShell

@@ -147,6 +147,8 @@ var verbTable = []verbSpec{
 		leaf("frontmatter", classPlanApply, mi("Frontmatter…", "propose frontmatter for a file", 6, "", "kb document frontmatter PATH")), sub("delete", classRemoving),
 	}, Flags: []string{"--project", "--concept", "--dry-run", "--accept", "--accept-keywords", "--set", "--by",
 		"--confidence", "--status", "--title", "--format", "--no-prompt"}},
+	{Name: "embed", Summary: "bring the semantic-search index in step with the knowledge base", Class: classDirect,
+		Flags: []string{"--status", "--rebuild"}},
 	{Name: "export", Summary: "write a portable JSON-L snapshot of the database", Class: classCLIOnly,
 		Flags: []string{"--project", "--out"}},
 	{Name: "format", Summary: "a fully assembled Markdown view of one project or every project", Class: classRead,

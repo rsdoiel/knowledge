@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -130,5 +131,60 @@ func TestFingerprintRealModel(t *testing.T) {
 	fp := NewHugot(dir).Fingerprint()
 	if strings.HasSuffix(fp, "?") || !strings.Contains(fp, ":") {
 		t.Errorf("fingerprint of a real model = %q", fp)
+	}
+}
+
+// Hugot's pure-Go backend compiles and keeps one executable (about 200 MB) for
+// every distinct (batch, sequence length) it is given. A first index of a
+// thousand rows, whose batches are nearly all new shapes, reached 14 GB and was
+// killed by the kernel. The embedder replaces its session every maxShapes shapes.
+func TestEmbedBoundsTheShapesItKeepsCompiled(t *testing.T) {
+	h := NewHugot(modelDir(t))
+	words := strings.Fields("the quick brown fox jumps over the lazy dog while a slow tortoise considers every option carefully")
+	var ms runtime.MemStats
+	for n := 3; n < 3+3*maxShapes+3; n++ { // each call is a new sequence length
+		if _, err := h.Embed([]string{strings.Join(words[:n%len(words)+1], " ") + strings.Repeat(" more", n)}); err != nil {
+			t.Fatal(err)
+		}
+		if len(h.shapes) > maxShapes {
+			t.Fatalf("after %d shapes the session holds %d, want at most %d", n-2, len(h.shapes), maxShapes)
+		}
+		runtime.ReadMemStats(&ms)
+		if ms.HeapAlloc > 3<<30 {
+			t.Fatalf("heap is %d MB after %d distinct shapes: the compiled shapes are not being released", ms.HeapAlloc>>20, n-2)
+		}
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&ms)
+	if ms.HeapAlloc > 2<<30 {
+		t.Errorf("heap is %d MB after the run, want under 2048", ms.HeapAlloc>>20)
+	}
+	// A session that was replaced still gives the right answer.
+	a, err := h.Embed([]string{"exit codes for command-line tools"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := NewHugot(modelDir(t)).Embed([]string{"exit codes for command-line tools"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := dot(a[0], b[0]); d < 0.9999 {
+		t.Errorf("a replaced session gives a different vector (cosine %f)", d)
+	}
+}
+
+func TestEmbedIsSafeForConcurrentCalls(t *testing.T) {
+	h := NewHugot(modelDir(t))
+	errs := make(chan error, 4)
+	for i := range 4 {
+		go func() {
+			_, err := h.Embed([]string{strings.Repeat("word ", 5+i*7)})
+			errs <- err
+		}()
+	}
+	for range 4 {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
 	}
 }

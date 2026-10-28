@@ -10,8 +10,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"sort"
 	"sync"
 
@@ -31,6 +34,16 @@ const maxTokens = 512
 // sorted by length first, so a batch pads to little more than its longest.
 const batchSize = 8
 
+// maxShapes is how many distinct (batch size, sequence length) shapes one
+// session is given before it is replaced. Hugot's pure-Go backend compiles an
+// executable for every new shape and keeps it for the life of the session, about
+// 200 MB each, and its bucketing options apply only to the XLA backend. With
+// length-sorted batches nearly every batch is a new shape, so an unbounded
+// session took a first index of a thousand rows past 14 GB and the kernel's
+// out-of-memory killer ended it. Replacing the session every few shapes bounds
+// the memory; each new shape costs one compile either way.
+const maxShapes = 4
+
 // fingerprintFiles are the files that decide what a vector means.
 var fingerprintFiles = []string{"model.onnx", "tokenizer.json", "config.json"}
 
@@ -45,10 +58,10 @@ var fingerprintFiles = []string{"model.onnx", "tokenizer.json", "config.json"}
 type Hugot struct {
 	dir string
 
-	once    sync.Once
+	mu      sync.Mutex // serialises Embed: a replaced session must not be in use
 	session *hugot.Session
 	pipe    *pipelines.FeatureExtractionPipeline
-	err     error
+	shapes  map[[2]int]bool // shapes the current session has compiled
 
 	fpOnce sync.Once
 	fp     string
@@ -74,6 +87,25 @@ func (h *Hugot) Model() string { return filepath.Base(h.dir) }
 
 /** Dimensions returns the length of the vectors Embed returns. */
 func (h *Hugot) Dimensions() int { return miniLMDimensions }
+
+/** Available reports whether the model's files are installed in the model
+ * directory, without loading the model.
+ *
+ * Returns:
+ *   error — nil when every file is present; otherwise an error wrapping
+ *     fs.ErrNotExist that names the directory and says how to install the model
+ *
+ * Example:
+ *   if err := e.Available(); err != nil { fmt.Println(err) }
+ */
+func (h *Hugot) Available() error {
+	for _, name := range fingerprintFiles {
+		if fi, err := os.Stat(filepath.Join(h.dir, name)); err != nil || !fi.Mode().IsRegular() {
+			return fmt.Errorf("the embedding model %s is not installed at %s (run: kb model fetch): %w", h.Model(), h.dir, fs.ErrNotExist)
+		}
+	}
+	return nil
+}
 
 /** Fingerprint identifies the model files: the model's name and a hash of its
  * ONNX file, tokenizer and config, so an index built by one set of files is
@@ -109,23 +141,50 @@ func (h *Hugot) Fingerprint() string {
 	return h.fp
 }
 
-// load opens the session and pipeline once. Vectors come back at unit length,
-// the same as the fake embedder's, so a dot product is a cosine.
+// load opens the session and pipeline if there is none. Vectors come back at
+// unit length, the same as the fake embedder's, so a dot product is a cosine.
 func (h *Hugot) load() error {
-	h.once.Do(func() {
-		h.session, h.err = hugot.NewGoSession(context.Background())
-		if h.err != nil {
-			return
-		}
-		h.pipe, h.err = h.session.NewPipeline(hugot.FeatureExtractionConfig{
-			ModelPath: h.dir,
-			Name:      "embed",
-			Options:   []hugot.FeatureExtractionOption{pipelines.WithNormalization()},
-		})
-	})
-	if h.err != nil {
-		return fmt.Errorf("loading model %s: %w", h.dir, h.err)
+	if h.pipe != nil {
+		return nil
 	}
+	session, err := hugot.NewGoSession(context.Background())
+	if err != nil {
+		return fmt.Errorf("loading model %s: %w", h.dir, err)
+	}
+	pipe, err := session.NewPipeline(hugot.FeatureExtractionConfig{
+		ModelPath: h.dir,
+		Name:      "embed",
+		Options:   []hugot.FeatureExtractionOption{pipelines.WithNormalization()},
+	})
+	if err != nil {
+		session.Destroy()
+		return fmt.Errorf("loading model %s: %w", h.dir, err)
+	}
+	h.session, h.pipe, h.shapes = session, pipe, map[[2]int]bool{}
+	return nil
+}
+
+// release drops the session and the executables it compiled.
+func (h *Hugot) release() {
+	if h.session != nil {
+		h.session.Destroy()
+	}
+	h.session, h.pipe, h.shapes = nil, nil, nil
+	runtime.GC()
+	debug.FreeOSMemory()
+}
+
+// admit notes the shape of a batch about to run. A new shape, when the session
+// already holds maxShapes of them, first replaces the session.
+func (h *Hugot) admit(batch, longest int) error {
+	key := [2]int{batch, longest}
+	if h.pipe != nil && !h.shapes[key] && len(h.shapes) >= maxShapes {
+		h.release()
+	}
+	if err := h.load(); err != nil {
+		return err
+	}
+	h.shapes[key] = true
 	return nil
 }
 
@@ -184,7 +243,9 @@ func (h *Hugot) Embed(texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil
 	}
-	if err := h.load(); err != nil {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err := h.load(); err != nil { // the tokenizer is needed to measure texts
 		return nil, err
 	}
 	type item struct {
@@ -204,6 +265,11 @@ func (h *Hugot) Embed(texts []string) ([][]float32, error) {
 		batch := make([]string, 0, hi-lo)
 		for _, it := range items[lo:hi] {
 			batch = append(batch, it.text)
+		}
+		// Sorted by length, the last text of a batch is its longest, and so decides
+		// the padded length Hugot compiles for.
+		if err := h.admit(len(batch), items[hi-1].tokens); err != nil {
+			return nil, err
 		}
 		res, err := h.pipe.RunPipeline(context.Background(), batch)
 		if err != nil {
