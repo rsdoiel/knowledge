@@ -341,7 +341,7 @@ func reviewOnATerminal(t *testing.T) (root string, master *os.File, screen *ptyS
 		testRecord{ID: "0001", Kind: "decision", Trigger: "design", Status: "proposed", Date: "2026-08-01"})
 	cmd := exec.Command(bin, "record", "set-status", "clasm/DR-0001")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "KB_PAGER=cat")
+	cmd.Env = terminalEnv("KB_PAGER=cat")
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start kb: %v", err)

@@ -7,15 +7,16 @@
   the thirteen pages written for v0.0.28. `concept`, `record`, `check-db`, `stats`, `story`, `completion` and
   `document` name codes whose proofs are in per-verb test files (`conceptshowrecall_test.go` and others); list them
   in `provedElsewhere` with the test name, or add the cases to `exitcodes_verbs_test.go`. Found 2026-10-28.
-- [ ] **Two TUI binary tests time out at 10 s on the Pi** (`TestBinary_TUIIngestPlanThenApplyOnATerminal`,
-  `TestBinary_TUIDeleteAProjectByTypingItsName`), also on a clean `main`. **Must be fixed before the next release.**
-  First lead (2026-10-28, not confirmed): the screen does render, so the program works. The test waits for an exact
-  string (`quokka to confirm: quokka`, `concept: created Fresh`) and the screen the test prints shows the dialog's text
-  wrapped mid-word (`...linked to nothi` / `ng`) with the typed name on a different row from the prompt. So the pseudo-terminal
-  is probably a different width from what the program lays out for, or the emulator wraps differently, and an expected
-  string that crosses a row break never matches. Check the size the test gives the pty against the size the program reads
-  (`ptyemu_test.go`, `tui_remove_test.go:365`, `tui_plan_test.go:328`), and whether the tests pass on another machine
-  (macmini-rd.local). Fix by sizing the pty explicitly, or by matching row by row. Found 2026-10-28.
+- [x] **Two TUI binary tests timed out at 10 s when run from inside tmux** (`TestBinary_TUIIngestPlanThenApplyOnATerminal`,
+  `TestBinary_TUIDeleteAProjectByTypingItsName`). Fixed 2026-10-28. Cause: the pseudo-terminal tests gave the binary the
+  caller's environment, so under `TERM=tmux-256color` (and `TMUX`) it wrote differently from the xterm the 80 by 24 emulator
+  (`ptyemu_test.go`) is built for, and the grid came out wrapped mid-word, so an expected phrase never matched. The program
+  itself was fine. Every test that starts the binary on a pty now uses `terminalEnv()` (TERM=xterm-256color, the terminal
+  variables dropped). Tests: `TestBinary_TUITestsIgnoreTheTerminalTheyWereRunFrom` (fails without the fix),
+  `TestTerminalEnv_ReplacesTheCallersTerminal`. The suite passes from inside tmux, under xterm and with TERM empty.
+  Not investigated: why the program's layout width differs under `tmux-256color` when the pty has no size set; the author
+  uses the interface under tmux and it works, so this is low priority, but the emulator may be missing a sequence tmux terminals
+  produce.
 - [ ] **Draft an upstream issue for Hugot** (`knights-analytics/hugot`, not filed; the author files it). v0.8.3's pure-Go
   backend ignores `WithGoMLXBatchBuckets` and `WithGoMLXSequenceBuckets` (padding is applied only when the runtime is XLA,
   `backends/backend.go`), keeps one compiled executable per distinct (batch, sequence length) for the life of the session,

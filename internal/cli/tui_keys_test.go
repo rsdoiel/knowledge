@@ -322,6 +322,7 @@ func TestBinary_TUIWalksDownAndUpWithEscDoingNothing(t *testing.T) {
 		testRecord{ID: "0001", Kind: "decision", Trigger: "design", Status: "proposed", Date: "2026-08-01"})
 	cmd := exec.Command(bin)
 	cmd.Dir = root
+	cmd.Env = terminalEnv()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start kb: %v", err)

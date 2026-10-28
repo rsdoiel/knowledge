@@ -154,6 +154,7 @@ func TestBinary_PromoteIsReachableFromATerminal(t *testing.T) {
 	kb, root, secID := draftedSection(t)
 	cmd := exec.Command(bin, "document", "review", "promote", fmt.Sprint(secID))
 	cmd.Dir = root
+	cmd.Env = terminalEnv()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	if code := exitCode(t, cmd.Run()); code != 0 {
 		t.Fatalf("exit = %d from a terminal, want 0", code)

@@ -258,6 +258,7 @@ func startOnATerminal(t *testing.T, root string, args ...string) (*os.File, *pty
 	master, slave := openPtyForTest(t)
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = root
+	cmd.Env = terminalEnv()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start kb: %v", err)

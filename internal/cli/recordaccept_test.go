@@ -273,6 +273,7 @@ func TestBinary_AcceptedIsReachableFromATerminal(t *testing.T) {
 		testRecord{ID: "0001", Kind: "decision", Trigger: "design", Status: "proposed", Date: "2026-08-01"})
 	cmd := exec.Command(bin, "record", "set-status", "clasm/DR-0001", "accepted")
 	cmd.Dir = root
+	cmd.Env = terminalEnv()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	if code := exitCode(t, cmd.Run()); code != 0 {
 		t.Fatalf("exit = %d from a terminal, want 0", code)

@@ -448,7 +448,7 @@ func startPendingOnATerminal(t *testing.T) (root string, master *os.File, screen
 	master, slave := openPtyForTest(t)
 	cmd := exec.Command(bin, "-i", "record", "pending")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "KB_PAGER="+waitingPager(t))
+	cmd.Env = terminalEnv("KB_PAGER=" + waitingPager(t))
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start kb: %v", err)

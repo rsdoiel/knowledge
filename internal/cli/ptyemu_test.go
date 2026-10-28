@@ -1,6 +1,9 @@
 package cli
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 // emulate plays what a program wrote to a terminal onto a character grid and
 // returns the rows. Bubble Tea v2 redraws only what changed, moving the cursor
@@ -168,4 +171,27 @@ func emulate(raw string, cols, rows int) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// terminalEnv is the environment a program under test gets on a pseudo-terminal:
+// the caller's, with everything that says what terminal it is dropped and a plain
+// xterm put in its place, then extra added. The emulator here plays output onto
+// an 80 by 24 grid and knows the xterm sequences; under TERM=tmux-256color, which
+// is what these tests inherit when they are run from inside tmux, the program
+// writes differently and the grid comes out wrapped mid-word, so a test waiting
+// for a phrase never saw it. A test must not depend on the terminal it was run from.
+func terminalEnv(extra ...string) []string {
+	drop := map[string]bool{
+		"TERM": true, "COLORTERM": true, "TERM_PROGRAM": true, "TERM_PROGRAM_VERSION": true,
+		"TMUX": true, "TMUX_PANE": true, "STY": true, "COLUMNS": true, "LINES": true,
+		"NO_COLOR": true, "CLICOLOR": true, "CLICOLOR_FORCE": true, "WT_SESSION": true,
+		"KONSOLE_VERSION": true, "VTE_VERSION": true, "ITERM_SESSION_ID": true, "KITTY_WINDOW_ID": true,
+	}
+	var env []string
+	for _, kv := range os.Environ() {
+		if name, _, _ := strings.Cut(kv, "="); !drop[name] {
+			env = append(env, kv)
+		}
+	}
+	return append(append(env, "TERM=xterm-256color"), extra...)
 }

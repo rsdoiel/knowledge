@@ -350,6 +350,38 @@ func TestRemove_TheLegendsOfferDeleteWhereItWorks(t *testing.T) {
 // A stray project called quokka, deleted by typing its name on a real terminal:
 // the first key typed is a q, which is text here and a command everywhere else.
 func TestBinary_TUIDeleteAProjectByTypingItsName(t *testing.T) {
+	deleteAProjectOnATerminal(t)
+}
+
+// The same, run from inside tmux: the tests set the terminal they run under
+// (terminalEnv), so the one they were started from makes no difference.
+func TestBinary_TUITestsIgnoreTheTerminalTheyWereRunFrom(t *testing.T) {
+	t.Setenv("TERM", "tmux-256color")
+	t.Setenv("TMUX", "/tmp/tmux-1000/default,1,0")
+	t.Setenv("COLORTERM", "truecolor")
+	deleteAProjectOnATerminal(t)
+}
+
+func TestTerminalEnv_ReplacesTheCallersTerminal(t *testing.T) {
+	t.Setenv("TERM", "tmux-256color")
+	t.Setenv("TMUX", "x")
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("KEEP_ME", "yes")
+	got := strings.Join(terminalEnv("KB_PAGER=cat"), "\n")
+	for _, want := range []string{"TERM=xterm-256color", "KEEP_ME=yes", "KB_PAGER=cat"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("env lacks %s", want)
+		}
+	}
+	for _, bad := range []string{"tmux-256color", "TMUX=", "NO_COLOR", "COLORTERM"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("env still has %s", bad)
+		}
+	}
+}
+
+func deleteAProjectOnATerminal(t *testing.T) {
+	t.Helper()
 	if runtime.GOOS != "linux" {
 		t.Skip("pseudo-terminal test is Linux only")
 	}
