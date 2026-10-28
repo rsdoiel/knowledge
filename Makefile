@@ -221,6 +221,26 @@ dist/Windows-arm64: $(PROGRAMS)
 	@cd dist && zip -r $(PROJECT)-v$(VERSION)-Windows-arm64.zip LICENSE codemeta.json CITATION.cff *.md bin/* man/* agents $(DOCS)
 	@rm -fR dist/bin
 
+# The semantic kb (semantic-search-plan.md T2) is built from the nested module in
+# semantic/ against the working tree through go.work, and needs Go 1.27 (Hugot).
+# semantic builds it for this machine; cross-semantic builds it for the six release
+# targets with CGO_ENABLED=0, which is the check that Hugot's pure-Go backend still
+# cross-compiles. Neither is part of `make release` yet: the archives hold the plain
+# kb until the semantic preview ships (plan T12).
+SEMANTIC_TARGETS = linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
+
+semantic: .FORCE
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -o "bin/kb-semantic$(EXT)" ./semantic/cmd/kb
+
+cross-semantic: .FORCE
+	@mkdir -p bin/semantic-cross
+	@for T in $(SEMANTIC_TARGETS); do \
+		OS="$${T%/*}"; ARCH="$${T#*/}"; EXE=""; [ "$$OS" = windows ] && EXE=".exe"; \
+		echo "semantic kb for $$OS/$$ARCH"; \
+		CGO_ENABLED=0 GOOS=$$OS GOARCH=$$ARCH go build -o "bin/semantic-cross/kb-$$OS-$$ARCH$$EXE" ./semantic/cmd/kb || exit 1; \
+	done
+
 distribute_docs:
 	@mkdir -p dist/
 	@cp -v codemeta.json dist/
