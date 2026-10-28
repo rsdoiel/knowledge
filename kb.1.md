@@ -427,8 +427,11 @@ the error on stderr carries the class name beside the number, for example
   a known condition: report it
 
 73
-: an output could not be created: the file exists, or its directory cannot be
-  made (merge -out, export -out, init, index, record new)
+: an output could not be created: merge -out already exists; or a directory or
+  file cannot be made (export -out in a directory that is missing or naming a
+  directory; init or record new under a path that is a file; index where
+  index.md cannot be created). Not 73: export -out onto a file that exists
+  replaces it, and init on a workspace that exists leaves it alone; both are 0
 
 74
 : a read or write failed part way: a disk or database I/O error
@@ -437,7 +440,12 @@ the error on stderr carries the class name beside the number, for example
 : the database is locked. Retrying later may succeed
 
 77
-: the operating system refused access
+: the operating system refused access, including a database file or a record
+  file that cannot be opened
+
+78
+: not used: kb reads no configuration file, only the environment
+  variables under WORKSPACE AND ENVIRONMENT
 
 # SEE ALSO
 

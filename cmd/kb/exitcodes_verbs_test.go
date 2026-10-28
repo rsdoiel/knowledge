@@ -371,6 +371,21 @@ func TestVerbs_IndexAndIngestOSRefusals(t *testing.T) {
 	runVerbCase(t, verbCase{name: "ingest of a record file it may not read", args: []string{"ingest", recs}, want: classNoPermission, bulk: true})
 }
 
+// kb(1) says what 73 (cant_create) is, and the cases that look like it but are not:
+// export -out onto a file that exists replaces it, and init on a workspace that
+// exists leaves it alone. Both are 0. Pinned so the manual stays true (T4 of
+// release-plan-v0.0.28.md).
+func TestVerbs_ReplacingAnExportAndRepeatingInitAreExit0(t *testing.T) {
+	runVerbCase(t, verbCase{name: "export -out onto an existing file", setup: [][]string{{"project", "add", "P", "d"}, {"export", "-out", "o.jsonl"}}, args: []string{"export", "-out", "o.jsonl"}, want: classOK})
+	dir := t.TempDir()
+	for i := 0; i < 2; i++ {
+		var out, errOut bytes.Buffer
+		if code := mainRun([]string{"init", dir}, &out, &errOut); code != 0 {
+			t.Fatalf("init run %d: exit %d, want 0: %s", i+1, code, errOut.String())
+		}
+	}
+}
+
 // A database file the operating system will not let kb open is 77 (no_permission),
 // as an unreadable import file and a read-only directory already are. SQLite
 // reports it as "unable to open database file", which says nothing about why, so

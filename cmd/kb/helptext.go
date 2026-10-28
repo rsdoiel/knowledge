@@ -431,8 +431,11 @@ the error on stderr carries the class name beside the number, for example
   a known condition: report it
 
 73
-: an output could not be created: the file exists, or its directory cannot be
-  made (merge -out, export -out, init, index, record new)
+: an output could not be created: merge -out already exists; or a directory or
+  file cannot be made (export -out in a directory that is missing or naming a
+  directory; init or record new under a path that is a file; index where
+  index.md cannot be created). Not 73: export -out onto a file that exists
+  replaces it, and init on a workspace that exists leaves it alone; both are 0
 
 74
 : a read or write failed part way: a disk or database I/O error
@@ -441,7 +444,12 @@ the error on stderr carries the class name beside the number, for example
 : the database is locked. Retrying later may succeed
 
 77
-: the operating system refused access
+: the operating system refused access, including a database file or a record
+  file that cannot be opened
+
+78
+: not used: {app_name} reads no configuration file, only the environment
+  variables under WORKSPACE AND ENVIRONMENT
 
 # SEE ALSO
 
@@ -2461,7 +2469,8 @@ scope, and record new with no scope anywhere are 2. For record fuzzy-tag:
 argument, and on any record verb a --concept or --write it does not take; 65 a
 record file that is malformed or whose tags: is in a form the edit will not
 change (nothing is written); 66 a record's file is missing, or there is no
-workspace here; 74 a write failed part way (writes already made are undone).
+workspace here; 73 record new cannot create the record's directory or file;
+74 a write failed part way (writes already made are undone).
 
 # VOCABULARIES
 

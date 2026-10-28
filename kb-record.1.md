@@ -188,7 +188,8 @@ scope, and record new with no scope anywhere are 2. For record fuzzy-tag:
 argument, and on any record verb a --concept or --write it does not take; 65 a
 record file that is malformed or whose tags: is in a form the edit will not
 change (nothing is written); 66 a record's file is missing, or there is no
-workspace here; 74 a write failed part way (writes already made are undone).
+workspace here; 73 record new cannot create the record's directory or file;
+74 a write failed part way (writes already made are undone).
 
 # VOCABULARIES
 
