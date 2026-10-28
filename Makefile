@@ -277,7 +277,7 @@ check-release: .FORCE
 	if [ $$FAIL -ne 0 ]; then echo "check-release: v$$V is NOT ready to release"; exit 1; fi; \
 	echo "check-release: v$$V is consistent"
 
-release: generate check-release build save setup_dist distribute_docs dist/Linux-x86_64 dist/Linux-aarch64 dist/macOS-x86_64 dist/macOS-arm64 dist/Windows-x86_64 dist/Windows-arm64
+release: generate check-release build setup_dist distribute_docs dist/Linux-x86_64 dist/Linux-aarch64 dist/macOS-x86_64 dist/macOS-arm64 dist/Windows-x86_64 dist/Windows-arm64
 	@printf "\nready to run\n\n\trelease.bash\n\n"
 
 
