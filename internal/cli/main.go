@@ -122,7 +122,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// them would be a pointless, surprising side effect. It is not
 	// hypothetical: kb index left a 127KB database in whatever directory it
 	// ran in.
-	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" || rest[0] == "completion" || rest[0] == "verbs" {
+	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" || rest[0] == "completion" || rest[0] == "verbs" || rest[0] == "model" {
 		// They do not use --db, so an explicit one is a mistake. It used to be
 		// dropped silently: `kb --db rt.db init` created ./agents/knowledge.db
 		// and never rt.db. Refuse it and say where the target really goes.
@@ -216,6 +216,8 @@ func dbOptionRefusal(verb string) error {
 		return usageErrorf("--db does not apply to completion: it opens no database; see kb help completion")
 	case "verbs":
 		return usageErrorf("--db does not apply to verbs: it opens no database; see kb help verbs")
+	case "model":
+		return usageErrorf("--db does not apply to model: it manages model files and opens no database; see kb help model")
 	}
 	return usageErrorf("--db does not apply to %s: it takes its databases as -a, -b and -out; see kb help %s", verb, verb)
 }

@@ -163,6 +163,9 @@ var verbTable = []verbSpec{
 	}},
 	{Name: "merge", Summary: "reconcile two knowledge.db files that drifted independently", Class: classCLIOnly,
 		Flags: []string{"--a", "--b", "--out", "--force"}},
+	{Name: "model", Summary: "install, fetch and list the embedding models semantic search uses", Subverbs: []subverbSpec{
+		sub("install", classDirect), sub("fetch", classDirect), sub("list", classRead),
+	}, Flags: []string{"--workspace", "--dir", "--name", "--source"}},
 	{Name: "observation", Summary: "manage observations", Menu: mi("Observations", "notes, findings, decisions, questions", 3, "", "kb observation"), Subverbs: []subverbSpec{
 		leaf("add", classAdditive, mi("New observation…", "record a note, finding or decision", 2, "", "kb observation add --project P KIND BODY")), leaf("list", classRead, mi("Browse", "a project's observations", 1, "", "kb observation list --project P")), sub("show", classRead), sub("update", classChanging),
 		sub("sources", classRead), sub("delete", classRemoving),

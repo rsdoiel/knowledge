@@ -223,7 +223,7 @@ record set-status showing old to new; delete asks for the name to be typed, as d
 does, for a project, observation, concept or record; ingest and the document and
 record fuzzy-tag verbs show their --dry-run first; document review promote ID
 opens the review form for a drafted section and document draft asks first; merge,
-import, init, export and completion are command line only. While you type, every key is text; Esc cancels.
+import, init, model, export and completion are command line only. While you type, every key is text; Esc cancels.
 
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
@@ -258,6 +258,10 @@ over each:
 KB_DB
 : the path to the database, as -db. Not read by init, index, merge or
   completion, which refuse -db
+
+KB_MODEL_DIR
+: the directory that holds embedding models, in place of the workspace's
+  agents/models/ and the user data directory (see kb-model(1))
 
 KB_PROJECT
 : the project to act on when none is given and the current directory belongs to
@@ -343,6 +347,10 @@ index
 init
 : create a new, empty workspace — see kb-init(1)
 
+model
+: install, fetch and list the embedding models semantic search uses — see
+  kb-model(1)
+
 completion
 : write a shell completion script for bash or PowerShell, or install it — see
   kb-completion(1)
@@ -356,7 +364,7 @@ verbs
 The global options -json, -db and -debug go before the verb: kb
 -json project list. After the verb they are refused, not ignored. So is any
 other flag a verb does not have, and any surplus argument.
-init, index, merge and completion never open the ambient database, so -db is
+init, index, merge, model and completion never open the ambient database, so -db is
 refused for them as well; init takes its target as kb init PATH, merge as -a, -b
 and -out.
 
@@ -455,5 +463,5 @@ kb-search(1), kb-merge(1), kb-check-db(1),
 kb-stats(1), kb-story(1), kb-export(1),
 kb-import(1), kb-ingest(1), kb-record(1),
 kb-document(1), kb-index(1), kb-init(1),
-kb-completion(1), kb-verbs(1), kb-topics(1)
+kb-model(1), kb-completion(1), kb-verbs(1), kb-topics(1)
 

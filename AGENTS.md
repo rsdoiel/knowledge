@@ -54,6 +54,7 @@ Each is `kb VERB`; the class is what it does to the database.
 | `stats` | read | counts of rows, links and checks, and a line per project |
 | `check-db` | read | compare the database with its JSON-L dump |
 | `export`, `import`, `merge` | cli_only | portable snapshots and reconciling two databases |
+| `model` (`install fetch list`) | direct, read | manage the embedding model files semantic search needs; files only, no database, no network except `fetch` |
 | `init`, `completion`, `verbs` | cli_only | create a workspace, shell completion, the verb table |
 
 ## Exit codes

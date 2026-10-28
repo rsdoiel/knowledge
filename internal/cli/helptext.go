@@ -227,7 +227,7 @@ record set-status showing old to new; delete asks for the name to be typed, as d
 does, for a project, observation, concept or record; ingest and the document and
 record fuzzy-tag verbs show their --dry-run first; document review promote ID
 opens the review form for a drafted section and document draft asks first; merge,
-import, init, export and completion are command line only. While you type, every key is text; Esc cancels.
+import, init, model, export and completion are command line only. While you type, every key is text; Esc cancels.
 
 A complete command always runs as a command and prints, on a terminal or not, so
 scripts can rely on it. Only an incomplete one opens the interface, and only on
@@ -262,6 +262,10 @@ over each:
 KB_DB
 : the path to the database, as -db. Not read by init, index, merge or
   completion, which refuse -db
+
+KB_MODEL_DIR
+: the directory that holds embedding models, in place of the workspace's
+  agents/models/ and the user data directory (see {app_name}-model(1))
 
 KB_PROJECT
 : the project to act on when none is given and the current directory belongs to
@@ -347,6 +351,10 @@ index
 init
 : create a new, empty workspace — see {app_name}-init(1)
 
+model
+: install, fetch and list the embedding models semantic search uses — see
+  {app_name}-model(1)
+
 completion
 : write a shell completion script for bash or PowerShell, or install it — see
   {app_name}-completion(1)
@@ -360,7 +368,7 @@ verbs
 The global options -json, -db and -debug go before the verb: {app_name}
 -json project list. After the verb they are refused, not ignored. So is any
 other flag a verb does not have, and any surplus argument.
-init, index, merge and completion never open the ambient database, so -db is
+init, index, merge, model and completion never open the ambient database, so -db is
 refused for them as well; init takes its target as kb init PATH, merge as -a, -b
 and -out.
 
@@ -459,7 +467,7 @@ the error on stderr carries the class name beside the number, for example
 {app_name}-stats(1), {app_name}-story(1), {app_name}-export(1),
 {app_name}-import(1), {app_name}-ingest(1), {app_name}-record(1),
 {app_name}-document(1), {app_name}-index(1), {app_name}-init(1),
-{app_name}-completion(1), {app_name}-verbs(1), {app_name}-topics(1)
+{app_name}-model(1), {app_name}-completion(1), {app_name}-verbs(1), {app_name}-topics(1)
 
 `
 
@@ -2799,6 +2807,126 @@ The workspace convention, as described in {app_name}(1).
 {app_name}(1), {app_name}-import(1), {app_name}-ingest(1)
 `
 
+// ModelHelpText is the kb-model(1) man page.
+const ModelHelpText = `%{app_name}-model(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-model — install, fetch and list the embedding models semantic search uses
+
+# SYNOPSIS
+
+{app_name} model install PATH [-name NAME] [-workspace] [-dir DIR]
+
+{app_name} model fetch [NAME] [-source URL] [-workspace] [-dir DIR]
+
+{app_name} model list [-workspace] [-dir DIR]
+
+# DESCRIPTION
+
+Semantic search compares the meaning of a question with the meaning of the
+rows in a knowledge base, using an embedding model: a few files, about 87 MB for
+the default, all-MiniLM-L6-v2 (Apache-2.0). model puts those files where
+{app_name} looks for them. It only manages files. It opens no knowledge base,
+and it works the same in a {app_name} built without semantic search, which can
+install a model but not use it; list says which kind of build is running.
+
+install PATH
+: copies a model from a directory, or from a .zip, .tar.gz or .tgz archive
+  holding one, after checking each file against the size and SHA-256 {app_name}
+  has on record for the model. It uses no network. Without PATH it exits 2 and
+  points to fetch and to install PATH. The model is recognised from its files;
+  -name names it explicitly.
+
+fetch [NAME]
+: downloads the model (the default when NAME is omitted), checks each file as it
+  arrives, and installs it. This is the only place {app_name} uses the network,
+  and only when you run it. -source URL fetches the files from a mirror (the
+  files at URL/FILE) instead of the recorded address.
+
+list
+: shows the build's capability, each installed model with where it is and
+  whether its files are all present, and the model the vector index was built
+  with. -json prints the same as a document.
+
+Nothing is left half-installed: files are copied or downloaded into a scratch
+directory that is moved into place only when every file checks out. An
+existing model of the same name is never overwritten; remove its directory
+first to replace it.
+
+# OPTIONS
+
+-workspace
+: install into WORKSPACE/agents/models/ instead of the user directory. The
+  workspace is the one found at or above the current directory. Add
+  agents/models/ to .gitignore: the files are large and are not part of the
+  knowledge.
+
+-dir DIR
+: install into, and look in, DIR instead (KB_MODEL_DIR does the same).
+
+-name NAME
+: install: the model the files are, when they cannot be recognised.
+
+-source URL
+: fetch: the base address to download from.
+
+The global -json option applies. The global -db option does not: model opens no
+database, and an explicit -db is refused (exit 2).
+
+# FILES
+
+Models are looked for in WORKSPACE/agents/models/NAME/ first, then in the user
+data directory ($XDG_DATA_HOME/kb/models, or ~/.local/share/kb/models;
+~/Library/Application Support/kb/models on macOS; %LocalAppData%\kb\models on
+Windows). KB_MODEL_DIR, or -dir, replaces both. Each installed model has a
+kb-model.json recording what was installed.
+
+# EXAMPLES
+
+~~~shell
+{app_name} model fetch
+{app_name} model install ~/Downloads/all-MiniLM-L6-v2.zip
+{app_name} model install -workspace /media/usb/all-MiniLM-L6-v2
+{app_name} model list
+~~~
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: the model was installed, or list ran
+
+2
+: a bad flag, a missing PATH, a surplus argument, an unknown subverb or model name, or a -db
+
+65
+: the files are not the model: one is missing, the wrong size, or fails its checksum; or an
+  archive is unreadable or holds a path outside itself
+
+66
+: PATH does not exist, a download was refused as not found, or -workspace found no workspace
+
+69
+: fetch could not reach the source, or it answered with an error
+
+73
+: a model of that name is already installed, or the directory cannot be created
+
+74
+: a copy or a download stopped part way
+
+77
+: the operating system refused access to a directory or file
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-init(1), {app_name}-search(1)
+`
+
 // CompletionHelpText is the kb-completion(1) man page.
 const CompletionHelpText = `%{app_name}-completion(1) user manual | version {version} {release_hash}
 % R. S. Doiel
@@ -2984,6 +3112,9 @@ index
 
 init
 : create a new, empty workspace
+
+model
+: install, fetch and list the embedding models semantic search uses
 
 completion
 : write or install a shell completion script for bash or PowerShell

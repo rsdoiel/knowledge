@@ -28,7 +28,7 @@ func exitStatusPages(t *testing.T) []string {
 // fileVerbs handle a file or directory the caller names, so their pages list the
 // file classes (65, 66, 73, 74, 77) they provoke as well as 0, 1 and 2.
 var fileVerbs = map[string]bool{
-	"export": true, "import": true, "merge": true, "index": true, "ingest": true, "init": true,
+	"export": true, "import": true, "merge": true, "index": true, "ingest": true, "init": true, "model": true,
 }
 
 // genericClasses can come from any verb that opens the database. They are listed
@@ -177,14 +177,15 @@ func provokedCodes() map[string]map[int]bool {
 // the tables, with that test's name. TestVerbs_IOIsExit74 and
 // TestVerbs_PermissionIsExit77 are single cases, listed here too.
 var provedElsewhere = map[string][]int{
-	"export": {74, 77}, // TestVerbs_ExportWriteFailures
-	"import": {74, 77}, // TestVerbs_IOIsExit74, TestVerbs_PermissionIsExit77
-	"init":   {77},     // TestVerbs_PermissionIsExit77
-	"ingest": {65, 77}, // TestCmdIngest_MalformedRecordsExit65AfterIngestingTheGoodOnes; 77: TestVerbs_IndexAndIngestOSRefusals
-	"source": {69},     // TestCheckRetractions_UnreachableServiceExits69AfterCheckingTheRest
-	"index":  {1, 77},  // TestIndexAll_StaleOnlyIsNegative; 77: TestVerbs_IndexAndIngestOSRefusals
-	"search": {1},      // TestVerbs_NegativeIsExit1
-	"merge":  {65},     // TestMerge_CollisionIsExit65
+	"export": {74, 77},                 // TestVerbs_ExportWriteFailures
+	"import": {74, 77},                 // TestVerbs_IOIsExit74, TestVerbs_PermissionIsExit77
+	"init":   {77},                     // TestVerbs_PermissionIsExit77
+	"ingest": {65, 77},                 // TestCmdIngest_MalformedRecordsExit65AfterIngestingTheGoodOnes; 77: TestVerbs_IndexAndIngestOSRefusals
+	"source": {69},                     // TestCheckRetractions_UnreachableServiceExits69AfterCheckingTheRest
+	"index":  {1, 77},                  // TestIndexAll_StaleOnlyIsNegative; 77: TestVerbs_IndexAndIngestOSRefusals
+	"search": {1},                      // TestVerbs_NegativeIsExit1
+	"merge":  {65},                     // TestMerge_CollisionIsExit65
+	"model":  {65, 66, 69, 73, 74, 77}, // TestModel_ExitCodes
 }
 
 // checkedAgainstVerbTests are the pages written for v0.0.28. The older pages (concept,
@@ -194,7 +195,7 @@ var provedElsewhere = map[string][]int{
 // release-plan-v0.0.28.md, T4, follow-up.
 var checkedAgainstVerbTests = []string{
 	"export", "import", "index", "ingest", "init", "link", "merge",
-	"observation", "project", "search", "source", "unlink", "topics",
+	"observation", "project", "search", "source", "unlink", "topics", "model",
 }
 
 // The page and the tests agree on every code but 0 and 2: a code a page names is

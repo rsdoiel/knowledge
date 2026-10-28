@@ -72,6 +72,9 @@ index
 init
 : create a new, empty workspace
 
+model
+: install, fetch and list the embedding models semantic search uses
+
 completion
 : write or install a shell completion script for bash or PowerShell
 
