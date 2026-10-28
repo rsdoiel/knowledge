@@ -2134,6 +2134,36 @@ Every project's records at once, or from inside a project's directory:
 cd agents/projects/clasm && {app_name} ingest decisions
 ~~~
 
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1). Ingest does everything it
+can and prints the counts, then exits with the class of the first failure in path
+order, so one bad file does not stop the good ones and a run with failures is
+never 0.
+
+0
+: every record was ingested or skipped as unchanged. A warning, an unresolved
+  reference, a status change and a concept created are reports and not failures.
+  --dry-run reports the same and writes nothing
+
+2
+: no PATH, more than one PATH, or a bad flag
+
+65
+: the first failure was wrong content: a record that does not parse, two files
+  claiming one identity, or a row the database refuses (ingest under the wrong
+  --root shows as constraint failures)
+
+66
+: PATH does not exist, or is a file and not a directory
+
+77
+: a record file the operating system will not let ingest read
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-index(1), {app_name}-record(1), {app_name}-concept(1), {app_name}-source(1)
 `
 
 // RecordHelpText is the kb-record(1) man page.
@@ -2547,6 +2577,40 @@ directory as ROOT still finds the corpora inside it.
 {app_name} index . --all --check
 ~~~
 
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: index.md was written, or --check found it current, or --all found every
+  corpus refreshed or current
+
+1
+: --check, and index.md is missing or differs from what the records would
+  produce (a normal "no", so it fits a pre-commit hook); or --all, and the only
+  trouble is stale indexes
+
+2
+: no PATH, more than one PATH, --all without a ROOT, --all or --check with
+  --stdout, or a bad flag (--db included: index never opens the database)
+
+65
+: a record that cannot be parsed. With --all, this is the class of the first
+  corpus that could not be indexed, since a failure is more serious than drift
+
+66
+: PATH (or ROOT) is not a directory, or does not exist
+
+73
+: index.md cannot be created, for example a directory stands where it goes
+
+77
+: the operating system refused to let index read the records or write index.md
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-ingest(1), {app_name}-record(1)
 `
 
 // InitHelpText is the kb-init(1) man page.
@@ -2595,6 +2659,28 @@ and an explicit -db is refused (exit 2) rather than ignored.
 {app_name} init ~/NewWorkspace
 ~~~
 
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1).
+
+0
+: PATH/agents/knowledge.db was created, or it already existed and was left
+  untouched (init is idempotent)
+
+2
+: more than one PATH, a bad flag, or a -db
+
+73
+: the workspace cannot be created: a path component is a file, or the directory
+  cannot be made
+
+77
+: the operating system refused to let init create the directory or the database
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-import(1), {app_name}-ingest(1)
 `
 
 // CompletionHelpText is the kb-completion(1) man page.

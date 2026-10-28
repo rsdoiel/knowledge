@@ -43,3 +43,25 @@ kb init
 kb init ~/NewWorkspace
 ~~~
 
+
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: PATH/agents/knowledge.db was created, or it already existed and was left
+  untouched (init is idempotent)
+
+2
+: more than one PATH, a bad flag, or a -db
+
+73
+: the workspace cannot be created: a path component is a file, or the directory
+  cannot be made
+
+77
+: the operating system refused to let init create the directory or the database
+
+# SEE ALSO
+
+kb(1), kb-import(1), kb-ingest(1)

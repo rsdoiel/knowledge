@@ -26,6 +26,10 @@ type verbCase struct {
 	want  exitClass
 	// noDB runs the command without --db, from an empty directory.
 	noDB bool
+	// bulk marks a command that does everything it can and prints its counts
+	// before it exits with the class of the first failure (DR-0003 rule 4), so
+	// stdout is not empty on a failure.
+	bulk bool
 }
 
 func runVerbCase(t *testing.T, tc verbCase) {
@@ -80,7 +84,7 @@ func runVerbCase(t *testing.T, tc verbCase) {
 			t.Errorf("envelope class %q code %d, want %q %d", env.Class, env.Code, tc.want.Name, tc.want.Code)
 		}
 	}
-	if out.Len() != 0 && tc.want != classOK {
+	if out.Len() != 0 && tc.want != classOK && !tc.bulk {
 		t.Errorf("stdout = %.100q, want it empty on a failure", out.String())
 	}
 }
@@ -243,6 +247,7 @@ var cantCreateVerbCases = []verbCase{
 	{name: "export into a missing directory", args: []string{"export", "-out", "/nonexistent/dir/o.jsonl"}},
 	{name: "merge -out already exists", setup: [][]string{{"project", "add", "P", "d"}, {"--db", "b.db", "project", "add", "Q", "d"}}, files: map[string]string{"o.db": "x"}, args: []string{"merge", "-a", "kb.db", "-b", "b.db", "-out", "o.db"}},
 	{name: "record new under a file", files: map[string]string{"blocker": "x"}, args: []string{"record", "new", "--workspace", "--title", "T", "--trigger", "design", "--dir", "blocker/sub", "--root", "."}},
+	{name: "index where index.md is a directory", files: map[string]string{"recs/index.md/keep": "x"}, args: []string{"index", "recs"}},
 	{name: "init under a file", noDB: true, files: map[string]string{"blocker": "x"}, args: []string{"init", "blocker/sub"}},
 }
 
@@ -300,6 +305,29 @@ func TestVerbs_ExportWriteFailures(t *testing.T) {
 		}
 		runVerbCase(t, verbCase{name: "export onto a full device", setup: seedProject(), args: []string{"export", "-out", "/dev/full"}, want: classIO})
 	})
+}
+
+// index and ingest name a directory, and the OS can refuse them: index cannot
+// write index.md into a read-only directory, ingest cannot read a record file.
+// Both are 77, as kb-index(1) and kb-ingest(1) say.
+func TestVerbs_IndexAndIngestOSRefusals(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root: permissions are not enforced")
+	}
+	ro := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(ro, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(ro, 0o755) })
+	runVerbCase(t, verbCase{name: "index into a read-only directory", args: []string{"index", ro}, want: classNoPermission})
+
+	recs := t.TempDir()
+	locked := filepath.Join(recs, "0001-ok.md")
+	if err := os.WriteFile(locked, []byte(goodRecord), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o644) })
+	runVerbCase(t, verbCase{name: "ingest of a record file it may not read", args: []string{"ingest", recs}, want: classNoPermission, bulk: true})
 }
 
 // A database file the operating system will not let kb open is 77 (no_permission),

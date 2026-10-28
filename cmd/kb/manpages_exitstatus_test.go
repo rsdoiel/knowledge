@@ -180,9 +180,9 @@ var provedElsewhere = map[string][]int{
 	"export": {74, 77}, // TestVerbs_ExportWriteFailures
 	"import": {74, 77}, // TestVerbs_IOIsExit74, TestVerbs_PermissionIsExit77
 	"init":   {77},     // TestVerbs_PermissionIsExit77
-	"ingest": {65},     // TestCmdIngest_MalformedRecordsExit65AfterIngestingTheGoodOnes
+	"ingest": {65, 77}, // TestCmdIngest_MalformedRecordsExit65AfterIngestingTheGoodOnes; 77: TestVerbs_IndexAndIngestOSRefusals
 	"source": {69},     // TestCheckRetractions_UnreachableServiceExits69AfterCheckingTheRest
-	"index":  {1},      // TestIndexAll_StaleOnlyIsNegative
+	"index":  {1, 77},  // TestIndexAll_StaleOnlyIsNegative; 77: TestVerbs_IndexAndIngestOSRefusals
 	"search": {1},      // TestVerbs_NegativeIsExit1
 	"merge":  {65},     // TestMerge_CollisionIsExit65
 }

@@ -103,3 +103,37 @@ kb index . --all
 kb index . --all --check
 ~~~
 
+
+# EXIT STATUS
+
+The workspace convention, as described in kb(1).
+
+0
+: index.md was written, or --check found it current, or --all found every
+  corpus refreshed or current
+
+1
+: --check, and index.md is missing or differs from what the records would
+  produce (a normal "no", so it fits a pre-commit hook); or --all, and the only
+  trouble is stale indexes
+
+2
+: no PATH, more than one PATH, --all without a ROOT, --all or --check with
+  --stdout, or a bad flag (--db included: index never opens the database)
+
+65
+: a record that cannot be parsed. With --all, this is the class of the first
+  corpus that could not be indexed, since a failure is more serious than drift
+
+66
+: PATH (or ROOT) is not a directory, or does not exist
+
+73
+: index.md cannot be created, for example a directory stands where it goes
+
+77
+: the operating system refused to let index read the records or write index.md
+
+# SEE ALSO
+
+kb(1), kb-ingest(1), kb-record(1)

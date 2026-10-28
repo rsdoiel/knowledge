@@ -146,3 +146,33 @@ kb ingest agents/projects
 cd agents/projects/clasm && kb ingest decisions
 ~~~
 
+
+# EXIT STATUS
+
+The workspace convention, as described in kb(1). Ingest does everything it
+can and prints the counts, then exits with the class of the first failure in path
+order, so one bad file does not stop the good ones and a run with failures is
+never 0.
+
+0
+: every record was ingested or skipped as unchanged. A warning, an unresolved
+  reference, a status change and a concept created are reports and not failures.
+  --dry-run reports the same and writes nothing
+
+2
+: no PATH, more than one PATH, or a bad flag
+
+65
+: the first failure was wrong content: a record that does not parse, two files
+  claiming one identity, or a row the database refuses (ingest under the wrong
+  --root shows as constraint failures)
+
+66
+: PATH does not exist, or is a file and not a directory
+
+77
+: a record file the operating system will not let ingest read
+
+# SEE ALSO
+
+kb(1), kb-index(1), kb-record(1), kb-concept(1), kb-source(1)
