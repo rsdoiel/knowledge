@@ -135,6 +135,13 @@ type scopedHit struct {
 	ProjectID int64    `json:"project_id,omitempty"`
 	Projects  []string `json:"projects,omitempty"`
 
+	// Semantic and hybrid searches only (all omitted from a plain search):
+	// the best chunk's cosine similarity, the chunk itself, and for a hybrid
+	// search which ranking found the row.
+	Score *float64 `json:"score,omitempty"`
+	Chunk string   `json:"chunk,omitempty"`
+	Via   string   `json:"via,omitempty"`
+
 	// Provenance (DR-0080): what the hit cites, the file it came from, and
 	// whether any cited work is retracted.
 	marker    string        // the printed retraction marker, not part of --json
@@ -170,16 +177,44 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 		}
 		hits = append(hits, h)
 	}
+	return printScoped(out, jsonOut, searchPrint{scope: scope, scopeName: scopeName, term: term,
+		total: res.Total, counts: res.Counts}, hits)
+}
+
+// searchPrint is what printScoped needs besides the hits: the search as it was
+// asked and the totals before the limit. mode is "" for a plain search.
+type searchPrint struct {
+	scope     knowledge.SearchScope
+	scopeName string
+	term      string
+	mode      string
+	minScore  *float64
+	total     int
+	counts    map[string]int
+}
+
+// searchTypeOf maps a result group to the source_type its hits carry.
+var searchTypeOf = map[string]string{"records": "record", "observations": "observation", "concepts": "concept", "documents": "document_summary", "sources": "source", "projects": "project"}
+
+// printScoped prints a scoped result, as JSON or grouped by kind with counts.
+func printScoped(out io.Writer, jsonOut bool, sp searchPrint, hits []scopedHit) error {
+	scope, scopeName, term := sp.scope, sp.scopeName, sp.term
+	res := struct {
+		Total  int
+		Counts map[string]int
+	}{sp.total, sp.counts}
 	if jsonOut {
 		return printJSON(out, struct {
-			Scope   string         `json:"scope"`
-			Kinds   []string       `json:"kinds,omitempty"`
-			Term    string         `json:"term"`
-			Total   int            `json:"total"`
-			Shown   int            `json:"shown"`
-			Counts  map[string]int `json:"counts"`
-			Results []scopedHit    `json:"results"`
-		}{scopeName, scope.Kinds, term, res.Total, len(hits), res.Counts, hits})
+			Scope    string         `json:"scope"`
+			Kinds    []string       `json:"kinds,omitempty"`
+			Term     string         `json:"term"`
+			Mode     string         `json:"mode,omitempty"`
+			MinScore *float64       `json:"min_score,omitempty"`
+			Total    int            `json:"total"`
+			Shown    int            `json:"shown"`
+			Counts   map[string]int `json:"counts"`
+			Results  []scopedHit    `json:"results"`
+		}{scopeName, scope.Kinds, term, sp.mode, sp.minScore, res.Total, len(hits), res.Counts, hits})
 	}
 	var parts []string
 	for _, k := range searchKindOrder {
@@ -191,8 +226,12 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 	if res.Total == 1 {
 		noun = "match"
 	}
-	fmt.Fprintf(out, "%s: %d %s — %s\n", scopeName, res.Total, noun, strings.Join(parts, " · "))
-	typeOf := map[string]string{"records": "record", "observations": "observation", "concepts": "concept", "documents": "document_summary", "sources": "source", "projects": "project"}
+	how := ""
+	if sp.mode != "" {
+		how = " (" + sp.mode + ")"
+	}
+	fmt.Fprintf(out, "%s: %d %s%s — %s\n", scopeName, res.Total, noun, how, strings.Join(parts, " · "))
+	typeOf := searchTypeOf
 	for _, k := range searchKindOrder {
 		if res.Counts[k] == 0 {
 			continue
@@ -220,8 +259,18 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 				line += "   [" + strings.Join(h.Projects, ", ") + "]"
 			}
 			line += h.marker
+			if h.Score != nil {
+				line += fmt.Sprintf("   score %.2f", *h.Score)
+			}
+			if h.Via != "" {
+				line += "   via " + h.Via
+			}
 			fmt.Fprintln(out, line)
-			if pl := passageLine(h.Section, h.Passage); pl != "" {
+			passage := h.Passage
+			if passage == "" {
+				passage = h.Chunk
+			}
+			if pl := passageLine(h.Section, passage); pl != "" {
 				fmt.Fprintln(out, "  "+pl)
 			}
 		}
@@ -233,6 +282,10 @@ func searchScoped(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, scope
 }
 
 func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	mode, minScore, args, modeErr := parseSearchMode(args)
+	if modeErr != nil {
+		return modeErr
+	}
 	if len(args) > 0 && args[0] != "--" && looksLikeSearchScope(args[0]) {
 		scope, name, err := parseSearchScope(kb, args[0])
 		if err != nil {
@@ -245,6 +298,9 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		term := strings.Join(rest, " ")
 		if strings.TrimSpace(term) == "" {
 			return usageErrorf("usage: search SCOPE/[KIND] TERM")
+		}
+		if mode != searchLexical {
+			return searchMeaning(kb, dl, jsonOut, mode, minScore, scope, name, term, out)
 		}
 		return searchScoped(kb, dl, jsonOut, scope, name, term, out)
 	}
@@ -261,6 +317,9 @@ func cmdSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	// not the result empty.
 	if strings.TrimSpace(term) == "" {
 		return usageErrorf("usage: search TERM")
+	}
+	if mode != searchLexical {
+		return searchMeaning(kb, dl, jsonOut, mode, minScore, knowledge.SearchScope{}, "everywhere", term, out)
 	}
 	results, err := logKBCall(dl, "Search", map[string]any{"term": term}, func() ([]knowledge.KBSearchResult, error) {
 		return kb.Search(term)

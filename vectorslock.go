@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -118,4 +119,28 @@ func (l *VectorsLock) Release() error {
 		return fmt.Errorf("knowledge: vector index lock: %w", err)
 	}
 	return nil
+}
+
+/** Building reports whether a kb embed run holds a live claim on the sidecar, so
+ * the index is part way through being built and a search of it would see only
+ * some of the rows. A claim whose heartbeat is older than LockStaleAfter is a
+ * run that died, and does not count.
+ *
+ * Returns:
+ *   bool — true while another run is building the index
+ *   error — a database error
+ *
+ * Example:
+ *   if busy, _ := v.Building(); busy { fmt.Println("try again later") }
+ */
+func (v *Vectors) Building() (bool, error) {
+	var beat int64
+	err := v.db.QueryRow(`SELECT heartbeat_at FROM vectors_lock WHERE id = 1`).Scan(&beat)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("knowledge: vector index lock: %w", err)
+	}
+	return beat >= v.now().Add(-LockStaleAfter).UnixMilli(), nil
 }

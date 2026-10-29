@@ -1,0 +1,154 @@
+$ kb search slow
+[observation] p — observation 0 about slow inference on the Raspberry Pi
+[observation] p — observation 1 about slow inference on the Raspberry Pi
+[observation] p — observation 2 about slow inference on the Raspberry Pi
+-- stderr --
+-- exit 0 --
+
+$ kb search inference
+[observation] p — observation 0 about slow inference on the Raspberry Pi
+[observation] p — observation 1 about slow inference on the Raspberry Pi
+[observation] p — observation 2 about slow inference on the Raspberry Pi
+-- stderr --
+-- exit 0 --
+
+$ kb search nonexistentzzqq
+-- stderr --
+kb: no results for "nonexistentzzqq"
+-- exit 1 --
+
+$ kb search p/ slow
+p: 3 matches — 3 observations
+
+observations (3)
+  p #1 — observation 0 about slow inference on the Raspberry Pi
+      observation 0 about «slow» inference on the Raspberry Pi
+  p #2 — observation 1 about slow inference on the Raspberry Pi
+      observation 1 about «slow» inference on the Raspberry Pi
+  p #3 — observation 2 about slow inference on the Raspberry Pi
+      observation 2 about «slow» inference on the Raspberry Pi
+-- stderr --
+-- exit 0 --
+
+$ kb search /observations slow
+everywhere: 3 matches — 3 observations
+
+observations (3)
+  p #1 — observation 0 about slow inference on the Raspberry Pi
+      observation 0 about «slow» inference on the Raspberry Pi
+  p #2 — observation 1 about slow inference on the Raspberry Pi
+      observation 1 about «slow» inference on the Raspberry Pi
+  p #3 — observation 2 about slow inference on the Raspberry Pi
+      observation 2 about «slow» inference on the Raspberry Pi
+-- stderr --
+-- exit 0 --
+
+$ kb -json search slow
+[
+  {
+    "Kind": "note",
+    "Label": "p",
+    "Snippet": "observation 0 about slow inference on the Raspberry Pi",
+    "SourceType": "observation",
+    "SourceID": 1,
+    "ProjectID": 1,
+    "Ref": "",
+    "Status": "",
+    "Passage": "observation 0 about «slow» inference on the Raspberry Pi",
+    "Section": "",
+    "Sources": [],
+    "Material": null,
+    "Retracted": false
+  },
+  {
+    "Kind": "note",
+    "Label": "p",
+    "Snippet": "observation 1 about slow inference on the Raspberry Pi",
+    "SourceType": "observation",
+    "SourceID": 2,
+    "ProjectID": 1,
+    "Ref": "",
+    "Status": "",
+    "Passage": "observation 1 about «slow» inference on the Raspberry Pi",
+    "Section": "",
+    "Sources": [],
+    "Material": null,
+    "Retracted": false
+  },
+  {
+    "Kind": "note",
+    "Label": "p",
+    "Snippet": "observation 2 about slow inference on the Raspberry Pi",
+    "SourceType": "observation",
+    "SourceID": 3,
+    "ProjectID": 1,
+    "Ref": "",
+    "Status": "",
+    "Passage": "observation 2 about «slow» inference on the Raspberry Pi",
+    "Section": "",
+    "Sources": [],
+    "Material": null,
+    "Retracted": false
+  }
+]
+-- stderr --
+-- exit 0 --
+
+$ kb -json search p/ slow
+{
+  "scope": "p",
+  "term": "slow",
+  "total": 3,
+  "shown": 3,
+  "counts": {
+    "observations": 3
+  },
+  "results": [
+    {
+      "kind": "note",
+      "label": "p",
+      "snippet": "observation 0 about slow inference on the Raspberry Pi",
+      "passage": "observation 0 about «slow» inference on the Raspberry Pi",
+      "source_type": "observation",
+      "source_id": 1,
+      "project_id": 1,
+      "sources": [],
+      "retracted": false
+    },
+    {
+      "kind": "note",
+      "label": "p",
+      "snippet": "observation 1 about slow inference on the Raspberry Pi",
+      "passage": "observation 1 about «slow» inference on the Raspberry Pi",
+      "source_type": "observation",
+      "source_id": 2,
+      "project_id": 1,
+      "sources": [],
+      "retracted": false
+    },
+    {
+      "kind": "note",
+      "label": "p",
+      "snippet": "observation 2 about slow inference on the Raspberry Pi",
+      "passage": "observation 2 about «slow» inference on the Raspberry Pi",
+      "source_type": "observation",
+      "source_id": 3,
+      "project_id": 1,
+      "sources": [],
+      "retracted": false
+    }
+  ]
+}
+-- stderr --
+-- exit 0 --
+
+$ kb search -- -dash
+-- stderr --
+kb: no results for "-dash"
+-- exit 1 --
+
+$ kb search --json slow
+-- stderr --
+kb: unknown flag "--json"; usage: search TERM (--json is a global option; put it before the verb, as in kb --json VERB ...)
+-- exit 2 --
+

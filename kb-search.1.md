@@ -14,6 +14,10 @@ kb search SCOPE/ TERM
 
 kb search SCOPE/KIND TERM
 
+kb search -semantic [-min-score N] [SCOPE/[KIND]] TERM
+
+kb search -hybrid [-min-score N] [SCOPE/[KIND]] TERM
+
 kb summary
 
 kb format [--project NAME]
@@ -82,6 +86,26 @@ search
   reason, since observations belong to projects and a project has no projects
   inside it. A document is found by its reviewed summaries.
 
+-semantic, -hybrid, -min-score N
+: search by meaning, or by meaning and words together. These need the semantic
+  build of kb, an installed model (kb model fetch) and a built
+  index (kb embed); the plain build refuses them (exit 2) and says so.
+  The flags come first, before the scope and the term; after the first word
+  that is not one of them, dashes are part of the term. TERM is plain text in
+  -semantic and FTS5 syntax in the words half of -hybrid.
+
+  -semantic ranks each row by how close its best chunk is to TERM and keeps
+  those at or above the cutoff (-min-score, from -1 to 1, 0.30 by default, -1
+  keeps every row). A hit shows the chunk that matched, without « » marks,
+  and its score. -hybrid fuses that ranking with the full-text one: a row
+  both found comes before a row only one found, and "via" says which (both,
+  words, meaning). Only records, observations, concepts and documents are
+  embedded, so sources/ and projects are refused (exit 2) and an unscoped
+  search covers those four kinds. Output is grouped by kind with counts, at
+  most 50 rows, and with -json each result has score and chunk (and via for
+  -hybrid). Rows not yet indexed cannot be found by meaning; a note on
+  standard error says how many. Plain kb search is unchanged.
+
 summary
 : a formatted overview of every project and its most recent observations
 
@@ -99,12 +123,27 @@ summary and format.
 : search found something, or summary or format printed its view
 
 1
-: search found nothing; a scope with no members (workspace/observations,
+: search found nothing (-semantic: nothing at or above the cutoff); a scope with no members (workspace/observations,
   harvey/projects); or format --project names a project that does not exist
 
 2
 : no TERM, a first word that starts with a dash and is not after --, an unknown
-  flag, a scope or kind that does not exist, or a surplus argument to summary
+  flag, a scope or kind that does not exist, or a surplus argument to summary;
+  -semantic or -hybrid together, or in a build without semantic search;
+  -min-score without one of them or with a value outside -1 to 1; -semantic or
+  -hybrid with sources or projects
+
+65
+: -semantic or -hybrid: the index was built by another model
+  (kb embed -rebuild)
+
+66
+: -semantic or -hybrid: the model is not installed, or there is no index yet
+  (kb model fetch, kb embed)
+
+75
+: -semantic or -hybrid: kb embed is building the index; search again
+  when it has finished
 
 # SEE ALSO
 

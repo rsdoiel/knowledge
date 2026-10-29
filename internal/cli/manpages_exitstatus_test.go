@@ -183,7 +183,7 @@ var provedElsewhere = map[string][]int{
 	"ingest": {65, 77},                 // TestCmdIngest_MalformedRecordsExit65AfterIngestingTheGoodOnes; 77: TestVerbs_IndexAndIngestOSRefusals
 	"source": {69},                     // TestCheckRetractions_UnreachableServiceExits69AfterCheckingTheRest
 	"index":  {1, 77},                  // TestIndexAll_StaleOnlyIsNegative; 77: TestVerbs_IndexAndIngestOSRefusals
-	"search": {1},                      // TestVerbs_NegativeIsExit1
+	"search": {1, 65, 66, 75},          // 1: TestVerbs_NegativeIsExit1; 65, 66, 75: TestSearchSemantic_ExitCodes and its siblings in searchsemantic_test.go
 	"merge":  {65},                     // TestMerge_CollisionIsExit65
 	"model":  {65, 66, 69, 73, 74, 77}, // TestModel_ExitCodes
 	"embed":  {65, 66, 75},             // TestEmbed_ExitCodes
