@@ -8,8 +8,9 @@ PROJECT = knowledge
 
 PANDOC = $(shell which pandoc)
 
-# Internal notes, not website pages. Kept out of the build so they stay unpublished.
-NO_PUBLISH = TODO.md
+# Internal notes and upstream drafts (issues, pull requests), not website pages. Kept out of the
+# build so they stay unpublished. The drafts are untracked and deleted once submitted.
+NO_PUBLISH = TODO.md ISSUE_DRAFT.md PR_DRAFT.md PR_REPLY.md
 
 MD_PAGES = $(filter-out $(NO_PUBLISH),$(shell ls -1 *.md))
 

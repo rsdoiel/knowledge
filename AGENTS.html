@@ -124,7 +124,11 @@ source</td>
 <td>read</td>
 <td><code>kb search TERM</code>, or scoped:
 <code>kb search harvey/records TERM</code>,
-<code>kb search /concepts TERM</code></td>
+<code>kb search /concepts TERM</code>; in the semantic build
+<code>kb search -semantic TERM</code> and <code>-hybrid TERM</code> rank
+by meaning (flags first, then scope and term; needs
+<code>kb model fetch</code> and <code>kb embed</code>; exit 66 without
+them, 2 in the plain build)</td>
 </tr>
 <tr class="odd">
 <td><code>record</code>

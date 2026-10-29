@@ -44,7 +44,7 @@ Each is `kb VERB`; the class is what it does to the database.
 | `concept` (`add list show recall rename set-kind delete suggest`) | read, additive, changing, removing | `show` lists links and the projects a concept spans; a concept has a kind (`character`, `place`, `theme`, `other`) |
 | `link`, `unlink` | additive, removing | link a project or observation to a concept, or an observation to a source |
 | `source` (`add list show remove retract link check-retractions`) | read, additive, changing, removing | cited works; `check-retractions` calls the network |
-| `search` | read | `kb search TERM`, or scoped: `kb search harvey/records TERM`, `kb search /concepts TERM` |
+| `search` | read | `kb search TERM`, or scoped: `kb search harvey/records TERM`, `kb search /concepts TERM`; in the semantic build `kb search -semantic TERM` and `-hybrid TERM` rank by meaning (flags first, then scope and term; needs `kb model fetch` and `kb embed`; exit 66 without them, 2 in the plain build) |
 | `record` (`list pending show set-status supersede fmt new concepts delete fuzzy-tag`) | read, additive, changing, removing | decision records; refer to one as `SCOPE/DR-NNNN`, `harvey/DR-0004` |
 | `ingest` | plan_apply | index a directory of record files |
 | `index` | direct | regenerate a `decisions/index.md` |
