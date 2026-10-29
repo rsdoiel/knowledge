@@ -233,6 +233,12 @@ semantic: .FORCE
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -o "bin/kb-semantic$(EXT)" ./semantic/cmd/kb
 
+# eval-semantic runs the labelled-query evaluation (semantic plan T9) with the real
+# model on a copy of KB_EVAL_DB, never from the test cache: the database, its index
+# and the model are outside the module, so the cache cannot see them change.
+eval-semantic: .FORCE
+	cd semantic && go test -count=1 -run TestEval -v .
+
 cross-semantic: .FORCE
 	@mkdir -p bin/semantic-cross
 	@for T in $(SEMANTIC_TARGETS); do \

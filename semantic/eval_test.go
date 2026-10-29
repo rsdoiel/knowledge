@@ -113,7 +113,11 @@ func evalFixture(t *testing.T) (*knowledge.KnowledgeBase, *knowledge.Vectors, kn
 
 func TestEval_LabelledQueries(t *testing.T) {
 	kb, v, emb := evalFixture(t)
-	set, err := evalset.Load(filepath.Join("..", "internal", "evalset", "testdata", "labelled_queries.json"))
+	// Default, not Load: the labels are then part of this test binary, so the go
+	// command's test cache does not serve a result from before a change to them.
+	// The database, the index and the model are outside the module and are not
+	// tracked: use -count=1 after changing any of them (make eval-semantic does).
+	set, err := evalset.Default()
 	if err != nil {
 		t.Fatal(err)
 	}

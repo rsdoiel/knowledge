@@ -6,6 +6,7 @@
 package evalset
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +15,15 @@ import (
 
 	knowledge "github.com/rsdoiel/knowledge"
 )
+
+// defaultSet is the labelled query set kept in testdata, embedded so that it is
+// part of every test binary that uses it: the go command's test cache sees a
+// change to the labels only through the binary, because it does not track files
+// outside the module root of the test (the semantic harness lives in another
+// module).
+//
+//go:embed testdata/labelled_queries.json
+var defaultSet []byte
 
 /** Matcher names a relevant row in a way that survives id renumbering: a record
  * by its qualified reference, an observation by a substring of its text, a concept
@@ -77,9 +87,28 @@ func Load(path string) (*Set, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parse(b, path)
+}
+
+/** Default returns the labelled query set that ships in testdata, as embedded in
+ * the package. Prefer it to Load in a test: a change to the labels then changes
+ * the compiled test, so the go command's test cache does not serve a result from
+ * before the change.
+ *
+ * Returns:
+ *   *Set — the set
+ *   error — the embedded file is malformed (a bug, caught by this package's tests)
+ *
+ * Example:
+ *   set, err := evalset.Default()
+ */
+func Default() (*Set, error) { return parse(defaultSet, "labelled_queries.json") }
+
+// parse reads and checks a labelled query set; name is for error messages.
+func parse(b []byte, name string) (*Set, error) {
 	var s Set
 	if err := json.Unmarshal(b, &s); err != nil {
-		return nil, fmt.Errorf("evalset: %s: %w", path, err)
+		return nil, fmt.Errorf("evalset: %s: %w", name, err)
 	}
 	seen := map[string]bool{}
 	for _, q := range s.Queries {

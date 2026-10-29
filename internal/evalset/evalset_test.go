@@ -29,6 +29,27 @@ func TestLoad_TheLabelledSetIsWellFormed(t *testing.T) {
 	}
 }
 
+// Default is the file in testdata, embedded: the two must say the same thing.
+func TestDefault_IsTheFileInTestdata(t *testing.T) {
+	onDisk, err := Load("testdata/labelled_queries.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	embedded, err := Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(embedded.Queries) != len(onDisk.Queries) || embedded.About != onDisk.About {
+		t.Errorf("embedded %d queries, on disk %d", len(embedded.Queries), len(onDisk.Queries))
+	}
+	for i := range onDisk.Queries {
+		if embedded.Queries[i].ID != onDisk.Queries[i].ID || embedded.Queries[i].Query != onDisk.Queries[i].Query ||
+			len(embedded.Queries[i].Relevant) != len(onDisk.Queries[i].Relevant) {
+			t.Errorf("query %s differs between the embedded set and the file", onDisk.Queries[i].ID)
+		}
+	}
+}
+
 func TestLoad_RefusesAMalformedSet(t *testing.T) {
 	for name, body := range map[string]string{
 		"repeated id":      `{"queries":[{"id":"a","query":"x","no_answer":true},{"id":"a","query":"y","no_answer":true}]}`,
