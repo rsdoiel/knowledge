@@ -33,7 +33,7 @@ and behaves as before; `kb search TERM` output is byte-identical (a golden-file 
 
 ### Changed
 
-- **Building from source needs Go 1.27.0 or later** (was 1.26.4): the root `go.mod`, `codemeta.json`, README and INSTALL agree with the
+- **Building from source needs Go 1.27.3 or later** (was 1.26.4): the root `go.mod`, `codemeta.json`, README and INSTALL agree with the
   nested module, whose embedding library requires it. Released binaries are unaffected.
 
 ### Measured (Raspberry Pi 5, 4 cores, 16 GB; a copy of this workspace's database, 893 rows, 4,137 passages)
