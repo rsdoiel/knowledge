@@ -8,7 +8,7 @@ require (
 )
 
 require (
-	github.com/gomlx/compute v0.1.16-0.20261028143122-acb940214a36 // indirect
+	github.com/gomlx/compute v0.1.16 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	golang.org/x/exp v0.0.0-20261013213113-2ab7f3cbc5fb // indirect
 )

@@ -1,5 +1,7 @@
 github.com/gomlx/compute v0.1.16-0.20261028143122-acb940214a36 h1:+SodoYae2gL4/ocrGHSwdZ4fQ5kueuF4pBoreSrnuMI=
 github.com/gomlx/compute v0.1.16-0.20261028143122-acb940214a36/go.mod h1:+IyIusGBr70LPqKcULueB2VTTXmJ3HqOdPmRM8O1Sug=
+github.com/gomlx/compute v0.1.16 h1:BbuKu1p2Ww72N9Cr4ues72aGY/yvEXNIJDmpeflfZuc=
+github.com/gomlx/compute v0.1.16/go.mod h1:+IyIusGBr70LPqKcULueB2VTTXmJ3HqOdPmRM8O1Sug=
 github.com/knights-analytics/hugot v0.8.3/go.mod h1:LHse10CcruDAB7tzEQmvCptgjZZTZsssrfEt3pPreYc=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
