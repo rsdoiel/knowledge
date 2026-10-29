@@ -3,7 +3,9 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased — offline semantic search (preview)
+## v0.0.29 — 2026-10-29
+
+Offline semantic search (preview).
 
 Plan: `agents/projects/knowledge/plans/semantic-search-plan.md`; decisions DR-0088 and DR-0089. A separate semantic build of `kb`
 (`make semantic`, Go 1.27, pure Go, about 33 MB against 21 MB) finds rows by meaning, offline. The plain `kb` registers no embedder
@@ -46,12 +48,13 @@ and behaves as before; `kb search TERM` output is byte-identical (a golden-file 
 
 ### Known limits
 
-- A preview: the labelled set needs the author's review, and the figures above come from one machine and one corpus.
-- The first index is slow on a Pi; the upstream fix for the pure-Go matmul (gomlx/compute #44) is pinned as a pseudo-version, to be
-  replaced by a tag before release. The pure-Go backend keeps one compiled executable per input shape; the embedder replaces its
-  session every four new shapes to bound memory (kb observation 537).
+- A preview: the labelled set was written by the model that wrote the search (the author reviewed and corrected it), and the figures above come from one corpus.
+- The first index is slow on a Pi (about 16 minutes), with the pure-Go matmul fix from gomlx/compute #44 (tagged v0.1.16). The pure-Go
+  backend keeps one compiled executable per input shape; the embedder replaces its session every four new shapes to bound memory
+  (kb observations 537 and 540; Hugot issue #154).
 - The release archives do not yet include the semantic build; build it from source (INSTALL.md).
-- Not yet run on macOS, Windows or amd64; linux/arm64 only.
+- Run for real on linux/arm64 (Raspberry Pi 5) and macOS arm64 (Mac Mini). Built for linux/macOS amd64 and Windows amd64/arm64 but not run there.
+- The nested module is tagged `semantic/v0.0.29`, the same number as the root: `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29`.
 
 ## v0.0.28 — 2026-10-28
 

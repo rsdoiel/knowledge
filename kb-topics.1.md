@@ -1,6 +1,6 @@
-%kb-topics(1) user manual | version 0.0.28 c100b07
+%kb-topics(1) user manual | version 0.0.29 1ae6b7d
 % R. S. Doiel
-% 2026-10-28
+% 2026-10-29
 
 # NAME
 

@@ -1,11 +1,11 @@
 #!/bin/sh
-# generated with CMTools 0.0.28 c100b07
+# generated with CMTools 0.0.29 1ae6b7d
 
 #
 # Set the package name and version to install
 #
 PACKAGE="knowledge"
-VERSION="0.0.28"
+VERSION="0.0.29"
 GIT_GROUP="rsdoiel"
 RELEASE="https://github.com/$GIT_GROUP/$PACKAGE/releases/tag/v$VERSION"
 if [ "$PKG_VERSION" != "" ]; then

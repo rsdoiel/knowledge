@@ -20,8 +20,8 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
-<h2 id="unreleased-offline-semantic-search-preview">Unreleased — offline
-semantic search (preview)</h2>
+<h2 id="v0.0.29-2026-10-29">v0.0.29 — 2026-10-29</h2>
+<p>Offline semantic search (preview).</p>
 <p>Plan:
 <code>agents/projects/knowledge/plans/semantic-search-plan.md</code>;
 decisions DR-0088 and DR-0089. A separate semantic build of
@@ -106,16 +106,22 @@ search by meaning.</li>
 </ul>
 <h3 id="known-limits">Known limits</h3>
 <ul>
-<li>A preview: the labelled set needs the author’s review, and the
-figures above come from one machine and one corpus.</li>
-<li>The first index is slow on a Pi; the upstream fix for the pure-Go
-matmul (gomlx/compute #44) is pinned as a pseudo-version, to be replaced
-by a tag before release. The pure-Go backend keeps one compiled
-executable per input shape; the embedder replaces its session every four
-new shapes to bound memory (kb observation 537).</li>
+<li>A preview: the labelled set was written by the model that wrote the
+search (the author reviewed and corrected it), and the figures above
+come from one corpus.</li>
+<li>The first index is slow on a Pi (about 16 minutes), with the pure-Go
+matmul fix from gomlx/compute #44 (tagged v0.1.16). The pure-Go backend
+keeps one compiled executable per input shape; the embedder replaces its
+session every four new shapes to bound memory (kb observations 537 and
+540; Hugot issue #154).</li>
 <li>The release archives do not yet include the semantic build; build it
 from source (INSTALL.md).</li>
-<li>Not yet run on macOS, Windows or amd64; linux/arm64 only.</li>
+<li>Run for real on linux/arm64 (Raspberry Pi 5) and macOS arm64 (Mac
+Mini). Built for linux/macOS amd64 and Windows amd64/arm64 but not run
+there.</li>
+<li>The nested module is tagged <code>semantic/v0.0.29</code>, the same
+number as the root:
+<code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29</code>.</li>
 </ul>
 <h2 id="v0.0.28-2026-10-28">v0.0.28 — 2026-10-28</h2>
 <p>An exit status and manual page release. Plan:

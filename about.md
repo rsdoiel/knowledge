@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.28
+version: 0.0.29
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,15 +33,15 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-10-28
+date_released: 2026-10-29
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.28
+## knowledge 0.0.29
 
-Exit status and manual pages. Every manual page now has an EXIT STATUS and a SEE ALSO section: the thirteen that lacked EXIT STATUS (export, import, index, ingest, init, link, merge, observation, project, search, source, unlink and topics) now list the codes they return (workspace DR-0003), and tests keep those pages and the verb tests in step, in both directions. An unreadable database file now exits 77 (no_permission) and not 74 (io); knowledge.Open returns an error that satisfies errors.Is(err, fs.ErrPermission) for it. kb(1)'s EXIT STATUS says what 73 and 77 are (export -out onto an existing file replaces it and init on an existing workspace is 0, neither is 73) and that 78 is unused; kb-record(1) lists 73. The setup, update and review knowledge-base skills are pinned to 0.0.28; the minimum kb they need stays 0.0.19. Requires fountain 1.0.3.
+Offline semantic search (preview). A separate semantic build of kb (make semantic, or go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29; Go 1.27.3 or later) finds rows by meaning with no daemon and no network after the model is fetched. New: kb search -semantic and -hybrid with -min-score (rows ranked by their best 400-character passage, shown with score and passage; exits 1 nothing above the cutoff, 65 index from another model, 66 no model or index, 75 index being built); kb model install|fetch|list for the all-MiniLM-L6-v2 embedding model (Apache-2.0, about 87 MB, checked against recorded SHA-256 sums); kb embed (-status, -rebuild) to build and refresh the index, interruptible and resumable; write verbs keep an existing index current; kb init keeps the model and index out of git; Tab in the interface search prompt cycles words, meaning and both. The plain kb is unchanged and kb search TERM output is byte-identical, proven by a golden-file test. Measured on 34 labelled queries (indicative): plain search recall@10 0.15, -semantic 0.88 with MRR 0.82; the default cutoff is 0.35. First index about 16 minutes on a Raspberry Pi 5 and 5.6 minutes on a Mac Mini (macOS arm64); a search takes 0.2 to 0.5 seconds. Run for real on linux/arm64 and macOS arm64; built but not run on linux/macOS amd64 and Windows. The release archives still hold the plain kb; build the semantic one from source. Building from source now needs Go 1.27.3 or later, and make check-release enforces that the go.mod, codemeta.json and nested module agree (make check-go-version). The test suite no longer needs GNU Make 4 (macOS ships 3.81).
 
 ## Authors
 
