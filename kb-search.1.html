@@ -23,6 +23,8 @@
 <p>kb search TERM</p>
 <p>kb search SCOPE/ TERM</p>
 <p>kb search SCOPE/KIND TERM</p>
+<p>kb search -semantic [-min-score N] [SCOPE/[KIND]] TERM</p>
+<p>kb search -hybrid [-min-score N] [SCOPE/[KIND]] TERM</p>
 <p>kb summary</p>
 <p>kb format [–project NAME]</p>
 <h1 id="description">DESCRIPTION</h1>
@@ -89,6 +91,41 @@ with the reason, since observations belong to projects and a project has
 no projects inside it. A document is found by its reviewed
 summaries.</p>
 <dl>
+<dt>-semantic, -hybrid, -min-score N</dt>
+<dd>
+search by meaning, or by meaning and words together. These need the
+semantic build of kb, an installed model (kb model fetch) and a built
+index (kb embed); the plain build refuses them (exit 2) and says so. The
+flags come first, before the scope and the term; after the first word
+that is not one of them, dashes are part of the term. TERM is plain text
+in -semantic and FTS5 syntax in the words half of -hybrid.
+</dd>
+</dl>
+<p>-semantic ranks each row by how close its best chunk is to TERM and
+keeps those at or above the cutoff (-min-score, from -1 to 1, 0.35 by
+default, -1 keeps every row). A hit shows the chunk that matched,
+without « » marks, and its score. -hybrid fuses that ranking with the
+full-text one: a row both found comes before a row only one found, and
+“via” says which (both, words, meaning). Only records, observations,
+concepts and documents are embedded, so sources/ and projects are
+refused (exit 2) and an unscoped search covers those four kinds. Output
+is grouped by kind with counts, at most 50 rows, and with -json each
+result has score and chunk (and via for -hybrid). Rows not yet indexed
+cannot be found by meaning; a note on standard error says how many.
+Plain kb search is unchanged.</p>
+<p>Which to use. Plain search needs every word of TERM to appear in a
+row, so a question typed as a sentence finds nothing; it is the right
+tool for a name or an exact word. -semantic is the one for a question.
+-hybrid adds the words half to -semantic: it puts a row that both found
+first, and shows rows only the words found. On a labelled set of 34
+queries (written by the same model that wrote the search, so read the
+figures as indicative) -semantic scored a mean reciprocal rank of 0.80
+and a recall at ten of 0.84, against 0.11 and 0.14 for plain search
+given the same queries; -hybrid found about the same rows as -semantic
+and did not rank them better, so it is a way to keep exact-word matches
+in a search by meaning, not a better ranking. Semantic search is a
+preview.</p>
+<dl>
 <dt>summary</dt>
 <dd>
 a formatted overview of every project and its most recent observations
@@ -110,14 +147,32 @@ search found something, or summary or format printed its view
 </dd>
 <dt>1</dt>
 <dd>
-search found nothing; a scope with no members (workspace/observations,
-harvey/projects); or format –project names a project that does not exist
+search found nothing (-semantic: nothing at or above the cutoff); a
+scope with no members (workspace/observations, harvey/projects); or
+format –project names a project that does not exist
 </dd>
 <dt>2</dt>
 <dd>
 no TERM, a first word that starts with a dash and is not after –, an
 unknown flag, a scope or kind that does not exist, or a surplus argument
-to summary
+to summary; -semantic or -hybrid together, or in a build without
+semantic search; -min-score without one of them or with a value outside
+-1 to 1; -semantic or -hybrid with sources or projects
+</dd>
+<dt>65</dt>
+<dd>
+-semantic or -hybrid: the index was built by another model (kb embed
+-rebuild)
+</dd>
+<dt>66</dt>
+<dd>
+-semantic or -hybrid: the model is not installed, or there is no index
+yet (kb model fetch, kb embed)
+</dd>
+<dt>75</dt>
+<dd>
+-semantic or -hybrid: kb embed is building the index; search again when
+it has finished
 </dd>
 </dl>
 <h1 id="see-also">SEE ALSO</h1>

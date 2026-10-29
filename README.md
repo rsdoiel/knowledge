@@ -47,6 +47,24 @@ A first word with no slash is part of the term, so `kb search harvey memory` is 
 
 A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group (`kb record`), and `kb record show` or `kb project show` with no argument, and `kb search` with no term or with only a scope (`kb search harvey/records`). `kb -i record pending` (also `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. `kb verbs` prints the table every menu, completion script and help flag is built from; `kb -json verbs` gives it to a script or a model.
 
+## Semantic search (preview)
+
+`kb search` finds rows that contain your words. The semantic build of `kb` also finds rows by meaning, offline, with no daemon and no network after the model is installed: `kb search -semantic "how do we keep databases in step across machines"` finds the records and notes about cross-machine sync although none of them says "in step". `-hybrid` adds the exact-word matches. It covers observations, decision records, concepts and documents' reviewed summaries; the vectors live in `agents/knowledge.vectors.db` beside the database, never in `knowledge.db` or the JSON-L export.
+
+```shell
+kb init                                  # once per workspace; keeps a workspace model and the index out of git
+kb model fetch                           # downloads the model (about 87 MB); offline: kb model install PATH
+kb embed                                 # builds the index; the first run takes minutes, later runs seconds
+kb search -semantic "how do we keep databases in step across machines"
+kb search -hybrid hunspell               # meaning, plus rows that contain the word
+```
+
+In the interactive interface, `Tab` in the search prompt switches the next search between words, meaning and both. The plain `kb` has none of this and stays at about 21 MB; the semantic build is built from the nested `semantic/` module (`make semantic`, Go 1.27) and is not yet in the release archives. See [kb-search(1)](kb-search.1.md), [kb-embed(1)](kb-embed.1.md) and [kb-model(1)](kb-model.1.md).
+
+Measured on a Raspberry Pi 5 (4 cores, 16 GB) over a copy of this workspace's knowledge base, 893 rows in about 4,100 passages: the first index took 14 to 17 minutes and up to 875 MB of memory, a search about half a second, and a repeat `kb embed` with nothing changed a fraction of a second. The semantic `kb` is about 33 MB against 21 MB for the plain one, and the model about 87 MB. Another machine will differ.
+
+**It is a preview.** The labelled query set it was tuned on (34 queries, `internal/evalset/testdata/labelled_queries.json`) was written by the same model that wrote the search and is awaiting review, so read its figures as indicative: `-semantic` scored a mean reciprocal rank of 0.80 and a recall at ten of 0.84 on it, against 0.11 and 0.14 for plain search given the same queries (plain search needs every word to appear, so a question typed as a sentence finds nothing). `-hybrid` found about the same rows as `-semantic` and did not rank them better; use it to keep exact-word matches inside a search by meaning. Plain `kb search` is unchanged.
+
 ## Deciding on a record
 
 A decision record is written `proposed` and a person decides it. `kb` enforces that: accepting needs a terminal.

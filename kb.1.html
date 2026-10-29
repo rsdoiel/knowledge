@@ -124,7 +124,10 @@ as a search being typed, and does nothing otherwise, so it never closes
 a screen. Ctrl-C quits from anywhere. A line at the bottom of every
 screen lists the keys that apply. While you type in the search prompt
 every key is text, q included, so a term that starts with q works; Esc
-leaves the prompt, and q is a command again afterwards.</p>
+leaves the prompt, and q is a command again afterwards. In the semantic
+build Tab in the prompt switches the next search between words, meaning
+and both, as kb search -semantic and -hybrid rank them, and the prompt
+says which; the plain build has no Tab and no label.</p>
 <p>u cuts a link: on a project’s Concepts tab it unlinks the selected
 concept from the project, and on an observation it lists the
 observation’s concept and source links to pick one. Either asks for the
@@ -245,8 +248,8 @@ showing old to new; delete asks for the name to be typed, as d does, for
 a project, observation, concept or record; ingest and the document and
 record fuzzy-tag verbs show their –dry-run first; document review
 promote ID opens the review form for a drafted section and document
-draft asks first; merge, import, init, export and completion are command
-line only. While you type, every key is text; Esc cancels.</p>
+draft asks first; merge, import, init, model, export and completion are
+command line only. While you type, every key is text; Esc cancels.</p>
 <p>A complete command always runs as a command and prints, on a terminal
 or not, so scripts can rely on it. Only an incomplete one opens the
 interface, and only on a terminal: bare kb, a bare group (kb record
@@ -278,6 +281,11 @@ line wins over each:</p>
 <dd>
 the path to the database, as -db. Not read by init, index, merge or
 completion, which refuse -db
+</dd>
+<dt>KB_MODEL_DIR</dt>
+<dd>
+the directory that holds embedding models, in place of the workspace’s
+agents/models/ and the user data directory (see kb-model(1))
 </dd>
 <dt>KB_PROJECT</dt>
 <dd>
@@ -387,6 +395,16 @@ kb-index(1)
 <dd>
 create a new, empty workspace — see kb-init(1)
 </dd>
+<dt>model</dt>
+<dd>
+install, fetch and list the embedding models semantic search uses — see
+kb-model(1)
+</dd>
+<dt>embed</dt>
+<dd>
+bring the semantic-search index in step with the knowledge base — see
+kb-embed(1)
+</dd>
 <dt>completion</dt>
 <dd>
 write a shell completion script for bash or PowerShell, or install it —
@@ -402,9 +420,9 @@ or with -json — see kb-verbs(1)
 <p>The global options -json, -db and -debug go before the verb: kb -json
 project list. After the verb they are refused, not ignored. So is any
 other flag a verb does not have, and any surplus argument. init, index,
-merge and completion never open the ambient database, so -db is refused
-for them as well; init takes its target as kb init PATH, merge as -a, -b
-and -out.</p>
+merge, model and completion never open the ambient database, so -db is
+refused for them as well; init takes its target as kb init PATH, merge
+as -a, -b and -out.</p>
 <p>A name that begins with a dash is given after –, as in kb project
 show – -name, so that it is not read as a flag. Every verb that takes a
 name, title or path accepts –, record, document, ingest and source add
@@ -510,8 +528,8 @@ under WORKSPACE AND ENVIRONMENT
 <p>kb-project(1), kb-observation(1), kb-concept(1), kb-link(1),
 kb-unlink(1), kb-source(1), kb-search(1), kb-merge(1), kb-check-db(1),
 kb-stats(1), kb-story(1), kb-export(1), kb-import(1), kb-ingest(1),
-kb-record(1), kb-document(1), kb-index(1), kb-init(1), kb-completion(1),
-kb-verbs(1), kb-topics(1)</p>
+kb-record(1), kb-document(1), kb-index(1), kb-init(1), kb-model(1),
+kb-embed(1), kb-completion(1), kb-verbs(1), kb-topics(1)</p>
 </section>
 <footer>
 <p>knowledge</p>

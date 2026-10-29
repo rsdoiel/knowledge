@@ -3,6 +3,50 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased — offline semantic search (preview)
+
+Plan: `agents/projects/knowledge/plans/semantic-search-plan.md`; decisions DR-0088 and DR-0089. A separate semantic build of `kb`
+(`make semantic`, Go 1.27, pure Go, about 33 MB against 21 MB) finds rows by meaning, offline. The plain `kb` registers no embedder
+and behaves as before; `kb search TERM` output is byte-identical (a golden-file test proves it).
+
+### Added
+
+- **`kb search -semantic TERM` and `-hybrid TERM`, with `-min-score N`.** Rows are ranked by their best 400-character passage and
+  shown with the score and the passage; `-hybrid` fuses the words ranking with it (a row both found comes first, `via both|words|meaning`
+  in the output). `SCOPE/KIND` works as before; only records, observations, concepts and documents are embedded, so `/sources` and
+  `/projects` are exit 2. At most 50 rows, grouped by kind with counts over everything above the cutoff; `-json` adds `mode`,
+  `min_score`, `score`, `chunk` and `via`. The default cutoff is 0.35, set from the labelled query set. Exits: 1 nothing above the
+  cutoff, 2 a build without the feature, 65 an index built by another model, 66 no model or index, 75 an index being built.
+- **`kb model install|fetch|list`** puts the embedding model (all-MiniLM-L6-v2, Apache-2.0, about 87 MB, pinned to a Hugging Face
+  revision and checked against recorded SHA-256 sums) in the workspace's `agents/models/` or the user's data directory; `fetch` is the only
+  code in `kb` that uses the network, and only when run. `install PATH` works offline.
+- **`kb embed`** builds and refreshes the index (`-status`, `-rebuild`); interruptible and resumable, one writer at a time. Verbs that
+  write rows update the index for them when one exists (at most 25 rows; the interface's own edits and `merge`, `import` and `check-db`
+  leave it to `kb embed`).
+- **`kb init`** adds `agents/models/` and `agents/knowledge.vectors.db` to `.gitignore` in a git work tree.
+- **The interface:** `Tab` in the search prompt cycles words, meaning, both; hidden in the plain build. It calls the same function as
+  `kb search`, so the two agree.
+- **Library:** `Embedder`, `RegisterEmbedder`, `Chunk`, `Vectors` (the sidecar), `EmbedIndex`, `SemanticSearch`, `FuseRankings`,
+  `LexicalRanking`, `HitsFor`, `EmbedStatus`, and `semantic.NewHugot` in the nested module. The root module has no embedding dependency.
+- **`internal/evalset`** and `semantic/eval_test.go`: 34 labelled queries and a harness that reports recall at 5 and 10 and mean
+  reciprocal rank for lexical, semantic and hybrid, and guards the measured numbers.
+
+### Measured (Raspberry Pi 5, 4 cores, 16 GB; a copy of this workspace's database, 893 rows, 4,137 passages)
+
+- First index 14 to 17 minutes (about 5 passages a second), up to 875 MB resident; a repeat run 146 ms; a search about 0.5 s.
+- On the 34 labelled queries (written and labelled by the model that wrote the search; awaiting review, so indicative): plain search
+  recall@10 0.14, MRR 0.11; `-semantic` 0.84 and 0.80; `-hybrid` about the same as `-semantic`. 400-character passages beat 200 and 800.
+- `-hybrid` does not rank better than `-semantic` on this set; it keeps exact-word matches inside a search by meaning.
+
+### Known limits
+
+- A preview: the labelled set needs the author's review, and the figures above come from one machine and one corpus.
+- The first index is slow on a Pi; the upstream fix for the pure-Go matmul (gomlx/compute #44) is pinned as a pseudo-version, to be
+  replaced by a tag before release. The pure-Go backend keeps one compiled executable per input shape; the embedder replaces its
+  session every four new shapes to bound memory (kb observation 537).
+- The release archives do not yet include the semantic build; build it from source (INSTALL.md).
+- Not yet run on macOS, Windows or amd64; linux/arm64 only.
+
 ## v0.0.28 — 2026-10-28
 
 An exit status and manual page release. Plan: `agents/projects/knowledge/plans/release-plan-v0.0.28.md`. It

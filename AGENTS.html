@@ -178,6 +178,20 @@ and who learns a fact; all need <code>--project</code></td>
 <td>portable snapshots and reconciling two databases</td>
 </tr>
 <tr class="even">
+<td><code>model</code> (<code>install fetch list</code>)</td>
+<td>direct, read</td>
+<td>manage the embedding model files semantic search needs; files only,
+no database, no network except <code>fetch</code></td>
+</tr>
+<tr class="odd">
+<td><code>embed</code> (<code>-status</code>,
+<code>-rebuild</code>)</td>
+<td>direct</td>
+<td>build and update the semantic-search index
+(<code>agents/knowledge.vectors.db</code>); semantic build only; write
+verbs keep it current when it exists</td>
+</tr>
+<tr class="even">
 <td><code>init</code>, <code>completion</code>, <code>verbs</code></td>
 <td>cli_only</td>
 <td>create a workspace, shell completion, the verb table</td>

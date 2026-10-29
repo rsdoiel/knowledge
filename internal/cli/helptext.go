@@ -1555,6 +1555,17 @@ search
   -hybrid). Rows not yet indexed cannot be found by meaning; a note on
   standard error says how many. Plain {app_name} search is unchanged.
 
+  Which to use. Plain search needs every word of TERM to appear in a row, so a
+  question typed as a sentence finds nothing; it is the right tool for a name
+  or an exact word. -semantic is the one for a question. -hybrid adds the
+  words half to -semantic: it puts a row that both found first, and shows rows
+  only the words found. On a labelled set of 34 queries (written by the same
+  model that wrote the search, so read the figures as indicative) -semantic
+  scored a mean reciprocal rank of 0.80 and a recall at ten of 0.84, against
+  0.11 and 0.14 for plain search given the same queries; -hybrid found about the same rows as -semantic
+  and did not rank them better, so it is a way to keep exact-word matches in a
+  search by meaning, not a better ranking. Semantic search is a preview.
+
 summary
 : a formatted overview of every project and its most recent observations
 
@@ -2885,6 +2896,16 @@ database. embed builds that index and keeps it current. It needs the semantic
 build of {app_name} and an installed model ({app_name}-model(1)); the plain build
 has no embedder and exits 2.
 
+Semantic search is a preview in this release. Measured on a Raspberry Pi 5 (4
+cores, 16 GB) over a copy of this workspace's knowledge base, 893 rows in about
+4,100 passages: the first index took 14 to 17 minutes (about 5 passages a
+second) and used up to 875 MB of memory; running embed again with nothing
+changed took a fraction of a second. A search takes about half a second,
+mostly loading the model. The semantic kb is about 33 MB against 21 MB for
+the plain one, and the model is about 87 MB. Another machine will differ.
+Run the first embed in a terminal you can leave, or detach it; it can be
+interrupted and resumed.
+
 Run with no flag, embed works out which rows are new or changed since they were
 embedded, embeds only those, and drops the entries of rows that are gone. A
 passage whose text did not change keeps its vector, so editing one paragraph of a
@@ -2912,8 +2933,8 @@ command's result. When it cannot (no model, another embed running, a different
 model, or more than a few dozen rows after a merge or an import) the command
 says in one line that rows are not yet indexed. {app_name} merge, import and
 check-db leave the index alone, so rows they bring in are simply not indexed
-until the next embed. The interactive interface's own edits are caught up the
-same way.
+until the next embed. The interactive interface's own edits do not update the
+index at all; run embed to bring it up to date.
 
 Only one embed writes the index at a time. A second gets exit 75 and may be run
 again later; a run that was killed does not block the index for more than five

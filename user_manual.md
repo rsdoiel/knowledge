@@ -35,6 +35,8 @@ Run `kb` with no verb to launch the interactive TUI, or `kb help` / `kb -h` to s
 | `export` | [kb-export(1)](kb-export.1.md) | write a portable JSON-L snapshot — the no-file-access alternative to `merge` |
 | `import` | [kb-import(1)](kb-import.1.md) | apply a JSON-L snapshot (from `export`) to the database |
 | `topics` | [kb-topics(1)](kb-topics.1.md) | list every help topic, one man page per verb |
+| `model` | [kb-model(1)](kb-model.1.md) | install, fetch and list the embedding model semantic search uses (preview) |
+| `embed` | [kb-embed(1)](kb-embed.1.md) | build and refresh the semantic-search index (preview) |
 
 ### Global flags
 
@@ -81,6 +83,24 @@ Documents → Review queue lists the sections waiting for a person (gist first, 
 `:` opens a command line on the menus and browsing screens: type any command as at the shell (a leading `kb` is optional) and press `Enter`. It runs the command line's own code, and what follows depends on the verb's class (`kb verbs`): reads and `index` run and show their output; adding and changing writes show the command and ask `y` (`record set-status` shows old to new); `delete` asks for the name to be typed, as `d` does; `ingest` and the fuzzy-tag verbs show their `--dry-run` first; `merge`, `import`, `init`, `export` and `completion` are command line only. While you type every key is text, and `Esc` cancels.
 
 A complete command line always runs and prints, on a terminal or not. Only an incomplete one opens the interface, and only on a terminal: bare `kb`, a bare group such as `kb record`, and `kb record show` or `kb project show` with no argument. `kb -i record pending` (or `-i record list`, `-i record show REF`, `-i project list`, `-i search TERM`) opens the interface at that command. See [kb(1)](kb.1.md) for the full description.
+
+### Semantic search (preview)
+
+The semantic build of `kb` adds `kb search -semantic TERM` and `-hybrid TERM`, which find rows by meaning rather than by their words, offline. Setting up, once per workspace:
+
+```shell
+kb init                                  # once per workspace; keeps a workspace model and the index out of git
+kb model fetch                           # downloads the model (about 87 MB); offline: kb model install PATH
+kb embed                                 # builds the index; the first run takes minutes, later runs seconds
+kb search -semantic "how do we keep databases in step across machines"
+kb search -hybrid hunspell               # meaning, plus rows that contain the word
+```
+
+Then keep it current: a verb that writes rows (`kb observation add`, `ingest`, `record` and `concept` changes) updates the index for those rows when one exists, up to 25 rows; `kb embed` catches up everything else (a merge, an import, the interface's own edits) and `kb embed -status` says how far behind it is. `kb search -semantic` reads the index and never builds it. It covers observations, decision records, concepts and documents' reviewed summaries (not projects or sources, which lexical search serves), so `kb search -semantic /sources x` is a usage error. Hits show a score and the passage that matched; `-min-score N` (from -1 to 1, 0.35 by default, -1 for everything) sets the cutoff, and `SCOPE/KIND` works as for plain search. Exit codes: 1 nothing above the cutoff, 2 a build without semantic search or a kind that is not embedded, 66 no model or no index, 65 an index built by another model (`kb embed -rebuild`), 75 an index being built.
+
+Measured on a Raspberry Pi 5 (4 cores, 16 GB) over a copy of this workspace's knowledge base, 893 rows in about 4,100 passages: the first index took 14 to 17 minutes and up to 875 MB of memory, a search about half a second, and a repeat `kb embed` with nothing changed a fraction of a second. The semantic `kb` is about 33 MB against 21 MB for the plain one, and the model about 87 MB. Another machine will differ.
+
+**It is a preview.** The labelled query set it was tuned on (34 queries, `internal/evalset/testdata/labelled_queries.json`) was written by the same model that wrote the search and is awaiting review, so read its figures as indicative: `-semantic` scored a mean reciprocal rank of 0.80 and a recall at ten of 0.84 on it, against 0.11 and 0.14 for plain search given the same queries (plain search needs every word to appear, so a question typed as a sentence finds nothing). `-hybrid` found about the same rows as `-semantic` and did not rank them better; use it to keep exact-word matches inside a search by meaning. Plain `kb search` is unchanged.
 
 ---
 

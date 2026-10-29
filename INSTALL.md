@@ -48,3 +48,30 @@ make test
 make install
 ~~~
 
+Semantic search (preview)
+-------------------------
+
+Semantic search (`kb search -semantic`, `-hybrid`) needs a separate build of `kb`: the plain one registers no embedder. The semantic build is not yet in the release archives; build it from source.
+
+### Required software
+
+- Go >= 1.27 (the embedding library needs it; the plain `kb` still builds with the Go above)
+- No C compiler, and no shared libraries: the build is pure Go (`CGO_ENABLED=0`)
+
+### Steps
+
+~~~shell
+git clone https://github.com/rsdoiel/knowledge
+cd knowledge
+make semantic            # builds bin/kb-semantic through go.work
+~~~
+
+Put `bin/kb-semantic` on your path as `kb` (or beside it). Then, in a workspace:
+
+~~~shell
+kb init                  # keeps a workspace model and the index out of git
+kb model fetch           # about 87 MB from Hugging Face, checked against recorded SHA-256 sums
+kb embed                 # the first run: 14 to 17 minutes on a Raspberry Pi 5 for 893 rows
+~~~
+
+With no network, copy the model from another machine and run `kb model install PATH` (a directory, or a .zip or .tar.gz holding it). By default the model is installed for your user (`$XDG_DATA_HOME/kb/models`, or `~/.local/share/kb/models`); add `-workspace` to `kb model fetch` or `install` to keep it in the workspace's `agents/models/` instead. The first index used up to 875 MB of memory on the Pi; the binary is about 33 MB. See [kb-model(1)](kb-model.1.md) and [kb-embed(1)](kb-embed.1.md).

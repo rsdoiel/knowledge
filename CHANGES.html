@@ -20,6 +20,92 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="unreleased-offline-semantic-search-preview">Unreleased — offline
+semantic search (preview)</h2>
+<p>Plan:
+<code>agents/projects/knowledge/plans/semantic-search-plan.md</code>;
+decisions DR-0088 and DR-0089. A separate semantic build of
+<code>kb</code> (<code>make semantic</code>, Go 1.27, pure Go, about 33
+MB against 21 MB) finds rows by meaning, offline. The plain
+<code>kb</code> registers no embedder and behaves as before;
+<code>kb search TERM</code> output is byte-identical (a golden-file test
+proves it).</p>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong><code>kb search -semantic TERM</code> and
+<code>-hybrid TERM</code>, with <code>-min-score N</code>.</strong> Rows
+are ranked by their best 400-character passage and shown with the score
+and the passage; <code>-hybrid</code> fuses the words ranking with it (a
+row both found comes first, <code>via both|words|meaning</code> in the
+output). <code>SCOPE/KIND</code> works as before; only records,
+observations, concepts and documents are embedded, so
+<code>/sources</code> and <code>/projects</code> are exit 2. At most 50
+rows, grouped by kind with counts over everything above the cutoff;
+<code>-json</code> adds <code>mode</code>, <code>min_score</code>,
+<code>score</code>, <code>chunk</code> and <code>via</code>. The default
+cutoff is 0.35, set from the labelled query set. Exits: 1 nothing above
+the cutoff, 2 a build without the feature, 65 an index built by another
+model, 66 no model or index, 75 an index being built.</li>
+<li><strong><code>kb model install|fetch|list</code></strong> puts the
+embedding model (all-MiniLM-L6-v2, Apache-2.0, about 87 MB, pinned to a
+Hugging Face revision and checked against recorded SHA-256 sums) in the
+workspace’s <code>agents/models/</code> or the user’s data directory;
+<code>fetch</code> is the only code in <code>kb</code> that uses the
+network, and only when run. <code>install PATH</code> works
+offline.</li>
+<li><strong><code>kb embed</code></strong> builds and refreshes the
+index (<code>-status</code>, <code>-rebuild</code>); interruptible and
+resumable, one writer at a time. Verbs that write rows update the index
+for them when one exists (at most 25 rows; the interface’s own edits and
+<code>merge</code>, <code>import</code> and <code>check-db</code> leave
+it to <code>kb embed</code>).</li>
+<li><strong><code>kb init</code></strong> adds
+<code>agents/models/</code> and <code>agents/knowledge.vectors.db</code>
+to <code>.gitignore</code> in a git work tree.</li>
+<li><strong>The interface:</strong> <code>Tab</code> in the search
+prompt cycles words, meaning, both; hidden in the plain build. It calls
+the same function as <code>kb search</code>, so the two agree.</li>
+<li><strong>Library:</strong> <code>Embedder</code>,
+<code>RegisterEmbedder</code>, <code>Chunk</code>, <code>Vectors</code>
+(the sidecar), <code>EmbedIndex</code>, <code>SemanticSearch</code>,
+<code>FuseRankings</code>, <code>LexicalRanking</code>,
+<code>HitsFor</code>, <code>EmbedStatus</code>, and
+<code>semantic.NewHugot</code> in the nested module. The root module has
+no embedding dependency.</li>
+<li><strong><code>internal/evalset</code></strong> and
+<code>semantic/eval_test.go</code>: 34 labelled queries and a harness
+that reports recall at 5 and 10 and mean reciprocal rank for lexical,
+semantic and hybrid, and guards the measured numbers.</li>
+</ul>
+<h3
+id="measured-raspberry-pi-5-4-cores-16-gb-a-copy-of-this-workspaces-database-893-rows-4137-passages">Measured
+(Raspberry Pi 5, 4 cores, 16 GB; a copy of this workspace’s database,
+893 rows, 4,137 passages)</h3>
+<ul>
+<li>First index 14 to 17 minutes (about 5 passages a second), up to 875
+MB resident; a repeat run 146 ms; a search about 0.5 s.</li>
+<li>On the 34 labelled queries (written and labelled by the model that
+wrote the search; awaiting review, so indicative): plain search
+recall@10 0.14, MRR 0.11; <code>-semantic</code> 0.84 and 0.80;
+<code>-hybrid</code> about the same as <code>-semantic</code>.
+400-character passages beat 200 and 800.</li>
+<li><code>-hybrid</code> does not rank better than
+<code>-semantic</code> on this set; it keeps exact-word matches inside a
+search by meaning.</li>
+</ul>
+<h3 id="known-limits">Known limits</h3>
+<ul>
+<li>A preview: the labelled set needs the author’s review, and the
+figures above come from one machine and one corpus.</li>
+<li>The first index is slow on a Pi; the upstream fix for the pure-Go
+matmul (gomlx/compute #44) is pinned as a pseudo-version, to be replaced
+by a tag before release. The pure-Go backend keeps one compiled
+executable per input shape; the embedder replaces its session every four
+new shapes to bound memory (kb observation 537).</li>
+<li>The release archives do not yet include the semantic build; build it
+from source (INSTALL.md).</li>
+<li>Not yet run on macOS, Windows or amd64; linux/arm64 only.</li>
+</ul>
 <h2 id="v0.0.28-2026-10-28">v0.0.28 — 2026-10-28</h2>
 <p>An exit status and manual page release. Plan:
 <code>agents/projects/knowledge/plans/release-plan-v0.0.28.md</code>. It
@@ -197,7 +283,7 @@ letter included, stays <code>unknown-fact</code>.</li>
 <h2 id="v0.0.25-2026-10-19">v0.0.25 — 2026-10-19</h2>
 <p>Plan:
 <code>agents/projects/knowledge/plans/release-plan-v0.0.25.md</code>.</p>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><p><strong>Several scenes in one Markdown file</strong> (DR-0082,
 extending DR-0075 and DR-0078). A Markdown heading with a scene id is a
@@ -398,7 +484,7 @@ scenes become story events, concepts have a kind, wikilinks accept a
 display alias, and <code>kb story timeline</code> and
 <code>kb story check</code> list and check the events. The plan was
 <code>agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md</code>.</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><strong>Concept kinds</strong> (DR-0078). <code>character</code>,
 <code>place</code>, <code>theme</code> or <code>other</code>, the
@@ -511,7 +597,7 @@ machine are fixed (completion on macOS, and dated notes read as decision
 records). The decisions are knowledge DR-0076 and DR-0077, both
 proposed; the plan is
 <code>agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md</code>.</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><strong><code>kb document ingest</code> offers frontmatter for a
 note that has none</strong> (DR-0076). On a terminal, a file with no
@@ -630,7 +716,7 @@ updated by this release: run
 <code>design/scoped-search-design.md</code>), <code>/</code> filters
 every list, and every row of the interface’s menus is built (the design
 is <code>design/tui-keys-and-write-flows-design.md</code>).</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><strong><code>kb search SCOPE/[KIND] TERM</code>: search scoped by a
 path</strong> (DR-0073, DR-0074).
@@ -782,7 +868,7 @@ items U1 to U7). Written and tested red first, including the built
 binary on a pseudo-terminal. The race detector passed on darwin/arm64 at
 <code>5fd9b2e</code>; the interface was tried by hand on Raspberry Pi OS
 and macOS. It has not been run on Windows.</p>
-<h3 id="added-4">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><strong>The removing gate</strong> (DR-0067, DR-0064 amendment; plan
 item U3). <code>d</code> deletes the selected project (the project
@@ -974,7 +1060,7 @@ detector passed on darwin/arm64 at the last code commit
 The interface was tried by hand in a real terminal on Linux. The next
 release, v0.0.20, brings the rest of the writes behind the same
 gates.</p>
-<h3 id="added-5">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><strong><code>kb verbs</code> prints the verb table</strong>
 (DR-0059). One table in <code>cmd/kb/verbtable.go</code> now describes
@@ -1012,7 +1098,7 @@ same.</li>
 DR-0067 names; the table classes them so and a test pins the full
 set.</li>
 </ul>
-<h3 id="added-6">Added</h3>
+<h3 id="added-7">Added</h3>
 <ul>
 <li><strong>The first write in the TUI: read a record and set its
 status</strong> (DR-0066, DR-0065, DR-0067, DR-0061). On the Records
@@ -1163,7 +1249,7 @@ file mode, so <code>&lt; /dev/null</code> does not count.
 <code>golang.org/x/sys</code> are now direct dependencies; both were
 already built into <code>kb</code> through bubbletea.</p></li>
 </ul>
-<h3 id="added-7">Added</h3>
+<h3 id="added-8">Added</h3>
 <ul>
 <li><strong><code>kb record set-status REF</code> with no status is a
 review</strong> (DR-0060): the record is shown through
@@ -1196,7 +1282,7 @@ at the last code commit and the suite passed; the new commands were
 checked read-only, with a scratch build, against both the Laboratory and
 the WorkLab workspaces (277 records, 23 projects in the second, with
 <code>DR-0001</code> repeated ten times).</p>
-<h3 id="added-8">Added</h3>
+<h3 id="added-9">Added</h3>
 <ul>
 <li><strong>A workspace is found by walking up</strong> (DR-0058): from
 the current directory to the nearest ancestor with
@@ -1302,7 +1388,7 @@ was checked by sourcing the generated script in real bash and PowerShell
 (<code>TabExpansion2</code>) against the real workspace; that run found
 a placeholder left unsubstituted in the project-name path, which the
 unit tests had missed, and it is fixed and now tested.</p>
-<h3 id="added-9">Added</h3>
+<h3 id="added-10">Added</h3>
 <ul>
 <li><strong><code>kb completion bash|powershell [-install]</code></strong>
 (DR-0056): writes a shell completion script to standard output, or with
@@ -1347,7 +1433,7 @@ subverb” to “not found”), and nothing exits 70. That comparison was made
 before the <code>kb import</code> and <code>kb project add</code> fixes
 below, and <code>project add</code> on an existing name changes from
 exit 0 to 1.</p>
-<h3 id="added-10">Added</h3>
+<h3 id="added-11">Added</h3>
 <ul>
 <li><strong><code>kb concept show NAME [--limit N]</code></strong>
 (DR-0051): a concept’s description and identifier, and per kind
@@ -1470,7 +1556,7 @@ the question that was asked, 2 says the command was wrong, and the
 change was checked by running the v0.0.13 build alongside the new one,
 387 commands in plain and <code>--json</code> mode, on a copy of the
 real database.</p>
-<h3 id="added-11">Added</h3>
+<h3 id="added-12">Added</h3>
 <ul>
 <li><strong>Removal verbs</strong> (DR-0050), so a mistake is fixable
 without raw SQL, which skips the search index:
@@ -1714,7 +1800,7 @@ The decisions behind the changes are DR-0040 to DR-0044. Every fix below
 was written red first, and the command-line changes were checked by
 running a build from before the change alongside the new one, on a copy
 of the real database.</p>
-<h3 id="added-12">Added</h3>
+<h3 id="added-13">Added</h3>
 <ul>
 <li><code>CleanName(kind, name)</code>, exported (DR-0042): trims
 surrounding whitespace from a project or concept name and refuses one
@@ -1920,7 +2006,7 @@ sweep of bugs that only showed up by running a build from before each
 change against the new one on real data. Every fix below was written red
 first, and each move was checked by diffing the old binary’s output
 against the new one, byte for byte.</p>
-<h3 id="added-13">Added</h3>
+<h3 id="added-14">Added</h3>
 <ul>
 <li><strong>The workflow logic is now library API</strong> (DR-0035).
 <code>cmd/kb</code> is <code>package   main</code>, so everything
@@ -2057,7 +2143,7 @@ near-miss tagging, a frontmatter provenance generator, and fuzzy
 candidate clustering, each of which surfaced and fixed a real
 self-contradiction in its own design doc before shipping, verified by
 hand rather than trusting the design’s own worked examples.</p>
-<h3 id="added-14">Added</h3>
+<h3 id="added-15">Added</h3>
 <ul>
 <li><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
 (DR-0032) catches what <code>tag</code>’s exact whole-word matching
@@ -2131,7 +2217,7 @@ unchanged.</li>
 v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
 two corpus-improvement verbs that surface candidates for a human to
 confirm rather than committing anything themselves.</p>
-<h3 id="added-15">Added</h3>
+<h3 id="added-16">Added</h3>
 <ul>
 <li><code>kb concept suggest [--project NAME] [--limit N]</code>
 (DR-0028), a read-only verb that scans every record body and document
@@ -2248,7 +2334,7 @@ in favour of the per-file property the test was always really asserting
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added-16">Added</h3>
+<h3 id="added-17">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -2286,7 +2372,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-17">Added</h3>
+<h3 id="added-18">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -2368,7 +2454,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-18">Added</h3>
+<h3 id="added-19">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -2426,7 +2512,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-19">Added</h3>
+<h3 id="added-20">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -2461,7 +2547,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-20">Added</h3>
+<h3 id="added-21">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -2501,7 +2587,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-21">Added</h3>
+<h3 id="added-22">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is

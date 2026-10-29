@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>knowledge</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="user_manual.html">User Manual</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/knowledge">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>kb-model — install, fetch and list the embedding models semantic
+search uses</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>kb model install PATH [-name NAME] [-workspace] [-dir DIR]</p>
+<p>kb model fetch <a href="#name">NAME</a> [-source URL] [-workspace]
+[-dir DIR]</p>
+<p>kb model list [-workspace] [-dir DIR]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Semantic search compares the meaning of a question with the meaning
+of the rows in a knowledge base, using an embedding model: a few files,
+about 87 MB for the default, all-MiniLM-L6-v2 (Apache-2.0). model puts
+those files where kb looks for them. It only manages files. It opens no
+knowledge base, and it works the same in a kb built without semantic
+search, which can install a model but not use it; list says which kind
+of build is running.</p>
+<dl>
+<dt>install PATH</dt>
+<dd>
+copies a model from a directory, or from a .zip, .tar.gz or .tgz archive
+holding one, after checking each file against the size and SHA-256 kb
+has on record for the model. It uses no network. Without PATH it exits 2
+and points to fetch and to install PATH. The model is recognised from
+its files; -name names it explicitly.
+</dd>
+<dt>fetch <a href="#name">NAME</a></dt>
+<dd>
+downloads the model (the default when NAME is omitted), checks each file
+as it arrives, and installs it. This is the only place kb uses the
+network, and only when you run it. -source URL fetches the files from a
+mirror (the files at URL/FILE) instead of the recorded address.
+</dd>
+<dt>list</dt>
+<dd>
+shows the build’s capability, each installed model with where it is and
+whether its files are all present, and the model the vector index was
+built with. -json prints the same as a document.
+</dd>
+</dl>
+<p>Nothing is left half-installed: files are copied or downloaded into a
+scratch directory that is moved into place only when every file checks
+out. An existing model of the same name is never overwritten; remove its
+directory first to replace it.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-workspace</dt>
+<dd>
+install into WORKSPACE/agents/models/ instead of the user directory. The
+workspace is the one found at or above the current directory. In a git
+work tree kb adds agents/models/ to the workspace’s .gitignore if it is
+missing (the files are large and are not part of the knowledge), and
+warns if git already tracks them.
+</dd>
+<dt>-dir DIR</dt>
+<dd>
+install into, and look in, DIR instead (KB_MODEL_DIR does the same).
+</dd>
+<dt>-name NAME</dt>
+<dd>
+install: the model the files are, when they cannot be recognised.
+</dd>
+<dt>-source URL</dt>
+<dd>
+fetch: the base address to download from.
+</dd>
+</dl>
+<p>The global -json option applies. The global -db option does not:
+model opens no database, and an explicit -db is refused (exit 2).</p>
+<h1 id="files">FILES</h1>
+<p>Models are looked for in WORKSPACE/agents/models/NAME/ first, then in
+the user data directory ($XDG_DATA_HOME/kb/models, or
+~/.local/share/kb/models; ~/Library/Application Support/kb/models on
+macOS; %LocalAppData%on Windows). KB_MODEL_DIR, or -dir, replaces both.
+Each installed model has a kb-model.json recording what was
+installed.</p>
+<h1 id="examples">EXAMPLES</h1>
+<pre class="shell"><code>kb model fetch
+kb model install ~/Downloads/all-MiniLM-L6-v2.zip
+kb model install -workspace /media/usb/all-MiniLM-L6-v2
+kb model list</code></pre>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>The workspace convention, as described in kb(1).</p>
+<dl>
+<dt>0</dt>
+<dd>
+the model was installed, or list ran
+</dd>
+<dt>2</dt>
+<dd>
+a bad flag, a missing PATH, a surplus argument, an unknown subverb or
+model name, or a -db
+</dd>
+<dt>65</dt>
+<dd>
+the files are not the model: one is missing, the wrong size, or fails
+its checksum; or an archive is unreadable or holds a path outside itself
+</dd>
+<dt>66</dt>
+<dd>
+PATH does not exist, a download was refused as not found, or -workspace
+found no workspace
+</dd>
+<dt>69</dt>
+<dd>
+fetch could not reach the source, or it answered with an error
+</dd>
+<dt>73</dt>
+<dd>
+a model of that name is already installed, or the directory cannot be
+created
+</dd>
+<dt>74</dt>
+<dd>
+a copy or a download stopped part way
+</dd>
+<dt>77</dt>
+<dd>
+the operating system refused access to a directory or file
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>kb(1), kb-init(1), kb-search(1)</p>
+</section>
+<footer>
+<p>knowledge</p>
+</footer>
+</body>
+</html>
