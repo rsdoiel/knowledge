@@ -19,7 +19,7 @@
     {"id": "q06", "query": "why did the model give empty replies", "relevant": [
       {"type": "observation", "contains": "every reply on llama3.2:3b is empty"}]},
     {"id": "q07", "query": "should the agent run models in-process", "no_answer": true,
-      "note": "the spike's weak case: the corpus decides where embedding runs (DR-0088) but not whether the agent runs its models in-process"},
+      "note": "the spike's weak case, and the known noisy one: the corpus decides where embedding runs (DR-0088) but not whether the agent runs its models in-process, yet the query shares vocabulary with many harvey rows and the top hits score 0.50. Quieting it would need a cutoff above 0.50, which costs recall (0.57 at 0.50), so the guard allows one noisy no-answer query of four"},
     {"id": "q08", "query": "why can't a model approve a decision record", "relevant": [
       {"type": "record", "ref": "knowledge/DR-0061"}, {"type": "record", "ref": "knowledge/DR-0070"}, {"type": "record", "ref": "knowledge/DR-0060"}]},
     {"id": "q09", "query": "how are bugs supposed to be fixed", "relevant": [{"type": "record", "ref": "workspace/DR-0007"}]},
