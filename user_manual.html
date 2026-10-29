@@ -354,11 +354,12 @@ machine will differ.</p>
 <p><strong>It is a preview.</strong> The labelled query set it was tuned
 on (34 queries,
 <code>internal/evalset/testdata/labelled_queries.json</code>) was
-written by the same model that wrote the search and is awaiting review,
-so read its figures as indicative: <code>-semantic</code> scored a mean
-reciprocal rank of 0.80 and a recall at ten of 0.84 on it, against 0.11
-and 0.14 for plain search given the same queries (plain search needs
-every word to appear, so a question typed as a sentence finds nothing).
+written by the same model that wrote the search and corrected once after
+the author looked over where it disagreed with the search, so read its
+figures as indicative: <code>-semantic</code> scored a mean reciprocal
+rank of 0.82 and a recall at ten of 0.88 on it, against 0.11 and 0.15
+for plain search given the same queries (plain search needs every word
+to appear, so a question typed as a sentence finds nothing).
 <code>-hybrid</code> found about the same rows as <code>-semantic</code>
 and did not rank them better; use it to keep exact-word matches inside a
 search by meaning. Plain <code>kb search</code> is unchanged.</p>

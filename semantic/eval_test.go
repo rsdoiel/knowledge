@@ -169,16 +169,17 @@ func TestEval_LabelledQueries(t *testing.T) {
 	}
 	t.Log(b.String())
 
-	// The guard: the numbers measured on 2026-10-29 for all-MiniLM-L6-v2 with
-	// 400-character chunks and the default cutoff, less a margin for the corpus
+	// The guard: the numbers measured on 2026-10-29 (after the labels were corrected)
+	// for all-MiniLM-L6-v2 with 400-character chunks and the default cutoff
+	// (recall@5 0.756, recall@10 0.883, MRR 0.821), less a margin for the corpus
 	// growing and the labels being one person's. A chunker, cutoff or model change
 	// that costs more than the margin fails here; re-measure and move the floors on
 	// purpose. Skipped for other chunk sizes, which this test is also used to compare.
 	if os.Getenv("KB_EVAL_CHUNK") != "" {
 		return
 	}
-	if def.Semantic.MRR < 0.75 || def.Semantic.Recall10 < 0.80 || def.Semantic.Recall5 < 0.67 {
-		t.Errorf("semantic search got worse than the floors (MRR 0.75, recall@10 0.80, recall@5 0.67):\n%s", def)
+	if def.Semantic.MRR < 0.77 || def.Semantic.Recall10 < 0.84 || def.Semantic.Recall5 < 0.71 {
+		t.Errorf("semantic search got worse than the floors (MRR 0.77, recall@10 0.84, recall@5 0.71):\n%s", def)
 	}
 	if def.Semantic.Quiet < 3 {
 		t.Errorf("semantic search answers the queries that have no answer: quiet %d of 4, floor 3\n%s", def.Semantic.Quiet, def)

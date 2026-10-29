@@ -111,9 +111,10 @@ search
   or an exact word. -semantic is the one for a question. -hybrid adds the
   words half to -semantic: it puts a row that both found first, and shows rows
   only the words found. On a labelled set of 34 queries (written by the same
-  model that wrote the search, so read the figures as indicative) -semantic
-  scored a mean reciprocal rank of 0.80 and a recall at ten of 0.84, against
-  0.11 and 0.14 for plain search given the same queries; -hybrid found about the same rows as -semantic
+  model that wrote the search, and corrected once after the author looked over
+  where it disagreed, so read the figures as indicative) -semantic scored a
+  mean reciprocal rank of 0.82 and a recall at ten of 0.88, against 0.11 and
+  0.15 for plain search given the same queries; -hybrid found about the same rows as -semantic
   and did not rank them better, so it is a way to keep exact-word matches in a
   search by meaning, not a better ranking. Semantic search is a preview.
 

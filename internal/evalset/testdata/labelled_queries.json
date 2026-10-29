@@ -1,10 +1,8 @@
 {
-  "about": "Labelled queries for semantic search (semantic plan T9). Drawn from agents/knowledge.db as of 2026-10-29 and labelled by the model that wrote them from record titles and a reading of the candidate rows; one person's judgement of one corpus, a guard against regressions and a way to compare models, not a general benchmark. A relevant row is named by a record ref, an observation substring or a concept name, so the labels survive id renumbering. no_answer queries have nothing in the corpus that answers them: a good search returns nothing for them.",
+  "about": "Labelled queries for semantic search (semantic plan T9). Drawn from agents/knowledge.db as of 2026-10-29 and labelled by the model that wrote them from record titles and a reading of the candidate rows, then corrected once on 2026-10-29 after the author looked over the queries where the labels and the search disagreed (q01, q04, q19 and q30 changed; the rest were not individually re-read); one person's judgement of one corpus, a guard against regressions and a way to compare models, not a general benchmark. A relevant row is named by a record ref, an observation substring or a concept name, so the labels survive id renumbering. no_answer queries have nothing in the corpus that answers them: a good search returns nothing for them.",
   "queries": [
     {"id": "q01", "query": "how do we keep databases in step across machines", "relevant": [
-      {"type": "concept", "name": "cross-machine-sync"}, {"type": "record", "ref": "knowledge/DR-0014"}, {"type": "record", "ref": "knowledge/DR-0013"},
-      {"type": "record", "ref": "knowledge/DR-0025"}, {"type": "record", "ref": "workspace/DR-0002"}, {"type": "record", "ref": "knowledge/DR-0003"},
-      {"type": "observation", "contains": "Cross-machine knowledge.db sync split into two features"}]},
+      {"type": "concept", "name": "cross-machine-sync"}, {"type": "record", "ref": "knowledge/DR-0014"}, {"type": "record", "ref": "knowledge/DR-0013"}, {"type": "record", "ref": "workspace/DR-0002"}, {"type": "record", "ref": "knowledge/DR-0003"}, {"type": "observation", "contains": "Cross-machine knowledge.db sync split into two features"}]},
     {"id": "q02", "query": "which licence was chosen for the compiler", "relevant": [
       {"type": "record", "ref": "tgnc/DR-0001"}, {"type": "record", "ref": "aoc/DR-0008"},
       {"type": "observation", "contains": "because tgnc will use Microsoft's typescript-go"}]},
@@ -12,7 +10,7 @@
       {"type": "record", "ref": "workspace/DR-0003"}, {"type": "record", "ref": "knowledge/DR-0047"}, {"type": "record", "ref": "harvey/DR-0005"},
       {"type": "record", "ref": "antennaApp/DR-0005"}]},
     {"id": "q04", "query": "slow inference on the Raspberry Pi", "relevant": [
-      {"type": "record", "ref": "harvey/DR-0029"}, {"type": "record", "ref": "harvey/DR-0032"}, {"type": "record", "ref": "harvey/DR-0025"}]},
+      {"type": "record", "ref": "harvey/DR-0029"}]},
     {"id": "q05", "query": "problems with the Hailo accelerator", "relevant": [
       {"type": "record", "ref": "harvey/DR-0029"}, {"type": "record", "ref": "harvey/DR-0030"},
       {"type": "observation", "contains": "fails once the system prompt exceeds about 3,300 characters"}]},
@@ -39,7 +37,7 @@
     {"id": "q18", "query": "how is a coding session recorded as a screenplay", "relevant": [
       {"type": "record", "ref": "harvey/DR-0014"}, {"type": "record", "ref": "harvey/DR-0015"}]},
     {"id": "q19", "query": "what stops the command line silently ignoring a misspelled flag", "relevant": [
-      {"type": "record", "ref": "knowledge/DR-0041"}, {"type": "record", "ref": "knowledge/DR-0046"}]},
+      {"type": "record", "ref": "knowledge/DR-0041"}, {"type": "record", "ref": "knowledge/DR-0046"}, {"type": "record", "ref": "knowledge/DR-0040"}]},
     {"id": "q20", "query": "how is a podcast subscription stored", "relevant": [
       {"type": "record", "ref": "audiobox/DR-0001"}, {"type": "concept", "name": "podcast"}]},
     {"id": "q21", "query": "why are skills no longer compiled to shell scripts", "relevant": [
@@ -57,7 +55,7 @@
     {"id": "q28", "query": "hunspell", "note": "an exact word", "relevant": [{"type": "record", "ref": "foulpapers/DR-0003"}]},
     {"id": "q29", "query": "wat2wasm", "note": "an exact word", "relevant": [{"type": "record", "ref": "rl/DR-0001"}, {"type": "record", "ref": "rl/DR-0002"}]},
     {"id": "q30", "query": "Levenshtein", "note": "an exact word", "relevant": [
-      {"type": "record", "ref": "knowledge/DR-0032"}, {"type": "record", "ref": "knowledge/DR-0034"}, {"type": "record", "ref": "knowledge/DR-0036"}]},
+      {"type": "record", "ref": "knowledge/DR-0032"}, {"type": "record", "ref": "knowledge/DR-0034"}]},
     {"id": "q31", "query": "AI HAT+ 2", "note": "a name with punctuation", "relevant": [{"type": "record", "ref": "harvey/DR-0029"}]},
     {"id": "q32", "query": "recipe for sourdough bread", "no_answer": true, "note": "nothing to do with the corpus"},
     {"id": "q33", "query": "what is the price of electricity in Oregon", "no_answer": true, "note": "nothing to do with the corpus"},
