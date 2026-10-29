@@ -115,7 +115,10 @@ cancels something in progress, such as a search being typed, and does nothing
 otherwise, so it never closes a screen. Ctrl-C quits from anywhere. A line at
 the bottom of every screen lists the keys that apply. While you type in the
 search prompt every key is text, q included, so a term that starts with q works;
-Esc leaves the prompt, and q is a command again afterwards.
+Esc leaves the prompt, and q is a command again afterwards. In the semantic
+build Tab in the prompt switches the next search between words, meaning and
+both, as {app_name} search -semantic and -hybrid rank them, and the prompt says
+which; the plain build has no Tab and no label.
 
 u cuts a link: on a project's Concepts tab it unlinks the selected concept from the
 project, and on an observation it lists the observation's concept and source

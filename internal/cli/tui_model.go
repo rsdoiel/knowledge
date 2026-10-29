@@ -100,6 +100,13 @@ type searchResultItem struct {
 	r     knowledge.KBSearchResult
 	ref   string   // a record's qualified reference, from a scoped search
 	spans []string // for a concept from a scoped search, the projects it is in
+
+	// From a search by meaning or by meaning and words (the same fields kb search
+	// -semantic and -hybrid print): the best chunk's score and text, and for a
+	// hybrid search which ranking found the row.
+	score *float64
+	chunk string
+	via   string
 }
 
 func (i searchResultItem) Title() string {
@@ -107,9 +114,19 @@ func (i searchResultItem) Title() string {
 	if i.ref != "" {
 		label = i.ref
 	}
-	return fmt.Sprintf("[%s] %s", i.r.Kind, label)
+	title := fmt.Sprintf("[%s] %s", i.r.Kind, label)
+	if i.score != nil {
+		title += fmt.Sprintf("  %.2f", *i.score)
+	}
+	if i.via != "" {
+		title += "  via " + i.via
+	}
+	return title
 }
 func (i searchResultItem) Description() string {
+	if i.chunk != "" {
+		return snippetOf(i.chunk, 200) + retractionMarker(i.r.HitProvenance)
+	}
 	if len(i.spans) > 0 {
 		return i.r.Snippet + "   [" + strings.Join(i.spans, ", ") + "]" + retractionMarker(i.r.HitProvenance)
 	}
@@ -133,6 +150,7 @@ type tuiModel struct {
 	searchList      list.Model
 	recordList      list.Model
 	searchInput     textinput.Model
+	searchMode      searchMode // words, meaning or both; Tab changes it where the build can search by meaning
 	searching       bool
 	searchFrom      viewState    // where a search began, which q from its results returns to
 	group           string       // the group whose menu is shown, in viewGroup
@@ -1031,6 +1049,13 @@ func (m *tuiModel) updateSearchResults(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 // text; Esc leaves the prompt and Enter runs the search.
 func (m *tuiModel) updateSearching(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "tab":
+		// Words, meaning, both: only in a build that has an embedder, so the plain
+		// build's prompt is as it was.
+		if meaningAvailable() {
+			m.searchMode = nextSearchMode(m.searchMode)
+		}
+		return m, nil
 	case "esc":
 		m.searching = false
 		m.searchInput.Blur()
@@ -1214,6 +1239,9 @@ func (m *tuiModel) loadConcepts() error {
 }
 
 func (m *tuiModel) runSearch(term string) error {
+	if m.searchMode != searchLexical {
+		return m.runMeaning(knowledge.SearchScope{}, "everywhere", "", term)
+	}
 	results, err := logKBCall(m.dl, "Search", map[string]any{"term": term}, func() ([]knowledge.KBSearchResult, error) {
 		return m.kb.Search(term)
 	})
@@ -1226,6 +1254,90 @@ func (m *tuiModel) runSearch(term string) error {
 	}
 	l := newBrowserList(m.isDark, items, fmt.Sprintf("Search: %s", term), m.cols()-4, m.listHeight())
 	m.searchList = l
+	m.clearFilter(viewSearch)
+	return nil
+}
+
+/** meaningAvailable reports whether this build can search by meaning, which is
+ * whether it has an embedder registered. The search toggle is offered only then.
+ *
+ * Returns:
+ *   bool — true in the semantic build
+ *
+ * Example:
+ *   if meaningAvailable() { legend += "   Tab words/meaning" }
+ */
+func meaningAvailable() bool {
+	_, ok := knowledge.RegisteredEmbedder()
+	return ok
+}
+
+/** nextSearchMode is the mode after m when Tab is pressed: words, meaning, both,
+ * and round again.
+ *
+ * Parameters:
+ *   m (searchMode) — the current mode
+ *
+ * Returns:
+ *   searchMode — the next one
+ *
+ * Example:
+ *   nextSearchMode(searchLexical) // searchSemantic
+ */
+func nextSearchMode(m searchMode) searchMode {
+	switch m {
+	case searchLexical:
+		return searchSemantic
+	case searchSemantic:
+		return searchHybrid
+	}
+	return searchLexical
+}
+
+// searchLabel is the prompt's name. In the plain build it is "Search"; where the
+// build can search by meaning it also says how the next search will rank.
+func (m *tuiModel) searchLabel() string {
+	if !meaningAvailable() {
+		return "Search"
+	}
+	switch m.searchMode {
+	case searchSemantic:
+		return "Search (meaning)"
+	case searchHybrid:
+		return "Search (words + meaning)"
+	}
+	return "Search (words)"
+}
+
+// runMeaning runs a search by meaning, or by meaning and words, with the function
+// kb search -semantic and -hybrid use, and fills the results list. An error (no
+// model, no index, an index being built, a kind that is not embedded) goes back
+// to the prompt as its message.
+func (m *tuiModel) runMeaning(scope knowledge.SearchScope, scopeName, scopeArg, term string) error {
+	res, err := meaningSearch(m.kb, m.dl, m.searchMode, nil, scope, scopeName, term)
+	if err != nil {
+		return err
+	}
+	items := make([]list.Item, len(res.Hits))
+	for i, h := range res.Hits {
+		items[i] = searchResultItem{r: h.R, ref: h.R.Ref, score: h.Score, chunk: h.Chunk, via: h.Via}
+	}
+	noun := "matches"
+	if res.Total == 1 {
+		noun = "match"
+	}
+	cmd := "kb search -" + string(m.searchMode)
+	if scopeArg != "" {
+		cmd += " " + scopeArg
+	}
+	title := fmt.Sprintf("%s %s — %d %s", cmd, term, res.Total, noun)
+	if res.Total > len(items) {
+		title += fmt.Sprintf(", showing %d", len(items))
+	}
+	if res.Unindexed > 0 {
+		title += fmt.Sprintf(" (%d rows not indexed: kb embed)", res.Unindexed)
+	}
+	m.searchList = newBrowserList(m.isDark, items, title, m.cols()-4, m.listHeight())
 	m.clearFilter(viewSearch)
 	return nil
 }
@@ -1247,6 +1359,9 @@ func (m *tuiModel) runSearchLine(line string) error {
 		return err
 	}
 	term := strings.Join(fields[1:], " ")
+	if m.searchMode != searchLexical {
+		return m.runMeaning(scope, name, fields[0], term)
+	}
 	res, err := logKBCall(m.dl, "SearchScoped", map[string]any{"term": term, "scope": name}, func() (*knowledge.ScopedSearchResult, error) {
 		return m.kb.SearchScoped(term, scope)
 	})
@@ -1330,6 +1445,9 @@ func (m *tuiModel) legendFull() string {
 	case m.err != nil:
 		return "q dismiss   Ctrl-C quit"
 	case m.searching:
+		if meaningAvailable() {
+			return "Tab words/meaning   Esc cancel   Enter search   Ctrl-C quit"
+		}
 		return "Esc cancel   Enter search   Ctrl-C quit"
 	}
 	move := "↑/↓ j/k move"
@@ -1417,7 +1535,7 @@ func (m *tuiModel) screenBody() (string, []string) {
 		return "Error", []string{fmt.Sprintf("error: %v", m.err)}
 	}
 	if m.searching {
-		return "Search", []string{"Search: " + m.searchInput.View()}
+		return "Search", []string{m.searchLabel() + ": " + m.searchInput.View()}
 	}
 	switch m.state {
 	case viewMenu:
