@@ -1,4 +1,4 @@
-%kb-init(1) user manual | version 0.0.29 1ae6b7d
+%kb-init(1) user manual | version 0.0.29 7d292d7
 % R. S. Doiel
 % 2026-10-29
 
