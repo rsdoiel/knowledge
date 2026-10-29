@@ -63,8 +63,10 @@ Semantic search (`kb search -semantic`, `-hybrid`) needs a separate build of `kb
 ~~~shell
 git clone https://github.com/rsdoiel/knowledge
 cd knowledge
-make semantic            # builds bin/kb-semantic through go.work
+make semantic            # builds bin/kb-semantic through semantic.work
 ~~~
+
+`make test-semantic` runs the nested module's tests. The workspace file is `semantic.work`, not `go.work`, so a plain `go build` here needs only Go 1.26; to use `go` directly on the nested module, set `GOWORK=$PWD/semantic.work`.
 
 Put `bin/kb-semantic` on your path as `kb` (or beside it). Then, in a workspace:
 

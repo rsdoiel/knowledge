@@ -222,29 +222,36 @@ dist/Windows-arm64: $(PROGRAMS)
 	@rm -fR dist/bin
 
 # The semantic kb (semantic-search-plan.md T2) is built from the nested module in
-# semantic/ against the working tree through go.work, and needs Go 1.27 (Hugot).
+# semantic/ against the working tree through semantic.work, and needs Go 1.27 (Hugot).
+# The workspace file is not named go.work so that a plain go build in this directory
+# does not see it: its go line (1.27) would otherwise force Go 1.27 on the plain kb.
 # semantic builds it for this machine; cross-semantic builds it for the six release
 # targets with CGO_ENABLED=0, which is the check that Hugot's pure-Go backend still
 # cross-compiles. Neither is part of `make release` yet: the archives hold the plain
 # kb until the semantic preview ships (plan T12).
+SEMANTIC_WORK = $(CURDIR)/semantic.work
 SEMANTIC_TARGETS = linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
 semantic: .FORCE
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -o "bin/kb-semantic$(EXT)" ./semantic/cmd/kb
+	GOWORK="$(SEMANTIC_WORK)" CGO_ENABLED=0 go build -o "bin/kb-semantic$(EXT)" ./semantic/cmd/kb
+
+# test-semantic runs the nested module's tests against the working tree.
+test-semantic: .FORCE
+	cd semantic && GOWORK="$(SEMANTIC_WORK)" go vet ./... && GOWORK="$(SEMANTIC_WORK)" go test ./...
 
 # eval-semantic runs the labelled-query evaluation (semantic plan T9) with the real
 # model on a copy of KB_EVAL_DB, never from the test cache: the database, its index
 # and the model are outside the module, so the cache cannot see them change.
 eval-semantic: .FORCE
-	cd semantic && go test -count=1 -run TestEval -v .
+	cd semantic && GOWORK="$(SEMANTIC_WORK)" go test -count=1 -run TestEval -v .
 
 cross-semantic: .FORCE
 	@mkdir -p bin/semantic-cross
 	@for T in $(SEMANTIC_TARGETS); do \
 		OS="$${T%/*}"; ARCH="$${T#*/}"; EXE=""; [ "$$OS" = windows ] && EXE=".exe"; \
 		echo "semantic kb for $$OS/$$ARCH"; \
-		CGO_ENABLED=0 GOOS=$$OS GOARCH=$$ARCH go build -o "bin/semantic-cross/kb-$$OS-$$ARCH$$EXE" ./semantic/cmd/kb || exit 1; \
+		GOWORK="$(SEMANTIC_WORK)" CGO_ENABLED=0 GOOS=$$OS GOARCH=$$ARCH go build -o "bin/semantic-cross/kb-$$OS-$$ARCH$$EXE" ./semantic/cmd/kb || exit 1; \
 	done
 
 distribute_docs:
@@ -302,6 +309,36 @@ check-release: .FORCE
 	done; \
 	if [ $$FAIL -ne 0 ]; then echo "check-release: v$$V is NOT ready to release"; exit 1; fi; \
 	echo "check-release: v$$V is consistent"
+
+# check-semantic-tag checks that the nested module can be tagged semantic/v$(VERSION) and
+# installed from the proxy, without go.work or semantic.work. It writes nothing here and
+# needs the network. The root and nested modules carry the same version number, and the
+# root tag goes first. It fails when
+#   - semantic/go.mod requires the root module at a version other than v$(VERSION),
+#   - v$(VERSION) is not tagged on origin (tag and push the root first),
+#   - in a clean clone of HEAD with GOWORK=off, go mod tidy would change semantic/go.mod
+#     or go.sum, or the nested module does not vet and build.
+# Run it after the root tag is pushed and the semantic/go.mod commit is made; the nested
+# tag goes on that commit.
+check-semantic-tag: .FORCE
+	@FAIL=0; V="v$(VERSION)"; \
+	bad() { echo "check-semantic-tag: $$1"; FAIL=1; }; \
+	REQ="$$(sed -n 's#^[[:space:]]*github.com/rsdoiel/knowledge \(v[^ ]*\)$$#\1#p' semantic/go.mod | head -1)"; \
+	[ "$$REQ" = "$$V" ] || bad "semantic/go.mod requires knowledge '$$REQ', this release is $$V"; \
+	git ls-remote --exit-code --tags origin "refs/tags/$$V" >/dev/null 2>&1 || bad "$$V is not tagged on origin: tag and push the root module first"; \
+	[ -z "$$(git status --porcelain)" ] || echo "check-semantic-tag: note: the working tree has changes; the check uses the last commit"; \
+	TMP="$$(mktemp -d)"; trap 'rm -rf "$$TMP"' EXIT; \
+	git clone -q . "$$TMP/knowledge" || bad "cannot clone HEAD"; \
+	if [ -d "$$TMP/knowledge/semantic" ]; then \
+		( cd "$$TMP/knowledge/semantic" && export GOWORK=off && \
+		  go mod tidy >"$$TMP/tidy.log" 2>&1 || { cat "$$TMP/tidy.log"; exit 1; }; \
+		  git diff --quiet -- go.mod go.sum || { echo "go mod tidy changes:"; git diff --stat -- go.mod go.sum; exit 2; }; \
+		  go vet ./... >"$$TMP/vet.log" 2>&1 || { cat "$$TMP/vet.log"; exit 3; }; \
+		  CGO_ENABLED=0 go build -o /dev/null ./cmd/kb >"$$TMP/build.log" 2>&1 || { cat "$$TMP/build.log"; exit 4; } ) \
+		|| bad "the nested module does not tidy, vet and build in a clean clone without a workspace"; \
+	else bad "no semantic/ directory in HEAD"; fi; \
+	if [ $$FAIL -ne 0 ]; then echo "check-semantic-tag: semantic/$$V is NOT ready to tag"; exit 1; fi; \
+	echo "check-semantic-tag: semantic/$$V can be tagged"
 
 release: generate check-release build setup_dist distribute_docs dist/Linux-x86_64 dist/Linux-aarch64 dist/macOS-x86_64 dist/macOS-arm64 dist/Windows-x86_64 dist/Windows-arm64
 	@printf "\nready to run\n\n\trelease.bash\n\n"
