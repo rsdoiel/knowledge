@@ -88,8 +88,14 @@ func makeVariable(t *testing.T, name string) (value, stderr string) {
 	if err := os.WriteFile(filepath.Join(dir, "Makefile"), b, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("make", "-s", "-f", "Makefile", "--no-builtin-rules", "--no-builtin-variables",
-		"--eval", "zz-print-%: ; @echo '$($*)'", "zz-print-"+name)
+	// A second makefile rather than --eval: the make that macOS ships is GNU Make
+	// 3.81, which has no --eval.
+	printer := "zz-print-%: ; @echo '$($*)'\n"
+	if err := os.WriteFile(filepath.Join(dir, "print.mk"), []byte(printer), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("make", "-s", "-f", "Makefile", "-f", "print.mk", "--no-builtin-rules", "--no-builtin-variables",
+		"zz-print-"+name)
 	cmd.Dir = dir
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
