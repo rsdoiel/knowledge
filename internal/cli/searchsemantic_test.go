@@ -149,7 +149,7 @@ func TestSearchSemantic_IndexBeingBuiltIs75(t *testing.T) {
 	if code != 75 || !strings.Contains(e, "being built") {
 		t.Errorf("exit %d: %s", code, e)
 	}
-	if code, _, e := f.run("search", "-semantic", "slow"); code != 0 {
+	if code, _, e := f.run("search", "-semantic", "slow inference on the Raspberry Pi"); code != 0 {
 		t.Errorf("after release: exit %d: %s", code, e)
 	}
 }

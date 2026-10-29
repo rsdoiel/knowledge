@@ -1541,7 +1541,7 @@ search
   -semantic and FTS5 syntax in the words half of -hybrid.
 
   -semantic ranks each row by how close its best chunk is to TERM and keeps
-  those at or above the cutoff (-min-score, from -1 to 1, 0.30 by default, -1
+  those at or above the cutoff (-min-score, from -1 to 1, 0.35 by default, -1
   keeps every row). A hit shows the chunk that matched, without « » marks,
   and its score. -hybrid fuses that ranking with the full-text one: a row
   both found comes before a row only one found, and "via" says which (both,

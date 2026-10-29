@@ -9,10 +9,12 @@ import (
 
 /** DefaultMinScore is the cosine similarity a chunk must reach to be returned
  * when SemanticOptions.MinScore is zero. Without a cutoff nearest-neighbour
- * search never finds nothing. It is a starting value, to be set from the
- * labelled query set (semantic-search-plan.md T9).
+ * search never finds nothing. It was set from the labelled query set
+ * (semantic-search-plan.md T9) for all-MiniLM-L6-v2: recall at 10 is unchanged
+ * from 0.20 to 0.35 and falls at 0.40, and 0.35 halves the rows returned
+ * compared with 0.30. Another model needs its own measurement.
  */
-const DefaultMinScore = 0.30
+const DefaultMinScore = 0.35
 
 /** NoCutoff, as SemanticOptions.MinScore, returns every indexed row however far
  * from the query it is: cosine similarity is never below -1.
