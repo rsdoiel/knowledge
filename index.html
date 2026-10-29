@@ -129,6 +129,11 @@ argument, and <code>kb search</code> with no term or with only a scope
 help flag is built from; <code>kb -json verbs</code> gives it to a
 script or a model.</p>
 <h2 id="semantic-search-preview">Semantic search (preview)</h2>
+<p><strong>This preview is not shipped as a binary: to try it you build
+it from source</strong> (<code>make semantic</code>, or
+<code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29</code>;
+Go 1.27.3 or later), as <a href="INSTALL.html">INSTALL.md</a>
+describes.</p>
 <p><code>kb search</code> finds rows that contain your words. The
 semantic build of <code>kb</code> also finds rows by meaning, offline,
 with no daemon and no network after the model is installed:
@@ -148,7 +153,7 @@ kb search -hybrid hunspell               # meaning, plus rows that contain the w
 switches the next search between words, meaning and both. The plain
 <code>kb</code> has none of this and stays at about 21 MB; the semantic
 build is built from the nested <code>semantic/</code> module
-(<code>make semantic</code>, Go 1.27) and is not yet in the release
+(<code>make semantic</code>, Go 1.27.3) and is not in the release
 archives. See <a href="kb-search.1.html">kb-search(1)</a>, <a
 href="kb-embed.1.html">kb-embed(1)</a> and <a
 href="kb-model.1.html">kb-model(1)</a>.</p>
@@ -233,16 +238,27 @@ skills that wrap the verbs (<code>setup-knowledge-base</code>,
 <code>~/.claude/skills</code>.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.28</li>
+<li>version: 0.0.29</li>
 <li>status: active</li>
-<li>released: 2026-10-28</li>
+<li>released: 2026-10-29</li>
 </ul>
-<p>An exit status and manual page release. Every manual page now has an
-EXIT STATUS and a SEE ALSO section: the thirteen pages that lacked EXIT
-STATUS list the codes they return (workspace DR-0003), and tests keep
-those pages and the verb tests in step. An unreadable database file now
-exits 77 (no_permission) and not 74 (io); <code>knowledge.Open</code>
-returns an error that satisfies
+<p>Offline semantic search, as a preview. A separate build of
+<code>kb</code> (<code>make semantic</code>, or
+<code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29</code>;
+Go 1.27.3 or later) finds rows by meaning with no daemon and no network
+once the model is fetched: <code>kb search -semantic</code> and
+<code>-hybrid</code>, <code>kb model install|fetch|list</code> and
+<code>kb embed</code>, and <code>Tab</code> in the interface search
+prompt. The plain <code>kb</code> and the release archives are
+unchanged, and <code>kb search TERM</code> output is byte-identical. Run
+for real on linux/arm64 and macOS arm64; the other platforms are built
+but not run. Building from source now needs Go 1.27.3.</p>
+<p>v0.0.28 (2026-10-28): An exit status and manual page release. Every
+manual page now has an EXIT STATUS and a SEE ALSO section: the thirteen
+pages that lacked EXIT STATUS list the codes they return (workspace
+DR-0003), and tests keep those pages and the verb tests in step. An
+unreadable database file now exits 77 (no_permission) and not 74 (io);
+<code>knowledge.Open</code> returns an error that satisfies
 <code>errors.Is(err, fs.ErrPermission)</code> for it. <code>kb(1)</code>
 says what 73 and 77 are and that 78 is unused. The setup, update and
 review skills are pinned to 0.0.28.</p>
