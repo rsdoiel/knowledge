@@ -263,6 +263,37 @@ distribute_docs:
 	@cp -vR agents dist/
 	@for DNAME in $(DOCS); do cp -vR $$DNAME dist/; done
 
+# check-go-version enforces the Go version policy (kb observation 548): the minimum Go is
+# the highest version the release was built with, and every file that states it agrees.
+# It writes nothing. It fails when
+#   - the go line of go.mod is lower than the Go in use (go env GOVERSION),
+#   - the "Go >= " line of codemeta.json is not the go line of go.mod,
+#   - semantic/go.mod, when there is one, has a different go line.
+# A go line without a patch ("1.27") is read as 1.27.0. check-release runs it.
+check-go-version: .FORCE
+	@FAIL=0; \
+	bad() { echo "check-go-version: $$1"; FAIL=1; }; \
+	full() { case "$$1" in *.*.*) echo "$$1";; *) echo "$$1.0";; esac; }; \
+	TC="$$(go env GOVERSION | sed 's/^go//')"; \
+	case "$$TC" in [0-9]*.[0-9]*) ;; *) TC="";; esac; \
+	case "$$TC" in *[!0-9.]*) TC="";; esac; \
+	if [ -z "$$TC" ]; then bad "cannot read the Go version from go env GOVERSION (a release is built with a tagged Go)"; \
+	else \
+		TC="$$(full "$$TC")"; \
+		GM="$$(full "$$(sed -n 's/^go \([0-9.]*\).*/\1/p' go.mod | head -1)")"; \
+		LOW="$$(printf '%s\n%s\n' "$$GM" "$$TC" | sort -V | head -1)"; \
+		[ "$$GM" = "$$TC" ] || [ "$$LOW" != "$$GM" ] || bad "go.mod says go $$GM, the Go in use is $$TC: the minimum is the highest version the release is built with"; \
+		CM="$$(jq -r '[.softwareRequirements[]? | select(startswith("Go >= "))][0] // empty | sub("Go >= "; "")' codemeta.json)"; \
+		[ -n "$$CM" ] || bad "codemeta.json has no \"Go >= \" line in softwareRequirements"; \
+		[ -z "$$CM" ] || [ "$$(full "$$CM")" = "$$GM" ] || bad "codemeta.json says Go >= $$CM, go.mod says go $$GM"; \
+		if [ -f semantic/go.mod ]; then \
+			NM="$$(full "$$(sed -n 's/^go \([0-9.]*\).*/\1/p' semantic/go.mod | head -1)")"; \
+			[ "$$NM" = "$$GM" ] || bad "semantic/go.mod says go $$NM, go.mod says go $$GM"; \
+		fi; \
+	fi; \
+	if [ $$FAIL -ne 0 ]; then exit 1; fi; \
+	echo "check-go-version: Go $$GM is consistent"
+
 # check-release reads the files a release is cut from and fails when they
 # disagree; it writes nothing. Run it before `make release` (the release target
 # runs it too, after generate). It fails when
@@ -271,7 +302,8 @@ distribute_docs:
 #   - datePublished is not today's date, the release day,
 #   - v$(VERSION) is already tagged here or on origin (codemeta.json was not bumped),
 #   - releaseNotes are the same as the last tag's (not written for this release),
-#   - softwareRequirements names a github.com/rsdoiel module at a version go.mod does not require.
+#   - softwareRequirements names a github.com/rsdoiel module at a version go.mod does not require,
+#   - the Go version policy fails (check-go-version).
 check-release: .FORCE
 	@FAIL=0; V="$(VERSION)"; TODAY="$$(date +%Y-%m-%d)"; \
 	bad() { echo "check-release: $$1"; FAIL=1; }; \
@@ -304,6 +336,7 @@ check-release: .FORCE
 		[ -n "$$GM" ] || { bad "softwareRequirements names $$M, which go.mod does not require"; continue; }; \
 		[ "$$GM" = "$$MIN" ] || bad "softwareRequirements says $$M >= $$MIN, go.mod requires v$$GM"; \
 	done; \
+	$(MAKE) -s check-go-version || FAIL=1; \
 	if [ $$FAIL -ne 0 ]; then echo "check-release: v$$V is NOT ready to release"; exit 1; fi; \
 	echo "check-release: v$$V is consistent"
 
