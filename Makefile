@@ -222,36 +222,33 @@ dist/Windows-arm64: $(PROGRAMS)
 	@rm -fR dist/bin
 
 # The semantic kb (semantic-search-plan.md T2) is built from the nested module in
-# semantic/ against the working tree through semantic.work, and needs Go 1.27 (Hugot).
-# The workspace file is not named go.work so that a plain go build in this directory
-# does not see it: its go line (1.27) would otherwise force Go 1.27 on the plain kb.
+# semantic/ against the working tree through go.work, and needs Go 1.27 (Hugot).
 # semantic builds it for this machine; cross-semantic builds it for the six release
 # targets with CGO_ENABLED=0, which is the check that Hugot's pure-Go backend still
 # cross-compiles. Neither is part of `make release` yet: the archives hold the plain
 # kb until the semantic preview ships (plan T12).
-SEMANTIC_WORK = $(CURDIR)/semantic.work
 SEMANTIC_TARGETS = linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
 semantic: .FORCE
 	@mkdir -p bin
-	GOWORK="$(SEMANTIC_WORK)" CGO_ENABLED=0 go build -o "bin/kb-semantic$(EXT)" ./semantic/cmd/kb
+	CGO_ENABLED=0 go build -o "bin/kb-semantic$(EXT)" ./semantic/cmd/kb
 
 # test-semantic runs the nested module's tests against the working tree.
 test-semantic: .FORCE
-	cd semantic && GOWORK="$(SEMANTIC_WORK)" go vet ./... && GOWORK="$(SEMANTIC_WORK)" go test ./...
+	cd semantic && go vet ./... && go test ./...
 
 # eval-semantic runs the labelled-query evaluation (semantic plan T9) with the real
 # model on a copy of KB_EVAL_DB, never from the test cache: the database, its index
 # and the model are outside the module, so the cache cannot see them change.
 eval-semantic: .FORCE
-	cd semantic && GOWORK="$(SEMANTIC_WORK)" go test -count=1 -run TestEval -v .
+	cd semantic && go test -count=1 -run TestEval -v .
 
 cross-semantic: .FORCE
 	@mkdir -p bin/semantic-cross
 	@for T in $(SEMANTIC_TARGETS); do \
 		OS="$${T%/*}"; ARCH="$${T#*/}"; EXE=""; [ "$$OS" = windows ] && EXE=".exe"; \
 		echo "semantic kb for $$OS/$$ARCH"; \
-		GOWORK="$(SEMANTIC_WORK)" CGO_ENABLED=0 GOOS=$$OS GOARCH=$$ARCH go build -o "bin/semantic-cross/kb-$$OS-$$ARCH$$EXE" ./semantic/cmd/kb || exit 1; \
+		CGO_ENABLED=0 GOOS=$$OS GOARCH=$$ARCH go build -o "bin/semantic-cross/kb-$$OS-$$ARCH$$EXE" ./semantic/cmd/kb || exit 1; \
 	done
 
 distribute_docs:
@@ -311,7 +308,7 @@ check-release: .FORCE
 	echo "check-release: v$$V is consistent"
 
 # check-semantic-tag checks that the nested module can be tagged semantic/v$(VERSION) and
-# installed from the proxy, without go.work or semantic.work. It writes nothing here and
+# installed from the proxy, without go.work. It writes nothing here and
 # needs the network. The root and nested modules carry the same version number, and the
 # root tag goes first. It fails when
 #   - semantic/go.mod requires the root module at a version other than v$(VERSION),

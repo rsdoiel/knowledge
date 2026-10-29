@@ -59,7 +59,7 @@ href="INSTALL_NOTES_Windows.html">INSTALL_NOTES_Windows.md</a></li>
 <h2 id="installing-from-source">Installing from source</h2>
 <h3 id="required-software">Required software</h3>
 <ul>
-<li>Go &gt;= 1.26.3</li>
+<li>Go &gt;= 1.27.0</li>
 </ul>
 <h3 id="steps">Steps</h3>
 <ol type="1">
@@ -79,15 +79,19 @@ plain one registers no embedder. The semantic build is not yet in the
 release archives; build it from source.</p>
 <h3 id="required-software-1">Required software</h3>
 <ul>
-<li>Go &gt;= 1.27 (the embedding library needs it; the plain
-<code>kb</code> still builds with the Go above)</li>
+<li>Go &gt;= 1.27.0 (the embedding library needs it, and so does the
+plain <code>kb</code>)</li>
 <li>No C compiler, and no shared libraries: the build is pure Go
 (<code>CGO_ENABLED=0</code>)</li>
 </ul>
 <h3 id="steps-1">Steps</h3>
 <pre class="shell"><code>git clone https://github.com/rsdoiel/knowledge
 cd knowledge
-make semantic            # builds bin/kb-semantic through semantic.work</code></pre>
+make semantic            # builds bin/kb-semantic through go.work</code></pre>
+<p><code>make test-semantic</code> runs the nested module’s tests.
+<code>go.work</code> joins the nested module to the working tree, so
+<code>go</code> run inside <code>semantic/</code> sees your changes to
+the root module.</p>
 <p>Put <code>bin/kb-semantic</code> on your path as <code>kb</code> (or
 beside it). Then, in a workspace:</p>
 <pre class="shell"><code>kb init                  # keeps a workspace model and the index out of git

@@ -32,7 +32,7 @@ Installing from source
 
 ### Required software
 
-- Go >= 1.26.3
+- Go >= 1.27.0
 
 ### Steps
 
@@ -55,7 +55,7 @@ Semantic search (`kb search -semantic`, `-hybrid`) needs a separate build of `kb
 
 ### Required software
 
-- Go >= 1.27 (the embedding library needs it; the plain `kb` still builds with the Go above)
+- Go >= 1.27.0 (the embedding library needs it, and so does the plain `kb`)
 - No C compiler, and no shared libraries: the build is pure Go (`CGO_ENABLED=0`)
 
 ### Steps
@@ -63,10 +63,10 @@ Semantic search (`kb search -semantic`, `-hybrid`) needs a separate build of `kb
 ~~~shell
 git clone https://github.com/rsdoiel/knowledge
 cd knowledge
-make semantic            # builds bin/kb-semantic through semantic.work
+make semantic            # builds bin/kb-semantic through go.work
 ~~~
 
-`make test-semantic` runs the nested module's tests. The workspace file is `semantic.work`, not `go.work`, so a plain `go build` here needs only Go 1.26; to use `go` directly on the nested module, set `GOWORK=$PWD/semantic.work`.
+`make test-semantic` runs the nested module's tests. `go.work` joins the nested module to the working tree, so `go` run inside `semantic/` sees your changes to the root module.
 
 Put `bin/kb-semantic` on your path as `kb` (or beside it). Then, in a workspace:
 

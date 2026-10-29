@@ -31,6 +31,11 @@ and behaves as before; `kb search TERM` output is byte-identical (a golden-file 
 - **`internal/evalset`** and `semantic/eval_test.go`: 34 labelled queries and a harness that reports recall at 5 and 10 and mean
   reciprocal rank for lexical, semantic and hybrid, and guards the measured numbers.
 
+### Changed
+
+- **Building from source needs Go 1.27.0 or later** (was 1.26.4): the root `go.mod`, `codemeta.json`, README and INSTALL agree with the
+  nested module, whose embedding library requires it. Released binaries are unaffected.
+
 ### Measured (Raspberry Pi 5, 4 cores, 16 GB; a copy of this workspace's database, 893 rows, 4,137 passages)
 
 - First index 14 to 17 minutes (about 5 passages a second), up to 875 MB resident; a repeat run 146 ms; a search about 0.5 s. On a Mac Mini (macOS arm64) the first index takes 5 minutes 37 seconds, up to 1.0 GB resident, a search 0.2 s.
