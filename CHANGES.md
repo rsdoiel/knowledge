@@ -36,7 +36,7 @@ and behaves as before; `kb search TERM` output is byte-identical (a golden-file 
 - First index 14 to 17 minutes (about 5 passages a second), up to 875 MB resident; a repeat run 146 ms; a search about 0.5 s.
 - On the 34 labelled queries (written and labelled by the model that wrote the search, and corrected once after the author looked over
   where it disagreed, so indicative): plain search recall@10 0.15, MRR 0.11; `-semantic` 0.88 and 0.82; `-hybrid` about the same as
-  `-semantic`. 400-character passages beat 200 and 800 (measured on the labels before that correction).
+  `-semantic`. 400-character passages beat 200 and 800 on recall@10 and MRR, re-measured on the corrected labels (800 is 0.03 better at recall@5).
 - `-hybrid` does not rank better than `-semantic` on this set; it keeps exact-word matches inside a search by meaning.
 
 ### Known limits
