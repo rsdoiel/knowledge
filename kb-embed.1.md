@@ -24,9 +24,9 @@ build of kb and an installed model (kb-model(1)); the plain build
 has no embedder and exits 2.
 
 Semantic search is a preview in this release. Measured on a Raspberry Pi 5 (4
-cores, 16 GB) over a copy of this workspace's knowledge base, 893 rows in about
-4,100 passages: the first index took 14 to 17 minutes (about 5 passages a
-second) and used up to 875 MB of memory; running embed again with nothing
+cores, 16 GB) over a copy of this workspace's knowledge base, 947 rows in about
+4,400 passages: the first index took about 16 minutes (about 4.7 passages a
+second) and used up to 1.2 GB of memory; running embed again with nothing
 changed took a fraction of a second. A search takes about half a second,
 mostly loading the model. The semantic kb is about 33 MB against 21 MB for
 the plain one, and the model is about 87 MB. Another machine will differ.

@@ -17,13 +17,13 @@
   Not investigated: why the program's layout width differs under `tmux-256color` when the pty has no size set; the author
   uses the interface under tmux and it works, so this is low priority, but the emulator may be missing a sequence tmux terminals
   produce.
-- [ ] **Draft an upstream issue for Hugot** (`knights-analytics/hugot`, not filed; the author files it). v0.8.3's pure-Go
-  backend ignores `WithGoMLXBatchBuckets` and `WithGoMLXSequenceBuckets` (padding is applied only when the runtime is XLA,
-  `backends/backend.go`), keeps one compiled executable per distinct (batch, sequence length) for the life of the session,
-  and errors once a configured cache limit is reached. A 893-row index of length-sorted batches reached 14.2 GB resident and
-  was OOM-killed on a 16 GB Pi 5. Our workaround is in `semantic/embedder.go` (`maxShapes`). Evidence: kb observation 537,
-  `agents/projects/knowledge/plans/semantic-search-plan.md` T7 notes, `TestEmbedBoundsTheShapesItKeepsCompiled`. Model the
-  draft on `tmp/hugot-spike/gomlx-issue-draft.md`. Added 2026-10-28.
+- [x] **Hugot's pure-Go backend kept one executable per input shape** (OOM-killed a 893-row first index at 14.2 GB on a 16 GB
+  Pi 5). Filed by the author 2026-10-29 as `knights-analytics/hugot#154`; fixed upstream in Hugot v0.8.5 (dynamic axes, with a
+  padding fallback). Verified 2026-10-30: the issue's reproduction stays at 643 MB over 100 new lengths, and a real first index
+  of 947 rows (4,380 passages) in one session took 15 min 36 s and peaked at 1,190 MB, against 19 min 46 s and 868 MB with the
+  replace-every-four-shapes workaround. The workaround (`maxShapes`) is removed from `semantic/embedder.go`; the test is now
+  `TestEmbedHoldsMemoryAcrossNewShapes`. The author posted the numbers on the issue. Evidence: kb observation 537 (corrected),
+  `tmp/hugot-issue/v085/`, `tmp/kb-bench/results.txt`.
 - [x] **An unreadable database file exited 74, not 77.** Fixed 2026-10-28, released in v0.0.28.
 
 - [x] **Four bugs fixed 2026-10-25, released in v0.0.27 (DR-0087, accepted).** (1) *The summary editors held the
@@ -117,6 +117,17 @@
 
 ## Requested features
 
+- [ ] **Bump `gomlx/compute` to v0.1.17 in `semantic/`, then offer the author's Pi 5 benchmark upstream.** v0.1.17 is
+  gomlx/compute#46 (adaptive chunking for the non-SIMD kernels; the maintainer measured it within the noise). Bump, rebuild,
+  rerun `tmp/compute-bench/` (the micro-benchmark behind the #44 thread, now `cmd/ka_microbench` in gomlx/compute) and a first
+  `kb embed`, then post the Pi 5 numbers on gomlx/compute#44 if the maintainer is still collecting them. The author posts.
+  Added 2026-10-30.
+- [ ] **Offer gomlx/compute the author's Pi 5 and Apple Silicon Mac for arm64 NEON SIMD benchmarks.** In the #44 thread the
+  maintainer (Jan Pfeifer) said the missing optimisation for the Pi's Cortex-A76 is arm64 NEON SIMD (it would also help Apple
+  users), that scheduling has little left to give, and that they have no Pi or Mac to develop or benchmark on. 77% of our embed
+  CPU time is the portable matmul kernel (kb observation 524). The author can run benchmarks on `harvey.local` (Pi 5) and
+  `macmini-rd.local` (arm64 Mac) once such a kernel exists; the offer goes in the #44 thread or a new gomlx/compute issue, which
+  the author files. The work is upstream; nothing to build here. Added 2026-10-30.
 - [ ] When using knowledge with a commercial LLM like claude, we have designs and plans that have a status that start as proposed and moves through an approval process. It seems like there should be an approval workflow similar do how decision records are proposed and approved.
 
 - [x] **Foul Papers asks of knowledge: the story foundation (knowledge DR-0075, accepted).** Done 2026-10-17,

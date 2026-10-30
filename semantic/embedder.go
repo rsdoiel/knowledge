@@ -13,8 +13,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
-	"runtime/debug"
 	"sort"
 	"sync"
 
@@ -34,16 +32,6 @@ const maxTokens = 512
 // sorted by length first, so a batch pads to little more than its longest.
 const batchSize = 8
 
-// maxShapes is how many distinct (batch size, sequence length) shapes one
-// session is given before it is replaced. Hugot's pure-Go backend compiles an
-// executable for every new shape and keeps it for the life of the session, about
-// 200 MB each, and its bucketing options apply only to the XLA backend. With
-// length-sorted batches nearly every batch is a new shape, so an unbounded
-// session took a first index of a thousand rows past 14 GB and the kernel's
-// out-of-memory killer ended it. Replacing the session every few shapes bounds
-// the memory; each new shape costs one compile either way.
-const maxShapes = 4
-
 // fingerprintFiles are the files that decide what a vector means.
 var fingerprintFiles = []string{"model.onnx", "tokenizer.json", "config.json"}
 
@@ -58,10 +46,9 @@ var fingerprintFiles = []string{"model.onnx", "tokenizer.json", "config.json"}
 type Hugot struct {
 	dir string
 
-	mu      sync.Mutex // serialises Embed: a replaced session must not be in use
+	mu      sync.Mutex // serialises Embed: the pipeline is not safe for concurrent use
 	session *hugot.Session
 	pipe    *pipelines.FeatureExtractionPipeline
-	shapes  map[[2]int]bool // shapes the current session has compiled
 
 	fpOnce sync.Once
 	fp     string
@@ -160,31 +147,7 @@ func (h *Hugot) load() error {
 		session.Destroy()
 		return fmt.Errorf("loading model %s: %w", h.dir, err)
 	}
-	h.session, h.pipe, h.shapes = session, pipe, map[[2]int]bool{}
-	return nil
-}
-
-// release drops the session and the executables it compiled.
-func (h *Hugot) release() {
-	if h.session != nil {
-		h.session.Destroy()
-	}
-	h.session, h.pipe, h.shapes = nil, nil, nil
-	runtime.GC()
-	debug.FreeOSMemory()
-}
-
-// admit notes the shape of a batch about to run. A new shape, when the session
-// already holds maxShapes of them, first replaces the session.
-func (h *Hugot) admit(batch, longest int) error {
-	key := [2]int{batch, longest}
-	if h.pipe != nil && !h.shapes[key] && len(h.shapes) >= maxShapes {
-		h.release()
-	}
-	if err := h.load(); err != nil {
-		return err
-	}
-	h.shapes[key] = true
+	h.session, h.pipe = session, pipe
 	return nil
 }
 
@@ -268,7 +231,7 @@ func (h *Hugot) Embed(texts []string) ([][]float32, error) {
 		}
 		// Sorted by length, the last text of a batch is its longest, and so decides
 		// the padded length Hugot compiles for.
-		if err := h.admit(len(batch), items[hi-1].tokens); err != nil {
+		if err := h.load(); err != nil {
 			return nil, err
 		}
 		res, err := h.pipe.RunPipeline(context.Background(), batch)
