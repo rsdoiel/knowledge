@@ -117,6 +117,7 @@
 
 ## Requested features
 
+- [ ] Add a sub verb, relates-to similar to supersede so it makes it easy to update the relationship without resorting to sed
 - [ ] **Bump `gomlx/compute` to v0.1.17 in `semantic/`, then offer the author's Pi 5 benchmark upstream.** v0.1.17 is
   gomlx/compute#46 (adaptive chunking for the non-SIMD kernels; the maintainer measured it within the noise). Bump, rebuild,
   rerun `tmp/compute-bench/` (the micro-benchmark behind the #44 thread, now `cmd/ka_microbench` in gomlx/compute) and a first
