@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/knights-analytics/hugot v0.8.5
-	github.com/rsdoiel/knowledge v0.0.29
+	github.com/rsdoiel/knowledge v0.0.30
 )
 
 require (
