@@ -206,6 +206,13 @@ type Observation struct {
 	Body      string
 	SourceDOI string
 	CreatedAt time.Time
+	// Status is "reviewed" (trusted: searchable, recalled) or "drafted"
+	// (written by a model, invisible until a person promotes it; DR-0090).
+	Status string
+	// GeneratedBy names the drafter of a drafted observation; "" otherwise.
+	GeneratedBy string
+	// Confidence is the drafter's 0 to 1 estimate, or nil when none was given.
+	Confidence *float64
 }
 
 /** Concept represents a named idea or term that can be linked to projects and
@@ -258,6 +265,10 @@ var kbAlterStmts = []string{
 	`ALTER TABLE projects ADD COLUMN origin_host TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE observations ADD COLUMN uuid TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE observations ADD COLUMN origin_host TEXT NOT NULL DEFAULT ''`,
+	// DR-0090: draft-then-promote. Every existing row is trusted.
+	`ALTER TABLE observations ADD COLUMN status TEXT NOT NULL DEFAULT 'reviewed'`,
+	`ALTER TABLE observations ADD COLUMN generated_by TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE observations ADD COLUMN confidence REAL`,
 	`ALTER TABLE concepts ADD COLUMN uuid TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE concepts ADD COLUMN origin_host TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE concepts ADD COLUMN kind TEXT NOT NULL DEFAULT 'other'`,
@@ -986,6 +997,13 @@ func (kb *KnowledgeBase) AddObservation(projectID int64, kind, body string) (int
  *       "This paper found X", "https://doi.org/10.1234/abcd.5678")
  */
 func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, sourceDOI string) (int64, error) {
+	return kb.insertObservation(projectID, kind, body, sourceDOI, "reviewed", "", nil)
+}
+
+// insertObservation is the one writer of the observations table. A reviewed
+// row is indexed in kb_fts; a drafted one is not, and stays out of it until
+// PromoteObservation (DR-0090).
+func (kb *KnowledgeBase) insertObservation(projectID int64, kind, body, sourceDOI, status, by string, confidence *float64) (int64, error) {
 	if !IsValidKind(kind) {
 		return 0, invalidf("knowledge: invalid kind %q; must be one of: %s",
 			kind, strings.Join(ValidObservationKinds, ", "))
@@ -1010,8 +1028,9 @@ func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, s
 	}
 	host, _ := os.Hostname()
 	res, err := kb.db.Exec(
-		`INSERT INTO observations (project_id, kind, body, uuid, origin_host) VALUES (?, ?, ?, ?, ?)`,
-		projectID, kind, body, u.String(), host,
+		`INSERT INTO observations (project_id, kind, body, uuid, origin_host, status, generated_by, confidence)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		projectID, kind, body, u.String(), host, status, by, confidence,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add observation: %w", err)
@@ -1025,7 +1044,7 @@ func (kb *KnowledgeBase) AddObservationWithSource(projectID int64, kind, body, s
 			return 0, err
 		}
 	}
-	if kb.ftsAvailable {
+	if status == "reviewed" && kb.ftsAvailable {
 		_, _ = kb.db.Exec(
 			`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
 			 VALUES (?, ?, '', '', 'observation', ?, ?)`,
@@ -1053,7 +1072,7 @@ func (kb *KnowledgeBase) Observations(projectID int64) ([]Observation, error) {
 	rows, err := kb.db.Query(
 		`SELECT id, project_id, kind, body, source_doi, created_at
 		 FROM   observations
-		 WHERE  project_id = ?
+		 WHERE  project_id = ? AND status = 'reviewed'
 		 ORDER  BY created_at DESC`,
 		projectID,
 	)
@@ -1096,14 +1115,19 @@ func (kb *KnowledgeBase) Observations(projectID int64) ([]Observation, error) {
 func (kb *KnowledgeBase) ObservationByID(id int64) (*Observation, error) {
 	var o Observation
 	var ts string
+	var conf sql.NullFloat64
 	err := kb.db.QueryRow(
-		`SELECT id, project_id, kind, body, source_doi, created_at
+		`SELECT id, project_id, kind, body, source_doi, created_at, status, generated_by, confidence
 		 FROM   observations
 		 WHERE  id = ?`,
 		id,
-	).Scan(&o.ID, &o.ProjectID, &o.Kind, &o.Body, &o.SourceDOI, &ts)
+	).Scan(&o.ID, &o.ProjectID, &o.Kind, &o.Body, &o.SourceDOI, &ts, &o.Status, &o.GeneratedBy, &conf)
 	if err != nil {
 		return nil, err
+	}
+	if conf.Valid {
+		v := conf.Float64
+		o.Confidence = &v
 	}
 	o.CreatedAt = parseTimestamp(ts)
 	return &o, nil
@@ -1690,7 +1714,7 @@ func (kb *KnowledgeBase) recentObservations(projectID int64, n int) ([]Observati
 	rows, err := kb.db.Query(
 		`SELECT id, project_id, kind, body, source_doi, created_at
 		 FROM   observations
-		 WHERE  project_id = ?
+		 WHERE  project_id = ? AND status = 'reviewed'
 		 ORDER  BY created_at DESC
 		 LIMIT  ?`,
 		projectID, n,
@@ -1844,7 +1868,7 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 	}
 	if _, err := kb.db.Exec(`
 		INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
-		SELECT body, kind, '', '', 'observation', id, project_id FROM observations`); err != nil {
+		SELECT body, kind, '', '', 'observation', id, project_id FROM observations WHERE status = 'reviewed'`); err != nil {
 		return fmt.Errorf("fts rebuild observations: %w", err)
 	}
 	if _, err := kb.db.Exec(`

@@ -79,7 +79,7 @@ const pidExpr = `CAST(COALESCE(NULLIF(kb_fts.project_id, ''), 0) AS INTEGER)`
 // documents with no project.
 const projectSourceIDs = `
 	SELECT os.source_id FROM observation_sources os
-	  JOIN observations o ON o.id = os.observation_id WHERE o.project_id = ?
+	  JOIN observations o ON o.id = os.observation_id WHERE o.status = 'reviewed' AND o.project_id = ?
 	UNION
 	SELECT ds.source_id FROM document_sources ds
 	  JOIN documents d ON d.id = ds.document_id WHERE d.project_id = ?
@@ -101,7 +101,7 @@ const projectConceptIDs = `
 	SELECT concept_id FROM project_concepts WHERE project_id = ?
 	UNION
 	SELECT oc.concept_id FROM observation_concepts oc
-	  JOIN observations o ON o.id = oc.observation_id WHERE o.project_id = ?
+	  JOIN observations o ON o.id = oc.observation_id WHERE o.status = 'reviewed' AND o.project_id = ?
 	UNION
 	SELECT rc.concept_id FROM record_concepts rc
 	  JOIN records r ON r.id = rc.record_id WHERE r.project_id = ?`
@@ -263,7 +263,7 @@ func (kb *KnowledgeBase) fillSourceSpans(out *ScopedSearchResult) error {
 		rows, err := kb.db.Query(`
 			SELECT DISTINCT p.name FROM projects p WHERE p.id IN (
 				SELECT o.project_id FROM observation_sources os JOIN observations o ON o.id = os.observation_id
-				 WHERE os.source_id = ?1
+				 WHERE o.status = 'reviewed' AND os.source_id = ?1
 				UNION
 				SELECT d.project_id FROM document_sources ds JOIN documents d ON d.id = ds.document_id
 				 WHERE ds.source_id = ?1
@@ -389,7 +389,7 @@ func (kb *KnowledgeBase) fillConceptSpans(out *ScopedSearchResult) error {
 				SELECT project_id FROM project_concepts WHERE concept_id = ?1
 				UNION
 				SELECT o.project_id FROM observation_concepts oc JOIN observations o ON o.id = oc.observation_id
-				 WHERE oc.concept_id = ?1
+				 WHERE o.status = 'reviewed' AND oc.concept_id = ?1
 				UNION
 				SELECT r.project_id FROM record_concepts rc JOIN records r ON r.id = rc.record_id
 				 WHERE rc.concept_id = ?1 AND r.project_id IS NOT NULL)

@@ -65,7 +65,8 @@ type Stats struct {
 // statRows, statLinks and statChecks are the counts of Stats, in the order they are reported.
 var statRows = []struct{ name, query string }{
 	{"projects", `SELECT COUNT(*) FROM projects`},
-	{"observations", `SELECT COUNT(*) FROM observations`},
+	{"observations", `SELECT COUNT(*) FROM observations WHERE status = 'reviewed'`},
+	{"observation_drafts", `SELECT COUNT(*) FROM observations WHERE status = 'drafted'`},
 	{"concepts", `SELECT COUNT(*) FROM concepts`},
 	{"sources", `SELECT COUNT(*) FROM sources`},
 	{"records", `SELECT COUNT(*) FROM records`},
@@ -75,10 +76,10 @@ var statRows = []struct{ name, query string }{
 
 var statLinks = []struct{ name, query string }{
 	{"project_concepts", `SELECT COUNT(*) FROM project_concepts`},
-	{"observation_concepts", `SELECT COUNT(*) FROM observation_concepts`},
+	{"observation_concepts", `SELECT COUNT(*) FROM observation_concepts x JOIN observations o ON o.id = x.observation_id WHERE o.status = 'reviewed'`},
 	{"record_concepts", `SELECT COUNT(*) FROM record_concepts`},
 	{"document_section_concepts", `SELECT COUNT(*) FROM document_section_concepts`},
-	{"observation_sources", `SELECT COUNT(*) FROM observation_sources`},
+	{"observation_sources", `SELECT COUNT(*) FROM observation_sources x JOIN observations o ON o.id = x.observation_id WHERE o.status = 'reviewed'`},
 	{"document_sources", `SELECT COUNT(*) FROM document_sources`},
 	{"record_sources", `SELECT COUNT(*) FROM record_sources`},
 	{"observation_relations", `SELECT COUNT(*) FROM observation_relations`},
@@ -86,7 +87,7 @@ var statLinks = []struct{ name, query string }{
 }
 
 var statChecks = []struct{ name, query string }{
-	{"observations_without_project", `SELECT COUNT(*) FROM observations WHERE project_id IS NULL`},
+	{"observations_without_project", `SELECT COUNT(*) FROM observations WHERE status = 'reviewed' AND project_id IS NULL`},
 	{"concepts_without_links", `SELECT COUNT(*) FROM concepts c WHERE
 		NOT EXISTS (SELECT 1 FROM project_concepts WHERE concept_id = c.id)
 		AND NOT EXISTS (SELECT 1 FROM observation_concepts WHERE concept_id = c.id)
@@ -127,13 +128,13 @@ func (kb *KnowledgeBase) Stats() (Stats, error) {
 		}
 	}
 	rows, err := kb.db.Query(`SELECT p.name,
-		(SELECT COUNT(*) FROM observations WHERE project_id = p.id),
+		(SELECT COUNT(*) FROM observations WHERE status = 'reviewed' AND project_id = p.id),
 		(SELECT COUNT(*) FROM records WHERE project_id = p.id),
 		(SELECT COUNT(*) FROM documents WHERE project_id = p.id),
 		(SELECT COUNT(*) FROM (
 			SELECT concept_id FROM project_concepts WHERE project_id = p.id
 			UNION SELECT x.concept_id FROM observation_concepts x
-				JOIN observations o ON o.id = x.observation_id WHERE o.project_id = p.id
+				JOIN observations o ON o.id = x.observation_id WHERE o.status = 'reviewed' AND o.project_id = p.id
 			UNION SELECT x.concept_id FROM record_concepts x
 				JOIN records r ON r.id = x.record_id WHERE r.project_id = p.id))
 		FROM projects p ORDER BY p.name`)

@@ -127,7 +127,7 @@ func (kb *KnowledgeBase) ConceptDetail(name string, limit int) (ConceptDetailRes
 		{&d.Observations, `SELECT o.id, IFNULL(p.name, ''), '', o.body, o.created_at
 			FROM observations o JOIN observation_concepts x ON x.observation_id = o.id
 			LEFT JOIN projects p ON p.id = o.project_id
-			WHERE x.concept_id = ? ORDER BY o.created_at DESC, o.id DESC LIMIT ?`},
+			WHERE o.status = 'reviewed' AND x.concept_id = ? ORDER BY o.created_at DESC, o.id DESC LIMIT ?`},
 		{&d.Records, `SELECT r.id, IFNULL(p.name, ''), r.title, r.body, r.ingested_at
 			FROM records r JOIN record_concepts x ON x.record_id = r.id
 			LEFT JOIN projects p ON p.id = r.project_id
@@ -183,7 +183,7 @@ func (kb *KnowledgeBase) conceptSpans(id int64) ([]ConceptSpan, error) {
 		{`SELECT p.name, 1 FROM projects p JOIN project_concepts x ON x.project_id = p.id WHERE x.concept_id = ?`,
 			func(s *ConceptSpan, n int) { s.Tagged = true }},
 		{`SELECT p.name, COUNT(*) FROM observations o JOIN observation_concepts x ON x.observation_id = o.id
-			JOIN projects p ON p.id = o.project_id WHERE x.concept_id = ? GROUP BY p.name`,
+			JOIN projects p ON p.id = o.project_id WHERE o.status = 'reviewed' AND x.concept_id = ? GROUP BY p.name`,
 			func(s *ConceptSpan, n int) { s.Observations = n }},
 		{`SELECT p.name, COUNT(*) FROM records r JOIN record_concepts x ON x.record_id = r.id
 			JOIN projects p ON p.id = r.project_id WHERE x.concept_id = ? GROUP BY p.name`,

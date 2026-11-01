@@ -149,7 +149,7 @@ func (kb *KnowledgeBase) RecallByNames(names []string, limit int, project string
 			query: `SELECT o.id, IFNULL(o.project_id, 0), IFNULL(p.name, ''), o.body, o.created_at, x.concept_id
 				FROM observations o JOIN observation_concepts x ON x.observation_id = o.id
 				LEFT JOIN projects p ON p.id = o.project_id
-				WHERE x.concept_id IN (` + in + `)%s ORDER BY o.id`,
+				WHERE o.status = 'reviewed' AND x.concept_id IN (` + in + `)%s ORDER BY o.id`,
 			scan: func(rows *sql.Rows) (int64, int64, TextRecallHit, error) {
 				var h TextRecallHit
 				var ts string

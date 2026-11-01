@@ -123,7 +123,7 @@ func (kb *KnowledgeBase) RecallByConceptNames(names []string, limit int) ([]Conc
 		SELECT o.id, o.project_id, o.body, o.created_at, COUNT(DISTINCT oc.concept_id) AS match_count
 		FROM observations o
 		JOIN observation_concepts oc ON oc.observation_id = o.id
-		WHERE oc.concept_id IN (%s)
+		WHERE o.status = 'reviewed' AND oc.concept_id IN (%s)
 		GROUP BY o.id`, placeholders), args...)
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: recall observations by concept: %w", err)
