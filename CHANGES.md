@@ -3,6 +3,52 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.30 — 2026-11-01
+
+A prerelease: observations can be drafted for a person to review. Decision: DR-0090; plan:
+`agents/projects/knowledge/plans/observation-draft-then-promote-plan.md` (K0 to K8). Not run under the race detector.
+
+A model such as harvey can record what it thinks is worth keeping without that reaching a later prompt. A draft is stored
+with a status, who drafted it and an optional confidence, and stays out of search and recall until a person promotes it
+at a terminal.
+
+### Added
+
+- **`kb observation add --draft --by WHO [--confidence N]`** records a draft (`--json` prints `{"id": N, "status": "drafted"}`).
+  `--by` and `--confidence` without `--draft`, a blank or multi-line `--by`, a confidence outside 0 to 1, and `--source-doi`
+  with `--draft` are exit 2 and write nothing.
+- **`kb observation list --status reviewed|drafted|all`**; the default stays reviewed, which is what harvey's fallback reads.
+  JSON rows gain `Status`, `GeneratedBy` and `Confidence`. `observation show` reports the drafter.
+- **`kb observation review list [--project P]` and `review promote ID`.** Promote exits 2 unless standard input and output are
+  a terminal (DR-0070), checked before the id is looked up; not a draft or no such id is exit 1. A draft is rejected with
+  `observation delete`, which needs no terminal.
+- **`kb stats` counts drafts** (`observation_drafts`); the `observations` row, the per-project counts and the
+  `observation_concepts` and `observation_sources` link counts count reviewed observations only.
+- **Library:** `AddObservationDraft`, `PromoteObservation`, `ObservationReviewQueue`, `ObservationsByStatus`; `Observation`
+  gains `Status`, `GeneratedBy` and `Confidence`.
+
+### Changed
+
+- **A draft is hidden everywhere an observation is read:** `kb search`, `kb concept recall` and `RecallByText`, retrieval,
+  `kb concept show`, `kb summary`, the Markdown view, scoped search (a project's concepts and sources and their spans) and the
+  semantic index (which is built from the search index). `observation_sites_test.go` lists every file that reads the
+  observations table and fails when a new one appears without a decision.
+- **Updating a draft gives a draft** by the same drafter, with no confidence; updating a reviewed observation gives a reviewed
+  one. A draft that a newer observation supersedes leaves the review queue and `list --status drafted`.
+- **Drafts travel as `observation_draft`** in `kb export`, `import`, `merge` and `check-db`. A reviewed observation exports
+  exactly as before. Importing an observation that the database holds as a draft promotes it; a draft never downgrades a
+  reviewed row; a merge that meets a draft and the reviewed copy keeps reviewed; a status difference is drift.
+- **The database gains `status`, `generated_by` and `confidence`** on `observations` on first open; every existing row is
+  `reviewed`.
+
+### Known limits
+
+- **A concept or source that only a draft links still travels** as an ordinary row, and a kb that predates this release
+  imports it and finds it in `kb search`. The draft's text and its links do not travel (v0.0.29 skips them, exit 0, checked).
+- A draft's concept and source links are counted by `concepts_without_links` and `sources_without_links`, so a concept that only
+  a draft links is not reported as an orphan.
+- Not run under the race detector (macmini-rd.local was offline); the suite passes without `-race` on a Raspberry Pi 5.
+
 ## v0.0.29 — 2026-10-29
 
 Offline semantic search (preview).

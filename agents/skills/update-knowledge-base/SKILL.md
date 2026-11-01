@@ -18,8 +18,8 @@ description: |
 compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
-  version: 0.9.0
-  kb_version: 0.0.29
+  version: 0.10.0
+  kb_version: 0.0.30
 variables:
   DB_PATH:
     type: string
@@ -27,7 +27,7 @@ variables:
     example: "agents/knowledge.db"
   ACTION:
     type: string
-    description: "What to add or change: project | observation | observation-update | concept | concept-suggest | concept-show | concept-recall | source | record | record-fuzzy-tag | document | document-draft | document-promote | document-tag | document-fuzzy-tag | document-frontmatter | project-rename | concept-rename | concept-delete | link-project-concept | link-observation-concept | link-observation-source | project-delete | observation-delete | document-delete | record-delete | unlink"
+    description: "What to add or change: project | observation | observation-draft | observation-promote | observation-update | concept | concept-suggest | concept-show | concept-recall | source | record | record-fuzzy-tag | document | document-draft | document-promote | document-tag | document-fuzzy-tag | document-frontmatter | project-rename | concept-rename | concept-delete | link-project-concept | link-observation-concept | link-observation-source | project-delete | observation-delete | document-delete | record-delete | unlink"
     example: "observation"
 ---
 
@@ -118,6 +118,11 @@ rejects the forms below, and some of them would fail without a word under a
   EXIT STATUS section (`kb help VERB`), and an unreadable database file now exits 77, not 74.
   Report either as a failure; neither changes what a command does.
 - **v0.0.29 (nothing here needs it; the minimum stays 0.0.19):** the semantic search preview adds `kb search -semantic`, `kb model` and `kb embed` to a separate build; the plain `kb` and every verb this skill uses behave as before, so ignore them here.
+- **v0.0.30 (needed for `observation-draft` and `observation-promote`; the minimum for everything else stays 0.0.19):** an
+  observation can be recorded as a draft (`kb observation add --draft --by WHO`) that stays out of search, recall, `kb summary`,
+  the counts and the default `observation list` until a person promotes it at a terminal (`kb observation review promote ID`,
+  exit 2 without one). A model uses `observation-draft`, never `observation`, for what it decided to keep itself; it never
+  promotes. `observation list --status drafted` and `observation review list` show what is waiting.
 
 ---
 
@@ -134,6 +139,8 @@ rejects the forms below, and some of them would fail without a word under a
 |-------------------------------|---------------------------------------------------------------------|
 | `project`                    | Adds a row to `projects` (`kb project add`)                        |
 | `observation`                | Adds a row to `observations` for a named project (`kb observation add`) |
+| `observation-draft`          | Records an observation as a draft that stays out of search and recall until a person promotes it (`kb observation add --draft --by`, kb >= v0.0.30) |
+| `observation-promote`        | Makes a draft observation reviewed, searchable and recalled: the person runs it at a terminal (`kb observation review promote`, kb >= v0.0.30) |
 | `observation-update`         | Corrects an observation by superseding it, never in place (`kb observation update`) |
 | `concept`                    | Adds a row to `concepts` (`kb concept add`)                        |
 | `concept-suggest`            | Proposes candidate *new* concepts from the corpus, read-only (`kb concept suggest`) |
@@ -230,6 +237,8 @@ If `ACTION` is not set, ask the user:
 > 23. set a concept's kind (kb >= v0.0.24)
 > 24. read a writing project's story: timeline, check, who knows what (read-only, kb >= v0.0.24)
 > 25. record that a document or decision record cites a source (kb >= v0.0.25)
+> 26. record an observation as a draft for a person to review (kb >= v0.0.30)
+> 27. promote a draft observation (the person runs this at a terminal, kb >= v0.0.30)
 
 ---
 
@@ -271,6 +280,47 @@ Prompt for:
 ```bash
 "$KB" --db "$DB_PATH" observation add --project "PROJECT_NAME" "KIND" "BODY"
 ```
+
+---
+
+### ACTION = observation-draft
+
+Use this instead of `observation` when a model, not a person, decided the
+observation was worth keeping. A draft is stored but is not searchable, not
+recalled, not in `kb summary` or the counts and not in `kb observation list`
+until a person promotes it; that is what keeps a model's guess out of a later
+prompt (knowledge DR-0090).
+
+Prompt for the same `PROJECT_NAME`, `KIND` and `BODY` as `observation`, plus:
+- `WHO` — who drafted it, one line, e.g. `claude-sonnet-5-5`
+- Optionally `CONFIDENCE` — a number in `[0, 1]`
+
+```bash
+"$KB" --db "$DB_PATH" observation add --project "PROJECT_NAME" --draft --by "WHO" --confidence "CONFIDENCE" "KIND" "BODY"
+```
+
+`--source-doi` is not allowed on a draft; link the source after it is promoted.
+`observation list --status drafted` and `observation review list` show the
+drafts waiting. Updating a draft (`observation-update`) gives a draft again.
+To reject one, `observation delete ID`, which needs no terminal.
+
+---
+
+### ACTION = observation-promote
+
+Promotion is what makes a draft trusted, searchable and recalled into a
+prompt — a person's act, never automatic. `observation review promote` exits 2
+unless standard input and output are a terminal, with no flag or environment
+variable to turn that off. Do not try to work around it, and the `!` prefix
+does not help (a bang line has no terminal). Show the queue, name the draft,
+and tell the user to run the command in a normal shell:
+
+```bash
+"$KB" --db "$DB_PATH" observation review list      # what is waiting
+kb observation review promote ID                   # the user runs this
+```
+
+Fails (exit 1) if the observation is not a draft or does not exist.
 
 ---
 

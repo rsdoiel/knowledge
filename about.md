@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.29
+version: 0.0.30
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,15 +33,15 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-10-29
+date_released: 2026-11-01
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.29
+## knowledge 0.0.30
 
-Offline semantic search (preview). A separate semantic build of kb (make semantic, or go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29; Go 1.27.3 or later) finds rows by meaning with no daemon and no network after the model is fetched. New: kb search -semantic and -hybrid with -min-score (rows ranked by their best 400-character passage, shown with score and passage; exits 1 nothing above the cutoff, 65 index from another model, 66 no model or index, 75 index being built); kb model install|fetch|list for the all-MiniLM-L6-v2 embedding model (Apache-2.0, about 87 MB, checked against recorded SHA-256 sums); kb embed (-status, -rebuild) to build and refresh the index, interruptible and resumable; write verbs keep an existing index current; kb init keeps the model and index out of git; Tab in the interface search prompt cycles words, meaning and both. The plain kb is unchanged and kb search TERM output is byte-identical, proven by a golden-file test. Measured on 34 labelled queries (indicative): plain search recall@10 0.15, -semantic 0.88 with MRR 0.82; the default cutoff is 0.35. First index about 16 minutes on a Raspberry Pi 5 and 5.6 minutes on a Mac Mini (macOS arm64); a search takes 0.2 to 0.5 seconds. Run for real on linux/arm64 and macOS arm64; built but not run on linux/macOS amd64 and Windows. The release archives still hold the plain kb; build the semantic one from source. Building from source now needs Go 1.27.3 or later, and make check-release enforces that the go.mod, codemeta.json and nested module agree (make check-go-version). The test suite no longer needs GNU Make 4 (macOS ships 3.81).
+Prerelease. Observations can be drafted for a person to review (DR-0090). A draft is stored with a status, the drafter and an optional confidence, and is invisible to search, concept recall, retrieval, kb summary, the counts and the default observation list until a person promotes it; every place that reads observations is filtered, and a test fails when a new one is added without a decision. New: kb observation add --draft --by WHO [--confidence N]; kb observation list --status reviewed|drafted|all; kb observation review list and kb observation review promote ID, which exits 2 unless standard input and output are a terminal, so a model can draft and cannot promote; updating a draft gives a draft; kb stats counts drafts separately. Drafts travel as their own record type (observation_draft) so an older kb skips them instead of reading them as trusted (checked against v0.0.29); an observation promoted on one machine promotes the draft on another at import, a draft never downgrades a reviewed row, and a merge keeps reviewed. Existing databases migrate with every observation reviewed. Not yet run under the race detector (a prerelease).
 
 ## Authors
 
