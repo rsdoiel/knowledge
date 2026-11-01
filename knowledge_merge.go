@@ -428,17 +428,28 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 		}
 	}
 
-	const obsCols = "kind, body, created_at, source_doi, uuid, origin_host"
+	const obsCols = "kind, body, created_at, source_doi, uuid, origin_host, status, generated_by, confidence"
 	for _, src := range []string{"a", "b"} {
 		if _, err := db.Exec(fmt.Sprintf(`
 			INSERT OR IGNORE INTO observations (project_id, %s)
-			SELECT mp.id, o.kind, o.body, o.created_at, o.source_doi, o.uuid, o.origin_host
+			SELECT mp.id, o.kind, o.body, o.created_at, o.source_doi, o.uuid, o.origin_host, o.status, o.generated_by, o.confidence
 			FROM %s.observations o
 			JOIN %s.projects sp ON sp.id = o.project_id
 			JOIN projects mp ON mp.uuid = sp.uuid`,
 			obsCols, src, src,
 		)); err != nil {
 			return nil, fmt.Errorf("knowledge: merge observations from %s: %w", src, err)
+		}
+	}
+	// Reviewed wins (DR-0090): INSERT OR IGNORE kept whichever copy came first,
+	// so a draft on one side and the same observation reviewed on the other
+	// must end up reviewed, whichever side was read first.
+	for _, src := range []string{"a", "b"} {
+		if _, err := db.Exec(fmt.Sprintf(`
+			UPDATE observations SET status = 'reviewed'
+			WHERE status = 'drafted'
+			  AND uuid IN (SELECT uuid FROM %s.observations WHERE status = 'reviewed')`, src)); err != nil {
+			return nil, fmt.Errorf("knowledge: merge observation status from %s: %w", src, err)
 		}
 	}
 

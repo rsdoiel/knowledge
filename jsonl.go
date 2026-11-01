@@ -17,6 +17,7 @@ const (
 	recConcept                = "concept"
 	recSource                 = "source"
 	recObservation            = "observation"
+	recObservationDraft       = "observation_draft"
 	recObservationConcept     = "observation_concept"
 	recObservationRelation    = "observation_relation"
 	recProjectConcept         = "project_concept"
@@ -89,6 +90,13 @@ type observationRecord struct {
 	Body        string `json:"body"`
 	SourceDOI   string `json:"source_doi"`
 	CreatedAt   string `json:"created_at"`
+
+	// Status, GeneratedBy and Confidence are set only on an observation_draft
+	// line (DR-0090). A reviewed observation leaves them out, so it is exactly
+	// the line an older kb wrote and reads.
+	Status      string   `json:"status,omitempty"`
+	GeneratedBy string   `json:"generated_by,omitempty"`
+	Confidence  *float64 `json:"confidence,omitempty"`
 }
 
 // observationConceptRecord is the JSON-L shape of one observation_concepts
@@ -651,7 +659,8 @@ func exportSources(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID 
 }
 
 func exportObservations(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
-	query := `SELECT o.id, o.uuid, o.origin_host, p.uuid, o.kind, o.body, o.source_doi, o.created_at
+	query := `SELECT o.id, o.uuid, o.origin_host, p.uuid, o.kind, o.body, o.source_doi, o.created_at,
+	                 o.status, o.generated_by, o.confidence
 	          FROM observations o
 	          JOIN projects p ON p.id = o.project_id`
 	args := []any{}
@@ -667,9 +676,21 @@ func exportObservations(kb *KnowledgeBase, enc *json.Encoder, scoped bool, proje
 	defer rows.Close()
 	for rows.Next() {
 		var id int64
+		var status, by string
+		var conf sql.NullFloat64
 		r := observationRecord{Type: recObservation}
-		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.ProjectUUID, &r.Kind, &r.Body, &r.SourceDOI, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&id, &r.UUID, &r.OriginHost, &r.ProjectUUID, &r.Kind, &r.Body, &r.SourceDOI, &r.CreatedAt,
+			&status, &by, &conf); err != nil {
 			return fmt.Errorf("knowledge: export observations: %w", err)
+		}
+		if status == "drafted" {
+			// A draft is its own record type so an older kb skips it as unknown
+			// instead of reading it as a trusted observation.
+			r.Type, r.Status, r.GeneratedBy = recObservationDraft, status, by
+			if conf.Valid {
+				v := conf.Float64
+				r.Confidence = &v
+			}
 		}
 		if err := enc.Encode(r); err != nil {
 			return fmt.Errorf("knowledge: export observations: %w", err)
@@ -890,6 +911,7 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		concepts                []conceptRecord
 		sources                 []sourceRecord
 		observations            []observationRecord
+		observationDrafts       []observationRecord
 		obsConcepts             []observationConceptRecord
 		obsRelations            []observationRelationRecord
 		projConcepts            []projectConceptRecord
@@ -955,6 +977,12 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
 			}
 			observations = append(observations, rec)
+		case recObservationDraft:
+			var rec observationRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return nil, fmt.Errorf("knowledge: import: line %d: %w", lineNo, err)
+			}
+			observationDrafts = append(observationDrafts, rec)
 		case recObservationConcept:
 			var rec observationConceptRecord
 			if err := json.Unmarshal(line, &rec); err != nil {
@@ -1164,6 +1192,27 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 		isNew, warning, err := importObservation(kb, rec, localProjectID)
 		if err != nil {
 			return nil, fmt.Errorf("knowledge: import observation %q: %w", rec.UUID, err)
+		}
+		if warning != "" {
+			s.Warnings = append(s.Warnings, warning)
+		}
+		if isNew {
+			s.Imported++
+		} else {
+			s.Skipped++
+		}
+	}
+
+	s = summaryFor(recObservationDraft)
+	for _, rec := range observationDrafts {
+		localProjectID, ok := resolveLocalID(kb, projectLocalID, "projects", rec.ProjectUUID)
+		if !ok {
+			s.Skipped++
+			continue
+		}
+		isNew, warning, err := importObservationDraft(kb, rec, localProjectID)
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: import observation draft %q: %w", rec.UUID, err)
 		}
 		if warning != "" {
 			s.Warnings = append(s.Warnings, warning)
@@ -1557,8 +1606,16 @@ func importSource(kb *KnowledgeBase, rec sourceRecord) (localID int64, isNew boo
 // dump, and rewriting it made CompareToJSONL report a false divergence.
 func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID int64) (isNew bool, warning string, err error) {
 	var existingID int64
-	err = kb.db.QueryRow(`SELECT id FROM observations WHERE uuid = ?`, rec.UUID).Scan(&existingID)
+	var existingStatus string
+	err = kb.db.QueryRow(`SELECT id, status FROM observations WHERE uuid = ?`, rec.UUID).Scan(&existingID, &existingStatus)
 	if err == nil {
+		// A draft held here that arrives as an observation was promoted
+		// elsewhere: promote it here too (DR-0090). Anything else is first-writer-wins.
+		if existingStatus == "drafted" {
+			if perr := kb.PromoteObservation(existingID); perr != nil {
+				return false, "", perr
+			}
+		}
 		return false, "", nil
 	}
 	if err != sql.ErrNoRows {
@@ -1586,6 +1643,33 @@ func importObservation(kb *KnowledgeBase, rec observationRecord, localProjectID 
 			`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
 			 VALUES (?, ?, '', '', 'observation', ?, ?)`,
 			rec.Body, kind, id, localProjectID)
+	}
+	return true, warning, nil
+}
+
+// importObservationDraft loads an observation_draft line. A uuid already held,
+// drafted or reviewed, is left alone: a draft never downgrades a reviewed row
+// (DR-0090). A new one is stored drafted and is not written to kb_fts.
+func importObservationDraft(kb *KnowledgeBase, rec observationRecord, localProjectID int64) (isNew bool, warning string, err error) {
+	var existingID int64
+	err = kb.db.QueryRow(`SELECT id FROM observations WHERE uuid = ?`, rec.UUID).Scan(&existingID)
+	if err == nil {
+		return false, "", nil
+	}
+	if err != sql.ErrNoRows {
+		return false, "", err
+	}
+	if !IsValidKind(rec.Kind) {
+		warning = fmt.Sprintf("observation draft %s: kind %q is not one of %s; kept as is",
+			rec.UUID, rec.Kind, strings.Join(ValidObservationKinds, ", "))
+	}
+	_, err = kb.db.Exec(
+		`INSERT INTO observations (project_id, kind, body, source_doi, created_at, uuid, origin_host, status, generated_by, confidence)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 'drafted', ?, ?)`,
+		localProjectID, rec.Kind, rec.Body, rec.SourceDOI, rec.CreatedAt, rec.UUID, rec.OriginHost, rec.GeneratedBy, rec.Confidence,
+	)
+	if err != nil {
+		return false, "", err
 	}
 	return true, warning, nil
 }

@@ -215,7 +215,7 @@ var diffQueries = []struct{ table, query string }{
 	{"projects", `SELECT name, name, description || char(31) || status FROM projects`},
 	{"concepts", `SELECT name, name, description || char(31) || identifier_type || char(31) || identifier_value || char(31) || kind FROM concepts`},
 	{"sources", `SELECT uuid, title, title || char(31) || identifier_type || char(31) || identifier_value || char(31) || retracted FROM sources`},
-	{"observations", `SELECT uuid, substr(body, 1, 60), kind || char(31) || body FROM observations`},
+	{"observations", `SELECT uuid, substr(body, 1, 60), kind || char(31) || body || char(31) || status FROM observations`},
 	{"records", `SELECT ` + rkey + `, 'DR-' || r.record_id || ' (' || IFNULL(p.name, 'workspace') || ')', r.checksum
 		FROM records r LEFT JOIN projects p ON p.id = r.project_id`},
 	{"observation_concepts", `SELECT o.uuid || '|' || c.name, substr(o.body, 1, 30) || ' -> ' || c.name, ''
