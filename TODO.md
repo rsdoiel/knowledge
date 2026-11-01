@@ -130,6 +130,26 @@
   `macmini-rd.local` (arm64 Mac) once such a kernel exists; the offer goes in the #44 thread or a new gomlx/compute issue, which
   the author files. The work is upstream; nothing to build here. Added 2026-10-30.
 - [ ] When using knowledge with a commercial LLM like claude, we have designs and plans that have a status that start as proposed and moves through an approval process. It seems like there should be an approval workflow similar do how decision records are proposed and approved.
+- [ ] **Say whether a piece of knowledge is fact, fiction or speculation.** Added 2026-11-01 at the author's request; no
+  design yet. The knowledge base will hold non-fiction, fiction and hypothetical or speculative material side by side,
+  and today nothing tells them apart: an observation, concept or source reads as a claim about the world. A story's
+  invented fact (Foul Papers) and a model's hypothesis (harvey) would be recalled as if they were established findings.
+  Harvey and Foul Papers need different things from it, so settle what each needs before choosing a shape.
+  - **Harvey** recalls into a prompt, where a speculative or fictional item mistaken for a finding is a wrong answer;
+    it needs to filter or label by standing, as `kb concept recall` already carries `RETRACTED:`.
+  - **Foul Papers** works inside an invented world, where the fiction *is* the subject and "true" means "true in the story";
+    it needs to keep a story's facts apart from reality and from other stories (the concept kinds and `story_events`
+    of DR-0075 are the start), without losing the ability to cite real sources for a real-world fact the story leans on.
+  - **Questions to settle in the design:** is this a per-row field (a "standing" or "mode" on observations, concepts,
+    sources, records and documents) or a scope (a project or world a row belongs to)? Is it closed vocabulary
+    (`fact`, `fiction`, `speculation`, perhaps `hypothesis` with a way to record that it was later confirmed or refuted)
+    or open? Does `kb search` and `kb concept recall` default to a standing, and what does harvey ask for? How does a
+    fictional concept that shares a name with a real one (a real city in a novel) stay distinct? What does export,
+    import and merge do with it (see the old-reader rule DR-0090 adopted: an older kb must not read it as a plain fact)?
+  - **Not the same as DR-0090.** Draft/reviewed says whether a *person has reviewed* a row; this says what kind of claim
+    the row *is*. A reviewed row can be fiction and a drafted row can be a fact. Keep them as two columns, and design
+    this one so it can reuse the filter sites DR-0090's guard test (`observation_sites_test.go`) enumerates.
+  - Next step: a feature request in `agents/projects/knowledge/feature_requests/`, then a design and a decision record.
 
 - [x] **Foul Papers asks of knowledge: the story foundation (knowledge DR-0075, accepted).** Done 2026-10-17,
   for v0.0.24. Wikilink alias, story front matter and Fountain boneyards, concept kinds, `story_events`,
