@@ -170,8 +170,9 @@ var verbTable = []verbSpec{
 	}, Flags: []string{"--workspace", "--dir", "--name", "--source"}},
 	{Name: "observation", Summary: "manage observations", Menu: mi("Observations", "notes, findings, decisions, questions", 3, "", "kb observation"), Subverbs: []subverbSpec{
 		leaf("add", classAdditive, mi("New observation…", "record a note, finding or decision", 2, "", "kb observation add --project P KIND BODY")), leaf("list", classRead, mi("Browse", "a project's observations", 1, "", "kb observation list --project P")), sub("show", classRead), sub("update", classChanging),
+		{Name: "review", Subverbs: []subverbSpec{sub("list", classRead), sub("promote", classChanging)}},
 		sub("sources", classRead), sub("delete", classRemoving),
-	}, Flags: []string{"--project", "--source-doi"}},
+	}, Flags: []string{"--project", "--source-doi", "--draft", "--by", "--confidence", "--status"}},
 	{Name: "project", Summary: "manage projects", Menu: mi("Projects", "browse projects, their notes, concepts, records", 1, "", "kb project"), Subverbs: []subverbSpec{
 		leaf("add", classAdditive, mi("New project…", "add a project", 2, "", "kb project add NAME DESCRIPTION")), leaf("list", classRead, mi("Browse", "the project list, with each project's observations, concepts and records", 1, "", "kb project list")),
 		{Name: "show", Class: classRead, ProjectArg: true},

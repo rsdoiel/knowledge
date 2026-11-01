@@ -21,7 +21,7 @@ Run `kb` with no verb to launch the interactive TUI, or `kb help` / `kb -h` to s
 |---|---|---|
 | `init` | [kb-init(1)](kb-init.1.md) | create a new, empty workspace |
 | `project` | [kb-project(1)](kb-project.1.md) | add, list, show, rename projects; set status/description; list a project's concepts |
-| `observation` | [kb-observation(1)](kb-observation.1.md) | add, list, show, update observations; list an observation's sources |
+| `observation` | [kb-observation(1)](kb-observation.1.md) | add, list, show, update observations; draft observations for a person to review and promote; list an observation's sources |
 | `concept` | [kb-concept(1)](kb-concept.1.md) | add, list, rename concepts — including scholarly identifiers (DOI, ORCID, ROR, Fundref) — and `suggest` candidate new ones from the corpus |
 | `link` | [kb-link(1)](kb-link.1.md) | link projects/observations to concepts |
 | `source` | [kb-source(1)](kb-source.1.md) | manage cited sources; check DOIs against Retraction Watch |

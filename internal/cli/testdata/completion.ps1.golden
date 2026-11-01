@@ -68,7 +68,7 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
             'ingest' { @('--root', '--dry-run') }
             'merge' { @('--a', '--b', '--out', '--force') }
             'model' { @('--workspace', '--dir', '--name', '--source') }
-            'observation' { @('--project', '--source-doi') }
+            'observation' { @('--project', '--source-doi', '--draft', '--by', '--confidence', '--status') }
             'project' { @('--status', '--root', '--dry-run') }
             'record' { @('--project', '--status', '--kind', '--trigger', '--initiative', '--since', '--root', '--dir', '--title', '--concept', '--workspace', '--partial', '--dry-run', '--write', '--all') }
             'search' { @('--project') }
@@ -101,7 +101,8 @@ Register-ArgumentCompleter -Native -CommandName kb,kb.exe -ScriptBlock {
                 else { $null }
             }
             'observation' {
-                if ($n -eq 1) { @('add', 'list', 'show', 'update', 'sources', 'delete') }
+                if ($n -eq 1) { @('add', 'list', 'show', 'update', 'review', 'sources', 'delete') }
+                elseif ($n -eq 2 -and $pos[1] -eq 'review') { @('list', 'promote') }
                 else { $null }
             }
             'project' {

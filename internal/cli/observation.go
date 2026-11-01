@@ -16,7 +16,7 @@ func init() {
 
 func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("usage: observation <add|list|show|update|sources|delete> ...")
+		return usageErrorf("usage: observation <add|list|show|update|review|sources|delete> ...")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -28,6 +28,8 @@ func cmdObservation(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, arg
 		return cmdObservationShow(kb, dl, jsonOut, rest, out)
 	case "update":
 		return cmdObservationUpdate(kb, dl, jsonOut, rest, out)
+	case "review":
+		return cmdObservationReview(kb, dl, jsonOut, rest, out)
 	case "sources":
 		return cmdObservationSources(kb, dl, jsonOut, rest, out)
 	case "delete":
@@ -42,12 +44,37 @@ func cmdObservationAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, 
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "project name (required)")
 	sourceDOI := fs.String("source-doi", "", "normalized DOI of the source paper")
+	draft := fs.Bool("draft", false, "record a draft a person must promote (needs --by)")
+	by := fs.String("by", "", "who drafted it, e.g. \"harvey qwen2.5:3b\" (with --draft)")
+	confidence := fs.String("confidence", "", "the drafter's estimate, 0 to 1 (with --draft)")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	rest := fs.Args()
+	const addUsage = "usage: observation add --project NAME [--draft --by WHO [--confidence N]] KIND BODY..."
 	if *project == "" || len(rest) < 2 {
-		return usageErrorf("usage: observation add --project NAME KIND BODY...")
+		return usageErrorf(addUsage)
+	}
+	var conf *float64
+	if *draft {
+		if strings.TrimSpace(*by) == "" || strings.ContainsAny(*by, "\r\n") {
+			return usageErrorf("--draft needs --by WHO, one non-blank line (%s)", addUsage)
+		}
+		if *sourceDOI != "" {
+			return usageErrorf("--source-doi cannot be used with --draft; link the source after the draft is promoted")
+		}
+		if *confidence != "" {
+			c, perr := strconv.ParseFloat(*confidence, 64)
+			if perr != nil || c != c {
+				return usageErrorf("invalid --confidence %q", *confidence)
+			}
+			if c < 0 || c > 1 {
+				return usageErrorf("--confidence must be between 0 and 1, got %v", c)
+			}
+			conf = &c
+		}
+	} else if *by != "" || *confidence != "" {
+		return usageErrorf("--by and --confidence are for a draft; add --draft (%s)", addUsage)
 	}
 	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": *project}, func() (*knowledge.Project, error) {
 		return kb.ProjectByName(*project)
@@ -61,6 +88,22 @@ func cmdObservationAdd(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, 
 	kind := rest[0]
 	body := strings.Join(rest[1:], " ")
 	var id int64
+	if *draft {
+		id, err = logKBCall(dl, "AddObservationDraft", map[string]any{"project_id": p.ID, "kind": kind, "by": *by}, func() (int64, error) {
+			return kb.AddObservationDraft(p.ID, kind, body, *by, conf)
+		})
+		if err != nil {
+			return err
+		}
+		if jsonOut {
+			return printJSON(out, struct {
+				ID     int64  `json:"id"`
+				Status string `json:"status"`
+			}{ID: id, Status: "drafted"})
+		}
+		fmt.Fprintf(out, "observation drafted (id=%d, kind=%s); a person promotes it with: kb observation review promote %d\n", id, kind, id)
+		return nil
+	}
 	if *sourceDOI != "" {
 		id, err = logKBCall(dl, "AddObservationWithSource", map[string]any{"project_id": p.ID, "kind": kind, "source_doi": *sourceDOI}, func() (int64, error) {
 			return kb.AddObservationWithSource(p.ID, kind, body, *sourceDOI)
@@ -86,14 +129,20 @@ func cmdObservationList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 	fs := flag.NewFlagSet("observation list", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "project name (required)")
+	status := fs.String("status", "reviewed", "reviewed, drafted or all")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
-	if err := noExtraArgs(fs, "usage: observation list --project NAME"); err != nil {
+	if err := noExtraArgs(fs, "usage: observation list --project NAME [--status reviewed|drafted|all]"); err != nil {
 		return err
 	}
 	if *project == "" {
-		return usageErrorf("usage: observation list --project NAME")
+		return usageErrorf("usage: observation list --project NAME [--status reviewed|drafted|all]")
+	}
+	switch *status {
+	case "reviewed", "drafted", "all":
+	default:
+		return usageErrorf("invalid --status %q; want reviewed, drafted or all", *status)
 	}
 	p, err := logKBCall(dl, "ProjectByName", map[string]any{"name": *project}, func() (*knowledge.Project, error) {
 		return kb.ProjectByName(*project)
@@ -104,8 +153,8 @@ func cmdObservationList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 	if p == nil {
 		return notFoundf("project %q not found", *project)
 	}
-	obs, err := logKBCall(dl, "Observations", map[string]any{"project_id": p.ID}, func() ([]knowledge.Observation, error) {
-		return kb.Observations(p.ID)
+	obs, err := logKBCall(dl, "ObservationsByStatus", map[string]any{"project_id": p.ID, "status": *status}, func() ([]knowledge.Observation, error) {
+		return kb.ObservationsByStatus(p.ID, *status)
 	})
 	if err != nil {
 		return err
@@ -118,7 +167,11 @@ func cmdObservationList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 		return nil
 	}
 	for _, o := range obs {
-		fmt.Fprintf(out, "%-4d  [%-10s] %s\n", o.ID, o.Kind, o.Body)
+		mark := ""
+		if o.Status == "drafted" {
+			mark = " (draft)"
+		}
+		fmt.Fprintf(out, "%-4d  [%-10s] %s%s\n", o.ID, o.Kind, o.Body, mark)
 	}
 	return nil
 }
@@ -169,6 +222,13 @@ func cmdObservationShow(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool,
 		return printJSON(out, detail)
 	}
 	fmt.Fprintf(out, "[%s] %s\n", o.Kind, o.Body)
+	if o.Status == "drafted" {
+		fmt.Fprintf(out, "  status: drafted by %s", o.GeneratedBy)
+		if o.Confidence != nil {
+			fmt.Fprintf(out, " (confidence %g)", *o.Confidence)
+		}
+		fmt.Fprintln(out)
+	}
 	if o.SourceDOI != "" {
 		fmt.Fprintf(out, "  DOI (legacy): %s\n", o.SourceDOI)
 	}
@@ -203,6 +263,11 @@ func cmdObservationUpdate(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut boo
 		return notFoundf("observation %d not found", id)
 	}
 	newID, err := logKBCall(dl, "AddObservation", map[string]any{"project_id": old.ProjectID, "kind": old.Kind}, func() (int64, error) {
+		if old.Status == "drafted" {
+			// Updating a draft gives a draft by the same drafter; only
+			// promote makes a row trusted (DR-0090 item 6).
+			return kb.AddObservationDraft(old.ProjectID, old.Kind, body, old.GeneratedBy, nil)
+		}
 		return kb.AddObservation(old.ProjectID, old.Kind, body)
 	})
 	if err != nil {
@@ -248,5 +313,106 @@ func cmdObservationSources(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bo
 	for _, s := range sources {
 		fmt.Fprintf(out, "%-4d  %s\n", s.ID, s.Title)
 	}
+	return nil
+}
+
+// cmdObservationReview implements `kb observation review list|promote`.
+func cmdObservationReview(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return usageErrorf("usage: observation review <list|promote> ...")
+	}
+	sub, rest := args[0], args[1:]
+	switch sub {
+	case "list":
+		return cmdObservationReviewList(kb, dl, jsonOut, rest, out)
+	case "promote":
+		return cmdObservationReviewPromote(kb, dl, jsonOut, rest, out)
+	default:
+		return usageErrorf("unknown observation review subverb %q; want list or promote", sub)
+	}
+}
+
+// cmdObservationReviewList implements `kb observation review list
+// [--project P]`: the drafts awaiting a person, oldest first.
+func cmdObservationReviewList(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	var projectName string
+	positional, err := splitFlags(args, map[string]*string{"--project": &projectName}, nil)
+	if err != nil {
+		return err
+	}
+	if len(positional) != 0 {
+		return usageErrorf("usage: observation review list [--project P]")
+	}
+	var projectID int64
+	names := map[int64]string{}
+	if projectName != "" {
+		p, err := kb.ProjectByName(projectName)
+		if err != nil || p == nil {
+			return notFoundf("unknown project %q", projectName)
+		}
+		projectID = p.ID
+	}
+	if ps, err := kb.Projects(); err == nil {
+		for _, p := range ps {
+			names[p.ID] = p.Name
+		}
+	}
+	items, err := logKBCall(dl, "ObservationReviewQueue", map[string]any{"project_id": projectID}, func() ([]knowledge.Observation, error) {
+		return kb.ObservationReviewQueue(projectID)
+	})
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		if items == nil {
+			items = []knowledge.Observation{}
+		}
+		return printJSON(out, items)
+	}
+	if len(items) == 0 {
+		fmt.Fprintln(out, "(no drafts awaiting review)")
+		return nil
+	}
+	for _, o := range items {
+		conf := ""
+		if o.Confidence != nil {
+			conf = fmt.Sprintf(" %g", *o.Confidence)
+		}
+		fmt.Fprintf(out, "%-4d  %s  [%s] by %s%s: %s\n", o.ID, names[o.ProjectID], o.Kind, o.GeneratedBy, conf, o.Body)
+	}
+	return nil
+}
+
+// cmdObservationReviewPromote implements `kb observation review promote ID`.
+func cmdObservationReviewPromote(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
+	positional, err := splitFlags(args, nil, nil)
+	if err != nil {
+		return err
+	}
+	if len(positional) != 1 {
+		return usageErrorf("usage: observation review promote ID")
+	}
+	id, err := strconv.ParseInt(positional[0], 10, 64)
+	if err != nil {
+		return usageErrorf("invalid observation id %q", positional[0])
+	}
+	// Promoting is what makes a draft trusted, searchable and recalled into a
+	// model's prompt, so it is a person's act (DR-0070, DR-0090): it needs a
+	// terminal and nothing turns that off. The check comes before the lookup.
+	if !atTerminal(out) {
+		return usageErrorf("a draft can only be promoted by a person at a terminal: run kb observation review promote %d from an interactive shell (standard input and output must be a terminal)", id)
+	}
+	if err := logKBCallErr(dl, "PromoteObservation", map[string]any{"id": id}, func() error {
+		return kb.PromoteObservation(id)
+	}); err != nil {
+		return err
+	}
+	if jsonOut {
+		return printJSON(out, struct {
+			ID     int64  `json:"id"`
+			Status string `json:"status"`
+		}{ID: id, Status: "reviewed"})
+	}
+	fmt.Fprintf(out, "observation %d reviewed\n", id)
 	return nil
 }

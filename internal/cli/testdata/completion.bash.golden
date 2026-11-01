@@ -63,7 +63,7 @@ _kb() {
         ingest) COMPREPLY=( $(compgen -W "--root --dry-run" -- "$cur") ) ;;
         merge) COMPREPLY=( $(compgen -W "--a --b --out --force" -- "$cur") ) ;;
         model) COMPREPLY=( $(compgen -W "--workspace --dir --name --source" -- "$cur") ) ;;
-        observation) COMPREPLY=( $(compgen -W "--project --source-doi" -- "$cur") ) ;;
+        observation) COMPREPLY=( $(compgen -W "--project --source-doi --draft --by --confidence --status" -- "$cur") ) ;;
         project) COMPREPLY=( $(compgen -W "--status --root --dry-run" -- "$cur") ) ;;
         record) COMPREPLY=( $(compgen -W "--project --status --kind --trigger --initiative --since --root --dir --title --concept --workspace --partial --dry-run --write --all" -- "$cur") ) ;;
         search) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
@@ -92,7 +92,8 @@ _kb() {
             if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "install fetch list" -- "$cur") )
             fi ;;
         observation)
-            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show update sources delete" -- "$cur") )
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show update review sources delete" -- "$cur") )
+            elif [[ $n -eq 2 && "${pos[1]}" == review ]]; then COMPREPLY=( $(compgen -W "list promote" -- "$cur") )
             fi ;;
         project)
             if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show concepts set-status set-description rename delete" -- "$cur") )

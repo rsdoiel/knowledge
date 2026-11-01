@@ -161,6 +161,9 @@ var negativeVerbCases = []verbCase{
 	{name: "unlink missing project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"unlink", "project", "nosuch", "C"}},
 	{name: "unlink source not linked", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}, {"source", "add", "S"}}, args: []string{"unlink", "source", "1", "1"}},
 	{name: "observation delete while linked", setup: seedLinked(), args: []string{"observation", "delete", "1"}},
+	{name: "observation review promote of a reviewed observation", setup: append(seedProject(), []string{"observation", "add", "--project", "P", "note", "b"}), args: []string{"observation", "review", "promote", "1"}},
+	{name: "observation review promote missing", args: []string{"observation", "review", "promote", "99"}},
+	{name: "observation review list unknown project", args: []string{"observation", "review", "list", "--project", "nosuch"}},
 	{name: "project delete while it owns an observation", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}}, args: []string{"project", "delete", "P"}},
 }
 
@@ -231,6 +234,12 @@ var usageVerbCases = []verbCase{
 	{name: "ingest bad flag", args: []string{"ingest", "--bogus", "."}},
 	{name: "index without a path", args: []string{"index"}},
 	{name: "init with two paths", noDB: true, args: []string{"init", "a", "b"}},
+	{name: "observation add --draft without --by", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "--draft", "note", "b"}},
+	{name: "observation add --by without --draft", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "--by", "h", "note", "b"}},
+	{name: "observation add --draft with confidence 1.5", setup: seedProject(), args: []string{"observation", "add", "--project", "P", "--draft", "--by", "h", "--confidence", "1.5", "note", "b"}},
+	{name: "observation list with a bad --status", setup: seedProject(), args: []string{"observation", "list", "--project", "P", "--status", "bogus"}},
+	{name: "observation review without a subverb", args: []string{"observation", "review"}},
+	{name: "observation review promote without an id", args: []string{"observation", "review", "promote"}},
 	{name: "init refuses --db", noDB: true, args: []string{"--db", "x.db", "init"}},
 }
 
