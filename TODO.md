@@ -3,6 +3,9 @@
 
 ## Bugs
 
+- [ ] When you run `kb version` you get an error in a directory with agents/knowledge.db you get the missing knowledge.db
+  message instead of the erorr that version isn't a verb. If the vocabularly of the command is wrong, should that be the first
+  error detected?
 - [ ] **Hold the older manual pages to the exit status check.** `TestManPages_ExitStatusMatchesTheVerbTests` covers
   the thirteen pages written for v0.0.28. `concept`, `record`, `check-db`, `stats`, `story`, `completion` and
   `document` name codes whose proofs are in per-verb test files (`conceptshowrecall_test.go` and others); list them
@@ -117,6 +120,8 @@
 
 ## Requested features
 
+- [ ] version, license should be verbs available as alias for `kb -version` and `kb -license` since I have muscle memory
+  from using the go command
 - [ ] Add a sub verb, relates-to similar to supersede so it makes it easy to update the relationship without resorting to sed
 - [ ] **Bump `gomlx/compute` to v0.1.17 in `semantic/`, then offer the author's Pi 5 benchmark upstream.** v0.1.17 is
   gomlx/compute#46 (adaptive chunking for the non-SIMD kernels; the maintainer measured it within the noise). Bump, rebuild,
