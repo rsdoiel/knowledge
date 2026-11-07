@@ -434,6 +434,32 @@
 
 ## To explore
 
+- [ ] **Deterministic (non-LLM) text processing for documents: what `knowledge` already has, and what `prose`, `gonum` and `gota` could add.**
+  Raised by the author 2026-11-06; to be explored in a separate session, before any implementation or plan. Why now: 25 of 27 document gists and
+  368 of 375 sections are unsummarized (2 gists and 7 sections reviewed), and DR-0091 (proposed) makes an unreviewed document useful at ingest
+  with a labelled verbatim excerpt and a *mechanical gist* (title, description, section headings). The author wants to see how far deterministic
+  methods go before any model is asked to summarize, and whether a small Ollama model is then needed at all. A gist is up to a paragraph that
+  helps a small language model identify a document in a concept recall or a search; not every section needs a summary.
+  **Start from what exists** (all offline, no new dependency): `CandidateTerms` and the term scoring in `conceptsuggest.go`; the fuzzy matching
+  in `conceptcluster.go` and `documentfuzzytag.go` (Levenshtein); paragraph chunking in `chunk.go`; `tag_density` and `MatchConceptNames`; FTS5
+  ranking in `kb_fts`; the optional semantic search (`searchsemantic.go`, Hugot embeddings).
+  **Questions for the session:**
+  1. `prose`: is it maintained, is it English only, and does it earn its place over the standard library for sentence segmentation, tokenizing
+     and tagging? (I believe it is largely unmaintained; check before depending on it.)
+  2. `gonum`: can it carry an extractive summarizer (TF-IDF or TextRank over a sentence graph, or LSA with an SVD) on a Pi 5 within a
+     reasonable time, and is it pure Go, so cross-compiling the `kb` release targets still works with `CGO_ENABLED=0`?
+  3. `gota` (dataframes): is there a job for it here at all, or is it only useful in analysis scripts and the reports? Do not add it for its own sake.
+  4. What should a deterministic *draft* look like for a hand-off, a design brief or a decision record (mostly headings, bullets and tables, where
+     sentence ranking does badly)? Compare against the mechanical gist of DR-0091 and against a Claude-drafted gist on five real documents
+     from different projects; time the author's review of each.
+  5. Which deterministic signals help the review queue instead of replacing it (size, `tag_density`, headings, novelty against existing
+     gists), as `kb document review list` already shows size and density?
+  **Constraints:** offline and reproducible, so golden-file tests can pin the output; a draft goes through `kb document draft --by NAME` and
+  only a person promotes it (DR-0070, DR-0090), so a deterministic engine needs no new trust rule; a new third-party module is a decision
+  in its own right and needs a record. Anything that calls a model belongs in harvey, which has the Ollama client and `assay` for
+  choosing a model; `kb` stays a data layer. Related: knowledge DR-0091, `narrative-documents-design.md` decisions 7 to 9, harvey TODO
+  (the `recall_knowledge` item).
+
 ### Bugs collected for v0.0.13
 
 Found 2026-09-24 by probing every verb with empty, malformed and unknown
