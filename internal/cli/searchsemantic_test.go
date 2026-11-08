@@ -225,3 +225,129 @@ func TestSearchSemantic_ADashLeadingTermAfterTheFlagsIsText(t *testing.T) {
 		t.Errorf("exit %d", code)
 	}
 }
+
+// DR-0094: the words half of -hybrid runs the typed query first and, when that
+// finds under three rows and the term is plain words, widens to any word.
+
+// hybridJSON runs kb -json search -hybrid and decodes the rows.
+func hybridJSON(t *testing.T, f *embedFixture, args ...string) (code int, rows []struct {
+	Snippet string `json:"snippet"`
+	Via     string `json:"via"`
+}) {
+	t.Helper()
+	code, out, _ := f.run(append([]string{"-json", "search", "-hybrid"}, args...)...)
+	var doc struct {
+		Results []struct {
+			Snippet string `json:"snippet"`
+			Via     string `json:"via"`
+		} `json:"results"`
+	}
+	if code == 0 {
+		if err := json.Unmarshal([]byte(out), &doc); err != nil {
+			t.Fatalf("not JSON: %v\n%s", err, out)
+		}
+	}
+	return code, doc.Results
+}
+
+func ferryFixture(t *testing.T) *embedFixture {
+	t.Helper()
+	f := newEmbedFixture(t, 0)
+	f.obs("the ferry timetable changed in winter")
+	f.obs("tomato plants need watering on tuesday")
+	f.obs("sourdough starter feeding schedule")
+	if code, _, e := f.run("embed"); code != 0 {
+		t.Fatalf("embed: %s", e)
+	}
+	return f
+}
+
+// Reproduces the report: a question typed as a sentence has words in more than
+// one row, so the AND finds nothing and -hybrid has no words half.
+func TestSearchHybrid_SentenceQuestionIsFoundByItsWords(t *testing.T) {
+	f := ferryFixture(t)
+	code, rows := hybridJSON(t, f, "when did the ferry schedule change for the winter timetable")
+	if code != 0 || len(rows) == 0 {
+		t.Fatalf("exit %d, %d rows: the words half found nothing", code, len(rows))
+	}
+	if !strings.Contains(rows[0].Snippet, "ferry timetable") {
+		t.Errorf("first row = %q, want the ferry timetable row", rows[0].Snippet)
+	}
+	if rows[0].Via != "words" && rows[0].Via != "both" {
+		t.Errorf("first row via %q: the words half did not find it", rows[0].Via)
+	}
+}
+
+// Guard: a typed query that already finds three rows is not widened.
+func TestSearchHybrid_QueryThatFindsRowsIsNotWidened(t *testing.T) {
+	f := newEmbedFixture(t, 0)
+	f.obs("ferry timetable one winter")
+	f.obs("ferry timetable two summer")
+	f.obs("ferry timetable three autumn")
+	f.obs("ferry repair costs")
+	f.obs("timetable for the bus")
+	if code, _, e := f.run("embed"); code != 0 {
+		t.Fatal(e)
+	}
+	// -min-score 0.99 leaves the semantic half empty, so only the words half shows.
+	code, rows := hybridJSON(t, f, "-min-score", "0.99", "ferry timetable")
+	if code != 0 || len(rows) != 3 {
+		t.Errorf("exit %d, %d rows, want the 3 rows that hold both words", code, len(rows))
+	}
+}
+
+// Guard: a term in FTS5 syntax is never rewritten, even when it finds nothing.
+func TestSearchHybrid_Fts5SyntaxIsNeverWidened(t *testing.T) {
+	f := ferryFixture(t)
+	for _, term := range []string{`ferry AND zzzunknown`, `"ferry zzzunknown"`, `ferry NOT winter`, `timeta*`} {
+		code, rows := hybridJSON(t, f, "-min-score", "0.99", term)
+		want := map[string]int{`ferry AND zzzunknown`: 0, `"ferry zzzunknown"`: 0, `ferry NOT winter`: 0, `timeta*`: 1}[term]
+		if want == 0 && code == 0 || want != 0 && len(rows) != want {
+			t.Errorf("%q: exit %d, %d rows, want %d", term, code, len(rows), want)
+		}
+	}
+}
+
+// Guard (DR-0094 item 2): a question with no answer that shares one common word
+// with a row still gets no rows, because the semantic half returned nothing.
+func TestSearchHybrid_NoAnswerQuestionStaysEmpty(t *testing.T) {
+	f := ferryFixture(t)
+	code, rows := hybridJSON(t, f, "what colour was the weather balloon last winter")
+	if code != 1 || len(rows) != 0 {
+		t.Errorf("exit %d, %d rows, want exit 1 and none: a shared common word is not an answer", code, len(rows))
+	}
+}
+
+// DR-0094 item 2 as built: the any-word search re-ranks the rows semantic search
+// found and adds none, so a row that only shares a common word is not listed.
+func TestSearchHybrid_WidenedWordsAddNoRowsOfTheirOwn(t *testing.T) {
+	f := newEmbedFixture(t, 0)
+	f.obs("the ferry timetable changed in winter")
+	f.obs("sourdough starter feeding needs flour water salt and patience every single morning before work and the whole weekend schedule")
+	if code, _, e := f.run("embed"); code != 0 {
+		t.Fatal(e)
+	}
+	// A floor of 0.4 keeps the ferry row and drops the long sourdough row from the semantic half.
+	code, rows := hybridJSON(t, f, "-min-score", "0.4", "when did the ferry schedule change for the winter timetable")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	for _, r := range rows {
+		if strings.Contains(r.Snippet, "sourdough") {
+			t.Errorf("a row that shares only the word \"schedule\" was listed: %q via %s", r.Snippet, r.Via)
+		}
+	}
+}
+
+// The guard is for queries written in FTS5 syntax. A question typed in prose has
+// colons, brackets and quotes, and is still widened.
+func TestSearchHybrid_ProsePunctuationDoesNotStopTheWidening(t *testing.T) {
+	f := ferryFixture(t)
+	code, rows := hybridJSON(t, f, `when did the ferry schedule (the winter one) change: what is the "timetable" now?`)
+	if code != 0 || len(rows) == 0 {
+		t.Fatalf("exit %d, %d rows: punctuation stopped the widening", code, len(rows))
+	}
+	if rows[0].Via != "words" && rows[0].Via != "both" {
+		t.Errorf("first row via %q, want the words half to have found it", rows[0].Via)
+	}
+}

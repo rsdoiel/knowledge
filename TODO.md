@@ -3,6 +3,75 @@
 
 ## Bugs
 
+- [ ] **`kb search -hybrid` gives the same results as `-semantic` for a sentence-length question: its lexical half ANDs every word,
+  so it matches nothing and fusion has nothing to fuse.** Known and measured in part (kb observations 539 and 542; note
+  `20261029-semantic-search-built-and-measured.md`: "an any-word variant was measured and not adopted"), reopened 2026-11-08 by
+  larger sets in `agents/tmp/eval/` (not in git). Fix implemented 2026-11-08 per knowledge DR-0094 (proposed): `LexicalRankingWide` plus the hybrid path in
+  `internal/cli/searchsemantic.go`, tests in `searchsemantic_test.go` files; gains smaller than the harness predicted (DR-0094 item 5), so
+  tuning the any-word ranking was tried and changes nothing (DR-0094 item 5). Not committed.
+  *Cause:* `LexicalRanking` (`searchsemantic.go`) runs the query as typed against `kb_fts MATCH`, so FTS5 requires every word
+  to appear in one row. Its only fallback (`quotedPhrase`) runs on an FTS syntax error, not on an empty result.
+  *Why it was not adopted:* on the 34 labelled queries (written and labelled by the model, optimistic) any-word hybrid scored
+  MRR 0.784 against semantic 0.821, with recall@5 and @10 slightly higher (0.789 and 0.897 against 0.756 and 0.883).
+  *Correction, 2026-11-08 later:* the figures below ranked `-hybrid` among all rows and the fused methods among records only; ranked among records, with the harness fixed and re-run, `-hybrid` as shipped scores 0.42, 0.84 and 0.35 and as built 0.44, 0.89 and 0.44 (DR-0094 item 5).
+  *New evidence* (RRF of semantic and an any-word OR, `evalset.AnyWord`, against `-hybrid` as shipped; MRR, use within 500 tokens):
+  365 questions built from citing sentences 0.48 and 73% against 0.38 and 60%; 30 drafted questions 0.89 and 100% against 0.76
+  and 97%; 12 author-approved paraphrased questions 0.43 and 67% against 0.29 and 58%. An AND-first variant that falls back to the
+  OR when AND finds fewer than three rows scored 0.49, 0.87 and 0.43 on the same sets, so about the same.
+  *Fix to decide:* AND first, as today, and only when it finds fewer than a few rows and TERM is plain words, run the any-word OR
+  and rank by `bm25`. That leaves every query that works today unchanged, including a TERM written in FTS5 syntax (quotes,
+  `prefix*`, `AND`), which semantic-search-design.md says `-hybrid` accepts. A plain OR everywhere would break that and scores no
+  better. The lexical half alone then needs its own check (it was MRR 0.54 alone on the 34 queries).
+  *Needs first:* a short amendment record to the semantic-search design (the "words half is FTS5 as typed" line), and a score floor
+  decision, since fusion returns rows the floor does not filter.
+  *Guard narrowed 2026-11-08 (later):* `hasFTS5Syntax` had treated a quote, parenthesis, colon or caret as FTS5 syntax and skipped 235 of 365
+  citing sentences; it now stops only for deliberate syntax (DR-0094 item 1). `-hybrid` MRR 0.47, 0.89, 0.44 against 0.42, 0.84, 0.35 before.
+  *Test first* (DR-0007): a ten-word question whose words are spread over one record's title and text, not all in one place, plus
+  one written in FTS5 syntax; assert the first is found by `-hybrid` and ranked differently from `-semantic`, and the second
+  returns what it returns today.
+
+- [ ] **A document is not findable by `kb search` until one of its summaries is reviewed: the title-only `'document'` entry in
+  `kb_fts` was designed and never built.** Found 2026-11-07 while measuring retrieval (not yet fixed; to be handled in the
+  design, decide, plan and implement phases of knowledge DR-0091's work).
+  *Spec:* `agents/projects/knowledge/design/narrative-documents-design.md` decision 8 (status "Decisions confirmed",
+  2026-09-13): "`documents` itself gets a thin `'document'` FTS entry (title only, indexed at ingest) — mirrors how `projects`
+  are indexed by name, so a document is findable by title even before anything about it is summarized."
+  *What was built:* only `indexDocumentSummaryFTS` (`documents.go`), written when a summary is promoted (`source_type =
+  'document_summary'`), and the matching `documentSummaryFTSSelect` in `knowledge.go` for the rebuild and backfill. No code
+  writes a `'document'` source type. `narrative-documents-plan.md` says promote "is the only place that writes the `kb_fts`"
+  document entry and lists no work item or test for a title entry, so it fell out between design and plan; no record,
+  observation or comment says it was dropped on purpose (git history of the design and plan not read beyond that).
+  *Reproduce (on HEAD, `kb 0.0.30`):* ingest any markdown file with a title and no reviewed summary, then `kb search "<its
+  exact title>"` exits 1, "no results". In the real database `kb_fts` holds 9 `document_summary` rows and no document rows
+  (29 documents ingested); in a scratch database with 157 ingested blog posts it holds none, and searching "Lagrange" misses
+  "Building Lagrange on Raspberry Pi OS". Evidence: the harness in `agents/tmp/eval/` (`go run . run-blog`; method 2 scores
+  0 on the blog sets); findings note `agents/projects/knowledge/notes/20261107-summarization-exploration-findings.md`
+  (addendum); kb observation 632.
+  *Effect:* the worst case of DR-0091's backlog: 25 of 27 documents on wren have no reviewed gist, so nearly every document is
+  invisible to search, by title included. Concept recall can still reach them but returns no text (DR-0091).
+  *Why it is wider than a one-line fix:* knowledge DR-0091 (accepted) item 4 assumes the entry exists and "widens" it to title,
+  `description` and section headings; DR-0092 (proposed) corrects that to "a new entry". Build to DR-0091 item 4 once, not
+  title-only first and widened later: the content is already accepted, only DR-0091's wording is wrong, so the fix need not wait
+  for DR-0092 to be promoted.
+  *Tests first (workspace DR-0007), through the production path:* ingest a document with nothing reviewed (the real ingest
+  verb, not `AddDocument` alone); `Search` finds it by its title, by its `description`, and by one section heading, and the hit
+  names the document and carries its `Material` (path, checksum) so a consumer can cite it; `TestPromoteDocumentSummary_RawSectionBodyNeverIndexed`
+  still passes (section bodies stay unindexed until a later record says otherwise); deleting a
+  document removes the entry; re-ingesting a changed title or heading replaces it (no duplicate row); the rebuild from the
+  tables (`rebuildFTSIfNeeded`) and an idempotent backfill produce the same rows for a database made by merge or import.
+  *Also check:* `kb merge`, `kb import`, `kb export` and `kb check-db` for the new source type (documents travel, the index
+  is derived, so the likely answer is no change, but the rebuild path must emit the rows); `kb stats` and `kb search`
+  scope/kind filters (what `KIND` names a document hit); the TUI search view; the man page and `help` topic for `search`
+  (which says it covers "documents' reviewed summaries" and must now say what else it covers); harvey's
+  consumption of search hits (`harvey/kbrecall.go`). Exit codes unchanged (no new class), but `kb search` for a title that now
+  matches keeps its 0 and 1.
+  *Semantic search depends on this:* `EmbedCorpus` (`embedcorpus.go`) reads its rows from `kb_fts` filtered by `EmbeddedKinds`
+  (`records`, `observations`, `concepts`, `documents`), so a document with no reviewed summary is not embedded either. The new
+  `document` source type needs a place in `EmbeddedKinds` and in the `documents` scope filter (today `document_summary` only),
+  or `kb search -semantic` still cannot find an unreviewed document.
+  *Open for design:* the ranking between a document entry and a reviewed summary of the same document; whether the hit's
+  `Kind` is a new value or `document`; whether a document can opt out of indexing (DR-0091's open item); `description` taken
+  from `abstract` when absent is a separate request (the blog uses `abstract`) and is not part of this fix.
 - [ ] When you run `kb version` you get an error in a directory with agents/knowledge.db you get the missing knowledge.db
   message instead of the erorr that version isn't a verb. If the vocabularly of the command is wrong, should that be the first
   error detected?

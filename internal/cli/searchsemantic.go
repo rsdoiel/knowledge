@@ -194,11 +194,28 @@ func meaningSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, mode searchMode, m
 	order := semKeys
 	via := map[knowledge.RowKey]string{}
 	if mode == searchHybrid {
-		lexKeys, err := logKBCall(dl, "LexicalRanking", map[string]any{"term": term}, func() ([]knowledge.RowKey, error) {
-			return kb.LexicalRanking(term, scope)
+		type lexical struct{ typed, widened []knowledge.RowKey }
+		lex, err := logKBCall(dl, "LexicalRankingWide", map[string]any{"term": term}, func() (lexical, error) {
+			typed, widened, err := kb.LexicalRankingWide(term, scope)
+			return lexical{typed, widened}, err
 		})
 		if err != nil {
 			return nil, err
+		}
+		// A row only the any-word search found counts only when the semantic half
+		// found something, so a common word is not an answer (DR-0094 item 2).
+		lexKeys := lex.typed
+		if lex.widened != nil && len(semKeys) > 0 {
+			inSem := map[knowledge.RowKey]bool{}
+			for _, k := range semKeys {
+				inSem[k] = true
+			}
+			lexKeys = nil
+			for _, k := range lex.widened {
+				if inSem[k] {
+					lexKeys = append(lexKeys, k)
+				}
+			}
 		}
 		order = nil
 		for _, f := range knowledge.FuseRankings(lexKeys, semKeys, 0) {

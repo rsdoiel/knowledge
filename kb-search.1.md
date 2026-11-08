@@ -92,7 +92,10 @@ search
   index (kb embed); the plain build refuses them (exit 2) and says so.
   The flags come first, before the scope and the term; after the first word
   that is not one of them, dashes are part of the term. TERM is plain text in
-  -semantic and FTS5 syntax in the words half of -hybrid.
+  -semantic and FTS5 syntax in the words half of -hybrid. A TERM of plain words
+  that finds fewer than three rows there is also searched for any of its words of
+  four letters or more; that re-ranks rows found by meaning and adds none. A TERM
+  in FTS5 syntax is never rewritten.
 
   -semantic ranks each row by how close its best chunk is to TERM and keeps
   those at or above the cutoff (-min-score, from -1 to 1, 0.35 by default, -1
@@ -114,9 +117,10 @@ search
   model that wrote the search, and corrected once after the author looked over
   where it disagreed, so read the figures as indicative) -semantic scored a
   mean reciprocal rank of 0.82 and a recall at ten of 0.88, against 0.11 and
-  0.15 for plain search given the same queries; -hybrid found about the same rows as -semantic
-  and did not rank them better, so it is a way to keep exact-word matches in a
-  search by meaning, not a better ranking. Semantic search is a preview.
+  0.15 for plain search given the same queries. With the words half typed as is,
+  -hybrid found about the same rows as -semantic; widened to any word when the
+  typed words find little, it ranked better on a drafted and a paraphrased set and
+  about the same on a larger one (DR-0094). Semantic search is a preview.
 
 summary
 : a formatted overview of every project and its most recent observations
