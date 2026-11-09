@@ -83,7 +83,7 @@ func TestCmdIngest_JSONPrintsTheSummaryAndTheClass(t *testing.T) {
 		t.Errorf("exit %d, want 65", code)
 	}
 	var sum struct{ Added, Failed int }
-	// stdout is a stream: the summary, then the error object (DR-0010).
+	// stdout is a stream: the summary, then the error object (DR-0011).
 	dec := json.NewDecoder(strings.NewReader(out))
 	if err := dec.Decode(&sum); err != nil || sum.Added != 1 || sum.Failed != 1 {
 		t.Errorf("stdout = %q (%v), want the summary with added 1, failed 1", out, err)

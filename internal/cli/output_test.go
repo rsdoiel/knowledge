@@ -36,7 +36,7 @@ func TestPrintError_TextMode(t *testing.T) {
 }
 
 // In JSON mode the human line still goes to standard error, and the error is
-// also an object on standard output (workspace DR-0010).
+// also an object on standard output (workspace DR-0011).
 func TestPrintError_JSONModeIsPlainOnStderrAndAnObjectOnStdout(t *testing.T) {
 	var out, errOut bytes.Buffer
 	printError(&out, &errOut, true, usageErrorf("something broke"))

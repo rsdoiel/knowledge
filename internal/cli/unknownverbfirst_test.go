@@ -42,7 +42,7 @@ func TestMainRun_UnknownVerbIsUsageBeforeTheWorkspaceIsLooked_For(t *testing.T) 
 }
 
 // With --json the unknown verb is also reported as the error envelope on
-// stdout, like every other error (workspace DR-0010): one JSON object, class
+// stdout, like every other error (workspace DR-0011): one JSON object, class
 // "usage", code 2. The plain line stays on stderr, without the usage page.
 func TestMainRun_UnknownVerbUnderJSONIsTheEnvelope(t *testing.T) {
 	t.Chdir(t.TempDir())

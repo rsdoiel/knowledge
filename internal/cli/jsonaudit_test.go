@@ -157,7 +157,7 @@ func TestMainRun_ErrorPathsNeverWriteToStdout(t *testing.T) {
 			t.Errorf("args=%v: stderr is empty, want the error message", args)
 		}
 		if jsonFlag == "--json" {
-			// The error is also the content of stdout, valid JSON (DR-0010).
+			// The error is also the content of stdout, valid JSON (DR-0011).
 			assertValidJSON(t, out.Bytes())
 		} else if out.Len() != 0 {
 			t.Errorf("args=%v: stdout = %q, want empty in text mode", args, out.String())

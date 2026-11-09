@@ -81,7 +81,7 @@ func runVerbCase(t *testing.T, tc verbCase) {
 		t.Errorf("kb %s: exit 70, an error nothing classified: %.200s", strings.Join(tc.args, " "), errOut.String())
 	}
 	if tc.want != classOK && !tc.bulk {
-		// The contract (workspace DR-0010): the human line is on stderr, and
+		// The contract (workspace DR-0011): the human line is on stderr, and
 		// in JSON mode the error is also the whole of stdout, as an object.
 		if e := strings.TrimSpace(errOut.String()); !strings.HasPrefix(e, "kb:") {
 			t.Errorf("stderr = %.100q, want the plain kb: line", e)

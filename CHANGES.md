@@ -7,7 +7,7 @@ release notes; maintained going forward.
 
 ### Changed
 
-- **An error is also written to standard output under `--json`** (workspace DR-0010). The plain `kb: message` line stays on
+- **An error is also written to standard output under `--json`** (workspace DR-0011). The plain `kb: message` line stays on
   standard error in both modes, as in text mode. In JSON mode the same failure is also the object
   `{"error": "...", "class": "no_input", "code": 66}` on standard output, so standard output is always valid JSON. **A script
   that read the JSON error from standard error must read standard output instead**; standard error is now plain text in every

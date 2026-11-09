@@ -18,7 +18,7 @@ func printJSON(out io.Writer, v any) error {
 // also written to out as an {"error": "...", "class": "...", "code": N}
 // object, where class and code are the exit class and status the process exits
 // with (workspace DR-0003), so that standard output is always JSON a program
-// can read, an error included (workspace DR-0010).
+// can read, an error included (workspace DR-0011).
 func printError(out, errOut io.Writer, jsonOut bool, err error) {
 	fmt.Fprintf(errOut, "kb: %v\n", err)
 	if jsonOut {

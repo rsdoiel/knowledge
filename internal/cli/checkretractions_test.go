@@ -77,7 +77,7 @@ func TestCheckRetractions_JSONCarriesTheFailureCount(t *testing.T) {
 	var res struct {
 		Checked, Updated, Failed int
 	}
-	// stdout is a stream: the result, then the error object (DR-0010).
+	// stdout is a stream: the result, then the error object (DR-0011).
 	dec := json.NewDecoder(&out)
 	if err := dec.Decode(&res); err != nil {
 		t.Fatalf("stdout is not JSON: %q", out.String())
