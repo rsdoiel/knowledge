@@ -61,9 +61,11 @@ a difference of opinion.
 
 -json
 : machine-readable JSON output instead of human-readable text. Applies to
-  every verb. Errors always go to stderr, never stdout, in both modes —
-  scripts consuming JSON output can rely on stdout staying valid JSON
-  even when a call fails.
+  every verb. An error is written to standard error as a plain "kb: message"
+  line, as in text mode, and in this mode also to standard output as a JSON
+  object, so standard output is always valid JSON, a failure included. A
+  warning or note is plain text on standard error only. A command line whose
+  options do not parse has no mode yet and is reported as text.
 
 -i
 : open the interface at this command instead of running it. {app_name} -i
@@ -370,6 +372,10 @@ verbs
 : print the verb table: every verb, subverb, flag and write class, as text or
   with -json — see {app_name}-verbs(1)
 
+version, license
+: print the version, or the license, as {app_name} -version and -license do — see
+  {app_name}-version(1)
+
 # ARGUMENTS
 
 The global options -json, -db and -debug go before the verb: {app_name}
@@ -400,8 +406,11 @@ script or a calling tool can tell them apart from the number alone. A command th
 works through many items (ingest, index --all, source check-retractions) does all it
 can, prints the counts, and then exits with the class of the first failure: it does
 not exit 0 with failures, and one bad item does not stop the good ones. With -json
-the error on stderr carries the class name beside the number, for example
-{"error": "...", "class": "no_input", "code": 66}.
+the error is also written to standard output as an object that carries the
+class name beside the number, for example
+{"error": "...", "class": "no_input", "code": 66}. A command that prints a
+result before it fails (ingest, check-retractions) leaves the result and then
+the error object on standard output, one after the other.
 
 0
 : success. A listing that matches nothing is still success
@@ -474,7 +483,7 @@ the error on stderr carries the class name beside the number, for example
 {app_name}-stats(1), {app_name}-story(1), {app_name}-export(1),
 {app_name}-import(1), {app_name}-ingest(1), {app_name}-record(1),
 {app_name}-document(1), {app_name}-index(1), {app_name}-init(1),
-{app_name}-model(1), {app_name}-embed(1), {app_name}-completion(1), {app_name}-verbs(1), {app_name}-topics(1)
+{app_name}-model(1), {app_name}-embed(1), {app_name}-completion(1), {app_name}-verbs(1), {app_name}-version(1), {app_name}-topics(1)
 
 `
 
@@ -1272,6 +1281,51 @@ flag or a surplus argument, or -db, which does not apply to this verb.
 # SEE ALSO
 
 {app_name}(1), {app_name}-completion(1)
+
+`
+
+// VersionHelpText is shown by `kb version -h`, `kb license -h`, `kb help version`
+// and `kb help license`. Generates kb-version.1.md.
+const VersionHelpText = `%{app_name}-version(1) user manual | version {version} {release_hash}
+% R. S. Doiel
+% {release_date}
+
+# NAME
+
+{app_name}-version, {app_name}-license — print the version, or the license
+
+# SYNOPSIS
+
+{app_name} version
+
+{app_name} license
+
+{app_name} -json version
+
+{app_name} -json license
+
+# DESCRIPTION
+
+{app_name} version prints the program name, its version and the release hash it was
+built from, on one line: the same as {app_name} -version. {app_name} license prints the
+license text: the same as {app_name} -license. They are verbs as well as options for
+the habit of the go command (go version).
+
+With the global -json option, version prints an object with "name", "version" and
+"release_hash", and license an object with "license", so standard output is JSON in
+that mode as for every verb.
+
+Neither opens a database, so both work anywhere, and --db does not apply to them.
+The global options go before the verb: {app_name} -json version.
+
+# EXIT STATUS
+
+The workspace convention, as described in {app_name}(1): 0 success; 2 an unknown
+flag, a surplus argument, or -db, which does not apply to these verbs.
+
+# SEE ALSO
+
+{app_name}(1), {app_name}-verbs(1)
 
 `
 
@@ -3348,6 +3402,9 @@ completion
 
 verbs
 : print the verb table, as text or JSON
+
+version
+: print the version. license, which prints the license, shares this page
 
 # NOTES
 

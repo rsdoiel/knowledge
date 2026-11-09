@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 
 	knowledge "github.com/rsdoiel/knowledge"
@@ -26,9 +25,13 @@ func dispatch(verbs map[string]verbFunc, kb *knowledge.KnowledgeBase, dl *DebugL
 	verb := args[0]
 	fn, ok := verbs[verb]
 	if !ok {
-		fmt.Fprintf(errOut, "kb: unknown verb %q\n", verb)
-		printHelp(errOut, "")
-		return 2
+		err := usageErrorf("unknown verb %q", verb)
+		printError(out, errOut, jsonOut, err)
+		if !jsonOut {
+			// The usage page is for a person reading the terminal or a log.
+			printHelp(errOut, "")
+		}
+		return exitCodeFor(err).Code
 	}
 	previous := adviceOut
 	adviceOut = errOut
@@ -41,7 +44,7 @@ func dispatch(verbs map[string]verbFunc, kb *knowledge.KnowledgeBase, dl *DebugL
 		if errors.Is(err, flag.ErrHelp) && printHelp(out, verb) {
 			return 0
 		}
-		printError(errOut, jsonOut, err)
+		printError(out, errOut, jsonOut, err)
 		return exitCodeFor(err).Code
 	}
 	// A write that changed embedded rows brings the semantic index along, when

@@ -206,6 +206,8 @@ var verbTable = []verbSpec{
 	}, Flags: []string{"--project", "--narrative", "--strict"}},
 	{Name: "summary", Summary: "a formatted overview of every project and its most recent observations", Class: classRead,
 		Flags: []string{"--project"}},
+	{Name: "version", Summary: "print the program name, version and release hash (as kb -version)", Class: classCLIOnly},
+	{Name: "license", Summary: "print the license (as kb -license)", Class: classCLIOnly},
 	{Name: "verbs", Summary: "print the verb table: every verb, subverb, flag and write class", Class: classCLIOnly},
 	{Name: "unlink", Summary: "remove a link between a project or observation and a concept, or an observation, document or record and a source", Class: classRemoving,
 		Flags: []string{"--document", "--record"}},

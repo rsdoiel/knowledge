@@ -41,7 +41,7 @@ Run `kb` with no verb to launch the interactive TUI, or `kb help` / `kb -h` to s
 ### Global flags
 
 - `--db PATH` — path to `knowledge.db`. Without it, `kb` walks up from the current directory to the nearest `agents/knowledge.db` (or `agents/knowledge.jsonl`, in a fresh clone), so it works from any subdirectory of a workspace
-- `--json` — machine-readable output on stdout; errors always go to stderr in both modes, so scripts and other language-model harnesses can drive `kb` directly
+- `--json` — machine-readable output on stdout; an error goes to stderr as a plain line in both modes and, under `--json`, also to stdout as an `{"error","class","code"}` object, so scripts and other language-model harnesses can drive `kb` directly
 - `--debug` — write a JSONL trace of every knowledge-base call (and, in the TUI, every input event and view change) to `./kb-debug-<timestamp>.jsonl`
 
 Full detail on all three: [kb(1)](kb.1.md), § GLOBAL OPTIONS.

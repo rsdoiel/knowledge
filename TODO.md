@@ -72,9 +72,13 @@
   *Open for design:* the ranking between a document entry and a reviewed summary of the same document; whether the hit's
   `Kind` is a new value or `document`; whether a document can opt out of indexing (DR-0091's open item); `description` taken
   from `abstract` when absent is a separate request (the blog uses `abstract`) and is not part of this fix.
-- [ ] When you run `kb version` you get an error in a directory with agents/knowledge.db you get the missing knowledge.db
-  message instead of the erorr that version isn't a verb. If the vocabularly of the command is wrong, should that be the first
-  error detected?
+- [x] **An unknown verb was reported as a missing workspace.** `kb version` outside a workspace said "no agents/knowledge.db
+  here" and exited 66; with `--db` it created that database. Fixed 2026-11-09, unreleased: `mainRun` checks the verb against
+  the table before it looks for the workspace, so it is exit 2 and nothing is made. Test: `TestMainRun_UnknownVerbIsUsage
+  BeforeTheWorkspaceIsLooked_For` (red first, four command lines). Under `--json` the error is also the envelope on stdout
+  (class `usage`, code 2; the plain line stays on stderr, no usage page): `TestMainRun_UnknownVerbUnderJSONIsTheEnvelope`. The
+  same change applies to every error (workspace DR-0011, accepted): `printError(out, errOut, ...)`; about 25 tests that asserted an
+  empty stdout on failure now assert the object. Exit codes reviewed: only this path changed, 66 to 2.
 - [ ] **Hold the older manual pages to the exit status check.** `TestManPages_ExitStatusMatchesTheVerbTests` covers
   the thirteen pages written for v0.0.28. `concept`, `record`, `check-db`, `stats`, `story`, `completion` and
   `document` name codes whose proofs are in per-verb test files (`conceptshowrecall_test.go` and others); list them
@@ -189,8 +193,13 @@
 
 ## Requested features
 
-- [ ] version, license should be verbs available as alias for `kb -version` and `kb -license` since I have muscle memory
-  from using the go command
+- [ ] Add a summerization tool to assist document indexing by kb. I'd like to persue NLP techniques similar to Python's NLPTK (we can use the following Go modules as a jumping off point, ```go get github.com/dreamsxin/gota
+go get gonum.org/v1/gonum``` and either ```
+go get github.com/tsawler/prose/v3``` or ```go get github.com/jdkato/prose/v3``` for the NLP piece
+
+
+- [x] `kb version` and `kb license` are verbs, as well as `-version` and `-license`. Done 2026-11-09, unreleased. Tests:
+  `versionlicense_test.go`. Page `kb-version(1)`; `license` shares it as `summary` and `format` share `search`.
 - [ ] Add a sub verb, relates-to similar to supersede so it makes it easy to update the relationship without resorting to sed
 - [ ] **Bump `gomlx/compute` to v0.1.17 in `semantic/`, then offer the author's Pi 5 benchmark upstream.** v0.1.17 is
   gomlx/compute#46 (adaptive chunking for the non-SIMD kernels; the maintainer measured it within the noise). Bump, rebuild,

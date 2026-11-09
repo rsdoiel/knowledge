@@ -77,14 +77,19 @@ func TestCheckRetractions_JSONCarriesTheFailureCount(t *testing.T) {
 	var res struct {
 		Checked, Updated, Failed int
 	}
-	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+	// stdout is a stream: the result, then the error object (DR-0010).
+	dec := json.NewDecoder(&out)
+	if err := dec.Decode(&res); err != nil {
 		t.Fatalf("stdout is not JSON: %q", out.String())
 	}
 	if res.Failed != 2 || res.Checked != 0 {
 		t.Errorf("result = %+v, want failed 2 and checked 0", res)
 	}
 	var env struct{ Class string }
-	if err := json.Unmarshal(errOut.Bytes(), &env); err != nil || env.Class != "unavailable" {
-		t.Errorf("stderr = %q, want an unavailable envelope", errOut.String())
+	if err := dec.Decode(&env); err != nil || env.Class != "unavailable" {
+		t.Errorf("stdout after the result: %v, want an unavailable envelope", err)
+	}
+	if !strings.HasPrefix(errOut.String(), "kb: ") {
+		t.Errorf("stderr = %q, want the plain kb: line", errOut.String())
 	}
 }

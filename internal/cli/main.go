@@ -74,14 +74,14 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// group, a leaf missing its argument, or any supported command after -i. A
 	// complete command always runs as a command and prints (DR-0066 amendment).
 	if opts.interactive && jsonOut {
-		return failWith(errOut, jsonOut, usageErrorf("-i opens the interface; it cannot be combined with -json"))
+		return failWith(out, errOut, jsonOut, usageErrorf("-i opens the interface; it cannot be combined with -json"))
 	}
 	start, open, err := deepLink(rest, opts.interactive, atTerminal(out))
 	if err != nil {
-		return failWith(errOut, jsonOut, err)
+		return failWith(out, errOut, jsonOut, err)
 	}
 	if open {
-		return openInterface(dbPath, jsonOut, debugOn, start, errOut)
+		return openInterface(dbPath, jsonOut, debugOn, start, out, errOut)
 	}
 	// help is also a verb, per the git/go convention, and takes an optional
 	// topic. kb -help TOPIC reaches the same text by way of the option.
@@ -91,8 +91,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 			topic = rest[1]
 		}
 		if !printHelp(out, topic) {
-			fmt.Fprintf(errOut, "kb: unknown help topic %q\n", topic)
-			return 2
+			return failWith(out, errOut, jsonOut, usageErrorf("unknown help topic %q", topic))
 		}
 		return 0
 	}
@@ -102,15 +101,20 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// of creating an ambient ./agents/knowledge.db.
 	if wantsVerbHelp(rest) {
 		if !printHelp(out, rest[0]) {
-			fmt.Fprintf(errOut, "kb: unknown verb %q\n", rest[0])
-			return 2
+			return failWith(out, errOut, jsonOut, usageErrorf("unknown verb %q", rest[0]))
 		}
 		return 0
 	}
 
+	// The vocabulary is checked before the workspace (and before any file is
+	// made): a mistyped verb is a usage error, exit 2, not a missing database.
+	if _, known := verbs[rest[0]]; !known {
+		return dispatch(verbs, nil, nil, jsonOut, rest, out, errOut)
+	}
+
 	dl, err := openDebugLogIfRequested(debugOn, errOut)
 	if err != nil {
-		return failWith(errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
+		return failWith(out, errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
 	}
 	defer dl.Close()
 
@@ -122,13 +126,13 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// them would be a pointless, surprising side effect. It is not
 	// hypothetical: kb index left a 127KB database in whatever directory it
 	// ran in.
-	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" || rest[0] == "completion" || rest[0] == "verbs" || rest[0] == "model" {
+	if rest[0] == "merge" || rest[0] == "index" || rest[0] == "init" || rest[0] == "completion" || rest[0] == "verbs" || rest[0] == "model" || rest[0] == "version" || rest[0] == "license" {
 		// They do not use --db, so an explicit one is a mistake. It used to be
 		// dropped silently: `kb --db rt.db init` created ./agents/knowledge.db
 		// and never rt.db. Refuse it and say where the target really goes.
 		if dbPath != "" {
 			refusal := dbOptionRefusal(rest[0])
-			printError(errOut, jsonOut, refusal)
+			printError(out, errOut, jsonOut, refusal)
 			return exitCodeFor(refusal).Code
 		}
 		return dispatch(verbs, nil, dl, jsonOut, rest, out, errOut)
@@ -143,7 +147,7 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	located := dbPath // "" only when the workspace is found by discovery
 	resolvedPath, err := resolveDBPath(dbPath)
 	if err != nil {
-		return failWith(errOut, jsonOut, err)
+		return failWith(out, errOut, jsonOut, err)
 	}
 
 	// The ambient-open guard (DR-0021 item 4, narrowed by DR-0022): a verb
@@ -158,14 +162,14 @@ func mainRun(args []string, out, errOut io.Writer) int {
 	// -in agents/knowledge.jsonl) relies on.
 	if rest[0] != "import" {
 		if err := missingWorkspace(dbPath, resolvedPath); err != nil {
-			return failWith(errOut, jsonOut, err)
+			return failWith(out, errOut, jsonOut, err)
 		}
 	}
 
 	noteWorkspaceAbove(errOut, located, resolvedPath)
 	kb, err := knowledge.Open(resolvedPath)
 	if err != nil {
-		return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
+		return failWith(out, errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
 	}
 	defer kb.Close()
 
@@ -178,7 +182,8 @@ func mainRun(args []string, out, errOut io.Writer) int {
  * opening the database.
  *
  * Parameters:
- *   errOut  (io.Writer) — where the error goes.
+ *   out     (io.Writer) — standard output; in JSON mode it also gets the error object.
+ *   errOut  (io.Writer) — standard error; always gets the "kb: message" line.
  *   jsonOut (bool)      — whether --json was given.
  *   err     (error)     — the failure.
  *
@@ -186,10 +191,10 @@ func mainRun(args []string, out, errOut io.Writer) int {
  *   int — the exit status for err's class.
  *
  * Example:
- *   return failWith(errOut, jsonOut, noInputf("no workspace here"))
+ *   return failWith(out, errOut, jsonOut, noInputf("no workspace here"))
  */
-func failWith(errOut io.Writer, jsonOut bool, err error) int {
-	printError(errOut, jsonOut, err)
+func failWith(out, errOut io.Writer, jsonOut bool, err error) int {
+	printError(out, errOut, jsonOut, err)
 	return exitCodeFor(err).Code
 }
 
@@ -216,6 +221,8 @@ func dbOptionRefusal(verb string) error {
 		return usageErrorf("--db does not apply to completion: it opens no database; see kb help completion")
 	case "verbs":
 		return usageErrorf("--db does not apply to verbs: it opens no database; see kb help verbs")
+	case "version", "license":
+		return usageErrorf("--db does not apply to %s: it prints fixed text and opens no database; see kb help version", verb)
 	case "model":
 		return usageErrorf("--db does not apply to model: it manages model files and opens no database; see kb help model")
 	}
@@ -508,18 +515,19 @@ func missingWorkspace(dbPath, resolvedPath string) error {
  *   jsonOut (bool) — report errors as JSON
  *   debugOn (bool) — write a debug trace
  *   start (tuiStart) — where the interface opens
+ *   out (io.Writer) — standard output
  *   errOut (io.Writer) — where notes and errors go
  *
  * Returns:
  *   int — the exit code
  *
  * Example:
- *   return openInterface("", false, false, tuiStart{state: viewMenu}, os.Stderr)
+ *   return openInterface("", false, false, tuiStart{state: viewMenu}, os.Stdout, os.Stderr)
  */
-func openInterface(dbPath string, jsonOut, debugOn bool, start tuiStart, errOut io.Writer) int {
+func openInterface(dbPath string, jsonOut, debugOn bool, start tuiStart, out, errOut io.Writer) int {
 	dl, err := openDebugLogIfRequested(debugOn, errOut)
 	if err != nil {
-		return failWith(errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
+		return failWith(out, errOut, jsonOut, asCreate(fmt.Errorf("opening debug log: %w", err)))
 	}
 	defer dl.Close()
 	if dbPath == "" {
@@ -527,15 +535,15 @@ func openInterface(dbPath string, jsonOut, debugOn bool, start tuiStart, errOut 
 	}
 	resolvedPath, err := resolveDBPath(dbPath)
 	if err != nil {
-		return failWith(errOut, jsonOut, err)
+		return failWith(out, errOut, jsonOut, err)
 	}
 	if err := missingWorkspace(dbPath, resolvedPath); err != nil {
-		return failWith(errOut, jsonOut, err)
+		return failWith(out, errOut, jsonOut, err)
 	}
 	noteWorkspaceAbove(errOut, dbPath, resolvedPath)
 	kb, err := knowledge.Open(resolvedPath)
 	if err != nil {
-		return failWith(errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
+		return failWith(out, errOut, jsonOut, fmt.Errorf("open %s: %w", resolvedPath, err))
 	}
 	defer kb.Close()
 	// A record named on the command line must exist, and is shown by its qualified
@@ -543,12 +551,12 @@ func openInterface(dbPath string, jsonOut, debugOn bool, start tuiStart, errOut 
 	if start.ref != "" {
 		rec, err := resolveRecordScoped(kb, start.ref, recordFlags{}, false)
 		if err != nil {
-			return failWith(errOut, jsonOut, err)
+			return failWith(out, errOut, jsonOut, err)
 		}
 		start.ref = refOf(*rec, projectNames(kb)).String()
 	}
 	if err := launchTUI(kb, dl, start); err != nil {
-		return failWith(errOut, jsonOut, err)
+		return failWith(out, errOut, jsonOut, err)
 	}
 	return 0
 }

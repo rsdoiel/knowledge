@@ -57,9 +57,11 @@ a difference of opinion.
 
 -json
 : machine-readable JSON output instead of human-readable text. Applies to
-  every verb. Errors always go to stderr, never stdout, in both modes —
-  scripts consuming JSON output can rely on stdout staying valid JSON
-  even when a call fails.
+  every verb. An error is written to standard error as a plain "kb: message"
+  line, as in text mode, and in this mode also to standard output as a JSON
+  object, so standard output is always valid JSON, a failure included. A
+  warning or note is plain text on standard error only. A command line whose
+  options do not parse has no mode yet and is reported as text.
 
 -i
 : open the interface at this command instead of running it. kb -i
@@ -366,6 +368,10 @@ verbs
 : print the verb table: every verb, subverb, flag and write class, as text or
   with -json — see kb-verbs(1)
 
+version, license
+: print the version, or the license, as kb -version and -license do — see
+  kb-version(1)
+
 # ARGUMENTS
 
 The global options -json, -db and -debug go before the verb: kb
@@ -396,8 +402,11 @@ script or a calling tool can tell them apart from the number alone. A command th
 works through many items (ingest, index --all, source check-retractions) does all it
 can, prints the counts, and then exits with the class of the first failure: it does
 not exit 0 with failures, and one bad item does not stop the good ones. With -json
-the error on stderr carries the class name beside the number, for example
-{"error": "...", "class": "no_input", "code": 66}.
+the error is also written to standard output as an object that carries the
+class name beside the number, for example
+{"error": "...", "class": "no_input", "code": 66}. A command that prints a
+result before it fails (ingest, check-retractions) leaves the result and then
+the error object on standard output, one after the other.
 
 0
 : success. A listing that matches nothing is still success
@@ -470,5 +479,5 @@ kb-search(1), kb-merge(1), kb-check-db(1),
 kb-stats(1), kb-story(1), kb-export(1),
 kb-import(1), kb-ingest(1), kb-record(1),
 kb-document(1), kb-index(1), kb-init(1),
-kb-model(1), kb-embed(1), kb-completion(1), kb-verbs(1), kb-topics(1)
+kb-model(1), kb-embed(1), kb-completion(1), kb-verbs(1), kb-version(1), kb-topics(1)
 

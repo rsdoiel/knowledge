@@ -1020,7 +1020,7 @@ full row afterward:
 | `concept-show` / `concept-recall` exit 1 | A normal answer: no such concept (show; offer the case variant it prints), or no concept found in the text (recall). Not a fault |
 | `record-fuzzy-tag` proposes common short words | Expected for a short concept name. Do not `--write`; re-run with `--concept` naming only the intended concepts |
 | `concept-suggest` output looks like noise | Expected in part — it is a mechanical pass, roughly half signal. Present it for the user to pick from; never auto-`concept add` the list |
-| Command exits non-zero             | Report the stderr message verbatim (never printed to stdout, so it's safe to surface directly even in `--json` scripting contexts), and act on the exit code (below) |
+| Command exits non-zero             | Report the stderr message verbatim (under `--json` the same error is also an `{"error","class","code"}` object on stdout, so a script can parse it), and act on the exit code (below) |
 
 ### Exit codes
 

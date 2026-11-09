@@ -83,15 +83,20 @@ func TestCmdIngest_JSONPrintsTheSummaryAndTheClass(t *testing.T) {
 		t.Errorf("exit %d, want 65", code)
 	}
 	var sum struct{ Added, Failed int }
-	if err := json.Unmarshal([]byte(out), &sum); err != nil || sum.Added != 1 || sum.Failed != 1 {
+	// stdout is a stream: the summary, then the error object (DR-0010).
+	dec := json.NewDecoder(strings.NewReader(out))
+	if err := dec.Decode(&sum); err != nil || sum.Added != 1 || sum.Failed != 1 {
 		t.Errorf("stdout = %q (%v), want the summary with added 1, failed 1", out, err)
 	}
 	var env struct {
 		Class string
 		Code  int
 	}
-	if err := json.Unmarshal([]byte(errOut), &env); err != nil || env.Class != "data" || env.Code != 65 {
-		t.Errorf("stderr = %q (%v), want a data envelope", errOut, err)
+	if err := dec.Decode(&env); err != nil || env.Class != "data" || env.Code != 65 {
+		t.Errorf("stdout after the summary: %v, want a data envelope", err)
+	}
+	if !strings.HasPrefix(errOut, "kb: ") {
+		t.Errorf("stderr = %q, want the plain kb: line", errOut)
 	}
 }
 

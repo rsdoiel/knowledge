@@ -89,21 +89,21 @@ func TestMainRun_UsageErrorsExitTwo(t *testing.T) {
 	}
 }
 
-// A usage error under --json is still exit 2, with the same envelope on stderr
-// and nothing on stdout.
+// A usage error under --json is still exit 2, with the envelope on stdout
+// and the plain line on stderr.
 func TestMainRun_UsageErrorUnderJSONExitsTwo(t *testing.T) {
 	code, out, errOut := runKB(t, "--json", "project", "show")
 	if code != 2 {
 		t.Errorf("exit %d, want 2", code)
 	}
-	if out != "" {
-		t.Errorf("stdout = %q, want it empty", out)
+	if !strings.HasPrefix(errOut, "kb: ") {
+		t.Errorf("stderr = %q, want the plain kb: line", errOut)
 	}
 	var env struct {
 		Error string `json:"error"`
 	}
-	if err := json.Unmarshal([]byte(errOut), &env); err != nil || env.Error == "" {
-		t.Errorf("stderr = %q, want a {\"error\": ...} envelope (%v)", errOut, err)
+	if err := json.Unmarshal([]byte(out), &env); err != nil || env.Error == "" {
+		t.Errorf("stdout = %q, want a {\"error\": ...} envelope (%v)", out, err)
 	}
 }
 

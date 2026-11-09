@@ -3,6 +3,30 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+### Changed
+
+- **An error is also written to standard output under `--json`** (workspace DR-0010). The plain `kb: message` line stays on
+  standard error in both modes, as in text mode. In JSON mode the same failure is also the object
+  `{"error": "...", "class": "no_input", "code": 66}` on standard output, so standard output is always valid JSON. **A script
+  that read the JSON error from standard error must read standard output instead**; standard error is now plain text in every
+  mode. A command that printed a result before it failed (`ingest`, `source check-retractions`) leaves the result and then the
+  error object on standard output. Warnings and notes are plain text on standard error only. Text mode is unchanged. The usage
+  page is no longer printed after an unknown verb under `--json`.
+
+### Added
+
+- **`kb version` and `kb license`** are verbs, as well as the `-version` and `-license` options, for the habit of `go version`.
+  They print the same text, open no database and work anywhere, and refuse `--db`. Under `--json` they print
+  `{"name", "version", "release_hash"}` and `{"license"}`. The manual page is `kb-version(1)`, which `license` shares.
+
+### Fixed
+
+- **An unknown verb was reported as a missing workspace.** `kb version` (before it existed) outside a workspace said "no
+  agents/knowledge.db here" and exited 66, and with `--db` it created that database. The verb is now checked before the
+  workspace: exit 2, and nothing is made. An unknown help topic and `kb UNKNOWN -h` now use the error object under `--json` too.
+
 ## v0.0.30 — 2026-11-01
 
 A prerelease: observations can be drafted for a person to review. Decision: DR-0090; plan:

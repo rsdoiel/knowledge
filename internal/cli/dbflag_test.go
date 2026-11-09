@@ -48,14 +48,14 @@ func TestMainRun_DBOptionRefusalUnderJSONIsAnEnvelope(t *testing.T) {
 	t.Chdir(t.TempDir())
 	var out, errOut bytes.Buffer
 	code := mainRun([]string{"--json", "--db", "rt.db", "init"}, &out, &errOut)
-	if code != 2 || out.Len() != 0 {
-		t.Fatalf("exit %d, stdout %q; want 2 and nothing on stdout", code, out.String())
+	if code != 2 || !strings.HasPrefix(errOut.String(), "kb: ") {
+		t.Fatalf("exit %d, stderr %q; want 2 and the plain kb: line", code, errOut.String())
 	}
 	var env struct {
 		Error string `json:"error"`
 	}
-	if err := json.Unmarshal(errOut.Bytes(), &env); err != nil || env.Error == "" {
-		t.Errorf("stderr = %q, want a {\"error\": ...} envelope (%v)", errOut.String(), err)
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil || env.Error == "" {
+		t.Errorf("stdout = %q, want a {\"error\": ...} envelope (%v)", out.String(), err)
 	}
 }
 

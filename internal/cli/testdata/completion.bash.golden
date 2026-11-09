@@ -45,7 +45,7 @@ _kb() {
         if [[ "$cur" == -* ]]; then
             COMPREPLY=( $(compgen -W "--db --debug --help -i --json --license --version" -- "$cur") )
         else
-            COMPREPLY=( $(compgen -W "check-db completion concept document embed export format help import index ingest init link merge model observation project record search source stats story summary unlink verbs" -- "$cur") )
+            COMPREPLY=( $(compgen -W "check-db completion concept document embed export format help import index ingest init license link merge model observation project record search source stats story summary unlink verbs version" -- "$cur") )
         fi
         return 0
     fi
@@ -75,7 +75,7 @@ _kb() {
         return 0
     fi
     case "$verb" in
-        help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document embed export format help import index ingest init link merge model observation project record search source stats story summary unlink verbs topics" -- "$cur") ) ;;
+        help)       [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "check-db completion concept document embed export format help import index ingest init license link merge model observation project record search source stats story summary unlink verbs version topics" -- "$cur") ) ;;
         completion) [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "bash powershell" -- "$cur") ) ;;
         search)     [[ $n -eq 1 ]] && COMPREPLY=( $(compgen -W "$(_kb_search_scopes)" -- "$cur") ) ;;
         concept)

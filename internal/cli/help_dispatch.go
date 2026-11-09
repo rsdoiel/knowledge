@@ -69,6 +69,8 @@ func printHelp(out io.Writer, topic string) bool {
 		f(CompletionHelpText)
 	case "verbs":
 		f(VerbsHelpText)
+	case "version", "license":
+		f(VersionHelpText)
 	case "model":
 		f(ModelHelpText)
 	case "embed":

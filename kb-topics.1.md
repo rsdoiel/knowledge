@@ -84,6 +84,9 @@ completion
 verbs
 : print the verb table, as text or JSON
 
+version
+: print the version. license, which prints the license, shares this page
+
 # NOTES
 
 The conventional spelling for this page is "help index". It is "help topics"

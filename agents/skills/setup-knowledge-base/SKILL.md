@@ -220,7 +220,7 @@ user decide. Windows PowerShell 5.1 is not covered.
 |-----------------------------------|-----------------------------------------------------------------------|
 | `kb` not found anywhere            | Report; suggest building it (`cd ~/Laboratory/knowledge && make build`) |
 | `DB_PATH`'s parent directory missing | `kb`/`Open()` creates it automatically (`os.MkdirAll`) — not an error |
-| Command exits non-zero             | Report the stderr message verbatim; `kb` always routes errors there, never stdout; then act on the exit code (below) |
+| Command exits non-zero             | Report the stderr message verbatim; `kb` always writes the error line there (under `--json` it is also an `{"error","class","code"}` object on stdout); then act on the exit code (below) |
 
 ### Exit codes
 

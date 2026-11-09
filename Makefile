@@ -10,7 +10,7 @@ GIT_GROUP = rsdoiel
 
 PROGRAMS = kb
 
-KB_TOPICS = project observation concept link unlink source search merge check-db stats story export import ingest record document index init model embed completion verbs topics
+KB_TOPICS = project observation concept link unlink source search merge check-db stats story export import ingest record document index init model embed completion verbs version topics
 
 RELEASE_DATE = $(shell date +%Y-%m-%d)
 

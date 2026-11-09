@@ -82,7 +82,7 @@ func TestMakefile_KBTopicsCoversEveryVerb(t *testing.T) {
 	}
 	// summary and format are aliases sharing search's page, so they have no
 	// page of their own to generate.
-	for _, alias := range []string{"summary", "format"} {
+	for _, alias := range []string{"summary", "format", "license"} {
 		listed[alias] = true
 	}
 	// Every topic needs a page, not only every verb: RELEASE_REVIEW.md asks

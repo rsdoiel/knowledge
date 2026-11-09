@@ -216,8 +216,8 @@ func TestCheckDB_JSONErrorEnvelopeCarriesTheClass(t *testing.T) {
 		Class string `json:"class"`
 		Code  int    `json:"code"`
 	}
-	if err := json.Unmarshal(errOut.Bytes(), &env); err != nil || env.Class != "no_input" {
-		t.Errorf("envelope = %s (%v)", errOut.String(), err)
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil || env.Class != "no_input" {
+		t.Errorf("envelope on stdout = %s (%v)", out.String(), err)
 	}
 }
 

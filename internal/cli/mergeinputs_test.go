@@ -175,14 +175,14 @@ func TestMerge_RefusalUnderJSONIsAnEnvelope(t *testing.T) {
 	mergeDir(t)
 	var out, errOut bytes.Buffer
 	code := mainRun([]string{"--json", "merge", "-a", "missing.db", "-b", "b.db", "-out", "o.db"}, &out, &errOut)
-	if code != 66 || out.Len() != 0 {
-		t.Fatalf("exit %d, stdout %q", code, out.String())
+	if code != 66 || !strings.HasPrefix(errOut.String(), "kb: ") {
+		t.Fatalf("exit %d, stderr %q", code, errOut.String())
 	}
 	var env struct {
 		Error string `json:"error"`
 	}
-	if err := json.Unmarshal(errOut.Bytes(), &env); err != nil || !strings.Contains(env.Error, "does not exist") {
-		t.Errorf("stderr = %q (%v), want an envelope naming the missing file", errOut.String(), err)
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil || !strings.Contains(env.Error, "does not exist") {
+		t.Errorf("stdout = %q (%v), want an envelope naming the missing file", out.String(), err)
 	}
 }
 

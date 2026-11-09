@@ -210,11 +210,11 @@ func TestModel_ExitCodes(t *testing.T) {
 			if code != tc.want.Code {
 				t.Fatalf("exit %d, want %d (%s); stderr %s", code, tc.want.Code, tc.want.Name, errOut.String())
 			}
-			if out.Len() != 0 {
-				t.Errorf("a failure wrote to stdout: %q", out.String())
+			if !strings.HasPrefix(errOut.String(), "kb: ") {
+				t.Errorf("stderr = %q, want the plain kb: line", errOut.String())
 			}
-			if !strings.Contains(errOut.String(), `"`+tc.want.Name+`"`) {
-				t.Errorf("error does not carry class %q: %s", tc.want.Name, errOut.String())
+			if !strings.Contains(out.String(), `"`+tc.want.Name+`"`) {
+				t.Errorf("stdout does not carry class %q: %s", tc.want.Name, out.String())
 			}
 		})
 	}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 )
 
@@ -26,23 +25,33 @@ func TestPrintJSON_ValidOutput(t *testing.T) {
 }
 
 func TestPrintError_TextMode(t *testing.T) {
-	var errOut bytes.Buffer
-	printError(&errOut, false, errors.New("something broke"))
-	if !strings.Contains(errOut.String(), "something broke") {
-		t.Errorf("errOut = %q, want it to contain the error message", errOut.String())
+	var out, errOut bytes.Buffer
+	printError(&out, &errOut, false, errors.New("something broke"))
+	if errOut.String() != "kb: something broke\n" {
+		t.Errorf("errOut = %q, want the one plain line", errOut.String())
+	}
+	if out.Len() != 0 {
+		t.Errorf("out = %q, want nothing in text mode", out.String())
 	}
 }
 
-func TestPrintError_JSONMode(t *testing.T) {
-	var errOut bytes.Buffer
-	printError(&errOut, true, errors.New("something broke"))
+// In JSON mode the human line still goes to standard error, and the error is
+// also an object on standard output (workspace DR-0010).
+func TestPrintError_JSONModeIsPlainOnStderrAndAnObjectOnStdout(t *testing.T) {
+	var out, errOut bytes.Buffer
+	printError(&out, &errOut, true, usageErrorf("something broke"))
+	if errOut.String() != "kb: something broke\n" {
+		t.Errorf("errOut = %q, want the plain line, not JSON", errOut.String())
+	}
 	var envelope struct {
 		Error string `json:"error"`
+		Class string `json:"class"`
+		Code  int    `json:"code"`
 	}
-	if err := json.Unmarshal(errOut.Bytes(), &envelope); err != nil {
-		t.Fatalf("errOut is not valid JSON: %v (%q)", err, errOut.String())
+	if err := json.Unmarshal(out.Bytes(), &envelope); err != nil {
+		t.Fatalf("out is not one JSON object: %v (%q)", err, out.String())
 	}
-	if envelope.Error != "something broke" {
-		t.Errorf("envelope.Error = %q, want %q", envelope.Error, "something broke")
+	if envelope.Error != "something broke" || envelope.Class != "usage" || envelope.Code != 2 {
+		t.Errorf("envelope = %+v, want error, class usage, code 2", envelope)
 	}
 }

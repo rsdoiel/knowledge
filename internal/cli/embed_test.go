@@ -219,11 +219,11 @@ func TestEmbed_ExitCodes(t *testing.T) {
 			}
 			var out, errOut bytes.Buffer
 			code := mainRun(append([]string{"--db", f.db, "-json"}, tc.args...), &out, &errOut)
-			if code != tc.want.Code || !strings.Contains(errOut.String(), `"`+tc.want.Name+`"`) {
-				t.Errorf("exit %d, want %d (%s); stderr %s", code, tc.want.Code, tc.want.Name, errOut.String())
+			if code != tc.want.Code || !strings.Contains(out.String(), `"`+tc.want.Name+`"`) {
+				t.Errorf("exit %d, want %d (%s); stdout %s", code, tc.want.Code, tc.want.Name, out.String())
 			}
-			if out.Len() != 0 {
-				t.Errorf("a failure wrote to stdout: %q", out.String())
+			if !strings.HasPrefix(errOut.String(), "kb: ") {
+				t.Errorf("stderr = %q, want the plain kb: line", errOut.String())
 			}
 		})
 	}

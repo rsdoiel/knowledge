@@ -19,7 +19,7 @@ summaries. `agents/knowledge.jsonl` beside it is the authoritative copy that tra
 1. **Write through `kb`, never raw SQL.** `kb` keeps the full-text index in step with every
    write; a hand-written `INSERT` does not. Raw `sqlite3` is for reading what no verb covers.
 2. **Use `--json` when a program reads the output.** It goes before the verb: `kb --json search
-   toast`. Errors go to standard error, so standard output stays parseable.
+   toast`. Errors go to standard error; under `--json` the error is also an object on standard output, so standard output stays parseable.
 3. **Never accept a decision record, and never promote a document summary.** A model may write a
    record (it is created `proposed`) and may draft a summary. `kb record set-status REF accepted`
    and `kb document review promote ID` exit 2 without a terminal, with no flag to change that. Tell
@@ -56,7 +56,7 @@ Each is `kb VERB`; the class is what it does to the database.
 | `export`, `import`, `merge` | cli_only | portable snapshots and reconciling two databases |
 | `model` (`install fetch list`) | direct, read | manage the embedding model files semantic search needs; files only, no database, no network except `fetch` |
 | `embed` (`-status`, `-rebuild`) | direct | build and update the semantic-search index (`agents/knowledge.vectors.db`); semantic build only; write verbs keep it current when it exists |
-| `init`, `completion`, `verbs` | cli_only | create a workspace, shell completion, the verb table |
+| `init`, `completion`, `verbs`, `version`, `license` | cli_only | create a workspace, shell completion, the verb table, the version, the license (as `-version` and `-license`) |
 
 ## Exit codes
 

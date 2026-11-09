@@ -86,8 +86,8 @@ func TestProjectAdd_ExistingNameIsExitOneAndChangesNothing(t *testing.T) {
 func TestProjectAdd_ExistingNameJSONErrorNamesTheClass(t *testing.T) {
 	db := filepath.Join(t.TempDir(), "kb.db")
 	projectAddRun(t, db, "project", "add", "demo")
-	code, _, errOut := projectAddRun(t, db, "--json", "project", "add", "demo")
-	if code != 1 || !strings.Contains(errOut, `"negative"`) {
-		t.Errorf("exit %d, stderr %s; want 1 and class negative", code, errOut)
+	code, out, errOut := projectAddRun(t, db, "--json", "project", "add", "demo")
+	if code != 1 || !strings.Contains(out, `"negative"`) || !strings.HasPrefix(errOut, "kb: ") {
+		t.Errorf("exit %d, stdout %s, stderr %s; want 1, class negative on stdout, the plain line on stderr", code, out, errOut)
 	}
 }

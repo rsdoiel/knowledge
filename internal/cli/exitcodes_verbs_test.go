@@ -80,19 +80,21 @@ func runVerbCase(t *testing.T, tc verbCase) {
 	if code == classInternal.Code {
 		t.Errorf("kb %s: exit 70, an error nothing classified: %.200s", strings.Join(tc.args, " "), errOut.String())
 	}
-	if s := strings.TrimSpace(errOut.String()); strings.HasPrefix(s, "{") {
+	if tc.want != classOK && !tc.bulk {
+		// The contract (workspace DR-0010): the human line is on stderr, and
+		// in JSON mode the error is also the whole of stdout, as an object.
+		if e := strings.TrimSpace(errOut.String()); !strings.HasPrefix(e, "kb:") {
+			t.Errorf("stderr = %.100q, want the plain kb: line", e)
+		}
 		var env struct {
 			Class string `json:"class"`
 			Code  int    `json:"code"`
 		}
-		if err := json.Unmarshal([]byte(s), &env); err != nil {
-			t.Errorf("stderr is not one JSON object: %.200q (%v)", s, err)
+		if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+			t.Errorf("stdout is not one JSON object: %.200q (%v)", out.String(), err)
 		} else if env.Class != tc.want.Name || env.Code != tc.want.Code {
 			t.Errorf("envelope class %q code %d, want %q %d", env.Class, env.Code, tc.want.Name, tc.want.Code)
 		}
-	}
-	if out.Len() != 0 && tc.want != classOK && !tc.bulk {
-		t.Errorf("stdout = %.100q, want it empty on a failure", out.String())
 	}
 }
 

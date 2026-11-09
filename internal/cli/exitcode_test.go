@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -334,8 +335,8 @@ func TestPrintError_JSONEnvelopeCarriesClassAndCode(t *testing.T) {
 			Class string `json:"class"`
 			Code  int    `json:"code"`
 		}
-		if err := json.Unmarshal([]byte(errOut), &env); err != nil {
-			t.Fatalf("stderr is not JSON: %q (%v)", errOut, err)
+		if err := json.Unmarshal([]byte(out), &env); err != nil {
+			t.Fatalf("stdout is not JSON: %q (%v)", out, err)
 		}
 		if env.Error != tc.failure.Error() || env.Class != tc.class || env.Code != tc.code {
 			t.Errorf("envelope = %+v, want error %q class %q code %d", env, tc.failure.Error(), tc.class, tc.code)
@@ -343,8 +344,8 @@ func TestPrintError_JSONEnvelopeCarriesClassAndCode(t *testing.T) {
 		if code != env.Code {
 			t.Errorf("exit code %d disagrees with the envelope's code %d", code, env.Code)
 		}
-		if out != "" {
-			t.Errorf("stdout = %q, want it empty", out)
+		if !strings.HasPrefix(errOut, "kb: ") {
+			t.Errorf("stderr = %q, want the plain kb: line", errOut)
 		}
 	}
 }
