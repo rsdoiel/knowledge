@@ -25,13 +25,13 @@ require (
 	github.com/glebarez/go-sqlite v1.22.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/gofrs/flock v0.13.1 // indirect
-	github.com/gomlx/compute v0.1.16 // indirect
-	github.com/gomlx/compute-onnx v0.1.15 // indirect
+	github.com/gomlx/compute v0.1.25 // indirect
+	github.com/gomlx/compute-onnx v0.1.24 // indirect
 	github.com/gomlx/exceptions v0.0.3 // indirect
-	github.com/gomlx/go-huggingface v0.4.17 // indirect
-	github.com/gomlx/go-xla v0.4.16 // indirect
-	github.com/gomlx/gomlx v0.28.19 // indirect
-	github.com/gomlx/onnx-gomlx v0.5.16 // indirect
+	github.com/gomlx/go-huggingface v0.4.27 // indirect
+	github.com/gomlx/go-xla v0.4.25 // indirect
+	github.com/gomlx/gomlx v0.28.29 // indirect
+	github.com/gomlx/onnx-gomlx v0.5.26 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/knights-analytics/ortgenai v0.3.4 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect

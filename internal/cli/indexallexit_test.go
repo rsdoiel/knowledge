@@ -76,3 +76,29 @@ func TestIndexAll_AllCurrentExitsZero(t *testing.T) {
 		t.Errorf("exit %d, want 0; stdout %q stderr %q", code, out, errOut)
 	}
 }
+
+// Under --json a corpus that could not be indexed is its own error object after
+// the summary (workspace DR-0011); a merely stale one is not an error.
+func TestIndexAll_JSONWritesOneErrorObjectPerFailedCorpus(t *testing.T) {
+	root := indexAllRoot(t)
+	a := filepath.Join(root, "a", "decisions", "0001-ok.md")
+	b, _ := os.ReadFile(a)
+	os.WriteFile(a, bytes.Replace(b, []byte(`title: "ok"`), []byte(`title: "changed"`), 1), 0o644)
+	writeRaw(t, filepath.Join(root, "b", "decisions"), "0002-bad.md", "---\nid: \"0002\"\ntitle: \"\"\n---\nx\n")
+
+	var out, errOut bytes.Buffer
+	code := mainRun([]string{"--json", "index", "--all", root, "--check"}, &out, &errOut)
+	if code != 65 {
+		t.Fatalf("exit %d, want 65; stderr %q", code, errOut.String())
+	}
+	items := decodeStream(t, out.String())
+	if len(items) != 2 {
+		t.Fatalf("stdout holds %d values, want the summary and one error object:\n%s", len(items), out.String())
+	}
+	if items[1]["class"] != "data" || items[1]["code"] != float64(65) {
+		t.Errorf("error object = %v, want class data, code 65", items[1])
+	}
+	if msg, _ := items[1]["error"].(string); !strings.Contains(msg, filepath.Join("b", "decisions")) {
+		t.Errorf("error %q should name the failed corpus", msg)
+	}
+}

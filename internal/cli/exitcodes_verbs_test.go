@@ -163,6 +163,8 @@ var negativeVerbCases = []verbCase{
 	{name: "unlink missing project", setup: [][]string{{"concept", "add", "C"}}, args: []string{"unlink", "project", "nosuch", "C"}},
 	{name: "unlink source not linked", setup: [][]string{{"project", "add", "P", "d"}, {"observation", "add", "--project", "P", "note", "b"}, {"source", "add", "S"}}, args: []string{"unlink", "source", "1", "1"}},
 	{name: "observation delete while linked", setup: seedLinked(), args: []string{"observation", "delete", "1"}},
+	{name: "check-db not in sync", bulk: true, setup: [][]string{{"project", "add", "P", "d"}, {"export", "-out", "dump.jsonl"}, {"project", "add", "Q", "d"}}, args: []string{"check-db", "--jsonl", "dump.jsonl"}},
+	{name: "story timeline of an unknown project", args: []string{"story", "timeline", "--project", "nosuch"}},
 	{name: "observation review promote of a reviewed observation", setup: append(seedProject(), []string{"observation", "add", "--project", "P", "note", "b"}), args: []string{"observation", "review", "promote", "1"}},
 	{name: "observation review promote missing", args: []string{"observation", "review", "promote", "99"}},
 	{name: "observation review list unknown project", args: []string{"observation", "review", "list", "--project", "nosuch"}},
@@ -284,6 +286,8 @@ var noInputVerbCases = []verbCase{
 	{name: "check-db with no dump", setup: seedProject(), args: []string{"check-db"}},
 	{name: "check-db with --jsonl naming a missing file", setup: seedProject(), args: []string{"check-db", "--jsonl", "/nonexistent.jsonl"}},
 	{name: "no workspace here", noDB: true, args: []string{"project", "list"}},
+	{name: "stats with no workspace", noDB: true, args: []string{"stats"}},
+	{name: "concept show with no workspace", noDB: true, args: []string{"concept", "show", "C"}},
 }
 
 func TestVerbs_NoInputIsExit66(t *testing.T) {

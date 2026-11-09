@@ -79,10 +79,9 @@
   (class `usage`, code 2; the plain line stays on stderr, no usage page): `TestMainRun_UnknownVerbUnderJSONIsTheEnvelope`. The
   same change applies to every error (workspace DR-0011, accepted): `printError(out, errOut, ...)`; about 25 tests that asserted an
   empty stdout on failure now assert the object. Exit codes reviewed: only this path changed, 66 to 2.
-- [ ] **Hold the older manual pages to the exit status check.** `TestManPages_ExitStatusMatchesTheVerbTests` covers
-  the thirteen pages written for v0.0.28. `concept`, `record`, `check-db`, `stats`, `story`, `completion` and
-  `document` name codes whose proofs are in per-verb test files (`conceptshowrecall_test.go` and others); list them
-  in `provedElsewhere` with the test name, or add the cases to `exitcodes_verbs_test.go`. Found 2026-10-28.
+- [x] **The older manual pages are held to the exit status check.** Done 2026-11-09, unreleased. All seven (and `verbs`,
+  `version`) are in `checkedAgainstVerbTests`; the proofs are table cases or named in `provedElsewhere`. It found one wrong code:
+  `completion -install` over a file in the directory's place exited 74, not 73 (fixed, `completionexit_test.go`).
 - [x] **Two TUI binary tests timed out at 10 s when run from inside tmux** (`TestBinary_TUIIngestPlanThenApplyOnATerminal`,
   `TestBinary_TUIDeleteAProjectByTypingItsName`). Fixed 2026-10-28. Cause: the pseudo-terminal tests gave the binary the
   caller's environment, so under `TERM=tmux-256color` (and `TMUX`) it wrote differently from the xterm the 80 by 24 emulator
@@ -200,12 +199,15 @@ go get github.com/tsawler/prose/v3``` or ```go get github.com/jdkato/prose/v3```
 
 - [x] `kb version` and `kb license` are verbs, as well as `-version` and `-license`. Done 2026-11-09, unreleased. Tests:
   `versionlicense_test.go`. Page `kb-version(1)`; `license` shares it as `summary` and `format` share `search`.
-- [ ] Add a sub verb, relates-to similar to supersede so it makes it easy to update the relationship without resorting to sed
+- [x] Add a sub verb, relates-to similar to supersede so it makes it easy to update the relationship without resorting to sed. Done 2026-11-09, unreleased: `kb record relates-to REF TARGET [--remove]`; tests `recordrelates_test.go`. Not in the interface (supersede has `u` there; a `r` key for relates-to is open).
 - [ ] **Bump `gomlx/compute` to v0.1.17 in `semantic/`, then offer the author's Pi 5 benchmark upstream.** v0.1.17 is
   gomlx/compute#46 (adaptive chunking for the non-SIMD kernels; the maintainer measured it within the noise). Bump, rebuild,
   rerun `tmp/compute-bench/` (the micro-benchmark behind the #44 thread, now `cmd/ka_microbench` in gomlx/compute) and a first
   `kb embed`, then post the Pi 5 numbers on gomlx/compute#44 if the maintainer is still collecting them. The author posts.
-  Added 2026-10-30.
+  Added 2026-10-30. *Done 2026-11-09, unreleased, except the posting:* `semantic/` is on compute v0.1.25 (the whole gomlx stack
+  at its latest; hugot has nothing after v0.8.5). A first `kb embed` of the same 947 rows took 15 min 25 s and peaked at 905 MB,
+  against 15 min 36 s and 1,190 MB, so the speed is unchanged and memory is a quarter lower. `tmp/compute-bench/` was not rerun.
+  The numbers for #44 are in `semantic/README.md`; the author posts.
 - [ ] **Offer gomlx/compute the author's Pi 5 and Apple Silicon Mac for arm64 NEON SIMD benchmarks.** In the #44 thread the
   maintainer (Jan Pfeifer) said the missing optimisation for the Pi's Cortex-A76 is arm64 NEON SIMD (it would also help Apple
   users), that scheduling has little left to give, and that they have no Pi or Mac to develop or benchmark on. 77% of our embed

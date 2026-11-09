@@ -718,6 +718,35 @@ func (kb *KnowledgeBase) AddRecordRelation(fromID, toID int64, relationship stri
 	return err
 }
 
+/** RemoveRecordRelation deletes one relation a record declares, and reports
+ * whether there was one. A relates_to edge is symmetric, so it is removed whichever
+ * of the two records declared it.
+ *
+ * Parameters:
+ *   fromID (int64) — the record that declares the relation
+ *   toID (int64) — the record it points at
+ *   relationship (string) — "supersedes" or "relates_to"
+ *
+ * Returns:
+ *   bool — true when a row was deleted
+ *   error — a database error
+ *
+ * Example:
+ *   removed, err := kb.RemoveRecordRelation(a.ID, b.ID, "relates_to")
+ */
+func (kb *KnowledgeBase) RemoveRecordRelation(fromID, toID int64, relationship string) (bool, error) {
+	res, err := kb.db.Exec(
+		`DELETE FROM record_relations WHERE relationship = ? AND
+		   ((from_id = ? AND to_id = ?) OR (? = 'relates_to' AND from_id = ? AND to_id = ?))`,
+		relationship, fromID, toID, relationship, toID, fromID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 /** ClearRecordRelationsFrom deletes every relation a record declares as its
  * own — both supersedes and relates_to — without touching edges other
  * records declare toward it. Ingest calls this before re-inserting a

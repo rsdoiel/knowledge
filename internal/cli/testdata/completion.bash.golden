@@ -65,7 +65,7 @@ _kb() {
         model) COMPREPLY=( $(compgen -W "--workspace --dir --name --source" -- "$cur") ) ;;
         observation) COMPREPLY=( $(compgen -W "--project --source-doi --draft --by --confidence --status" -- "$cur") ) ;;
         project) COMPREPLY=( $(compgen -W "--status --root --dry-run" -- "$cur") ) ;;
-        record) COMPREPLY=( $(compgen -W "--project --status --kind --trigger --initiative --since --root --dir --title --concept --workspace --partial --dry-run --write --all" -- "$cur") ) ;;
+        record) COMPREPLY=( $(compgen -W "--project --status --kind --trigger --initiative --since --root --dir --title --concept --workspace --partial --remove --dry-run --write --all" -- "$cur") ) ;;
         search) COMPREPLY=( $(compgen -W "--project" -- "$cur") ) ;;
         source) COMPREPLY=( $(compgen -W "--doi --url --authors --published --publisher --rights --version --relationship --document --record --hash" -- "$cur") ) ;;
         story) COMPREPLY=( $(compgen -W "--project --narrative --strict" -- "$cur") ) ;;
@@ -100,7 +100,7 @@ _kb() {
             elif [[ $n -eq 2 && "${pos[1]}" =~ ^(show|concepts|set-status|set-description|rename|delete)$ ]]; then COMPREPLY=( $(compgen -W "$(_kb_projects)" -- "$cur") )
             fi ;;
         record)
-            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "list pending show set-status supersede fmt new concepts delete fuzzy-tag" -- "$cur") )
+            if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "list pending show set-status supersede relates-to fmt new concepts delete fuzzy-tag" -- "$cur") )
             fi ;;
         source)
             if [[ $n -eq 1 ]]; then COMPREPLY=( $(compgen -W "add list show remove retract link check-retractions" -- "$cur") )

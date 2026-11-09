@@ -338,7 +338,7 @@ ingest
 
 record
 : read and maintain decision records — list, pending, show, new, set-status,
-  supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
+  supersede, relates-to, fmt, fuzzy-tag (near-miss concept mentions) — see
   kb-record(1)
 
 document

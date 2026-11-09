@@ -54,6 +54,7 @@ type recordFlags struct {
 	dir        string
 	title      string
 	partial    bool
+	remove     bool
 	dryRun     bool
 	concept    string
 	write      bool
@@ -84,7 +85,7 @@ type recordFlags struct {
  */
 func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return usageErrorf("record requires a subverb: list, pending, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete")
+		return usageErrorf("record requires a subverb: list, pending, show, new, set-status, supersede, relates-to, fmt, concepts, fuzzy-tag or delete")
 	}
 	flags, err := parseRecordFlags(args[1:])
 	if err != nil {
@@ -107,6 +108,8 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 		return recordSetStatus(kb, jsonOut, flags, out)
 	case "supersede":
 		return recordSupersede(kb, jsonOut, flags, out)
+	case "relates-to":
+		return recordRelatesTo(kb, jsonOut, flags, out)
 	case "fmt":
 		return recordFmt(kb, jsonOut, flags, out)
 	case "new":
@@ -118,7 +121,7 @@ func cmdRecord(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	case "fuzzy-tag":
 		return recordFuzzyTag(kb, jsonOut, flags, out)
 	default:
-		return usageErrorf("unknown record subverb %q; want list, pending, show, new, set-status, supersede, fmt, concepts, fuzzy-tag or delete", args[0])
+		return usageErrorf("unknown record subverb %q; want list, pending, show, new, set-status, supersede, relates-to, fmt, concepts, fuzzy-tag or delete", args[0])
 	}
 }
 
@@ -134,7 +137,7 @@ func parseRecordFlags(args []string) (recordFlags, error) {
 	}
 	boolFlags := map[string]*bool{
 		"--workspace": &f.workspace, "--partial": &f.partial, "--dry-run": &f.dryRun,
-		"--write": &f.write, "--all": &f.all,
+		"--write": &f.write, "--all": &f.all, "--remove": &f.remove,
 	}
 	positional, err := splitFlags(args, strFlags, boolFlags)
 	if err != nil {
@@ -1006,4 +1009,126 @@ func adviseDeprecatedScopeFlags(subverb string, f recordFlags) {
 			advise("--workspace is deprecated; qualify the record instead: workspace/DR-NNNN")
 		}
 	}
+}
+
+/** relatesEntry renders the frontmatter entry that makes from cite to: a bare id
+ * in the same tier, `scope:id` in another (ingest reads both).
+ *
+ * Parameters:
+ *   from (knowledge.Record) — the record whose file gets the entry
+ *   to (knowledge.Record) — the record it cites
+ *   names (map[int64]string) — project names by id
+ *
+ * Returns:
+ *   string — such as "0007", "other:0007" or "workspace:0011"
+ *
+ * Example:
+ *   entry := relatesEntry(a, b, projectNames(kb))
+ */
+func relatesEntry(from, to knowledge.Record, names map[int64]string) string {
+	if from.ProjectID == to.ProjectID && from.Scope == to.Scope {
+		return to.RecordID
+	}
+	return qualify(to, names) + ":" + to.RecordID
+}
+
+// recordRelatesTo adds, or with --remove drops, a relates_to link from the first
+// record to the second. Like supersede it writes the record file and the
+// database together. Only the citing record's file changes: a relates_to edge
+// reads the same from both ends, so the cited record is not touched and may be
+// in another tier.
+func recordRelatesTo(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.Writer) error {
+	if len(f.args) != 2 {
+		return usageErrorf("usage: record relates-to RECORD TARGET [--remove]")
+	}
+	from, err := resolveRecordForWrite(kb, f.args[0], f)
+	if err != nil {
+		return err
+	}
+	to, err := resolveRecord(kb, f.args[1], recordFlags{})
+	if err != nil {
+		return err
+	}
+	if from.ID == to.ID {
+		return usageErrorf("DR-%s cannot relate to itself", from.RecordID)
+	}
+
+	root := recordRoot(kb, f)
+	rf, raw, err := loadRecordFile(root, from)
+	if err != nil {
+		return err
+	}
+	notes := []string{}
+	if n := normalisationNote(rf, raw, from.Path); n != "" {
+		notes = append(notes, n)
+	}
+
+	names := projectNames(kb)
+	targetProject := ""
+	if to.Scope != "workspace" {
+		targetProject = names[to.ProjectID]
+	}
+	var kept []string
+	found := false
+	for _, e := range rf.RelatesTo {
+		key, ok := parseReference(e, rf.ProjectName, rf.Record.Scope)
+		if ok && key.recordID == to.RecordID && key.scope == to.Scope && key.project == targetProject {
+			found = true
+			continue
+		}
+		kept = append(kept, e)
+	}
+
+	action := "added"
+	changedFile := false
+	if f.remove {
+		action = "removed"
+		hadRow, err := kb.RemoveRecordRelation(from.ID, to.ID, "relates_to")
+		if err != nil {
+			return err
+		}
+		if !found && !hadRow {
+			return negativef("%s does not relate to %s", refOf(*from, names), refOf(*to, names))
+		}
+		rf.RelatesTo, changedFile = kept, found
+	} else if !found {
+		rf.RelatesTo, changedFile = append(rf.RelatesTo, relatesEntry(*from, *to, names)), true
+	}
+	if changedFile {
+		restore := func() { _ = os.WriteFile(filepath.Join(root, from.Path), raw, 0o644) }
+		if _, err := saveRecordFile(kb, root, from, rf); err != nil {
+			restore()
+			return err
+		}
+		if regenErr := regenerateIndexIfPresent(filepath.Dir(filepath.Join(root, from.Path))); regenErr != nil {
+			notes = append(notes, fmt.Sprintf("index.md could not be refreshed: %v", regenErr))
+		}
+	}
+	if !f.remove {
+		// Also when the file already said so: the database is made to agree.
+		if err := kb.AddRecordRelation(from.ID, to.ID, "relates_to"); err != nil {
+			if changedFile {
+				_ = os.WriteFile(filepath.Join(root, from.Path), raw, 0o644)
+			}
+			return err
+		}
+	}
+
+	fromRef, toRef := refOf(*from, names), refOf(*to, names)
+	if jsonOut {
+		result := map[string]any{"ref": fromRef.String(), "target": toRef.String(), "action": action}
+		if len(notes) > 0 {
+			result["notes"] = notes
+		}
+		return printJSON(out, result)
+	}
+	if f.remove {
+		fmt.Fprintf(out, "%s no longer relates to %s\n", fromRef, toRef)
+	} else {
+		fmt.Fprintf(out, "%s relates to %s\n", fromRef, toRef)
+	}
+	for _, n := range notes {
+		fmt.Fprintln(out, n)
+	}
+	return nil
 }

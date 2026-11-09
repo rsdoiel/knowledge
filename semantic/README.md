@@ -37,4 +37,9 @@ peaked at 868 MB (the Pi's soft temperature limit was active at the end of that 
 speed gap is probably overstated). Memory is bounded: the compiled shapes are kept, at
 a few MB each, and there is no per-shape cap.
 
+Measured again on 2026-11-09 with the gomlx stack at its latest releases (gomlx v0.28.29, compute v0.1.25,
+go-xla v0.4.25, onnx-gomlx v0.5.26; hugot is still v0.8.5), on the same data: 15 min 25 s and a peak of
+905 MB, against 15 min 36 s and 1,190 MB before. The speed is the same (the Pi's Cortex-A76 still has no
+NEON kernel upstream); the peak is about a quarter lower.
+
 No `replace` to a fork is committed (workspace DR-0009).

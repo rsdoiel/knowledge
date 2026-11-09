@@ -64,7 +64,7 @@ rejects the forms below, and some of them would fail without a word under a
   A skill that wants the whole workspace passes `--all`.
 - `kb` finds the workspace by walking up from the current directory, so it works
   from any subdirectory; each workspace is independent of the others.
-- `record set-status`, `record supersede` and `record delete` **refuse a bare id
+- `record set-status`, `record supersede`, `record relates-to` and `record delete` **refuse a bare id
   with no scope** (exit 2). Always pass the qualified reference, or run inside the
   project. `record new` takes its project from the current directory when
   `--project` is left out; pass `--project` anyway so the command says what it does.

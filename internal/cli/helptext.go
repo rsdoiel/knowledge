@@ -342,7 +342,7 @@ ingest
 
 record
 : read and maintain decision records — list, pending, show, new, set-status,
-  supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
+  supersede, relates-to, fmt, fuzzy-tag (near-miss concept mentions) — see
   {app_name}-record(1)
 
 document
@@ -2463,6 +2463,8 @@ const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {r
 
 {app_name} record supersede NEW_REF OLD_REF [--partial] [--project P] [--workspace] [--root DIR]
 
+{app_name} record relates-to REF TARGET_REF [--remove] [--project P] [--workspace] [--root DIR]
+
 {app_name} record new --title T --trigger G [--project P | --workspace] [--kind K] [--dir DIR] [--root DIR]
 
 {app_name} record fmt PATH [--dry-run]
@@ -2488,7 +2490,7 @@ workspace (the workspace directory's own name is accepted as an alias for it,
 and a project of that name wins): harvey/DR-0004, workspace/DR-0003. A bare id
 resolves only where one record has it; otherwise the command lists the
 qualified candidates rather than choosing one. A command that changes a record
-(set-status, supersede, delete) never acts on a bare id with no scope: say
+(set-status, supersede, relates-to, delete) never acts on a bare id with no scope: say
 harvey/DR-0004, run it from inside the project, or set KB_PROJECT.
 
 Scope. list takes scopes as arguments: kb record list harvey clasm workspace.
@@ -2565,6 +2567,14 @@ supersede
   index.md, same as set-status, for both NEW's and OLD's corpora if either
   already has one
 
+relates-to
+: add TARGET_REF to REF's relates_to, in the record's file and in the database
+  together, so a cross-reference never needs a hand edit of the frontmatter.
+  Only REF's file changes: the link reads the same from both ends, and TARGET_REF
+  may be in another tier (written as project:ID or workspace:ID). Repeating it
+  changes nothing. --remove takes the link out of both; a link that was not
+  there is exit 1. A record cannot relate to itself (exit 2)
+
 new
 : scaffold a record: allocate the next id for the tier, fill the fields a
   tool owns, set status to proposed, and print all five body headings whether
@@ -2616,7 +2626,7 @@ delete
   decision record from disk: delete the file yourself first, or retire the record
   with set-status cancelled. --dry-run reports and changes nothing.
 
-new, set-status, supersede, fmt and fuzzy-tag --write are the only commands that
+new, set-status, supersede, relates-to, fmt and fuzzy-tag --write are the only commands that
 write a record file; ingest never does. A record is written proposed and stays proposed: a
 model may write a record, but only the author accepts one.
 
@@ -2677,6 +2687,9 @@ trigger
 : restrict to, or resolve within, the workspace tier. On new it names the tier.
   Elsewhere it is deprecated in the same way: use workspace as the scope or
   workspace/DR-NNNN
+
+--remove
+: on relates-to, take the link out instead of adding it
 
 --partial
 : on supersede, leave OLD accepted instead of marking it superseded. Use when
@@ -2997,8 +3010,8 @@ has no embedder and exits 2.
 
 Semantic search is a preview in this release. Measured on a Raspberry Pi 5 (4
 cores, 16 GB) over a copy of this workspace's knowledge base, 947 rows in about
-4,400 passages: the first index took about 16 minutes (about 4.7 passages a
-second) and used up to 1.2 GB of memory; running embed again with nothing
+4,400 passages: the first index took about 15 minutes (about 4.7 passages a
+second) and used up to 0.9 GB of memory; running embed again with nothing
 changed took a fraction of a second. A search takes about half a second,
 mostly loading the model. The semantic kb is about 33 MB against 21 MB for
 the plain one, and the model is about 87 MB. Another machine will differ.

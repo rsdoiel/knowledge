@@ -135,11 +135,13 @@ type ingester struct {
 	// going after a failure, so every record it can is ingested, but the command
 	// exits with this error's class (workspace DR-0003 rule 4, DR-0047 item 6).
 	firstFail   error
+	failures    []error         // every failure, in order, for the per-item error objects under --json
 	newConcepts map[string]bool // lower-cased names already noted as new this run
 }
 
 // noteFailure remembers the first failure so cmdIngest can exit with its class.
 func (ing *ingester) noteFailure(err error) {
+	ing.failures = append(ing.failures, err)
 	if ing.firstFail == nil {
 		ing.firstFail = err
 	}
@@ -225,9 +227,12 @@ func cmdIngest(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, args []s
 	if ing.firstFail != nil {
 		// The listing above has the text; this line has the count and the class, and
 		// does not say the first failure a second time.
-		return classedAs(exitCodeFor(ing.firstFail), fmt.Errorf(
-			"ingest: %d error(s), listed above; every record that could be ingested was",
-			len(ing.summary.Errors)))
+		return &bulkError{
+			Err: classedAs(exitCodeFor(ing.firstFail), fmt.Errorf(
+				"ingest: %d error(s), listed above; every record that could be ingested was",
+				len(ing.summary.Errors))),
+			Items: ing.failures,
+		}
 	}
 	return nil
 }

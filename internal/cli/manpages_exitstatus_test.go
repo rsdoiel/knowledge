@@ -187,6 +187,10 @@ var provedElsewhere = map[string][]int{
 	"merge":  {65},                     // TestMerge_CollisionIsExit65
 	"model":  {65, 66, 69, 73, 74, 77}, // TestModel_ExitCodes
 	"embed":  {65, 66, 75},             // TestEmbed_ExitCodes
+	// The older pages, proved by tests of their own:
+	"concept":    {74},            // TestConceptRecall_StdinReadFailureIsIO (66: noInputVerbCases)
+	"record":     {65, 66, 74},    // TestRecordFuzzyTag_MalformedRecordFileIsData, _MissingRecordFileIsNoInput, _WriteFailureIsIOAndRollsBack
+	"completion": {1, 66, 73, 74}, // TestCompletion_CheckReportsWhatIsMissingAndWhatIsFine, completionexit_test.go (66, 73, 74), InstallBashNeverOverwritesAForeignFile
 }
 
 // checkedAgainstVerbTests are the pages written for v0.0.28. The older pages (concept,
@@ -197,6 +201,7 @@ var provedElsewhere = map[string][]int{
 var checkedAgainstVerbTests = []string{
 	"export", "import", "index", "ingest", "init", "link", "merge",
 	"observation", "project", "search", "source", "unlink", "topics", "model", "embed",
+	"concept", "record", "check-db", "stats", "story", "completion", "document", "verbs", "version",
 }
 
 // The page and the tests agree on every code but 0 and 2: a code a page names is

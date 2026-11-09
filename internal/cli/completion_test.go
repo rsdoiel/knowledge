@@ -243,8 +243,8 @@ func TestCompletion_InstallBashUnwritableDirIsAnIOClass(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", data)
 	var out, errOut bytes.Buffer
 	code := mainRun([]string{"completion", "bash", "-install"}, &out, &errOut)
-	if code != 73 && code != 74 {
-		t.Errorf("exit %d, want 73 or 74; stderr %q", code, errOut.String())
+	if code != 73 {
+		t.Errorf("exit %d, want 73; stderr %q", code, errOut.String())
 	}
 }
 

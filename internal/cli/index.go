@@ -220,7 +220,9 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 	// firstFail is the first corpus that could not be indexed at all. A stale
 	// index is a normal negative answer; a failure outranks it (X3, DR-0047).
 	var firstFail error
-	noteFailure := func(err error) {
+	var failures []error
+	noteFailure := func(dir string, err error) {
+		failures = append(failures, fmt.Errorf("%s: %w", dir, err))
 		if firstFail == nil {
 			firstFail = err
 		}
@@ -232,7 +234,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 			r.Status, r.Detail = "error", err.Error()
 			summary.Corpora = append(summary.Corpora, r)
 			needsAttention++
-			noteFailure(asContent(err))
+			noteFailure(dir, asContent(err))
 			continue
 		}
 		r.Records = count
@@ -243,7 +245,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 			case rerr != nil:
 				r.Status, r.Detail = "error", rerr.Error()
 				needsAttention++
-				noteFailure(rerr)
+				noteFailure(dir, rerr)
 			case string(got) != index:
 				r.Status = "stale"
 				needsAttention++
@@ -257,7 +259,7 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 			r.Status, r.Detail = "error", err.Error()
 			summary.Corpora = append(summary.Corpora, r)
 			needsAttention++
-			noteFailure(asCreate(err))
+			noteFailure(dir, asCreate(err))
 			continue
 		}
 		r.Status = "written"
@@ -274,7 +276,10 @@ func cmdIndexAll(dl *DebugLog, jsonOut bool, root string, check bool, out io.Wri
 		writeIndexAllText(out, summary)
 	}
 	if firstFail != nil {
-		return fmt.Errorf("%d of %d corpora need attention; see above: %w", needsAttention, len(summary.Corpora), firstFail)
+		return &bulkError{
+			Err:   fmt.Errorf("%d of %d corpora need attention; see above: %w", needsAttention, len(summary.Corpora), firstFail),
+			Items: failures,
+		}
 	}
 	if needsAttention > 0 {
 		return negativef("%d of %d corpora need attention; see above", needsAttention, len(summary.Corpora))

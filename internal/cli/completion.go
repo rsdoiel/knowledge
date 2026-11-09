@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	knowledge "github.com/rsdoiel/knowledge"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 func init() {
@@ -46,7 +48,7 @@ var completionGlobalFlags = []string{"--db", "--debug", "--help", "-i", "--json"
 // skips the word after it when looking for the verb's arguments.
 var completionBoolFlags = map[string]bool{
 	"--dry-run": true, "--force": true, "--stdout": true, "--check": true, "--all": true,
-	"--workspace": true, "--partial": true, "--write": true, "--install": true,
+	"--workspace": true, "--partial": true, "--remove": true, "--write": true, "--install": true,
 	"--uninstall": true, "--no-prompt": true, "--draft": true,
 }
 
@@ -510,7 +512,9 @@ func InstallCompletion(appName, shell, home, dataHome, goos string) (string, err
 			if !strings.HasPrefix(string(old), "# bash completion for "+name+"\n") {
 				return "", cantCreatef("%s exists and was not written by %s; not overwriting it", path, name)
 			}
-		} else if !os.IsNotExist(err) {
+		} else if !os.IsNotExist(err) && !errors.Is(err, syscall.ENOTDIR) {
+			// ENOTDIR: a file stands where the script's directory must go. That
+			// is not a read failure; writeFileIn reports it as cant_create.
 			return "", err
 		}
 	}
@@ -653,7 +657,7 @@ func CheckCompletion(w io.Writer, appName, shell, home, dataHome, goos string) (
 // writeFileIn writes data to path, creating its directory first.
 func writeFileIn(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return asCreate(err)
 	}
 	return os.WriteFile(path, data, 0o644)
 }

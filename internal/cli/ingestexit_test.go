@@ -191,3 +191,47 @@ func TestCmdIngest_WrongRootHitsUniqueConstraintsAndExits65(t *testing.T) {
 		t.Errorf("stdout %q should say 0 added and 2 failed, and show the constraint", out)
 	}
 }
+
+// A bulk command under --json writes one error object per failed item, after
+// the summary (workspace DR-0011), not one object for the whole run.
+func TestCmdIngest_JSONWritesOneErrorObjectPerFailedRecord(t *testing.T) {
+	dir, run := ingestDir(t)
+	testRecord{ID: "0001", Project: "clasm"}.write(t, dir)
+	writeRaw(t, dir, "0002-bad.md", badRecord)
+	writeRaw(t, dir, "0003-none.md", "no frontmatter at all\n")
+	code, out, errOut := run(true)
+	if code != 65 {
+		t.Fatalf("exit %d, want 65; stderr %q", code, errOut)
+	}
+	items := decodeStream(t, out)
+	if len(items) != 3 {
+		t.Fatalf("stdout holds %d values, want the summary and two error objects:\n%s", len(items), out)
+	}
+	for i, want := range []string{"0002-bad.md", "0003-none.md"} {
+		env := items[i+1]
+		if env["class"] != "data" || env["code"] != float64(65) {
+			t.Errorf("object %d = %v, want class data, code 65", i+1, env)
+		}
+		if msg, _ := env["error"].(string); !strings.Contains(msg, want) {
+			t.Errorf("object %d error %q should name %s", i+1, msg, want)
+		}
+	}
+	if n := strings.Count(errOut, "\n"); n != 1 {
+		t.Errorf("stderr has %d lines, want the one count line: %q", n, errOut)
+	}
+}
+
+// decodeStream reads every JSON value in s.
+func decodeStream(t *testing.T, s string) []map[string]any {
+	t.Helper()
+	var all []map[string]any
+	dec := json.NewDecoder(strings.NewReader(s))
+	for dec.More() {
+		var m map[string]any
+		if err := dec.Decode(&m); err != nil {
+			t.Fatalf("stdout is not a stream of JSON objects: %v\n%s", err, s)
+		}
+		all = append(all, m)
+	}
+	return all
+}
