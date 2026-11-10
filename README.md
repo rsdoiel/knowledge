@@ -49,7 +49,7 @@ A complete command line always runs and prints, on a terminal or not. Only an in
 
 ## Semantic search (preview)
 
-**This preview is not shipped as a binary: to try it you build it from source** (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29`; Go 1.27.3 or later), as [INSTALL.md](INSTALL.md) describes.
+**This preview is not shipped as a binary: to try it you build it from source** (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31`; Go 1.27.3 or later), as [INSTALL.md](INSTALL.md) describes.
 
 `kb search` finds rows that contain your words. The semantic build of `kb` also finds rows by meaning, offline, with no daemon and no network after the model is installed: `kb search -semantic "how do we keep databases in step across machines"` finds the records and notes about cross-machine sync although none of them says "in step". `-hybrid` adds the exact-word matches. It covers observations, decision records, concepts and documents' reviewed summaries; the vectors live in `agents/knowledge.vectors.db` beside the database, never in `knowledge.db` or the JSON-L export.
 
@@ -100,7 +100,7 @@ kb document ingest notes/2026-09-29-worklog.md --project harvey
 - status: active
 - released: 2026-10-29
 
-Offline semantic search, as a preview. A separate build of `kb` (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29`; Go 1.27.3 or later) finds rows by meaning with no daemon and no network once the model is fetched: `kb search -semantic` and `-hybrid`, `kb model install|fetch|list` and `kb embed`, and `Tab` in the interface search prompt. The plain `kb` and the release archives are unchanged, and `kb search TERM` output is byte-identical. Run for real on linux/arm64 and macOS arm64; the other platforms are built but not run. Building from source now needs Go 1.27.3.
+Offline semantic search, as a preview. A separate build of `kb` (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31`; Go 1.27.3 or later) finds rows by meaning with no daemon and no network once the model is fetched: `kb search -semantic` and `-hybrid`, `kb model install|fetch|list` and `kb embed`, and `Tab` in the interface search prompt. The plain `kb` and the release archives are unchanged, and `kb search TERM` output is byte-identical. Run for real on linux/arm64 and macOS arm64; the other platforms are built but not run. Building from source now needs Go 1.27.3.
 
 v0.0.28 (2026-10-28): An exit status and manual page release. Every manual page now has an EXIT STATUS and a SEE ALSO section: the thirteen pages that lacked EXIT STATUS list the codes they return (workspace DR-0003), and tests keep those pages and the verb tests in step. An unreadable database file now exits 77 (no_permission) and not 74 (io); `knowledge.Open` returns an error that satisfies `errors.Is(err, fs.ErrPermission)` for it. `kb(1)` says what 73 and 77 are and that 78 is unused. The setup, update and review skills are pinned to 0.0.28.
 
