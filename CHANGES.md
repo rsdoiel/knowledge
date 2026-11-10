@@ -3,7 +3,7 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased
+## v0.0.31 — 2026-11-09
 
 ### Changed
 
@@ -31,7 +31,10 @@ release notes; maintained going forward.
 - **`kb version` and `kb license`** are verbs, as well as the `-version` and `-license` options, for the habit of `go version`.
   They print the same text, open no database and work anywhere, and refuse `--db`. Under `--json` they print
   `{"name", "version", "release_hash"}` and `{"license"}`. The manual page is `kb-version(1)`, which `license` shares.
-
+- **`kb search -hybrid` widens its words half when the typed words find little** (DR-0094). A TERM of plain words that finds fewer
+  than three rows there is also searched for any of its words of four letters or more; that re-ranks rows found by meaning and adds
+  none, and a TERM in FTS5 syntax is never rewritten. With the words half as typed, a sentence-length question matched `-semantic`
+  because every word had to match; widened, it ranked better on a drafted and a paraphrased set and about the same on a larger one.
 - **The gomlx stack in `semantic/` is at its latest releases** (gomlx v0.28.29, compute v0.1.25, go-xla v0.4.25, compute-onnx
   v0.1.24, onnx-gomlx v0.5.26, go-huggingface v0.4.27; hugot has no release after v0.8.5). The first index of 947 rows on a Pi 5
   takes the same 15 minutes and peaks at 905 MB, against 1,190 MB before.

@@ -12,8 +12,8 @@
     }
   ],
   "dateCreated": "2026-07-27",
-  "dateModified": "2026-11-01",
-  "datePublished": "2026-11-01",
+  "dateModified": "2026-11-09",
+  "datePublished": "2026-11-09",
   "description": "A standalone SQLite3-backed knowledge base for tracking projects, observations, concepts, decision records, and narrative documents across independent experiments in the rsdoiel/Laboratory workspace. Extracted from the harvey terminal agent's knowledge.go, this module provides a typed CRUD API (Open, AddProject, AddObservationWithSource, AddConceptWithIdentifier, Search, and related methods) plus UUID-based row identity and a SQL/ATTACH-based cross-machine merge tool, so other experiments and language-model harnesses can read and write structured observations directly instead of raw sqlite3 CLI inserts. Ships cmd/kb, a single \"kb VERB ARGS\" binary (matching the git/go command model) covering the full API with both human-readable and --json output, a merge verb for reconciling two databases that drifted independently, and a read-only interactive TUI browser for exploring projects, observations, and concepts. It also indexes Decision Records -- episode-scoped Markdown files with YAML frontmatter, kept in a project's decisions/ directory -- as first-class rows, so the reasoning behind a decision is retrievable rather than living only in files the knowledge base never reads. Inline [[wikilink]] tagging and frontmatter tags/keywords resolve to concepts at ingest time (records and documents alike), an embedder-free RecallByConceptNames/MatchConceptNames pair gives small/CPU-only models a cheap concept-based retrieval path ahead of any vector RAG, and a documents/document_sections schema ingests narratives and articles (Markdown, Fountain, plain text) at graduated abstraction levels -- a document-level gist plus per-section summaries, each going through an explicit human review step before being trusted as searchable content.",
   "keywords": [
     "SQLite3",
@@ -48,10 +48,10 @@
     "Pandoc >= 3.9",
     "GNU Make >= 3"
   ],
-  "version": "0.0.30",
+  "version": "0.0.31",
   "developmentStatus": "active",
   "issueTracker": "https://github.com/rsdoiel/knowledge/issues",
-  "releaseNotes": "Prerelease. Observations can be drafted for a person to review (DR-0090). A draft is stored with a status, the drafter and an optional confidence, and is invisible to search, concept recall, retrieval, kb summary, the counts and the default observation list until a person promotes it; every place that reads observations is filtered, and a test fails when a new one is added without a decision. New: kb observation add --draft --by WHO [--confidence N]; kb observation list --status reviewed|drafted|all; kb observation review list and kb observation review promote ID, which exits 2 unless standard input and output are a terminal, so a model can draft and cannot promote; updating a draft gives a draft; kb stats counts drafts separately. Drafts travel as their own record type (observation_draft) so an older kb skips them instead of reading them as trusted (checked against v0.0.29); an observation promoted on one machine promotes the draft on another at import, a draft never downgrades a reviewed row, and a merge keeps reviewed. Existing databases migrate with every observation reviewed. Not yet run under the race detector (a prerelease).",
+  "releaseNotes": "Prerelease. An error is now also written to standard output under --json as {\"error\", \"class\", \"code\"}, so standard output is always valid JSON (workspace DR-0011); the plain \"kb: message\" line stays on standard error in every mode, so a script that read the JSON error from standard error must read standard output. A bulk command (ingest, index --all) writes one error object per failed item. New: kb record relates-to REF TARGET [--remove] writes a relates_to link to the record file and the database together, with an l key for it in the interface; kb version and kb license as verbs. Fixed: an unknown verb outside a workspace was reported as a missing workspace (exit 66, and --db created a database), now exit 2; kb completion -install over a file in the script directory's place exits 73, not 74. kb search -hybrid widens its words half to any word when the typed words find little (DR-0094). The exit-status check now covers every manual page. The gomlx stack in the semantic module is at its latest releases (hugot v0.8.5 is still the newest): the first index of 947 rows takes the same 15 minutes and peaks at 905 MB instead of 1,190 MB.",
   "copyrightYear": 2026,
   "copyrightHolder": "R. S. Doiel"
 }

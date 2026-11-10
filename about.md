@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.30
+version: 0.0.31
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,15 +33,15 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-11-01
+date_released: 2026-11-09
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.30
+## knowledge 0.0.31
 
-Prerelease. Observations can be drafted for a person to review (DR-0090). A draft is stored with a status, the drafter and an optional confidence, and is invisible to search, concept recall, retrieval, kb summary, the counts and the default observation list until a person promotes it; every place that reads observations is filtered, and a test fails when a new one is added without a decision. New: kb observation add --draft --by WHO [--confidence N]; kb observation list --status reviewed|drafted|all; kb observation review list and kb observation review promote ID, which exits 2 unless standard input and output are a terminal, so a model can draft and cannot promote; updating a draft gives a draft; kb stats counts drafts separately. Drafts travel as their own record type (observation_draft) so an older kb skips them instead of reading them as trusted (checked against v0.0.29); an observation promoted on one machine promotes the draft on another at import, a draft never downgrades a reviewed row, and a merge keeps reviewed. Existing databases migrate with every observation reviewed. Not yet run under the race detector (a prerelease).
+Prerelease. An error is now also written to standard output under --json as {"error", "class", "code"}, so standard output is always valid JSON (workspace DR-0011); the plain "kb: message" line stays on standard error in every mode, so a script that read the JSON error from standard error must read standard output. A bulk command (ingest, index --all) writes one error object per failed item. New: kb record relates-to REF TARGET [--remove] writes a relates_to link to the record file and the database together, with an l key for it in the interface; kb version and kb license as verbs. Fixed: an unknown verb outside a workspace was reported as a missing workspace (exit 66, and --db created a database), now exit 2; kb completion -install over a file in the script directory's place exits 73, not 74. kb search -hybrid widens its words half to any word when the typed words find little (DR-0094). The exit-status check now covers every manual page. The gomlx stack in the semantic module is at its latest releases (hugot v0.8.5 is still the newest): the first index of 947 rows takes the same 15 minutes and peaks at 905 MB instead of 1,190 MB.
 
 ## Authors
 

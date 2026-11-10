@@ -14,7 +14,7 @@ compatibility: claude-code, harvey
 metadata:
   author: R. S. Doiel
   version: 0.9.0
-  kb_version: 0.0.30
+  kb_version: 0.0.31
 variables:
   DB_PATH:
     type: string
