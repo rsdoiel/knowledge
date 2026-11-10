@@ -21,6 +21,9 @@ release notes; maintained going forward.
   the database together, as `supersede` does for a replacement, so a cross-reference no longer needs a hand edit of the
   frontmatter. Only REF's file changes; a target in another tier is written as `project:ID` or `workspace:ID`. Repeating
   it changes nothing, removing a link that is not there is exit 1, relating a record to itself is exit 2.
+- **`l` links the selected record to another in the interface** (the Records screen and a project's Records tab), by the
+  command's own function: you type which record (the scope is filled in), the field refuses itself and a record that is not
+  there, and only the selected record's file and the database are written.
 - **A bulk command writes one error object per failed item under `--json`** (workspace DR-0011): `ingest` and `index --all`
   follow the summary with an object for each record or corpus that failed, each with its own class, in place of one object
   for the run. The plain stderr line is still the one count line. The audit found no other verb that wrote an error or a

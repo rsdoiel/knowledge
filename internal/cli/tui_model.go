@@ -818,6 +818,8 @@ func (m *tuiModel) updateRecordScope(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("status")
 	case "u":
 		return m.supersedeSelected()
+	case "l":
+		return m.relateSelected()
 	case "n":
 		return m.beginForm(m.newRecordForm(m.scopeForForm()))
 	case "d":
@@ -1009,6 +1011,8 @@ func (m *tuiModel) updateRecords(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.showSelected("status")
 	case "u":
 		return m.supersedeSelected()
+	case "l":
+		return m.relateSelected()
 	case "n":
 		return m.beginForm(m.newRecordForm(m.projectName()))
 	case "d":
@@ -1421,7 +1425,9 @@ func (m *tuiModel) legend() string {
 func fitLegend(legend string, width int) string {
 	tight := strings.ReplaceAll(legend, "   ", "  ")
 	noMove := strings.TrimPrefix(tight, "↑/↓ j/k move  ")
-	short := noMove
+	// The link key is the newest and the least used, so it is the first to go.
+	bare := strings.Replace(noMove, "l link  ", "", 1)
+	short := bare
 	for _, r := range [][2]string{{"e describe", "e desc"}, {"u supersede", "u super"}} {
 		short = strings.Replace(short, r[0], r[1], 1)
 	}
@@ -1431,7 +1437,7 @@ func fitLegend(legend string, width int) string {
 	for _, r := range [][2]string{{"d delete", "d del"}, {"r rename", "r ren"}, {"s status", "s stat"}} {
 		shorter = strings.Replace(shorter, r[0], r[1], 1)
 	}
-	for _, candidate := range []string{legend, tight, noMove, short, shorter} {
+	for _, candidate := range []string{legend, tight, noMove, bare, short, shorter} {
 		if lipgloss.Width(candidate) <= width {
 			return candidate
 		}
@@ -1460,7 +1466,7 @@ func (m *tuiModel) legendFull() string {
 		}
 		return move + "   Enter open   S search   : command   q back"
 	case viewRecordScope:
-		return move + "   Enter read   s status   u supersede   d delete   " + m.scopeKey() + "   S search   q back"
+		return move + "   Enter read   s status   u supersede   l link   d delete   " + m.scopeKey() + "   S search   q back"
 	case viewRemove:
 		return "Esc cancel   Enter delete (only when the name matches)   Ctrl-C quit"
 	case viewChange:
@@ -1486,7 +1492,7 @@ func (m *tuiModel) legendFull() string {
 	case viewText:
 		return m.textLegend()
 	case viewRecords:
-		return move + "   Enter read   s status   u supersede   d delete   o c r tabs   S search   q back"
+		return move + "   Enter read   s status   u supersede   l link   d delete   o c r tabs   S search   q back"
 	case viewObservations, viewConcepts:
 		if m.state == viewObservations {
 			return move + "   Enter show   n new   e edit   u unlink   d delete   o c r tabs   S search   q back"

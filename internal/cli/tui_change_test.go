@@ -476,3 +476,66 @@ func TestChange_TheLegendsOfferSupersede(t *testing.T) {
 		t.Errorf("the Records screen legend lacks u supersede:\n%s", m.View().Content)
 	}
 }
+
+func TestChange_ARecordIsLinkedToAnotherAndOnlyItsOwnFileIsWritten(t *testing.T) {
+	fakePagerSeam(t)
+	m, root := writeModel(t) // 0001 proposed; 0002 accepted
+	other := readFixture(t, root, "clasm", "0002")
+	selectRef(t, m, "clasm/DR-0001")
+	m, _ = press(t, m, ch('l'))
+	if m.state != viewChange || !m.capturingText() {
+		t.Fatalf("state %s, capturing %v; want the field, taking text", viewStateNames[m.state], m.capturingText())
+	}
+	m, _ = press(t, m, append(typed("0002"), keyEnter)...)
+	v := m.View().Content
+	for _, want := range []string{"clasm/DR-0001", "relates to", "clasm/DR-0002", "y apply"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("the confirmation lacks %q:\n%s", want, v)
+		}
+	}
+	if fileHas(t, root, "0001", "relates_to: [\"0002\"]") {
+		t.Fatal("something was written before the confirmation")
+	}
+	m, _ = press(t, m, ch('y'))
+	if !fileHas(t, root, "0001", `relates_to: ["0002"]`) {
+		t.Errorf("DR-0001 does not carry the link:\n%s", readFixture(t, root, "clasm", "0001"))
+	}
+	if readFixture(t, root, "clasm", "0002") != other {
+		t.Error("the cited record's file was written")
+	}
+	if !strings.Contains(m.View().Content, "equivalent:  kb record relates-to clasm/DR-0001 clasm/DR-0002") {
+		t.Errorf("the screen does not give the command:\n%s", m.View().Content)
+	}
+}
+
+func TestChange_ALinkTheCommandRefusesStaysInTheField(t *testing.T) {
+	for name, typedRef := range map[string]string{"itself": "0001", "a record that is not there": "9999"} {
+		t.Run(name, func(t *testing.T) {
+			fakePagerSeam(t)
+			m, root := writeModel(t)
+			before := readFixture(t, root, "clasm", "0001")
+			selectRef(t, m, "clasm/DR-0001")
+			m, _ = press(t, m, ch('l'))
+			m, _ = press(t, m, append(typed(typedRef), keyEnter)...)
+			if m.state != viewChange || strings.Contains(m.View().Content, "y apply") {
+				t.Fatalf("state %s; a refusal should stay in the field:\n%s", viewStateNames[m.state], m.View().Content)
+			}
+			if readFixture(t, root, "clasm", "0001") != before {
+				t.Error("a refused link wrote")
+			}
+		})
+	}
+}
+
+// The l key is on the legend when there is room, and the other keys keep their
+// words when there is not.
+func TestChange_TheLinkKeyIsOnAWideLegendAndDroppedFirstOnANarrowOne(t *testing.T) {
+	legend := "↑/↓ j/k move   Enter read   s status   u supersede   l link   d delete   a this scope   S search   q back"
+	if got := fitLegend(legend, 200); !strings.Contains(got, "l link") {
+		t.Errorf("a wide legend lost the link key: %q", got)
+	}
+	got := fitLegend(legend, 78)
+	if strings.Contains(got, "l link") || !strings.Contains(got, "s status") || !strings.Contains(got, "u supersede") {
+		t.Errorf("a narrow legend should drop l link and keep the other words: %q", got)
+	}
+}

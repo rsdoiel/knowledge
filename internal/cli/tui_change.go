@@ -369,3 +369,51 @@ func (m *tuiModel) supersedeSelected() (tea.Model, tea.Cmd) {
 	}
 	return m.beginChange(f)
 }
+
+// relateSelected starts a relates_to link from the selected record: the person
+// types which record it cites, and the field refuses what `kb record relates-to`
+// refuses before anything is confirmed. The scope is filled in; typing another
+// scope reaches a record in another tier.
+func (m *tuiModel) relateSelected() (tea.Model, tea.Cmd) {
+	ref, ok := m.selectedRecordRef()
+	if !ok {
+		return m, nil
+	}
+	prefix := ref[:strings.Index(ref, "/")+1]
+	names := projectNames(m.kb)
+	targetRef := ""
+	f := &changeFlow{
+		subject: "record " + ref,
+		old:     prefix,
+		edit:    newEdit(prefix, false, m.cols()-8),
+		note:    "Only this record's file and the database are written; the link reads the same from both ends. The command's --remove option is not offered here.",
+		validate: func(v string) ([]string, error) {
+			from, err := resolveRecordForWrite(m.kb, ref, recordFlags{})
+			if err != nil {
+				return nil, err
+			}
+			to, err := resolveRecord(m.kb, strings.TrimSpace(v), recordFlags{})
+			if err != nil {
+				return nil, err
+			}
+			if from.ID == to.ID {
+				return nil, usageErrorf("DR-%s cannot relate to itself", from.RecordID)
+			}
+			if _, _, err := loadRecordFile(recordRoot(m.kb, recordFlags{}), from); err != nil {
+				return nil, err
+			}
+			targetRef = refOf(*to, names).String()
+			return []string{
+				fmt.Sprintf("%s  %s", refOf(*from, names), from.Title),
+				"relates to",
+				fmt.Sprintf("%s  %s  (%s)", targetRef, to.Title, to.Status),
+			}, nil
+		},
+		equivalent: func(string) string { return "kb record relates-to " + ref + " " + targetRef },
+		describe:   func(string) string { return ref + " relates to " + targetRef },
+		apply: func(string) error {
+			return recordRelatesTo(m.kb, false, recordFlags{args: []string{ref, targetRef}}, &bytes.Buffer{})
+		},
+	}
+	return m.beginChange(f)
+}

@@ -3,12 +3,12 @@
 
 ## Bugs
 
-- [ ] **`kb search -hybrid` gives the same results as `-semantic` for a sentence-length question: its lexical half ANDs every word,
+- [x] **`kb search -hybrid` gives the same results as `-semantic` for a sentence-length question: its lexical half ANDs every word,
   so it matches nothing and fusion has nothing to fuse.** Known and measured in part (kb observations 539 and 542; note
   `20261029-semantic-search-built-and-measured.md`: "an any-word variant was measured and not adopted"), reopened 2026-11-08 by
   larger sets in `agents/tmp/eval/` (not in git). Fix implemented 2026-11-08 per knowledge DR-0094 (proposed): `LexicalRankingWide` plus the hybrid path in
   `internal/cli/searchsemantic.go`, tests in `searchsemantic_test.go` files; gains smaller than the harness predicted (DR-0094 item 5), so
-  tuning the any-word ranking was tried and changes nothing (DR-0094 item 5). Not committed.
+  tuning the any-word ranking was tried and changes nothing (DR-0094 item 5). *Committed 2026-11-08 as `b29ea20`; DR-0094 accepted 2026-11-09 (ticked 2026-11-09, unreleased).*
   *Cause:* `LexicalRanking` (`searchsemantic.go`) runs the query as typed against `kb_fts MATCH`, so FTS5 requires every word
   to appear in one row. Its only fallback (`quotedPhrase`) runs on an FTS syntax error, not on an empty result.
   *Why it was not adopted:* on the 34 labelled queries (written and labelled by the model, optimistic) any-word hybrid scored
@@ -192,30 +192,38 @@
 
 ## Requested features
 
-- [ ] Add a summerization tool to assist document indexing by kb. I'd like to persue NLP techniques similar to Python's NLPTK (we can use the following Go modules as a jumping off point, ```go get github.com/dreamsxin/gota
-go get gonum.org/v1/gonum``` and either ```
-go get github.com/tsawler/prose/v3``` or ```go get github.com/jdkato/prose/v3``` for the NLP piece
-
+- [x] **DECLINED 2026-11-09: a summarization tool for document indexing (gota, gonum, prose).** *Original request:* a Go
+  extractive-summary tool in the style of Python's NLTK, using `github.com/dreamsxin/gota`, `gonum.org/v1/gonum` and
+  `github.com/tsawler/prose/v3` or `github.com/jdkato/prose/v3`. *Why declined:* the weekend's exploration of search and
+  semantic search (DR-0091 to DR-0094, the retrieval battery) showed that searching the full text of a document, in sections,
+  finds what a short summary hides, so the better direction is to index the whole corpus rather than a condensed form of it.
+  A summary is a lossy copy that the full text already outranks, and a drafted one still needs the author's review before
+  it counts. Search the document's own sections (DR-0093) instead. Reopen only if the full-text path proves too slow or
+  too noisy at scale. The related survey of deterministic text processing (below) stays open as a nice-to-have.
 
 - [x] `kb version` and `kb license` are verbs, as well as `-version` and `-license`. Done 2026-11-09, unreleased. Tests:
   `versionlicense_test.go`. Page `kb-version(1)`; `license` shares it as `summary` and `format` share `search`.
-- [x] Add a sub verb, relates-to similar to supersede so it makes it easy to update the relationship without resorting to sed. Done 2026-11-09, unreleased: `kb record relates-to REF TARGET [--remove]`; tests `recordrelates_test.go`. Not in the interface (supersede has `u` there; a `r` key for relates-to is open).
-- [ ] **Bump `gomlx/compute` to v0.1.17 in `semantic/`, then offer the author's Pi 5 benchmark upstream.** v0.1.17 is
+- [x] Add a sub verb, relates-to similar to supersede so it makes it easy to update the relationship without resorting to sed. Done 2026-11-09, unreleased: `kb record relates-to REF TARGET [--remove]`; tests `recordrelates_test.go`. In the interface too: `l` on the Records screen and a project's Records tab (`tui_change.go`, `relateSelected`; `--remove` is not offered there).
+- [x] **Bump `gomlx/compute` to v0.1.17 in `semantic/`, then offer the author's Pi 5 benchmark upstream.** v0.1.17 is
   gomlx/compute#46 (adaptive chunking for the non-SIMD kernels; the maintainer measured it within the noise). Bump, rebuild,
   rerun `tmp/compute-bench/` (the micro-benchmark behind the #44 thread, now `cmd/ka_microbench` in gomlx/compute) and a first
   `kb embed`, then post the Pi 5 numbers on gomlx/compute#44 if the maintainer is still collecting them. The author posts.
   Added 2026-10-30. *Done 2026-11-09, unreleased, except the posting:* `semantic/` is on compute v0.1.25 (the whole gomlx stack
   at its latest; hugot has nothing after v0.8.5). A first `kb embed` of the same 947 rows took 15 min 25 s and peaked at 905 MB,
   against 15 min 36 s and 1,190 MB, so the speed is unchanged and memory is a quarter lower. `tmp/compute-bench/` was not rerun.
-  The numbers for #44 are in `semantic/README.md`; the author posts.
+  *Decided 2026-11-09:* the numbers are not posted upstream unless a problem turns up; `tmp/compute-bench/` is rerun here to
+  show there is none. *Rerun 2026-11-09, three alternating rounds on the Pi 5, v0.1.16 against v0.1.25 (ms per text):* batch 16 of
+  20 words 37.4 and 37.5; batch 8 of 100 words 197.2 and 185.3; single 53.5 and 57.1. The 4x gain of v0.1.16 over v0.1.15 is kept and
+  the differences are within a few percent, so there is no problem to report. The first-index figures are in `semantic/README.md`.
 - [ ] **Offer gomlx/compute the author's Pi 5 and Apple Silicon Mac for arm64 NEON SIMD benchmarks.** In the #44 thread the
   maintainer (Jan Pfeifer) said the missing optimisation for the Pi's Cortex-A76 is arm64 NEON SIMD (it would also help Apple
   users), that scheduling has little left to give, and that they have no Pi or Mac to develop or benchmark on. 77% of our embed
   CPU time is the portable matmul kernel (kb observation 524). The author can run benchmarks on `harvey.local` (Pi 5) and
   `macmini-rd.local` (arm64 Mac) once such a kernel exists; the offer goes in the #44 thread or a new gomlx/compute issue, which
-  the author files. The work is upstream; nothing to build here. Added 2026-10-30.
+  the author files. The work is upstream; nothing to build here. Added 2026-10-30. *2026-11-09:* not pursued unless the
+  benchmark rerun shows a problem.
 - [ ] When using knowledge with a commercial LLM like claude, we have designs and plans that have a status that start as proposed and moves through an approval process. It seems like there should be an approval workflow similar do how decision records are proposed and approved.
-- [ ] **Say whether a piece of knowledge is fact, fiction or speculation.** Added 2026-11-01 at the author's request; no
+- [ ] **Say whether a piece of knowledge is fact, fiction or speculation.** *Nice to have; may move to a later release (decided 2026-11-09).* Added 2026-11-01 at the author's request; no
   design yet. The knowledge base will hold non-fiction, fiction and hypothetical or speculative material side by side,
   and today nothing tells them apart: an observation, concept or source reads as a claim about the world. A story's
   invented fact (Foul Papers) and a model's hypothesis (harvey) would be recalled as if they were established findings.
@@ -514,7 +522,7 @@ go get github.com/tsawler/prose/v3``` or ```go get github.com/jdkato/prose/v3```
 
 ## To explore
 
-- [ ] **Deterministic (non-LLM) text processing for documents: what `knowledge` already has, and what `prose`, `gonum` and `gota` could add.**
+- [ ] **Deterministic (non-LLM) text processing for documents: what `knowledge` already has, and what `prose`, `gonum` and `gota` could add.** *Nice to have; may move to a later release (decided 2026-11-09).*
   Raised by the author 2026-11-06; to be explored in a separate session, before any implementation or plan. Why now: 25 of 27 document gists and
   368 of 375 sections are unsummarized (2 gists and 7 sections reviewed), and DR-0091 (proposed) makes an unreviewed document useful at ingest
   with a labelled verbatim excerpt and a *mechanical gist* (title, description, section headings). The author wants to see how far deterministic
@@ -886,7 +894,7 @@ trip was also checked and is clean: 14 tables' row counts identical.
   `source add` title still may hold a newline; `document tag` does not recognise a
   wrapped existing link. Breaking for scripts: needs an upgrade note.
 
-- [ ] **Programmatic corpus-improvement techniques, as the corpus grows.** **No target; after manuscripts are in the corpus.**
+- [ ] **Programmatic corpus-improvement techniques, as the corpus grows.** **A future release (decided 2026-11-09); after manuscripts are in the corpus.**
   **2026-10-19 (v0.0.25, DR-0085): ranking and grouping of `concept suggest` fixed (damped score, longer stoplist, grouping by stem). Still open: story metadata (`characters`, `place`) as a source of concept names once a manuscript is in the corpus; related documents by shared concepts; any model-based extraction. See `notes/corpus-improvement-2026-10-19.md`.**
   Raised 2026-09-18 while discussing the MADR item below: decision records
   already benefit from being surfaced through multiple routes (frontmatter,
@@ -1470,3 +1478,8 @@ stale duplicates once that was noticed.
   the existing case for it — `head`, `grep`, `awk` reach a corpus without
   `kb` installed — stands uncontested. Removing the file was never
   implemented or seriously pursued.
+
+- [x] **Workspace DR-0010: knowledge follows it.** Done 2026-11-09, unreleased: knowledge already seeded a gist only from the author's
+  `description`, left `abstract` unread and showed a missing summary as `unsummarized`; knowledge DR-0095 (proposed) says so, and
+  `documentdescription_test.go` holds it. No behavior changed. Open: the list of copied blog abstracts DR-0010 mentions (a read-only
+  report; the author says whether it is wanted); `abstract` as a fallback for `description` is still a separate request.

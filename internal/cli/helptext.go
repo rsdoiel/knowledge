@@ -169,7 +169,7 @@ supersede another: you type which one (its scope is filled in, so a number is
 enough), the field refuses what {app_name} record supersede refuses (a record that
 is not there, itself, one in another tier), and the confirmation shows both records
 and that the replaced one becomes superseded; both files and the database are
-written. A text field starts from the current text; Enter accepts it, Ctrl-J starts a new
+written. On a record l links it to another with relates_to: you type which one (the scope is filled in and can be changed to reach another tier), the field refuses itself and a record that is not there, and only the selected record's file and the database are written. A text field starts from the current text; Enter accepts it, Ctrl-J starts a new
 line, Ctrl-U clears the line, and Esc cancels. While you type every key is text,
 q included. Each change is made by the command's own function, so a refusal (a
 rename onto a name that is taken) is the command's refusal, shown on the screen
