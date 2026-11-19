@@ -6,11 +6,23 @@
 #
 # Usage: release.bash [--dry-run] [--nested]
 #   --dry-run  do everything up to the prompt (notes, checksums), say what
-#              would be committed, pushed, uploaded and tagged, and change nothing.
+#              would be created, uploaded and tagged, and change nothing.
 #   --nested   only the nested module: wait for the root tag to be public, require
 #              it in semantic/go.mod, check, and tag semantic/vX.Y.Z. A normal run
 #              does this itself after you finalize the draft; --nested resumes an
 #              interrupted run.
+#
+# The release is made from the commit HEAD (workspace DR-0012). The script commits
+# and pushes nothing for the root release: it stops unless the tree is committed and
+# HEAD is pushed (make check-committed), and creates the draft with --target HEAD.
+#
+# An interrupted run is resumed by running the script again (workspace DR-0013).
+# If the draft for the tag exists, targets HEAD and is still a draft, nothing is
+# created again: each file in dist/ is skipped when the draft already holds it
+# (same SHA-256), uploaded when missing, and uploaded again with --clobber when
+# the draft holds a different or unfinished copy. A published release, or a draft
+# for another commit, stops the script. Over SSH, run it under tmux or nohup so a
+# dropped connection does not interrupt the upload.
 #
 # The nested module (semantic/) carries the same version as the root. The root tag
 # is made by GitHub when the draft is finalized, so the nested tag has to wait for
@@ -25,6 +37,9 @@ for ARG in "$@"; do
         *) echo "usage: release.bash [--dry-run] [--nested]" >&2; exit 2 ;;
     esac
 done
+
+# The notes file is removed however the script ends, even if the terminal is lost.
+trap 'rm -f release_notes.tmp' EXIT
 
 REPO_ID="${PWD##*/}"
 GROUP_ID="$(git config --get remote.origin.url | sed -E 's#.*github\.com[:/]([^/]+)/.*#\1#')"
@@ -160,66 +175,149 @@ else
 fi
 echo "Checksums written to dist/${CHECKSUM_FILE}"
 
-# Now we're ready to push things. This is the only place the release is
-# committed and pushed (make release does not), and a draft that already
-# exists for the tag stops the run so a second one is never created.
-if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-    echo "error: a release for ${RELEASE_TAG} already exists on GitHub; delete the draft first"
-    rm -f release_notes.tmp
+# The release is built from one known commit. Stop unless it is committed and
+# pushed.
+if ! make -s check-committed; then
     exit 1
 fi
-if [ "${DRY_RUN}" = "1" ]; then
-    echo "dry run: would commit (if the tree is dirty) and push, then create draft ${RELEASE_TAG} and upload:"
-    git status --short
-    ls dist/*.zip "dist/${CHECKSUM_FILE}"
-    if [ "${HAS_NESTED}" = "1" ]; then
-        print_nested_plan
-    fi
-    rm -f release_notes.tmp
-    exit 0
-fi
-# shellcheck disable=SC2162
-read -r -p "Push release to GitHub with gh? (y/N) " YES_NO
-if [ "${YES_NO}" = "y" ]; then
-	if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-		git commit -am "prep for ${RELEASE_TAG}" || exit 1
-	fi
-	git push origin "$(git rev-parse --abbrev-ref HEAD)" || exit 1
-	# Now generate a draft release
-	echo "Pushing release ${RELEASE_TAG} to GitHub"
-	gh release create "${RELEASE_TAG}" \
-		--draft \
-		-F release_notes.tmp \
-		--generate-notes
-	echo "Uploading distribution files and checksums"
-	echo "Starting upload: dist/${CHECKSUM_FILE}
-	"
-	gh release upload "${RELEASE_TAG}" "dist/${CHECKSUM_FILE}"
-	echo "  Completed upload: dist/${CHECKSUM_FILE}"
-	for FILE in dist/*.zip; do
-		echo "Starting upload: ${FILE}
-	"
-		gh release upload "${RELEASE_TAG}" "${FILE}"
-		echo "  Completed upload: ${FILE}"
-	done
+RELEASE_COMMIT="$(git rev-parse HEAD)"
 
-	rm release_notes.tmp
-	if [ "${HAS_NESTED}" = "1" ]; then
-		echo
-		echo "Now finalize the draft; this script then tags the nested module (${NESTED_TAG})."
-		echo
-		echo "	${REPO_URL}/releases"
-		echo
-		wait_for_publish || exit 1
-		release_nested
-		exit $?
-	fi
-	cat <<EOT
+# digest prints the SHA-256 of a file.
+digest() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    else
+        shasum -a 256 "$1" | cut -d' ' -f1
+    fi
+}
+
+# A release that already exists is resumed only if it is a draft for this commit
+# (DR-0013); anything else stops the run, so a second release is never created
+# and a published one is never touched.
+RESUME=0
+VIEW=""
+if VIEW="$(gh release view "${RELEASE_TAG}" --json isDraft,targetCommitish,assets 2>/dev/null)"; then
+    if [ "$(printf '%s' "${VIEW}" | jq -r .isDraft)" != "true" ]; then
+        echo "error: ${RELEASE_TAG} is not a draft on GitHub; it is published and is not touched"
+        if [ "${HAS_NESTED}" = "1" ]; then
+            echo "       (if ${NESTED_TAG} is not tagged yet, run ./release.bash --nested)"
+        fi
+        exit 1
+    fi
+    DRAFT_TARGET="$(printf '%s' "${VIEW}" | jq -r .targetCommitish)"
+    if [ "${DRAFT_TARGET}" != "${RELEASE_COMMIT}" ]; then
+        echo "error: the draft for ${RELEASE_TAG} targets ${DRAFT_TARGET}, not HEAD ${RELEASE_COMMIT}; delete the draft first"
+        exit 1
+    fi
+    RESUME=1
+fi
+
+# plan_for FILE prints what to do with one file: upload, replace or skip.
+plan_for() {
+    if [ "${RESUME}" != "1" ]; then
+        echo upload
+        return
+    fi
+    printf '%s' "${VIEW}" | jq -r --arg n "$(basename "$1")" --arg d "sha256:$(digest "$1")" --argjson s "$(wc -c <"$1" | tr -d ' ')" '
+        ([.assets[]? | select(.name == $n)] | .[0]) as $a
+        | if $a == null then "upload"
+          elif $a.state != "uploaded" then "replace"
+          elif ($a.digest // "") != "" then (if $a.digest == $d then "skip" else "replace" end)
+          elif $a.size == $s then "skip"
+          else "replace" end'
+}
+
+# The checksums file first, then the zips.
+PLAN=()
+TODO_COUNT=0
+FILE_COUNT=0
+for FILE in "dist/${CHECKSUM_FILE}" dist/*.zip; do
+    ACTION="$(plan_for "${FILE}")"
+    PLAN+=("${ACTION} ${FILE}")
+    FILE_COUNT=$((FILE_COUNT + 1))
+    [ "${ACTION}" = "skip" ] || TODO_COUNT=$((TODO_COUNT + 1))
+done
+
+if [ "${RESUME}" = "1" ]; then
+    echo "Resume: the draft ${RELEASE_TAG} exists and targets ${RELEASE_COMMIT}; ${TODO_COUNT} of ${FILE_COUNT} files to upload"
+else
+    echo "New release: draft ${RELEASE_TAG} at ${RELEASE_COMMIT}; ${FILE_COUNT} files to upload"
+fi
+for LINE in "${PLAN[@]}"; do
+    echo "  ${LINE%% *}: ${LINE#* }"
+done
+
+# finish says what comes after the upload: finalize the draft and, with a nested
+# module, wait for it to be published and tag the nested module.
+finish() {
+    rm -f release_notes.tmp
+    if [ "${HAS_NESTED}" = "1" ]; then
+        echo
+        echo "Now finalize the draft; this script then tags the nested module (${NESTED_TAG})."
+        echo
+        echo "	${REPO_URL}/releases"
+        echo
+        wait_for_publish || return 1
+        release_nested
+        return $?
+    fi
+    cat <<EOT
 
 Now goto repo release and finalize draft.
 
 	${REPO_URL}/releases
 
 EOT
+}
 
+if [ "${DRY_RUN}" = "1" ]; then
+    if [ "${HAS_NESTED}" = "1" ]; then
+        print_nested_plan
+    fi
+    echo "dry run: nothing changed"
+    exit 0
+fi
+if [ "${RESUME}" = "1" ] && [ "${TODO_COUNT}" = "0" ]; then
+    echo "Nothing to upload: the draft holds every file."
+    finish
+    exit $?
+fi
+if [ "${RESUME}" = "1" ]; then
+    PROMPT="Resume the draft release on GitHub with gh? (y/N) "
+else
+    PROMPT="Create the draft release on GitHub with gh? (y/N) "
+fi
+# shellcheck disable=SC2162
+read -r -p "${PROMPT}" YES_NO
+if [ "${YES_NO}" = "y" ]; then
+    if [ "${RESUME}" != "1" ]; then
+        echo "Pushing release ${RELEASE_TAG} to GitHub"
+        gh release create "${RELEASE_TAG}" \
+            --draft \
+            --target "${RELEASE_COMMIT}" \
+            -F release_notes.tmp \
+            --generate-notes || exit 1
+    fi
+    echo "Uploading distribution files and checksums"
+    for LINE in "${PLAN[@]}"; do
+        ACTION="${LINE%% *}"
+        FILE="${LINE#* }"
+        case "${ACTION}" in
+            skip)
+                echo "  Skipped (already uploaded): ${FILE}"
+                continue
+                ;;
+            replace) CLOBBER="--clobber" ;;
+            *) CLOBBER="" ;;
+        esac
+        echo "  Starting upload: ${FILE}"
+        # shellcheck disable=SC2086
+        if ! gh release upload "${RELEASE_TAG}" "${FILE}" ${CLOBBER}; then
+            echo "error: upload of ${FILE} failed; run release.bash again to resume"
+            exit 1
+        fi
+        echo "  Completed upload: ${FILE}"
+    done
+    finish
+    exit $?
 fi
