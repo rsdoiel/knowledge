@@ -3,6 +3,22 @@
 
 ## Bugs
 
+- [ ] **`kb record show` and `relates-to` say "no record DR-0013 in the workspace tier" for a record whose file is on disk but not yet
+  ingested, and `kb index` ("1 record indexed") does not change that.** Found 2026-11-18 (kb 0.0.31 `93cff1fe`) while writing workspace DR-0013; the
+  author asked for it to be filed. *Reproduce* (scratch workspace, nothing else needed): `kb init .`; `kb record new --workspace --title T --trigger design`
+  (prints `workspace/DR-0001 written to agents/decisions/0001-t.md (proposed)`); then `kb record show workspace/DR-0001` or
+  `kb record relates-to workspace/DR-0001 workspace/DR-0001` gives `kb: no record DR-0001 in the workspace tier` (exit 1), and `kb record list --all`
+  gives `no matching records`; `kb index agents/decisions` prints `1 record indexed to .../index.md` and `show` still fails; `kb ingest agents/decisions`
+  then makes all of them work. *Cause:* by design, `record new` "writes the file; does not ingest it" (`kb help record`), and `index` regenerates
+  `index.md` from the files without loading the database. `refInTier` (`ref.go`) knows only the database, so it reports a record that exists as a file
+  the same way as one that does not exist at all. *Other record verbs (`set-status`, `supersede`, `concepts`) were not tried; they use the same lookup and probably behave the same.* *Why it bites:* the message names no next step, "indexed" reads as "now findable", and the sequence
+  in the workspace CLAUDE.md (`record new`, then `ingest`, then `index` after a status change) is easy to run out of order; the author's session ran
+  `index` first and then edited `relates_to` by hand instead of ingesting. *Fix to decide* (smallest first): (1) when `refInTier` finds nothing, look for
+  `NNNN-*.md` in the tier's decisions directory and say `DR-0013 is on disk (agents/decisions/0013-....md) but not ingested; run kb ingest agents/decisions`,
+  exit code unchanged (1, not found); (2) `kb index` warns for a record file that is not in the database, or says "N files written to index.md, M not
+  ingested"; (3) `record new` ingests the file it just wrote (it writes the file anyway, and ingest is additive). Not a data-loss bug: nothing is written
+  wrongly, and a hand-set `relates_to` survived ingest. Test-first (workspace DR-0007): a test that runs `record new` then `show` through the dispatcher
+  and fails for the reported reason (the message), then the fix, then the whole suite. Whenever the exit codes change, review them (it should stay 1).
 - [x] **`kb search -hybrid` gives the same results as `-semantic` for a sentence-length question: its lexical half ANDs every word,
   so it matches nothing and fusion has nothing to fuse.** Known and measured in part (kb observations 539 and 542; note
   `20261029-semantic-search-built-and-measured.md`: "an any-word variant was measured and not adopted"), reopened 2026-11-08 by
