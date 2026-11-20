@@ -2,6 +2,7 @@
 <html lang="en-US">
 <head>
     <title>knowledge</title>
+    <link rel="alternate" type="text/markdown" href="CLAUDE.md">
     <link rel="stylesheet" href="/css/site.css">
 </head>
 <body>
@@ -20,9 +21,19 @@
 <h1 id="claude.md">CLAUDE.md</h1>
 <p>Read <a href="AGENTS.html">AGENTS.md</a>: what <code>kb</code> is,
 the rules for using it safely, the verbs and the exit codes.</p>
+<h2 id="makefile-verb-man-pages">Makefile: verb man pages</h2>
+<p>The <code>Makefile</code> was scaffolded by <code>cmt</code> and has
+since been extended. Do not regenerate it. Its <code>KB_TOPICS</code>
+variable and <code>kb-topics-help</code> target generate one man page
+per <code>kb</code> verb. When adding a verb, add it to
+<code>KB_TOPICS</code> and to <code>kb(1)</code>;
+<code>cmd/kb/help_dispatch_test.go</code> enforces both. Losing
+<code>KB_TOPICS</code> fails quietly: <code>MAN_PAGES_1</code> is a glob
+over existing <code>.1.md</code> files, so <code>make man</code> would
+still report success.</p>
 </section>
 <footer>
-<p>knowledge</p>
+<p>knowledge. This page is also published as <a href="CLAUDE.md">Markdown</a>.</p>
 </footer>
 </body>
 </html>

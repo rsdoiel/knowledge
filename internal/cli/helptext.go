@@ -2,9 +2,14 @@ package cli
 
 // HelpText is the primary kb(1) man page. Shown by bare `kb -h`/`kb help`.
 // Generates kb.1.md.
-const HelpText = `%{app_name}(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const HelpText = `---
+title: {app_name}
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -491,9 +496,14 @@ the error object on standard output, one after the other.
 // Generates kb-document.1.md. Stub: only `ingest` exists so far
 // (narrative-documents-plan.md W3); review/draft/promote/list/show land in
 // W5/W8, and this page grows a full DESCRIPTION then.
-const DocumentHelpText = `%{app_name}-document(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const DocumentHelpText = `---
+title: {app_name}-document
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -766,9 +776,14 @@ a script can draft but not make a summary trusted.
 
 // ProjectHelpText is shown by `kb project -h` and `kb help project`.
 // Generates kb-project.1.md.
-const ProjectHelpText = `%{app_name}-project(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const ProjectHelpText = `---
+title: {app_name}-project
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -891,9 +906,14 @@ The workspace convention, as described in {app_name}(1).
 
 // ObservationHelpText is shown by `kb observation -h` and `kb help observation`.
 // Generates kb-observation.1.md.
-const ObservationHelpText = `%{app_name}-observation(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const ObservationHelpText = `---
+title: {app_name}-observation
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1020,9 +1040,14 @@ The workspace convention, as described in {app_name}(1).
 
 // ConceptHelpText is shown by `kb concept -h` and `kb help concept`.
 // Generates kb-concept.1.md.
-const ConceptHelpText = `%{app_name}-concept(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const ConceptHelpText = `---
+title: {app_name}-concept
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1207,9 +1232,14 @@ workspace here; 74 stdin could not be read.
 
 // VerbsHelpText is shown by `kb verbs -h` and `kb help verbs`.
 // Generates kb-verbs.1.md.
-const VerbsHelpText = `%{app_name}-verbs(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const VerbsHelpText = `---
+title: {app_name}-verbs
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1286,9 +1316,14 @@ flag or a surplus argument, or -db, which does not apply to this verb.
 
 // VersionHelpText is shown by `kb version -h`, `kb license -h`, `kb help version`
 // and `kb help license`. Generates kb-version.1.md.
-const VersionHelpText = `%{app_name}-version(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const VersionHelpText = `---
+title: {app_name}-version
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1330,9 +1365,14 @@ flag, a surplus argument, or -db, which does not apply to these verbs.
 `
 
 // UnlinkHelpText is shown by `kb unlink -h` and `kb help unlink`.
-const UnlinkHelpText = `%{app_name}-unlink(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const UnlinkHelpText = `---
+title: {app_name}-unlink
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1386,9 +1426,14 @@ The workspace convention, as described in {app_name}(1).
 
 // LinkHelpText is shown by `kb link -h` and `kb help link`.
 // Generates kb-link.1.md.
-const LinkHelpText = `%{app_name}-link(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const LinkHelpText = `---
+title: {app_name}-link
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1428,9 +1473,14 @@ The workspace convention, as described in {app_name}(1).
 
 // SourceHelpText is shown by `kb source -h` and `kb help source`.
 // Generates kb-source.1.md.
-const SourceHelpText = `%{app_name}-source(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const SourceHelpText = `---
+title: {app_name}-source
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1541,9 +1591,14 @@ The workspace convention, as described in {app_name}(1).
 
 // SearchHelpText is shown by `kb search -h`, `kb summary -h`, `kb format
 // -h`, and `kb help search`. Generates kb-search.1.md.
-const SearchHelpText = `%{app_name}-search(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const SearchHelpText = `---
+title: {app_name}-search
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1712,9 +1767,14 @@ summary and format.
 
 // MergeHelpText is shown by `kb merge -h` and `kb help merge`.
 // Generates kb-merge.1.md.
-const MergeHelpText = `%{app_name}-merge(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const MergeHelpText = `---
+title: {app_name}-merge
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1806,9 +1866,14 @@ The workspace convention, as described in {app_name}(1).
 
 // CheckDBHelpText is shown by `kb check-db -h` and `kb help check-db`.
 // Generates kb-check-db.1.md.
-const CheckDBHelpText = `%{app_name}-check-db(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const CheckDBHelpText = `---
+title: {app_name}-check-db
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -1883,9 +1948,14 @@ different), collisions and file_times.
 
 // StoryHelpText is shown by `kb story -h` and `kb help story`.
 // Generates kb-story.1.md.
-const StoryHelpText = `%{app_name}-story(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const StoryHelpText = `---
+title: {app_name}-story
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2012,9 +2082,14 @@ The workspace convention, as described in {app_name}(1).
 
 // StatsHelpText is shown by `kb stats -h` and `kb help stats`.
 // Generates kb-stats.1.md.
-const StatsHelpText = `%{app_name}-stats(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const StatsHelpText = `---
+title: {app_name}-stats
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2085,9 +2160,14 @@ The workspace convention, as described in {app_name}(1).
 
 // ExportHelpText is shown by `kb export -h` and `kb help export`.
 // Generates kb-export.1.md.
-const ExportHelpText = `%{app_name}-export(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const ExportHelpText = `---
+title: {app_name}-export
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2167,9 +2247,14 @@ The workspace convention, as described in {app_name}(1).
 
 // ImportHelpText is shown by `kb import -h` and `kb help import`.
 // Generates kb-import.1.md.
-const ImportHelpText = `%{app_name}-import(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const ImportHelpText = `---
+title: {app_name}-import
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2262,9 +2347,14 @@ The workspace convention, as described in {app_name}(1).
 `
 
 // IngestHelpText is the kb-ingest(1) man page.
-const IngestHelpText = `%{app_name}-ingest(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const IngestHelpText = `---
+title: {app_name}-ingest
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2443,9 +2533,14 @@ never 0.
 `
 
 // RecordHelpText is the kb-record(1) man page.
-const RecordHelpText = `%{app_name}-record(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const RecordHelpText = `---
+title: {app_name}-record
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2765,9 +2860,14 @@ Start a new record, and bring a corpus into canonical form:
 `
 
 // IndexHelpText is the kb-index(1) man page.
-const IndexHelpText = `%{app_name}-index(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const IndexHelpText = `---
+title: {app_name}-index
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2907,9 +3007,14 @@ The workspace convention, as described in {app_name}(1).
 `
 
 // InitHelpText is the kb-init(1) man page.
-const InitHelpText = `%{app_name}-init(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const InitHelpText = `---
+title: {app_name}-init
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -2983,9 +3088,14 @@ The workspace convention, as described in {app_name}(1).
 `
 
 // EmbedHelpText is the kb-embed(1) man page.
-const EmbedHelpText = `%{app_name}-embed(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const EmbedHelpText = `---
+title: {app_name}-embed
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -3098,9 +3208,14 @@ The workspace convention, as described in {app_name}(1).
 `
 
 // ModelHelpText is the kb-model(1) man page.
-const ModelHelpText = `%{app_name}-model(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const ModelHelpText = `---
+title: {app_name}-model
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -3219,9 +3334,14 @@ The workspace convention, as described in {app_name}(1).
 `
 
 // CompletionHelpText is the kb-completion(1) man page.
-const CompletionHelpText = `%{app_name}-completion(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const CompletionHelpText = `---
+title: {app_name}-completion
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 
@@ -3330,9 +3450,14 @@ not create the directory; 74 a write failed part way.
 // Named "topics" rather than the conventional "index" because index is a verb
 // here, so kb help index is kb-index(1) and cannot also be this. harvey
 // accepts both spellings; only this one is free in kb.
-const TopicsHelpText = `%{app_name}-topics(1) user manual | version {version} {release_hash}
-% R. S. Doiel
-% {release_date}
+const TopicsHelpText = `---
+title: {app_name}-topics
+section: 1
+header: user manual
+footer: version {version} {release_hash}
+date: {release_date}
+author: R. S. Doiel
+---
 
 # NAME
 

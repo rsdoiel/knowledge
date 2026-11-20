@@ -2,6 +2,7 @@
 <html lang="en-US">
 <head>
     <title>knowledge</title>
+    <link rel="alternate" type="text/markdown" href="index.md">
     <link rel="stylesheet" href="/css/site.css">
 </head>
 <body>
@@ -131,7 +132,7 @@ script or a model.</p>
 <h2 id="semantic-search-preview">Semantic search (preview)</h2>
 <p><strong>This preview is not shipped as a binary: to try it you build
 it from source</strong> (<code>make semantic</code>, or
-<code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29</code>;
+<code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31</code>;
 Go 1.27.3 or later), as <a href="INSTALL.html">INSTALL.md</a>
 describes.</p>
 <p><code>kb search</code> finds rows that contain your words. The
@@ -158,8 +159,8 @@ archives. See <a href="kb-search.1.html">kb-search(1)</a>, <a
 href="kb-embed.1.html">kb-embed(1)</a> and <a
 href="kb-model.1.html">kb-model(1)</a>.</p>
 <p>Measured on a Raspberry Pi 5 (4 cores, 16 GB) over a copy of this
-workspace’s knowledge base, 893 rows in about 4,100 passages: the first
-index took 14 to 17 minutes and up to 875 MB of memory, a search about
+workspace’s knowledge base, 947 rows in about 4,400 passages: the first
+index took about 15 minutes and up to 0.9 GB of memory, a search about
 half a second, and a repeat <code>kb embed</code> with nothing changed a
 fraction of a second. The semantic <code>kb</code> is about 33 MB
 against 21 MB for the plain one, and the model about 87 MB. Another
@@ -244,7 +245,7 @@ skills that wrap the verbs (<code>setup-knowledge-base</code>,
 </ul>
 <p>Offline semantic search, as a preview. A separate build of
 <code>kb</code> (<code>make semantic</code>, or
-<code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.29</code>;
+<code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31</code>;
 Go 1.27.3 or later) finds rows by meaning with no daemon and no network
 once the model is fetched: <code>kb search -semantic</code> and
 <code>-hybrid</code>, <code>kb model install|fetch|list</code> and
@@ -383,7 +384,7 @@ Reporting bugs</a></li>
 </ul>
 </section>
 <footer>
-<p>knowledge</p>
+<p>knowledge. This page is also published as <a href="index.md">Markdown</a>.</p>
 </footer>
 </body>
 </html>

@@ -1,6 +1,11 @@
-%kb-observation(1) user manual | version 0.0.31 93cff1fe
-% R. S. Doiel
-% 2026-11-09
+---
+title: kb-observation
+section: 1
+header: user manual
+footer: version 0.0.32 c66d141
+date: 2026-11-20
+author: R. S. Doiel
+---
 
 # NAME
 

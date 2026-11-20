@@ -292,7 +292,7 @@ func TestPrintHelp_IndexIsTheVerbPageNotTheTopicIndex(t *testing.T) {
 	if !printHelp(&out, "index") {
 		t.Fatal("kb help index is not recognized")
 	}
-	if !strings.Contains(out.String(), "kb-index(1)") {
+	if !strings.Contains(out.String(), "title: kb-index\n") {
 		t.Errorf("kb help index should be the verb's manual page:\n%s", out.String()[:200])
 	}
 }

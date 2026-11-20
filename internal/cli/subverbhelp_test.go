@@ -40,7 +40,7 @@ func TestMainRun_SubverbHelpPrintsTheVerbPage(t *testing.T) {
 					if code != 0 {
 						t.Errorf("exit %d, want 0; stderr=%q", code, errOut.String())
 					}
-					if !strings.Contains(out.String(), "kb-"+tc.verb+"(1)") {
+					if !strings.Contains(out.String(), "title: kb-"+tc.verb+"\n") {
 						t.Errorf("stdout is not the %s page: %.120q", tc.verb, out.String())
 					}
 					if errOut.Len() != 0 {
@@ -63,7 +63,7 @@ func TestMainRun_NestedSubverbHelpPrintsTheDocumentPage(t *testing.T) {
 			if code := mainRun([]string{"document", "review", sub, "-help"}, &out, &errOut); code != 0 {
 				t.Errorf("exit %d, want 0; stderr=%q", code, errOut.String())
 			}
-			if !strings.Contains(out.String(), "kb-document(1)") {
+			if !strings.Contains(out.String(), "title: kb-document\n") {
 				t.Errorf("stdout is not the document page: %.120q", out.String())
 			}
 		})
@@ -89,7 +89,7 @@ func TestMainRun_HelpAfterFlagsPrintsThePageNotFlagError(t *testing.T) {
 			if strings.Contains(errOut.String(), "help requested") {
 				t.Errorf("stderr leaks the flag package's message: %q", errOut.String())
 			}
-			if !strings.Contains(out.String(), "kb-"+args[0]+"(1)") {
+			if !strings.Contains(out.String(), "title: kb-"+args[0]+"\n") {
 				t.Errorf("stdout is not the %s page: %.120q", args[0], out.String())
 			}
 		})
@@ -152,7 +152,7 @@ func TestMainRun_HelpAfterFlagsInHandRolledParsersPrintsThePage(t *testing.T) {
 			if code != 0 {
 				t.Errorf("exit %d, want 0; stderr=%q", code, errOut.String())
 			}
-			if !strings.Contains(out.String(), "kb-"+args[0]+"(1)") {
+			if !strings.Contains(out.String(), "title: kb-"+args[0]+"\n") {
 				t.Errorf("stdout is not the %s page: %.120q; stderr=%q", args[0], out.String(), errOut.String())
 			}
 		})
