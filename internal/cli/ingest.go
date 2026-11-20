@@ -17,9 +17,10 @@ func init() {
 	verbs["ingest"] = cmdIngest
 }
 
-// recordFilePattern matches a decision record filename: a four-digit id, a
-// dash, a slug. The generated index.md deliberately does not match.
-var recordFilePattern = regexp.MustCompile(`^[0-9]{4}-.*\.md$`)
+// recordFilePattern matches a record filename: a four-digit id (a decision) or
+// DS- or PL- and four digits (a design or a plan, DR-0096), a dash, a slug. The
+// generated index.md deliberately does not match.
+var recordFilePattern = regexp.MustCompile(`^((DS|PL)-)?[0-9]{4}-.*\.md$`)
 
 // datedNamePattern matches a name that starts with a date, YYYY-MM-DD. A dated
 // note (notes/2026-09-29-worklog.md) would otherwise pass for record 2026.
@@ -28,8 +29,12 @@ var datedNamePattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}([-.]|$)`)
 // nonRecordDirs are the directories of the project layout (PROJECT_CYCLE.md)
 // that never hold decision records. The walk skips them below the directory it
 // was given; a directory named on the command line is read whatever it is called.
+//
+// design/ and plans/ are not on the list: they hold designs and plans, which are
+// records (DR-0096), and the other files in them are not read because their
+// names are not DS-NNNN-slug.md or PL-NNNN-slug.md.
 var nonRecordDirs = map[string]bool{
-	"design": true, "plans": true, "feature_requests": true, "notes": true, "hand-off": true,
+	"feature_requests": true, "notes": true, "hand-off": true,
 }
 
 /** isRecordFileName reports whether a file name is a decision record's:
@@ -59,7 +64,7 @@ var wikilinkPattern = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
 // [[Name]] is how it tags a concept — but [[0007]] is the natural way to
 // write "see DR-0007", so it silently minted a concept named "0007" instead
 // of warning. See TODO.md "[[NNNN]] in a record body mints a junk concept".
-var recordIDLikeWikilink = regexp.MustCompile(`(?i)^(dr-)?[0-9]{4}$`)
+var recordIDLikeWikilink = regexp.MustCompile(`(?i)^((dr|ds|pl)-)?[0-9]{4}$`)
 
 /** statusChange is a record whose status entered the database through a file
  * and not through `kb record set-status` (DR-0068): either the file's status
@@ -288,6 +293,27 @@ func collectRecordFilesIn(dir string) ([]string, error) {
 	return files, nil
 }
 
+// inDesignOrPlans reports whether path, found by a walk of root, lies below a
+// directory named design or plans (root itself excluded).
+func inDesignOrPlans(root, path string) bool {
+	rel, err := filepath.Rel(root, filepath.Dir(path))
+	if err != nil {
+		return false
+	}
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		if part == "design" || part == "plans" {
+			return true
+		}
+	}
+	return false
+}
+
+// isDesignOrPlanFileName reports whether a file name is DS-NNNN-slug.md or
+// PL-NNNN-slug.md.
+func isDesignOrPlanFileName(name string) bool {
+	return strings.HasPrefix(name, "DS-") || strings.HasPrefix(name, "PL-")
+}
+
 // collectRecordFiles walks dir and returns every record file, sorted, so that
 // a run is deterministic.
 func collectRecordFiles(dir string) ([]string, error) {
@@ -300,6 +326,13 @@ func collectRecordFiles(dir string) ([]string, error) {
 			return fs.SkipDir
 		}
 		if d.IsDir() || !isRecordFileName(d.Name()) {
+			return nil
+		}
+		// Below a design/ or plans/ directory only a design or a plan is a record
+		// (DS-NNNN-slug.md, PL-NNNN-slug.md); a bare NNNN-slug.md there is a
+		// numbered note, as it always was. A directory named on the command
+		// line is read whatever it holds.
+		if inDesignOrPlans(dir, p) && !isDesignOrPlanFileName(d.Name()) {
 			return nil
 		}
 		files = append(files, p)
@@ -356,8 +389,8 @@ func (ing *ingester) upsertAll(files []string) {
 			// read like a possible collision.
 			if moved && existing.Checksum != rf.Record.Checksum {
 				ing.summary.Warnings = append(ing.summary.Warnings, fmt.Sprintf(
-					"%s: DR-%s was stored at %s; a slug may have been regenerated, or two files may claim one id",
-					name, rf.Record.RecordID, existing.Path))
+					"%s: %s was stored at %s; a slug may have been regenerated, or two files may claim one id",
+					name, knowledge.RecordLabel(rf.Record.RecordID), existing.Path))
 			}
 		}
 		// A status that enters through a file is reported (DR-0068), not blocked:
@@ -436,9 +469,9 @@ func identityCollision(existing, incoming *knowledge.Record, name string) string
 		return ""
 	}
 	return fmt.Sprintf(
-		"%s: DR-%s already exists with a different uuid (%s stored at %s, incoming %s); "+
+		"%s: %s already exists with a different uuid (%s stored at %s, incoming %s); "+
 			"refusing to overwrite it, since two records cannot share one identity",
-		name, incoming.RecordID, existing.UUID, existing.Path, incoming.UUID)
+		name, knowledge.RecordLabel(incoming.RecordID), existing.UUID, existing.Path, incoming.UUID)
 }
 
 // projectID resolves a frontmatter project name to a row, creating the
@@ -717,6 +750,11 @@ func parseReference(entry, citingProject, citingScope string) (reference, bool) 
 	}
 
 	id = strings.TrimPrefix(id, "DR-")
+	// A design or a plan is cited by its stored id, DS-0001 or PL-0001; a bare
+	// number is a decision (DR-0096).
+	if p := strings.ToUpper(id); strings.HasPrefix(p, "DS-") || strings.HasPrefix(p, "PL-") {
+		id = p
+	}
 	if id == "" {
 		return reference{}, false
 	}
@@ -770,10 +808,10 @@ func (ing *ingester) reportMissing(dir string) {
 			continue
 		}
 		ing.summary.Missing = append(ing.summary.Missing, fmt.Sprintf(
-			"DR-%s (%s) is in the database but has no file at that path; "+
+			"%s (%s) is in the database but has no file at that path; "+
 				"if it moved, re-run ingest on its new location first — if it was deleted, "+
 				"`kb record delete %s` removes the row",
-			r.RecordID, r.Path, refOf(r, names)))
+			knowledge.RecordLabel(r.RecordID), r.Path, refOf(r, names)))
 	}
 }
 

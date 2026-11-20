@@ -80,7 +80,9 @@ func (i observationItem) FilterValue() string { return i.o.Body }
 // rather than the date.
 type recordItem struct{ r knowledge.Record }
 
-func (i recordItem) Title() string { return fmt.Sprintf("DR-%s  %s", i.r.RecordID, i.r.Title) }
+func (i recordItem) Title() string {
+	return fmt.Sprintf("%s  %s", knowledge.RecordLabel(i.r.RecordID), i.r.Title)
+}
 func (i recordItem) Description() string {
 	trigger := i.r.Trigger
 	if trigger == "" {

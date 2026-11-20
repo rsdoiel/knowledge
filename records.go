@@ -341,7 +341,7 @@ func (kb *KnowledgeBase) indexRecordFTS(id int64, r Record) {
 	_, _ = kb.db.Exec(
 		`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)
 		 VALUES (?, ?, ?, ?, 'record', ?, ?)`,
-		r.Title+"\n"+r.Body, r.Kind, "DR-"+r.RecordID, r.Title, id, r.ProjectID)
+		r.Title+"\n"+r.Body, r.Kind, RecordLabel(r.RecordID), r.Title, id, r.ProjectID)
 }
 
 /** RecordByIdentity returns the record with the given identity — the

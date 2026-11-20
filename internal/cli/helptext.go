@@ -2587,7 +2587,7 @@ record it supersedes.
 A record id is not by itself an identity, since two projects may each have a
 DR-0001, and listings print the qualified form for that reason. A record is named by SCOPE/DR-NNNN, where SCOPE is a project name or
 workspace (the workspace directory's own name is accepted as an alias for it,
-and a project of that name wins): harvey/DR-0004, workspace/DR-0003. A bare id
+and a project of that name wins): harvey/DR-0004, workspace/DR-0003. A design is DS-NNNN and a plan PL-NNNN, each with its own numbers (harvey/DS-0001, harvey/PL-0002); a decision is DR-NNNN, or the bare number. A bare id
 resolves only where one record has it; otherwise the command lists the
 qualified candidates rather than choosing one. A command that changes a record
 (set-status, supersede, relates-to, delete) never acts on a bare id with no scope: say
@@ -2685,7 +2685,13 @@ new
   uses for its filters: a value outside the vocabularies below is refused
   unless a record already in the database carries it, and the error names
   what is known. That catches a typo before it is written into a file, where
-  it would otherwise become a value the filter rule accepts
+  it would otherwise become a value the filter rule accepts. --kind design
+  and --kind plan write a design brief or a plan as a record: DS-NNNN in the
+  project's design directory, PL-NNNN in its plans directory, each numbered
+  from its own sequence across the project, status proposed. They belong to a
+  project (--workspace is a usage error) and are accepted like a decision,
+  by a person at a terminal with set-status. ingest reads DS- and PL- files in
+  design and plans; any other file there is left alone
 
 fmt
 : rewrite every record under PATH into canonical form. This is the

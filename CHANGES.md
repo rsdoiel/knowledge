@@ -5,6 +5,16 @@ release notes; maintained going forward.
 
 ## Unreleased
 
+### Added
+
+- **Designs and plans are records** (knowledge DR-0096). `kb record new --kind design` writes a design brief as `design/DS-NNNN-slug.md`
+  and `--kind plan` a plan as `plans/PL-NNNN-slug.md`, each with its own id prefix and its own numbers, status `proposed`, and the same
+  gate on acceptance as a decision: only a person at a terminal accepts one (`kb record set-status`). References are `project/DS-0001`
+  and `project/PL-0001` beside `project/DR-0096`; `DR-` and bare numbers still mean a decision. `kb ingest` reads `DS-` and `PL-` files
+  in a project's `design/` and `plans/` directories and leaves every other file there alone, and `relates_to`, `supersedes`, search,
+  export, import and merge work on them as on a decision. They belong to a project, not to the workspace tier. No schema change.
+  A design file edited by hand can still say `status: accepted`; `kb` gates `set-status`, not the file (as for a decision record).
+
 ### Fixed
 
 - **A document is found by `kb search` as soon as it is ingested.** Until now a document was searchable only after one of its
@@ -19,6 +29,9 @@ release notes; maintained going forward.
 - **The document entry is embedded.** `kb embed` embeds it and `kb search -semantic` and `-hybrid` find a document by meaning from the moment it is
   ingested (DR-0092's open question, decided 2026-11-20). A document with reviewed summaries lists both the entry and the summaries as hits. Run
   `kb embed` once to index the entries of documents already ingested.
+- **`kb record show`, `relates-to` and the other record verbs say when a record's file is on disk but not ingested** (`DR-0013 is on disk
+  (agents/decisions/0013-....md) but not ingested; run kb ingest agents/decisions`), instead of the same "no record" as for a record that does not
+  exist. The exit code stays 1.
 
 ## v0.0.32 — 2026-11-20
 

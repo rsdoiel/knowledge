@@ -397,7 +397,7 @@ func (m *tuiModel) relateSelected() (tea.Model, tea.Cmd) {
 				return nil, err
 			}
 			if from.ID == to.ID {
-				return nil, usageErrorf("DR-%s cannot relate to itself", from.RecordID)
+				return nil, usageErrorf("%s cannot relate to itself", knowledge.RecordLabel(from.RecordID))
 			}
 			if _, _, err := loadRecordFile(recordRoot(m.kb, recordFlags{}), from); err != nil {
 				return nil, err
