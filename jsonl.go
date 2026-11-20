@@ -148,6 +148,7 @@ type documentRecord struct {
 	Path          string `json:"path"`
 	Author        string `json:"author"`
 	PublishedDate string `json:"published_date"`
+	Description   string `json:"description,omitempty"`
 	Checksum      string `json:"checksum"`
 	IngestedAt    string `json:"ingested_at"`
 }
@@ -483,7 +484,7 @@ func exportRecordConcepts(kb *KnowledgeBase, enc *json.Encoder, scoped bool, pro
 // travelling by name like decisionRecord (DR-0018).
 func exportDocuments(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectID int64) error {
 	query := `SELECT d.uuid, d.origin_host, IFNULL(p.name, ''), d.title, d.format, d.path,
-	                 d.author, d.published_date, d.checksum, d.ingested_at
+	                 d.author, d.published_date, d.description, d.checksum, d.ingested_at
 	          FROM documents d
 	          LEFT JOIN projects p ON p.id = d.project_id`
 	args := []any{}
@@ -500,7 +501,7 @@ func exportDocuments(kb *KnowledgeBase, enc *json.Encoder, scoped bool, projectI
 	for rows.Next() {
 		r := documentRecord{Type: recDocument}
 		if err := rows.Scan(&r.UUID, &r.OriginHost, &r.ProjectName, &r.Title, &r.Format, &r.Path,
-			&r.Author, &r.PublishedDate, &r.Checksum, &r.IngestedAt); err != nil {
+			&r.Author, &r.PublishedDate, &r.Description, &r.Checksum, &r.IngestedAt); err != nil {
 			return fmt.Errorf("knowledge: export documents: %w", err)
 		}
 		if err := enc.Encode(r); err != nil {
@@ -1181,6 +1182,11 @@ func ImportJSONL(kb *KnowledgeBase, r io.Reader) ([]ImportTableSummary, error) {
 			s.Skipped++
 		}
 	}
+	// The sections are in; write each imported document's search entry
+	// (DR-0092). Nothing else indexes a document an import brought in.
+	for _, id := range documentLocalID {
+		kb.indexDocumentFTS(id)
+	}
 
 	s = summaryFor(recObservation)
 	for _, rec := range observations {
@@ -1718,7 +1724,7 @@ func importDocument(kb *KnowledgeBase, rec documentRecord, localProjectID int64)
 	}
 	id, err := kb.AddDocument(Document{
 		ProjectID: localProjectID, Title: rec.Title, Format: rec.Format, Path: rec.Path,
-		Author: rec.Author, PublishedDate: rec.PublishedDate, Checksum: rec.Checksum,
+		Author: rec.Author, PublishedDate: rec.PublishedDate, Description: rec.Description, Checksum: rec.Checksum,
 		UUID: rec.UUID, OriginHost: rec.OriginHost,
 	})
 	if err != nil {

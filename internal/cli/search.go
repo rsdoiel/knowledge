@@ -196,6 +196,14 @@ type searchPrint struct {
 // searchTypeOf maps a result group to the source_type its hits carry.
 var searchTypeOf = map[string]string{"records": "record", "observations": "observation", "concepts": "concept", "documents": "document_summary", "sources": "source", "projects": "project"}
 
+// searchHitIsOfKind says whether a hit of source type typ belongs to the result
+// group whose primary source type is want. A document is found two ways: a
+// reviewed summary (document_summary) and the entry for the document itself
+// (document, DR-0092); both are in the "documents" group.
+func searchHitIsOfKind(typ, want string) bool {
+	return typ == want || (want == "document_summary" && typ == "document")
+}
+
 // printScoped prints a scoped result, as JSON or grouped by kind with counts.
 func printScoped(out io.Writer, jsonOut bool, sp searchPrint, hits []scopedHit) error {
 	scope, scopeName, term := sp.scope, sp.scopeName, sp.term
@@ -238,7 +246,7 @@ func printScoped(out io.Writer, jsonOut bool, sp searchPrint, hits []scopedHit) 
 		}
 		fmt.Fprintf(out, "\n%s (%d)\n", k, res.Counts[k])
 		for _, h := range hits {
-			if h.Type != typeOf[k] {
+			if !searchHitIsOfKind(h.Type, typeOf[k]) {
 				continue
 			}
 			who := h.Label

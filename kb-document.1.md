@@ -1,6 +1,6 @@
-%kb-document(1) user manual | version 0.0.31 93cff1fe
+%kb-document(1) user manual | version 0.0.32 c66d141
 % R. S. Doiel
-% 2026-11-09
+% 2026-11-20
 
 # NAME
 
@@ -161,7 +161,9 @@ review promote
 : promote a drafted summary to reviewed -- the only human action that
   makes a summary trusted. Only a reviewed summary is indexed for search
   or returned as content by a concept-tag query; a section's raw body is
-  never indexed at all, only its reviewed summary. It requires an
+  never indexed at all, only its reviewed summary. (A document's title,
+  description and headings are searched from ingest; they are the author's
+  own text, not a summary.) It requires an
   interactive terminal on standard input and output (exit 2 without one,
   nothing written, no way to turn that off; see EXIT STATUS), so a model
   that drafted a summary cannot also make it trusted. The library call

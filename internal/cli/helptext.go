@@ -654,7 +654,9 @@ review promote
 : promote a drafted summary to reviewed -- the only human action that
   makes a summary trusted. Only a reviewed summary is indexed for search
   or returned as content by a concept-tag query; a section's raw body is
-  never indexed at all, only its reviewed summary. It requires an
+  never indexed at all, only its reviewed summary. (A document's title,
+  description and headings are searched from ingest; they are the author's
+  own text, not a summary.) It requires an
   interactive terminal on standard input and output (exit 2 without one,
   nothing written, no way to turn that off; see EXIT STATUS), so a model
   that drafted a summary cannot also make it trusted. The library call
@@ -1569,8 +1571,9 @@ const SearchHelpText = `%{app_name}-search(1) user manual | version {version} {r
 
 search
 : full-text search across observations, records, projects, concepts, sources
-  (title, authors, publisher and identifier) and documents' reviewed summaries
-  using the FTS5 index. TERM uses standard FTS5
+  (title, authors, publisher and identifier) and documents (each document's
+  title, front-matter description and section headings, and its reviewed
+  summaries) using the FTS5 index. TERM uses standard FTS5
   query syntax: multiple words are ANDed, "quoted phrases" match exactly,
   prefix* matches by prefix. A first word that starts with a dash is read as
   a mistyped option and refused (exit 2); give a dash-leading term after --,
@@ -1627,7 +1630,9 @@ search
   observations and on any of its records. Projects are searched at the global
   scope only: workspace/observations and harvey/projects are exit 1 with the
   reason, since observations belong to projects and a project has no projects
-  inside it. A document is found by its reviewed summaries.
+  inside it. A document is found by its title, its front-matter description
+  and its section headings as soon as it is ingested, and by its reviewed
+  summaries once they are promoted; a section's body text is not searched.
 
 -semantic, -hybrid, -min-score N
 : search by meaning, or by meaning and words together. These need the semantic

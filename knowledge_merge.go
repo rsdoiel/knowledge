@@ -483,11 +483,11 @@ func MergeKnowledgeBases(aPath, bPath, mergedPath string) ([]MergeTableSummary, 
 
 	// Documents hang off projects the same way records do -- project_id is
 	// nullable, same LEFT JOIN and leniency rule as records above.
-	const documentCols = `title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host`
+	const documentCols = `title, format, path, author, published_date, description, checksum, ingested_at, uuid, origin_host`
 	for _, src := range []string{"a", "b"} {
 		if _, err := db.Exec(fmt.Sprintf(`
 			INSERT OR IGNORE INTO documents (project_id, %s)
-			SELECT mp.id, d.title, d.format, d.path, d.author, d.published_date,
+			SELECT mp.id, d.title, d.format, d.path, d.author, d.published_date, d.description,
 			       d.checksum, d.ingested_at, d.uuid, d.origin_host
 			FROM %s.documents d
 			LEFT JOIN %s.projects sp ON sp.id = d.project_id

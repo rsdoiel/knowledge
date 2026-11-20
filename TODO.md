@@ -46,7 +46,7 @@
   one written in FTS5 syntax; assert the first is found by `-hybrid` and ranked differently from `-semantic`, and the second
   returns what it returns today.
 
-- [ ] **A document is not findable by `kb search` until one of its summaries is reviewed: the title-only `'document'` entry in
+- [x] **A document is not findable by `kb search` until one of its summaries is reviewed: the title-only `'document'` entry in
   `kb_fts` was designed and never built.** Found 2026-11-07 while measuring retrieval (not yet fixed; to be handled in the
   design, decide, plan and implement phases of knowledge DR-0091's work).
   *Spec:* `agents/projects/knowledge/design/narrative-documents-design.md` decision 8 (status "Decisions confirmed",
@@ -88,6 +88,7 @@
   *Open for design:* the ranking between a document entry and a reviewed summary of the same document; whether the hit's
   `Kind` is a new value or `document`; whether a document can opt out of indexing (DR-0091's open item); `description` taken
   from `abstract` when absent is a separate request (the blog uses `abstract`) and is not part of this fix.
+  *Fixed 2026-11-20 (branch `document-fts-entry`, unreleased):* ingest writes one `kb_fts` entry per document (`source_type = 'document'`, `source_id` = the document id; title, front-matter description, section headings), `documents.description` is a new column (lazy migration; export, import, merge carry it), the `documents` search kind finds both source types, hits carry the document's `Material`, delete removes the entry, import and the open-time backfill rebuild it, and a skipped ingest fills a missing description. Tests: `documentfts_test.go`. *Not done:* embedding the entry (`EmbeddedKinds` and the semantic scope filter still select `document_summary` only; DR-0092's open question), DR-0091's excerpt tier and `trust` field, DR-0093's `kb_text_fts`, the TUI search view and harvey's `kbrecall.go` (not checked), a `kb check-db` check for the entry (check-db does not look at `kb_fts`).
 - [x] **An unknown verb was reported as a missing workspace.** `kb version` outside a workspace said "no agents/knowledge.db
   here" and exited 66; with `--db` it created that database. Fixed 2026-11-09, unreleased: `mainRun` checks the verb against
   the table before it looks for the workspace, so it is exit 2 and nothing is made. Test: `TestMainRun_UnknownVerbIsUsage

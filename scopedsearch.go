@@ -17,7 +17,10 @@ import (
  */
 var SearchKinds = []string{"records", "observations", "concepts", "documents", "sources", "projects"}
 
-// searchKindSource maps a search kind to the source_type the index stores.
+// searchKindSource maps a search kind to the source_type the index stores. A
+// document is two: its reviewed summaries (document_summary) and, from DR-0092,
+// its one title, description and headings entry (document); see
+// searchKindSources.
 var searchKindSource = map[string]string{
 	"records":      "record",
 	"observations": "observation",
@@ -25,6 +28,22 @@ var searchKindSource = map[string]string{
 	"documents":    "document_summary",
 	"sources":      "source",
 	"projects":     "project",
+}
+
+// searchKindSources lists every source_type a kind finds. The search verbs see
+// all of them. Semantic search embeds only the first: whether the document
+// entry is embedded too is DR-0092's open question, so for now the always=true
+// path of scopeFilter (the embedder and semantic search) stays as it was.
+var searchKindSources = map[string][]string{
+	"documents": {"document_summary", "document"},
+}
+
+// kindSourceTypes returns the source_types a search kind finds.
+func kindSourceTypes(kind string, summariesOnly bool) []string {
+	if more, ok := searchKindSources[kind]; ok && !summariesOnly {
+		return more
+	}
+	return []string{searchKindSource[kind]}
 }
 
 /** SearchScope says where a scoped search looks (knowledge DR-0073, DR-0074).
@@ -175,26 +194,27 @@ func (kb *KnowledgeBase) scopeFilter(scope SearchScope, allowed []string, always
 	if scoped || len(scope.Kinds) > 0 || always {
 		var ors []string
 		for _, k := range kinds {
-			st := searchKindSource[k]
-			switch {
-			case !scoped:
-				ors = append(ors, "kb_fts.source_type = '"+st+"'")
-			case k == "concepts" && scope.Workspace:
-				ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN
+			for _, st := range kindSourceTypes(k, always) {
+				switch {
+				case !scoped:
+					ors = append(ors, "kb_fts.source_type = '"+st+"'")
+				case k == "concepts" && scope.Workspace:
+					ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN
 					(SELECT rc.concept_id FROM record_concepts rc JOIN records r ON r.id = rc.record_id WHERE r.project_id IS NULL))`)
-			case k == "concepts":
-				ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectConceptIDs+`))`)
-				args = append(args, pid, pid, pid)
-			case k == "sources" && scope.Workspace:
-				ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+workspaceSourceIDs+`))`)
-			case k == "sources":
-				ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectSourceIDs+`))`)
-				args = append(args, pid, pid, pid)
-			case scope.Workspace:
-				ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = 0)")
-			default:
-				ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = ?)")
-				args = append(args, pid)
+				case k == "concepts":
+					ors = append(ors, `(kb_fts.source_type = 'concept' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectConceptIDs+`))`)
+					args = append(args, pid, pid, pid)
+				case k == "sources" && scope.Workspace:
+					ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+workspaceSourceIDs+`))`)
+				case k == "sources":
+					ors = append(ors, `(kb_fts.source_type = 'source' AND CAST(kb_fts.source_id AS INTEGER) IN (`+projectSourceIDs+`))`)
+					args = append(args, pid, pid, pid)
+				case scope.Workspace:
+					ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = 0)")
+				default:
+					ors = append(ors, "(kb_fts.source_type = '"+st+"' AND "+pidExpr+" = ?)")
+					args = append(args, pid)
+				}
 			}
 		}
 		where = " AND (" + strings.Join(ors, " OR ") + ")"
@@ -318,6 +338,11 @@ func (kb *KnowledgeBase) runScoped(term, where string, args []any, limit int) (*
 	kindOf := map[string]string{}
 	for k, st := range searchKindSource {
 		kindOf[st] = k
+	}
+	for k, sts := range searchKindSources {
+		for _, st := range sts {
+			kindOf[st] = k
+		}
 	}
 	crows, err := kb.db.Query(
 		`SELECT kb_fts.source_type, COUNT(*) FROM kb_fts WHERE kb_fts MATCH ?`+where+` GROUP BY kb_fts.source_type`,

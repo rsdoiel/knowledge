@@ -99,7 +99,7 @@ func (kb *KnowledgeBase) provQuery(q string, args ...any) (*sql.Rows, error) {
 // whatever the number of hits. A target of a kind with no provenance (a concept,
 // a project, a source) gets an empty non-nil Sources.
 func (kb *KnowledgeBase) fillProvenance(targets []provTarget) error {
-	var obsIDs, recIDs, secIDs []int64
+	var obsIDs, recIDs, secIDs, directDocIDs []int64
 	for _, t := range targets {
 		t.dst.Sources = []SourceRef{}
 		switch t.sourceType {
@@ -109,21 +109,32 @@ func (kb *KnowledgeBase) fillProvenance(targets []provTarget) error {
 			recIDs = append(recIDs, t.id)
 		case "document_summary", "document_gist", "document_section":
 			secIDs = append(secIDs, t.id)
+		case "document":
+			// The title, description and headings entry (DR-0092): its id is the
+			// document's own, so there is no section to go through.
+			directDocIDs = append(directDocIDs, t.id)
 		}
 	}
-	if len(obsIDs)+len(recIDs)+len(secIDs) == 0 {
+	if len(obsIDs)+len(recIDs)+len(secIDs)+len(directDocIDs) == 0 {
 		return nil
 	}
 
 	// Sections -> their documents.
 	docOfSection := map[int64]int64{}
 	var docIDs []int64
+	seenDirect := map[int64]bool{}
+	for _, id := range directDocIDs {
+		if !seenDirect[id] {
+			seenDirect[id] = true
+			docIDs = append(docIDs, id)
+		}
+	}
 	if len(secIDs) > 0 {
 		rows, err := kb.provQuery(`SELECT id, document_id FROM document_sections WHERE id IN (`+placeholders(len(secIDs))+`)`, int64Args(secIDs)...)
 		if err != nil {
 			return err
 		}
-		seen := map[int64]bool{}
+		seen := seenDirect
 		for rows.Next() {
 			var sid, did int64
 			if err := rows.Scan(&sid, &did); err != nil {
@@ -202,6 +213,8 @@ func (kb *KnowledgeBase) fillProvenance(targets []provTarget) error {
 		case "document_summary", "document_gist", "document_section":
 			did := docOfSection[t.id]
 			links, mat = docLinks[did], docMat[did]
+		case "document":
+			links, mat = docLinks[t.id], docMat[t.id]
 		default:
 			continue
 		}

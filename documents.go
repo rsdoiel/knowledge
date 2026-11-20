@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS documents (
     path           TEXT NOT NULL,
     author         TEXT NOT NULL DEFAULT '',
     published_date TEXT NOT NULL DEFAULT '',
+    description    TEXT NOT NULL DEFAULT '',
     checksum       TEXT NOT NULL DEFAULT '',
     ingested_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
     uuid           TEXT NOT NULL DEFAULT '',
@@ -84,6 +85,7 @@ type Document struct {
 	Path          string
 	Author        string
 	PublishedDate string
+	Description   string // the front-matter description, verbatim; "" when the file has none
 	Checksum      string
 	IngestedAt    time.Time
 	UUID          string
@@ -150,9 +152,9 @@ func (kb *KnowledgeBase) AddDocument(d Document) (int64, error) {
 		d.OriginHost, _ = os.Hostname()
 	}
 	res, err := kb.db.Exec(
-		`INSERT INTO documents (project_id, title, format, path, author, published_date, checksum, uuid, origin_host)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		projectValue(d.ProjectID), d.Title, d.Format, d.Path, d.Author, d.PublishedDate, d.Checksum, d.UUID, d.OriginHost,
+		`INSERT INTO documents (project_id, title, format, path, author, published_date, description, checksum, uuid, origin_host)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		projectValue(d.ProjectID), d.Title, d.Format, d.Path, d.Author, d.PublishedDate, d.Description, d.Checksum, d.UUID, d.OriginHost,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("knowledge: add document: %w", err)
@@ -283,9 +285,9 @@ func (kb *KnowledgeBase) DocumentByPath(path string) (*Document, error) {
 	var d Document
 	var ts string
 	err := kb.db.QueryRow(
-		`SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host
+		`SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, description, checksum, ingested_at, uuid, origin_host
 		 FROM documents WHERE path = ? LIMIT 1`, path,
-	).Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author, &d.PublishedDate, &d.Checksum, &ts, &d.UUID, &d.OriginHost)
+	).Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author, &d.PublishedDate, &d.Description, &d.Checksum, &ts, &d.UUID, &d.OriginHost)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -313,9 +315,9 @@ func (kb *KnowledgeBase) DocumentByID(id int64) (*Document, error) {
 	var d Document
 	var ts string
 	err := kb.db.QueryRow(
-		`SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host
+		`SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, description, checksum, ingested_at, uuid, origin_host
 		 FROM documents WHERE id = ?`, id,
-	).Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author, &d.PublishedDate, &d.Checksum, &ts, &d.UUID, &d.OriginHost)
+	).Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author, &d.PublishedDate, &d.Description, &d.Checksum, &ts, &d.UUID, &d.OriginHost)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -855,6 +857,23 @@ func (kb *KnowledgeBase) UpdateDocumentMetadata(id int64, title, author, publish
 	return err
 }
 
+/** UpdateDocumentDescription sets a document's stored front-matter description.
+ *
+ * Parameters:
+ *   id          (int64)  — the document's internal id.
+ *   description (string) — the description, verbatim; "" when the file has none.
+ *
+ * Returns:
+ *   error — on database failure.
+ *
+ * Example:
+ *   err := kb.UpdateDocumentDescription(docID, "Fieldwork on quokka habitats")
+ */
+func (kb *KnowledgeBase) UpdateDocumentDescription(id int64, description string) error {
+	_, err := kb.db.Exec(`UPDATE documents SET description = ? WHERE id = ?`, description, id)
+	return err
+}
+
 /** UpdateDocumentSectionBody updates a section's raw body and word-count
  * signal on re-ingest, and sets its stale flag (design decision 10) --
  * summary_body/summary_status/confidence are deliberately left untouched,
@@ -1194,7 +1213,7 @@ func (kb *KnowledgeBase) MarkDocumentSectionStale(id int64) error {
  *   docs, err := kb.Documents(0)
  */
 func (kb *KnowledgeBase) Documents(projectID int64) ([]Document, error) {
-	query := `SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, checksum, ingested_at, uuid, origin_host
+	query := `SELECT id, IFNULL(project_id, 0), title, format, path, author, published_date, description, checksum, ingested_at, uuid, origin_host
 	          FROM documents`
 	var args []any
 	if projectID != 0 {
@@ -1212,7 +1231,7 @@ func (kb *KnowledgeBase) Documents(projectID int64) ([]Document, error) {
 		var d Document
 		var ts string
 		if err := rows.Scan(&d.ID, &d.ProjectID, &d.Title, &d.Format, &d.Path, &d.Author,
-			&d.PublishedDate, &d.Checksum, &ts, &d.UUID, &d.OriginHost); err != nil {
+			&d.PublishedDate, &d.Description, &d.Checksum, &ts, &d.UUID, &d.OriginHost); err != nil {
 			return nil, err
 		}
 		d.IngestedAt = parseTimestamp(ts)
