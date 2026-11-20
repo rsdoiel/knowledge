@@ -164,6 +164,16 @@ func (kb *KnowledgeBase) IngestDocument(projectID int64, path string, opts Docum
 			return DocumentIngestResult{}, err
 		}
 		if doc != nil {
+			// The description is kept on the row, and the document's search entry
+			// is rewritten, on every ingest a skipped one included: a document
+			// ingested before the column existed gets its description from its
+			// next ingest, though its checksum has not changed.
+			if doc.Description != parsed.GistSeed {
+				if err := kb.UpdateDocumentDescription(doc.ID, parsed.GistSeed); err != nil {
+					return DocumentIngestResult{}, err
+				}
+			}
+			kb.indexDocumentFTS(doc.ID)
 			warnings, err := kb.replaceStoryEvents(projectID, doc.ID, drafts)
 			if err != nil {
 				return DocumentIngestResult{}, err
@@ -401,7 +411,7 @@ func densityLinkCandidates(kb *KnowledgeBase, text string, seen map[string]bool)
 func ingestNewDocument(kb *KnowledgeBase, projectID int64, path, title string, parsed *ParsedDocument) error {
 	docID, err := kb.AddDocument(Document{
 		ProjectID: projectID, Title: title, Format: parsed.Format, Path: path,
-		Author: parsed.Author, PublishedDate: parsed.PublishedDate, Checksum: parsed.Checksum,
+		Author: parsed.Author, PublishedDate: parsed.PublishedDate, Description: parsed.GistSeed, Checksum: parsed.Checksum,
 	})
 	if err != nil {
 		return err

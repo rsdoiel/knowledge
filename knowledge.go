@@ -274,6 +274,15 @@ var kbAlterStmts = []string{
 	`ALTER TABLE concepts ADD COLUMN kind TEXT NOT NULL DEFAULT 'other'`,
 }
 
+// kbDocumentsAlterStmts are lazy-migration statements for the documents table,
+// applied after documentsSchema creates it. description holds the front-matter
+// description verbatim (DR-0091 item 4, DR-0092): the document search entry
+// needs it, and until now it survived only as the gist row's drafted summary,
+// which search must never read (DR-0070).
+var kbDocumentsAlterStmts = []string{
+	`ALTER TABLE documents ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
+}
+
 // kbSourcesAlterStmts are lazy-migration statements for the sources table,
 // applied separately since sources doesn't exist yet when kbAlterStmts runs.
 var kbSourcesAlterStmts = []string{
@@ -440,6 +449,9 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 		db.Close()
 		return nil, fmt.Errorf("knowledge: apply documents schema: %w", err)
 	}
+	for _, stmt := range kbDocumentsAlterStmts {
+		_, _ = db.Exec(stmt) // a duplicate column name on an up-to-date database is expected
+	}
 	// The citation join tables of DR-0081 need documents, records and sources
 	// to exist, so they are applied after all three.
 	if _, err := db.Exec(documentSourcesSchema + recordSourcesSchema); err != nil {
@@ -482,6 +494,7 @@ func openWithWorkspace(dbPath, workspace string) (*KnowledgeBase, error) {
 		_ = kb.rebuildFTSIfNeeded()
 		kb.backfillSourceFTS()
 		kb.backfillDocumentSummaryFTS()
+		kb.backfillDocumentFTS()
 	}
 	return kb, nil
 }
@@ -1790,6 +1803,57 @@ const sourceFTSSelect = `
 	       'source', id, 0
 	FROM sources`
 
+// documentFTSSelect is the one row a document contributes to kb_fts whatever
+// its review state (DR-0091 item 4 as corrected by DR-0092): the title, the
+// front-matter description and the section headings in document order. All of
+// it is the author's own text; a drafted summary and a raw section body are
+// never part of it (design decision 8, DR-0070). source_id is the document's
+// id, not a section's.
+const documentFTSSelect = `
+	SELECT d.title || char(10) || d.description || char(10) ||
+	       IFNULL((SELECT group_concat(heading, char(10)) FROM
+	                 (SELECT heading FROM document_sections
+	                   WHERE document_id = d.id AND level = 'section' AND heading != ''
+	                   ORDER BY seq, id)), ''),
+	       'document', d.title, d.description, 'document', d.id, IFNULL(d.project_id, 0)
+	FROM documents d`
+
+// indexDocumentFTS (re)writes one document's entry in kb_fts, the same
+// delete-then-insert shape every other writer uses. Ingest calls it once the
+// document's sections are in place.
+func (kb *KnowledgeBase) indexDocumentFTS(documentID int64) {
+	if !kb.ftsAvailable {
+		return
+	}
+	_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'document' AND source_id = ?`, documentID)
+	_, _ = kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)`+
+		documentFTSSelect+` WHERE d.id = ?`, documentID)
+}
+
+// rebuildDocumentFTS writes every document's entry afresh. Import and the
+// open-time backfill use it: a merge, an import or a database made before the
+// entry existed holds documents the index knows nothing of. It is idempotent.
+func (kb *KnowledgeBase) rebuildDocumentFTS() {
+	if !kb.ftsAvailable {
+		return
+	}
+	_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'document'`)
+	_, _ = kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + documentFTSSelect)
+}
+
+// backfillDocumentFTS builds the entries when the index holds fewer of them
+// than there are documents, as backfillDocumentSummaryFTS does for summaries.
+func (kb *KnowledgeBase) backfillDocumentFTS() {
+	var nDocs, nIndexed int
+	if kb.db.QueryRow(`SELECT COUNT(*) FROM documents`).Scan(&nDocs) != nil || nDocs == 0 {
+		return
+	}
+	if kb.db.QueryRow(`SELECT COUNT(*) FROM kb_fts WHERE source_type = 'document'`).Scan(&nIndexed) != nil || nIndexed >= nDocs {
+		return
+	}
+	kb.rebuildDocumentFTS()
+}
+
 // documentSummaryFTSSelect is the row a reviewed document summary contributes to
 // kb_fts, the same shape indexDocumentSummaryFTS writes when a summary is
 // promoted. A raw section body is never indexed (design decision 8).
@@ -1863,6 +1927,7 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM records`, total).Scan(&total)
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM sources`, total).Scan(&total)
 	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM document_sections WHERE summary_status = 'reviewed'`, total).Scan(&total)
+	kb.db.QueryRow(`SELECT COUNT(*) + ? FROM documents`, total).Scan(&total)
 	if total == 0 {
 		return nil
 	}
@@ -1905,6 +1970,10 @@ func (kb *KnowledgeBase) rebuildFTSIfNeeded() error {
 	// merged database, and promotion is the only other thing that indexes them.
 	if _, err := kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + documentSummaryFTSSelect); err != nil {
 		return fmt.Errorf("fts rebuild document summaries: %w", err)
+	}
+	// And the title, description and headings entry of every document.
+	if _, err := kb.db.Exec(`INSERT INTO kb_fts(body, kind, label, descr, source_type, source_id, project_id)` + documentFTSSelect); err != nil {
+		return fmt.Errorf("fts rebuild documents: %w", err)
 	}
 	return nil
 }

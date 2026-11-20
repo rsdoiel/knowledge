@@ -476,6 +476,7 @@ func (kb *KnowledgeBase) DeleteDocument(id int64, force bool) (DocumentUsage, er
 		return DocumentUsage{}, err
 	}
 	if kb.ftsAvailable {
+		_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'document' AND source_id = ?`, id)
 		for _, sid := range sectionIDs {
 			_, _ = kb.db.Exec(`DELETE FROM kb_fts WHERE source_type = 'document_summary' AND source_id = ?`, sid)
 		}

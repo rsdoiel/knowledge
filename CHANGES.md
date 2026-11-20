@@ -3,6 +3,21 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+### Fixed
+
+- **A document is found by `kb search` as soon as it is ingested.** Until now a document was searchable only after one of its
+  summaries was reviewed, so a freshly ingested file could not be found even by its exact title. Ingest now writes one search
+  entry per document holding its title, its front-matter `description` and its section headings (knowledge DR-0091 item 4,
+  corrected by DR-0092). All of it is the author's own text; a drafted summary and a section's body are still never searched. The
+  entry is in the `documents` group of `kb search` and its hits carry the document's path and checksum.
+- A `description` is now stored on the document row (`documents.description`, added to an existing database on open) and travels
+  in `kb export`, `kb import` and `kb merge` (the export field is omitted when empty). A document ingested before this release
+  gets its description, and its search entry, from its next `kb ingest`, though its file has not changed; a database made by
+  merge or import builds the entries when it is opened.
+- Semantic search does not embed the new entry yet (DR-0092 leaves that open).
+
 ## v0.0.32 — 2026-11-20
 
 ### Changed
