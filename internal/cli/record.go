@@ -470,6 +470,11 @@ func resolveRecordScoped(kb *knowledge.KnowledgeBase, arg string, f recordFlags,
 		if errors.Is(err, knowledge.ErrInvalid) {
 			return nil, wrapUsage(err)
 		}
+		if errors.Is(err, knowledge.ErrNotFound) {
+			if rel, ok := recordFileOnDisk(recordRoot(kb, f), ref, filepath.Base(recordRoot(kb, f))); ok {
+				return nil, notFoundf("%s is on disk (%s) but not ingested; run kb ingest %s", ref, rel, filepath.Dir(rel))
+			}
+		}
 		return nil, err
 	}
 	switch {
@@ -479,6 +484,36 @@ func resolveRecordScoped(kb *knowledge.KnowledgeBase, arg string, f recordFlags,
 		return nil, usageErrorf("%s is not in project %s, but --project %s was also given", ref, flagProject.Name, flagProject.Name)
 	}
 	return rec, nil
+}
+
+// recordFileOnDisk looks for the file of a record the database does not know:
+// `record new` writes the file and leaves ingesting it to `kb ingest`, and the
+// lookup by reference reads only the database, so a record that exists as a
+// file reported the same "no record" as one that does not exist. It returns the
+// file's path relative to root. Only the tier's own decisions directory is
+// searched (agents/decisions, or agents/projects/NAME/decisions); a file
+// elsewhere is found by `kb ingest PATH`, not by guessing.
+func recordFileOnDisk(root string, ref knowledge.Ref, workspaceName string) (string, bool) {
+	if ref.Scope == "" || ref.ID == "" {
+		return "", false
+	}
+	dir := filepath.Join("agents", "projects", ref.Scope, "decisions")
+	if strings.EqualFold(ref.Scope, "workspace") || strings.EqualFold(ref.Scope, workspaceName) {
+		dir = filepath.Join("agents", "decisions")
+	}
+	id := ref.ID
+	for len(id) < 4 {
+		id = "0" + id
+	}
+	matches, err := filepath.Glob(filepath.Join(root, dir, id+"-*.md"))
+	if err != nil || len(matches) == 0 {
+		return "", false
+	}
+	rel, err := filepath.Rel(root, matches[0])
+	if err != nil {
+		return "", false
+	}
+	return rel, true
 }
 
 // recordShow prints one record with its relations resolved in both

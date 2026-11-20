@@ -3,7 +3,7 @@
 
 ## Bugs
 
-- [ ] **`kb record show` and `relates-to` say "no record DR-0013 in the workspace tier" for a record whose file is on disk but not yet
+- [x] **`kb record show` and `relates-to` say "no record DR-0013 in the workspace tier" for a record whose file is on disk but not yet *Fixed 2026-11-20 (fix (1), unreleased): `resolveRecordScoped` (`internal/cli/record.go`) looks for `NNNN-*.md` in the tier's decisions directory when the database has no such record and says `DR-NNNN is on disk (PATH) but not ingested; run kb ingest DIR`, exit 1; covers every record verb that resolves a reference. Test: `recordondisk_test.go`. Options (2) and (3) not done.*
   ingested, and `kb index` ("1 record indexed") does not change that.** Found 2026-11-18 (kb 0.0.31 `93cff1fe`) while writing workspace DR-0013; the
   author asked for it to be filed. *Reproduce* (scratch workspace, nothing else needed): `kb init .`; `kb record new --workspace --title T --trigger design`
   (prints `workspace/DR-0001 written to agents/decisions/0001-t.md (proposed)`); then `kb record show workspace/DR-0001` or
