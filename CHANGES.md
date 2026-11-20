@@ -3,6 +3,14 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## v0.0.32 — 2026-11-20
+
+### Changed
+
+- Third-party modules refreshed, including `github.com/rsdoiel/fountain` v1.0.4 (the root and `semantic` modules).
+- `release.bash` and `release.ps1` follow workspace DR-0012 and resume an interrupted draft release (DR-0013); the
+  Makefile has the DR-0012 flow.
+
 ## v0.0.31 — 2026-11-09
 
 ### Changed

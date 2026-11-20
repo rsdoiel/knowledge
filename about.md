@@ -10,7 +10,7 @@ authors:
 
 
 repository_code: https://github.com/rsdoiel/knowledge
-version: 0.0.31
+version: 0.0.32
 license_url: https://www.gnu.org/licenses/agpl-3.0.txt
 
 programming_language:
@@ -33,15 +33,15 @@ keywords:
   - retrieval-augmented generation
   - narrative documents
 
-date_released: 2026-11-09
+date_released: 2026-11-20
 ---
 
 About this software
 ===================
 
-## knowledge 0.0.31
+## knowledge 0.0.32
 
-Prerelease. An error is now also written to standard output under --json as {"error", "class", "code"}, so standard output is always valid JSON (workspace DR-0011); the plain "kb: message" line stays on standard error in every mode, so a script that read the JSON error from standard error must read standard output. A bulk command (ingest, index --all) writes one error object per failed item. New: kb record relates-to REF TARGET [--remove] writes a relates_to link to the record file and the database together, with an l key for it in the interface; kb version and kb license as verbs. Fixed: an unknown verb outside a workspace was reported as a missing workspace (exit 66, and --db created a database), now exit 2; kb completion -install over a file in the script directory's place exits 73, not 74. kb search -hybrid widens its words half to any word when the typed words find little (DR-0094). The exit-status check now covers every manual page. The gomlx stack in the semantic module is at its latest releases (hugot v0.8.5 is still the newest): the first index of 947 rows takes the same 15 minutes and peaks at 905 MB instead of 1,190 MB.
+Prerelease. Maintenance release: third-party modules refreshed (fountain v1.0.4), release.bash and release.ps1 follow workspace DR-0012 and resume an interrupted draft release (DR-0013), and the Makefile has the DR-0012 flow. An error is now also written to standard output under --json as {"error", "class", "code"}, so standard output is always valid JSON (workspace DR-0011); the plain "kb: message" line stays on standard error in every mode, so a script that read the JSON error from standard error must read standard output. A bulk command (ingest, index --all) writes one error object per failed item. New: kb record relates-to REF TARGET [--remove] writes a relates_to link to the record file and the database together, with an l key for it in the interface; kb version and kb license as verbs. Fixed: an unknown verb outside a workspace was reported as a missing workspace (exit 66, and --db created a database), now exit 2; kb completion -install over a file in the script directory's place exits 73, not 74. kb search -hybrid widens its words half to any word when the typed words find little (DR-0094). The exit-status check now covers every manual page. The gomlx stack in the semantic module is at its latest releases (hugot v0.8.5 is still the newest): the first index of 947 rows takes the same 15 minutes and peaks at 905 MB instead of 1,190 MB.
 
 ## Authors
 
@@ -69,7 +69,7 @@ A standalone SQLite3-backed knowledge base for tracking projects, observations, 
 
 - Go >= 1.27.3
 - gopkg.in/yaml.v3 >= 3.0.1
-- github.com/rsdoiel/fountain >= 1.0.3
+- github.com/rsdoiel/fountain >= 1.0.4
 - git >= 2.0 (runtime, for kb document frontmatter's provenance detection)
 
 

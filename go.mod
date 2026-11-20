@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/glebarez/go-sqlite v1.23.0
 	github.com/google/uuid v1.6.0
-	github.com/rsdoiel/fountain v1.0.3
+	github.com/rsdoiel/fountain v1.0.4
 	golang.org/x/sys v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
 )
