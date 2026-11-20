@@ -176,12 +176,14 @@ stale against itself
 promote a drafted summary to reviewed – the only human action that makes
 a summary trusted. Only a reviewed summary is indexed for search or
 returned as content by a concept-tag query; a section’s raw body is
-never indexed at all, only its reviewed summary. It requires an
-interactive terminal on standard input and output (exit 2 without one,
-nothing written, no way to turn that off; see EXIT STATUS), so a model
-that drafted a summary cannot also make it trusted. The library call
-PromoteDocumentSummary has no such rule: a program that links the
-package, harvey for one, enforces its own
+never indexed at all, only its reviewed summary. (A document’s title,
+description and headings are searched from ingest; they are the author’s
+own text, not a summary.) It requires an interactive terminal on
+standard input and output (exit 2 without one, nothing written, no way
+to turn that off; see EXIT STATUS), so a model that drafted a summary
+cannot also make it trusted. The library call PromoteDocumentSummary has
+no such rule: a program that links the package, harvey for one, enforces
+its own
 </dd>
 <dt>tag</dt>
 <dd>

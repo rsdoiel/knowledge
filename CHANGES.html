@@ -21,6 +21,62 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
+<h2 id="unreleased">Unreleased</h2>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>Designs and plans are records</strong> (knowledge DR-0096).
+<code>kb record new --kind design</code> writes a design brief as
+<code>design/DS-NNNN-slug.md</code> and <code>--kind plan</code> a plan
+as <code>plans/PL-NNNN-slug.md</code>, each with its own id prefix and
+its own numbers, status <code>proposed</code>, and the same gate on
+acceptance as a decision: only a person at a terminal accepts one
+(<code>kb record set-status</code>). References are
+<code>project/DS-0001</code> and <code>project/PL-0001</code> beside
+<code>project/DR-0096</code>; <code>DR-</code> and bare numbers still
+mean a decision. <code>kb ingest</code> reads <code>DS-</code> and
+<code>PL-</code> files in a project’s <code>design/</code> and
+<code>plans/</code> directories and leaves every other file there alone,
+and <code>relates_to</code>, <code>supersedes</code>, search, export,
+import and merge work on them as on a decision. They belong to a
+project, not to the workspace tier. No schema change. A design file
+edited by hand can still say <code>status: accepted</code>;
+<code>kb</code> gates <code>set-status</code>, not the file (as for a
+decision record).</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><strong>A document is found by <code>kb search</code> as soon as it
+is ingested.</strong> Until now a document was searchable only after one
+of its summaries was reviewed, so a freshly ingested file could not be
+found even by its exact title. Ingest now writes one search entry per
+document holding its title, its front-matter <code>description</code>
+and its section headings (knowledge DR-0091 item 4, corrected by
+DR-0092). All of it is the author’s own text; a drafted summary and a
+section’s body are still never searched. The entry is in the
+<code>documents</code> group of <code>kb search</code> and its hits
+carry the document’s path and checksum.</li>
+<li>A <code>description</code> is now stored on the document row
+(<code>documents.description</code>, added to an existing database on
+open) and travels in <code>kb export</code>, <code>kb import</code> and
+<code>kb merge</code> (the export field is omitted when empty). A
+document ingested before this release gets its description, and its
+search entry, from its next <code>kb ingest</code>, though its file has
+not changed; a database made by merge or import builds the entries when
+it is opened.</li>
+<li><strong>The document entry is embedded.</strong>
+<code>kb embed</code> embeds it and <code>kb search -semantic</code> and
+<code>-hybrid</code> find a document by meaning from the moment it is
+ingested (DR-0092’s open question, decided 2026-11-20). A document with
+reviewed summaries lists both the entry and the summaries as hits. Run
+<code>kb embed</code> once to index the entries of documents already
+ingested.</li>
+<li><strong><code>kb record show</code>, <code>relates-to</code> and the
+other record verbs say when a record’s file is on disk but not
+ingested</strong>
+(<code>DR-0013 is on disk   (agents/decisions/0013-....md) but not ingested; run kb ingest agents/decisions</code>),
+instead of the same “no record” as for a record that does not exist. The
+exit code stays 1.</li>
+</ul>
 <h2 id="v0.0.32-2026-11-20">v0.0.32 — 2026-11-20</h2>
 <h3 id="changed">Changed</h3>
 <ul>
@@ -48,7 +104,7 @@ error object on standard output. Warnings and notes are plain text on
 standard error only. Text mode is unchanged. The usage page is no longer
 printed after an unknown verb under <code>--json</code>.</li>
 </ul>
-<h3 id="added">Added</h3>
+<h3 id="added-1">Added</h3>
 <ul>
 <li><strong><code>kb record relates-to REF TARGET [--remove]</code></strong>
 adds (or removes) a <code>relates_to</code> link in the citing record’s
@@ -93,7 +149,7 @@ has no release after v0.8.5). The first index of 947 rows on a Pi 5
 takes the same 15 minutes and peaks at 905 MB, against 1,190 MB
 before.</li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed-1">Fixed</h3>
 <ul>
 <li><strong><code>kb completion SHELL -install</code> exited 74 when a
 file stood where the script’s directory must go;</strong> it is 73
@@ -125,7 +181,7 @@ Decision: DR-0090; plan:
 without that reaching a later prompt. A draft is stored with a status,
 who drafted it and an optional confidence, and stays out of search and
 recall until a person promotes it at a terminal.</p>
-<h3 id="added-1">Added</h3>
+<h3 id="added-2">Added</h3>
 <ul>
 <li><strong><code>kb observation add --draft --by WHO [--confidence N]</code></strong>
 records a draft (<code>--json</code> prints
@@ -203,7 +259,7 @@ MB against 21 MB) finds rows by meaning, offline. The plain
 <code>kb</code> registers no embedder and behaves as before;
 <code>kb search TERM</code> output is byte-identical (a golden-file test
 proves it).</p>
-<h3 id="added-2">Added</h3>
+<h3 id="added-3">Added</h3>
 <ul>
 <li><strong><code>kb search -semantic TERM</code> and
 <code>-hybrid TERM</code>, with <code>-min-score N</code>.</strong> Rows
@@ -302,7 +358,7 @@ number as the root:
 carries out workspace DR-0003’s rule that a tool documents the codes it
 can return under EXIT STATUS in its manual, and it goes out ahead of the
 offline semantic search work (DR-0088, DR-0089).</p>
-<h3 id="fixed-1">Fixed</h3>
+<h3 id="fixed-2">Fixed</h3>
 <ul>
 <li><strong>An unreadable database file exited 74 (io) instead of 77
 (no_permission).</strong> SQLite reports a file the operating system
@@ -384,7 +440,7 @@ not investigated.</p>
 <code>agents/projects/knowledge/plans/release-plan-v0.0.27.md</code>.
 Decision: DR-0087 (accepted), refining the “left as they are” paragraph
 of DR-0046.</p>
-<h3 id="fixed-2">Fixed</h3>
+<h3 id="fixed-3">Fixed</h3>
 <ul>
 <li><p><strong>A gist could not be written and checked in the terminal
 interface.</strong> Documents → Review queue opened the editor on the
@@ -473,7 +529,7 @@ letter included, stays <code>unknown-fact</code>.</li>
 <h2 id="v0.0.25-2026-10-19">v0.0.25 — 2026-10-19</h2>
 <p>Plan:
 <code>agents/projects/knowledge/plans/release-plan-v0.0.25.md</code>.</p>
-<h3 id="added-3">Added</h3>
+<h3 id="added-4">Added</h3>
 <ul>
 <li><p><strong>Several scenes in one Markdown file</strong> (DR-0082,
 extending DR-0075 and DR-0078). A Markdown heading with a scene id is a
@@ -629,7 +685,7 @@ into its correct word in <code>suggest</code> (the near-existing report
 and <code>fuzzy-tag</code> still use edit distance). Scores are about
 twenty where they were several hundred.</p></li>
 </ul>
-<h3 id="fixed-3">Fixed</h3>
+<h3 id="fixed-4">Fixed</h3>
 <ul>
 <li><strong>The small known problems of v0.0.23 to v0.0.24
 (T6).</strong> A record’s search passage is the paragraph the match is
@@ -674,7 +730,7 @@ scenes become story events, concepts have a kind, wikilinks accept a
 display alias, and <code>kb story timeline</code> and
 <code>kb story check</code> list and check the events. The plan was
 <code>agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md</code>.</p>
-<h3 id="added-4">Added</h3>
+<h3 id="added-5">Added</h3>
 <ul>
 <li><strong>Concept kinds</strong> (DR-0078). <code>character</code>,
 <code>place</code>, <code>theme</code> or <code>other</code>, the
@@ -787,7 +843,7 @@ machine are fixed (completion on macOS, and dated notes read as decision
 records). The decisions are knowledge DR-0076 and DR-0077, both
 proposed; the plan is
 <code>agents/projects/knowledge/plans/release-plan-v0.0.23-v0.0.24.md</code>.</p>
-<h3 id="added-5">Added</h3>
+<h3 id="added-6">Added</h3>
 <ul>
 <li><strong><code>kb document ingest</code> offers frontmatter for a
 note that has none</strong> (DR-0076). On a terminal, a file with no
@@ -870,7 +926,7 @@ called).</li>
 date.</strong> It was git’s first commit; it is now the date in the
 name, source <code>filename</code>.</li>
 </ul>
-<h3 id="fixed-4">Fixed</h3>
+<h3 id="fixed-5">Fixed</h3>
 <ul>
 <li><strong><code>kb completion bash -install</code> left a new Terminal
 window on macOS without completion.</strong> <code>/bin/bash</code> 3.2
@@ -906,7 +962,7 @@ updated by this release: run
 <code>design/scoped-search-design.md</code>), <code>/</code> filters
 every list, and every row of the interface’s menus is built (the design
 is <code>design/tui-keys-and-write-flows-design.md</code>).</p>
-<h3 id="added-6">Added</h3>
+<h3 id="added-7">Added</h3>
 <ul>
 <li><strong><code>kb search SCOPE/[KIND] TERM</code>: search scoped by a
 path</strong> (DR-0073, DR-0074).
@@ -1001,7 +1057,7 @@ changes.</li>
 <li><strong>A plan’s command wraps at spaces</strong>, so a long path no
 longer hides the end of it on the confirmation.</li>
 </ul>
-<h3 id="fixed-5">Fixed</h3>
+<h3 id="fixed-6">Fixed</h3>
 <ul>
 <li><strong>Dimmed menu rows named v0.0.20, a release that had
 shipped.</strong> A test now fails when a row that is not built names a
@@ -1016,7 +1072,7 @@ pager no longer depends on which programs are installed (knowledge
 DR-0071, a partial supersede of DR-0066 point 5). Written and tested red
 first; the race detector passed on darwin/arm64 at <code>13c96bf</code>,
 the last code commit.</p>
-<h3 id="fixed-6">Fixed</h3>
+<h3 id="fixed-7">Fixed</h3>
 <ul>
 <li><strong>Enter on a record in the interface returned straight to the
 list.</strong> <code>bat</code> was chosen as the pager when installed,
@@ -1058,7 +1114,7 @@ items U1 to U7). Written and tested red first, including the built
 binary on a pseudo-terminal. The race detector passed on darwin/arm64 at
 <code>5fd9b2e</code>; the interface was tried by hand on Raspberry Pi OS
 and macOS. It has not been run on Windows.</p>
-<h3 id="added-7">Added</h3>
+<h3 id="added-8">Added</h3>
 <ul>
 <li><strong>The removing gate</strong> (DR-0067, DR-0064 amendment; plan
 item U3). <code>d</code> deletes the selected project (the project
@@ -1250,7 +1306,7 @@ detector passed on darwin/arm64 at the last code commit
 The interface was tried by hand in a real terminal on Linux. The next
 release, v0.0.20, brings the rest of the writes behind the same
 gates.</p>
-<h3 id="added-8">Added</h3>
+<h3 id="added-9">Added</h3>
 <ul>
 <li><strong><code>kb verbs</code> prints the verb table</strong>
 (DR-0059). One table in <code>cmd/kb/verbtable.go</code> now describes
@@ -1288,7 +1344,7 @@ same.</li>
 DR-0067 names; the table classes them so and a test pins the full
 set.</li>
 </ul>
-<h3 id="added-9">Added</h3>
+<h3 id="added-10">Added</h3>
 <ul>
 <li><strong>The first write in the TUI: read a record and set its
 status</strong> (DR-0066, DR-0065, DR-0067, DR-0061). On the Records
@@ -1439,7 +1495,7 @@ file mode, so <code>&lt; /dev/null</code> does not count.
 <code>golang.org/x/sys</code> are now direct dependencies; both were
 already built into <code>kb</code> through bubbletea.</p></li>
 </ul>
-<h3 id="added-10">Added</h3>
+<h3 id="added-11">Added</h3>
 <ul>
 <li><strong><code>kb record set-status REF</code> with no status is a
 review</strong> (DR-0060): the record is shown through
@@ -1472,7 +1528,7 @@ at the last code commit and the suite passed; the new commands were
 checked read-only, with a scratch build, against both the Laboratory and
 the WorkLab workspaces (277 records, 23 projects in the second, with
 <code>DR-0001</code> repeated ten times).</p>
-<h3 id="added-11">Added</h3>
+<h3 id="added-12">Added</h3>
 <ul>
 <li><strong>A workspace is found by walking up</strong> (DR-0058): from
 the current directory to the nearest ancestor with
@@ -1578,7 +1634,7 @@ was checked by sourcing the generated script in real bash and PowerShell
 (<code>TabExpansion2</code>) against the real workspace; that run found
 a placeholder left unsubstituted in the project-name path, which the
 unit tests had missed, and it is fixed and now tested.</p>
-<h3 id="added-12">Added</h3>
+<h3 id="added-13">Added</h3>
 <ul>
 <li><strong><code>kb completion bash|powershell [-install]</code></strong>
 (DR-0056): writes a shell completion script to standard output, or with
@@ -1623,7 +1679,7 @@ subverb” to “not found”), and nothing exits 70. That comparison was made
 before the <code>kb import</code> and <code>kb project add</code> fixes
 below, and <code>project add</code> on an existing name changes from
 exit 0 to 1.</p>
-<h3 id="added-13">Added</h3>
+<h3 id="added-14">Added</h3>
 <ul>
 <li><strong><code>kb concept show NAME [--limit N]</code></strong>
 (DR-0051): a concept’s description and identifier, and per kind
@@ -1708,7 +1764,7 @@ unchanged, guarded by golden tests captured before the move.</li>
 <li>Harvey’s <code>recallKB</code> calls <code>RecallByText</code>, the
 same call <code>kb concept recall</code> makes.</li>
 </ul>
-<h3 id="fixed-7">Fixed</h3>
+<h3 id="fixed-8">Fixed</h3>
 <ul>
 <li><strong><code>kb import</code> no longer rewrites an observation
 kind outside the vocabulary to <code>note</code></strong> (DR-0054). The
@@ -1746,7 +1802,7 @@ the question that was asked, 2 says the command was wrong, and the
 change was checked by running the v0.0.13 build alongside the new one,
 387 commands in plain and <code>--json</code> mode, on a copy of the
 real database.</p>
-<h3 id="added-14">Added</h3>
+<h3 id="added-15">Added</h3>
 <ul>
 <li><strong>Removal verbs</strong> (DR-0050), so a mistake is fixable
 without raw SQL, which skips the search index:
@@ -1834,7 +1890,7 @@ open, the debug log) are reported like any other error, so they honour
 first argument as a mistyped option (exit 2), and take a dash-leading
 term or path after <code>--</code>.</li>
 </ul>
-<h3 id="fixed-8">Fixed</h3>
+<h3 id="fixed-9">Fixed</h3>
 <ul>
 <li>Silent successes: <code>source retract 99</code> and
 <code>source remove 99</code> on an id that does not exist exited 0;
@@ -1990,7 +2046,7 @@ The decisions behind the changes are DR-0040 to DR-0044. Every fix below
 was written red first, and the command-line changes were checked by
 running a build from before the change alongside the new one, on a copy
 of the real database.</p>
-<h3 id="added-15">Added</h3>
+<h3 id="added-16">Added</h3>
 <ul>
 <li><code>CleanName(kind, name)</code>, exported (DR-0042): trims
 surrounding whitespace from a project or concept name and refuses one
@@ -2081,7 +2137,7 @@ database with such rows still loads.</li>
 <li><code>kb search ''</code> and <code>kb search ' '</code> are usage
 errors (exit 2, DR-0040, DR-0041), not <code>no results</code>.</li>
 </ul>
-<h3 id="fixed-9">Fixed</h3>
+<h3 id="fixed-10">Fixed</h3>
 <ul>
 <li><strong><code>kb project rename demo ''</code> corrupted a project
 that owns records</strong> (DR-0042). The command rewrites every owned
@@ -2196,7 +2252,7 @@ sweep of bugs that only showed up by running a build from before each
 change against the new one on real data. Every fix below was written red
 first, and each move was checked by diffing the old binary’s output
 against the new one, byte for byte.</p>
-<h3 id="added-16">Added</h3>
+<h3 id="added-17">Added</h3>
 <ul>
 <li><strong>The workflow logic is now library API</strong> (DR-0035).
 <code>cmd/kb</code> is <code>package   main</code>, so everything
@@ -2308,7 +2364,7 @@ event at the call boundary rather than one per internal KB call, and
 <code>concept suggest</code> logs the candidate count rather than the
 item count.</li>
 </ul>
-<h3 id="fixed-10">Fixed</h3>
+<h3 id="fixed-11">Fixed</h3>
 <ul>
 <li><strong>Output that changed between identical runs</strong>
 (DR-0037), found by repeating every verb and by an audit of each
@@ -2333,7 +2389,7 @@ near-miss tagging, a frontmatter provenance generator, and fuzzy
 candidate clustering, each of which surfaced and fixed a real
 self-contradiction in its own design doc before shipping, verified by
 hand rather than trusting the design’s own worked examples.</p>
-<h3 id="added-17">Added</h3>
+<h3 id="added-18">Added</h3>
 <ul>
 <li><code>kb document fuzzy-tag --project NAME [--concept NAME,...] [--dry-run]</code>
 (DR-0032) catches what <code>tag</code>’s exact whole-word matching
@@ -2390,7 +2446,7 @@ words (<code>table</code>+<code>stable</code>+<code>able</code>,
 <code>old</code>+<code>cold</code>+<code>told</code>+<code>hold</code>+<code>fold</code>),
 fixed with a length gate.</li>
 </ul>
-<h3 id="fixed-11">Fixed</h3>
+<h3 id="fixed-12">Fixed</h3>
 <ul>
 <li><code>kb search TERM</code> threw a raw SQLite error
 (<code>fts5: syntax error</code>) instead of a normal no-results outcome
@@ -2407,7 +2463,7 @@ unchanged.</li>
 v0.0.9, an answer to the foreign-ADR question open since 2026-09-15, and
 two corpus-improvement verbs that surface candidates for a human to
 confirm rather than committing anything themselves.</p>
-<h3 id="added-18">Added</h3>
+<h3 id="added-19">Added</h3>
 <ul>
 <li><code>kb concept suggest [--project NAME] [--limit N]</code>
 (DR-0028), a read-only verb that scans every record body and document
@@ -2477,7 +2533,7 @@ this module became the decision- record format’s first conversion pilot.
 <code>kb(1)</code>’s DESCRIPTION and SEE ALSO now name records and
 documents too.</li>
 </ul>
-<h3 id="fixed-12">Fixed</h3>
+<h3 id="fixed-13">Fixed</h3>
 <ul>
 <li><code>kb merge</code> could silently keep a stale project or concept
 name, or drop a side outright, depending on merge order, because
@@ -2524,7 +2580,7 @@ in favour of the per-file property the test was always really asserting
 for their mutable fields, and a multi-corpus mode for
 <code>index.md</code> — three items closed out of <code>TODO.md</code>,
 two of them correcting their own original diagnosis along the way.</p>
-<h3 id="added-19">Added</h3>
+<h3 id="added-20">Added</h3>
 <ul>
 <li><code>kb project rename OLD NEW</code> and
 <code>kb concept rename OLD NEW</code> (DR-0024) replace the only prior
@@ -2562,7 +2618,7 @@ directory.</li>
 <p>A bug-fix-and-small-features release: closing the
 <code>index.md</code> staleness gap at its source, and giving
 observations a correction path.</p>
-<h3 id="added-20">Added</h3>
+<h3 id="added-21">Added</h3>
 <ul>
 <li><code>kb index PATH --check</code> compares a fresh render against
 <code>PATH/index.md</code> byte-for-byte and fails with “does not exist”
@@ -2588,7 +2644,7 @@ export/import carry <code>observation_relations</code> from this
 release, not as a follow-on, per the standing rule that a table missing
 from the merge summary is a table whose loss goes unreported.</li>
 </ul>
-<h3 id="fixed-13">Fixed</h3>
+<h3 id="fixed-14">Fixed</h3>
 <ul>
 <li><code>kb record set-status</code> and
 <code>kb record supersede</code> now refresh a corpus’s
@@ -2606,7 +2662,7 @@ changes, which bit WorkLab twice.</li>
 corpora (clasm, WorkLab, caltechauthors), all in
 <code>kb ingest</code>’s re-run behavior plus <code>kb search</code>’s
 exit code.</p>
-<h3 id="fixed-14">Fixed</h3>
+<h3 id="fixed-15">Fixed</h3>
 <ul>
 <li><code>kb ingest</code> no longer leaves stale edges behind on
 re-ingest. A <code>relates_to</code>/<code>supersedes</code> entry
@@ -2644,7 +2700,7 @@ result.</li>
 <code>knowledge</code> toward a small-model-friendly knowledge base:
 inline concept tagging, embedder-free concept-based retrieval, and
 narrative/article ingestion at graduated abstraction levels.</p>
-<h3 id="added-21">Added</h3>
+<h3 id="added-22">Added</h3>
 <ul>
 <li><code>kb ingest</code> resolves <code>[[Name]]</code> wikilinks in a
 record’s body, and its previously-unused <code>tags</code> frontmatter
@@ -2702,7 +2758,7 @@ unrecognized flag instead of silently dropping it.</li>
 <code>record_relations</code> were invisible to all three, so running
 <code>merge</code> (or an export/import round trip) discarded every
 decision record while reporting success (DR-0013).</p>
-<h3 id="added-22">Added</h3>
+<h3 id="added-23">Added</h3>
 <ul>
 <li><code>kb merge</code> carries
 <code>records</code>/<code>record_relations</code> in its union, reports
@@ -2737,7 +2793,7 @@ reorganisation moving process artifacts out of project repositories
 <code>agents/knowledge.db</code> in whatever directory it happens to be
 run from — a new <code>kb init</code> verb is now the explicit way to
 start a workspace (DR-0021, DR-0022).</p>
-<h3 id="added-23">Added</h3>
+<h3 id="added-24">Added</h3>
 <ul>
 <li><code>kb init [PATH]</code>: creates a schema-only, idempotent
 <code>agents/knowledge.db</code>, the same shape as
@@ -2777,7 +2833,7 @@ retrievable rather than living only in files the knowledge base never
 reads. The format is specified in
 <code>~/WorkLab/DECISION_RECORD_FORMAT.md</code>; this release is its
 reference implementation.</p>
-<h3 id="added-24">Added</h3>
+<h3 id="added-25">Added</h3>
 <ul>
 <li><strong>Schema</strong>: <code>records</code> and
 <code>record_relations</code>. A record’s identity is
@@ -2833,7 +2889,7 @@ specification: field order, flow-styled sequences, and a double-quoted
 string type for the seven fields the format requires quoted, so every
 writer produces byte-identical output.</li>
 </ul>
-<h3 id="fixed-15">Fixed</h3>
+<h3 id="fixed-16">Fixed</h3>
 <ul>
 <li>A record path read from the database is confined to the workspace
 root before it is read or written. <code>filepath.Join</code> cleans a

@@ -141,8 +141,9 @@ with no daemon and no network after the model is installed:
 <code>kb search -semantic "how do we keep databases in step across machines"</code>
 finds the records and notes about cross-machine sync although none of
 them says “in step”. <code>-hybrid</code> adds the exact-word matches.
-It covers observations, decision records, concepts and documents’
-reviewed summaries; the vectors live in
+It covers observations, decision records, concepts and documents (a
+document’s title, description and headings from the moment it is
+ingested, and its reviewed summaries); the vectors live in
 <code>agents/knowledge.vectors.db</code> beside the database, never in
 <code>knowledge.db</code> or the JSON-L export.</p>
 <pre class="shell"><code>kb init                                  # once per workspace; keeps a workspace model and the index out of git

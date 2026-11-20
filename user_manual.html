@@ -340,15 +340,17 @@ for those rows when one exists, up to 25 rows; <code>kb embed</code>
 catches up everything else (a merge, an import, the interface’s own
 edits) and <code>kb embed -status</code> says how far behind it is.
 <code>kb search -semantic</code> reads the index and never builds it. It
-covers observations, decision records, concepts and documents’ reviewed
-summaries (not projects or sources, which lexical search serves), so
-<code>kb search -semantic /sources x</code> is a usage error. Hits show
-a score and the passage that matched; <code>-min-score N</code> (from -1
-to 1, 0.35 by default, -1 for everything) sets the cutoff, and
-<code>SCOPE/KIND</code> works as for plain search. Exit codes: 1 nothing
-above the cutoff, 2 a build without semantic search or a kind that is
-not embedded, 66 no model or no index, 65 an index built by another
-model (<code>kb embed -rebuild</code>), 75 an index being built.</p>
+covers observations, decision records, concepts and documents (a
+document’s title, description and headings from the moment it is
+ingested, and its reviewed summaries) (not projects or sources, which
+lexical search serves), so <code>kb search -semantic /sources x</code>
+is a usage error. Hits show a score and the passage that matched;
+<code>-min-score N</code> (from -1 to 1, 0.35 by default, -1 for
+everything) sets the cutoff, and <code>SCOPE/KIND</code> works as for
+plain search. Exit codes: 1 nothing above the cutoff, 2 a build without
+semantic search or a kind that is not embedded, 66 no model or no index,
+65 an index built by another model (<code>kb embed -rebuild</code>), 75
+an index being built.</p>
 <p>Measured on a Raspberry Pi 5 (4 cores, 16 GB) over a copy of this
 workspace’s knowledge base, 947 rows in about 4,400 passages: the first
 index took about 15 minutes and up to 0.9 GB of memory, a search about

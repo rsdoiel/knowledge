@@ -239,7 +239,7 @@
   `macmini-rd.local` (arm64 Mac) once such a kernel exists; the offer goes in the #44 thread or a new gomlx/compute issue, which
   the author files. The work is upstream; nothing to build here. Added 2026-10-30. *2026-11-09:* not pursued unless the
   benchmark rerun shows a problem.
-- [ ] When using knowledge with a commercial LLM like claude, we have designs and plans that have a status that start as proposed and moves through an approval process. It seems like there should be an approval workflow similar do how decision records are proposed and approved.
+- [x] When using knowledge with a commercial LLM like claude, we have designs and plans that have a status that start as proposed and moves through an approval process. It seems like there should be an approval workflow similar do how decision records are proposed and approved. *Done 2026-11-20, unreleased: designs and plans are records of kind `design` and `plan` with their own prefixes (`DS-NNNN`, `PL-NNNN`) and the same terminal-gated acceptance as a decision (knowledge DR-0096, accepted). Still open: a design file edited by hand can say `status: accepted`; `kb` gates `set-status`, not the file.*
 - [ ] **Say whether a piece of knowledge is fact, fiction or speculation.** *Nice to have; may move to a later release (decided 2026-11-09).* Added 2026-11-01 at the author's request; no
   design yet. The knowledge base will hold non-fiction, fiction and hypothetical or speculative material side by side,
   and today nothing tells them apart: an observation, concept or source reads as a claim about the world. A story's
