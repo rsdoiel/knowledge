@@ -464,7 +464,7 @@ func renderIndex(records []*knowledge.RecordFile) string {
 			flag = indexSupersededOn
 		}
 		rows = append(rows, strings.Join([]string{
-			"DR-" + rf.Record.RecordID,
+			knowledge.RecordLabel(rf.Record.RecordID),
 			rf.Record.Date,
 			indexCol(rf.Record.Status, indexStatusWidth),
 			indexCol(rf.Record.Kind, indexKindWidth),

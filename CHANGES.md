@@ -3,6 +3,18 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
+## Unreleased
+
+### Added
+
+- **Designs and plans are records** (knowledge DR-0096). `kb record new --kind design` writes a design brief as `design/DS-NNNN-slug.md`
+  and `--kind plan` a plan as `plans/PL-NNNN-slug.md`, each with its own id prefix and its own numbers, status `proposed`, and the same
+  gate on acceptance as a decision: only a person at a terminal accepts one (`kb record set-status`). References are `project/DS-0001`
+  and `project/PL-0001` beside `project/DR-0096`; `DR-` and bare numbers still mean a decision. `kb ingest` reads `DS-` and `PL-` files
+  in a project's `design/` and `plans/` directories and leaves every other file there alone, and `relates_to`, `supersedes`, search,
+  export, import and merge work on them as on a decision. They belong to a project, not to the workspace tier. No schema change.
+  A design file edited by hand can still say `status: accepted`; `kb` gates `set-status`, not the file (as for a decision record).
+
 ## v0.0.32 — 2026-11-20
 
 ### Changed

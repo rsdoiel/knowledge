@@ -34,9 +34,30 @@ type Ref struct {
  */
 func (r Ref) String() string {
 	if r.Scope == "" {
-		return "DR-" + r.ID
+		return RecordLabel(r.ID)
 	}
-	return r.Scope + "/DR-" + r.ID
+	return r.Scope + "/" + RecordLabel(r.ID)
+}
+
+/** RecordLabel is a record id as kb prints it: "DR-0096" for a decision's
+ * digits, and the id itself for a design ("DS-0001") or a plan ("PL-0001"),
+ * whose stored id carries its prefix (DR-0096).
+ *
+ * Parameters:
+ *   id (string) — the record id as stored.
+ *
+ * Returns:
+ *   string — the label.
+ *
+ * Example:
+ *   knowledge.RecordLabel("0096")    // "DR-0096"
+ *   knowledge.RecordLabel("DS-0001") // "DS-0001"
+ */
+func RecordLabel(id string) string {
+	if len(id) > 0 && (id[0] < '0' || id[0] > '9') {
+		return id
+	}
+	return "DR-" + id
 }
 
 /** ParseRef reads a record reference: "SCOPE/DR-NNNN", "SCOPE/NNNN", "DR-NNNN"
@@ -60,33 +81,41 @@ func (r Ref) String() string {
 func ParseRef(s string) (Ref, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return Ref{}, invalidf("an empty record reference; want SCOPE/DR-NNNN, e.g. harvey/DR-0004")
+		return Ref{}, invalidf("an empty record reference; want SCOPE/DR-NNNN, DS-NNNN or PL-NNNN, e.g. harvey/DR-0004")
 	}
 	scope, id := "", s
 	if i := strings.Index(s, "/"); i >= 0 {
 		scope, id = s[:i], s[i+1:]
 		if scope == "" {
-			return Ref{}, invalidf("record reference %q has no scope before the \"/\"; want SCOPE/DR-NNNN", s)
+			return Ref{}, invalidf("record reference %q has no scope before the \"/\"; want SCOPE/DR-NNNN, DS-NNNN or PL-NNNN", s)
 		}
 		if strings.Contains(id, "/") {
-			return Ref{}, invalidf("record reference %q has more than one \"/\"; want SCOPE/DR-NNNN", s)
+			return Ref{}, invalidf("record reference %q has more than one \"/\"; want SCOPE/DR-NNNN, DS-NNNN or PL-NNNN", s)
 		}
 	}
-	if len(id) >= 3 && strings.EqualFold(id[:3], "DR-") {
-		id = id[3:]
+	// DR- (or no prefix) is a decision, stored as its digits. DS- and PL- name a
+	// design and a plan (DR-0096), stored with the prefix.
+	prefix := ""
+	if len(id) >= 3 && id[2] == '-' {
+		switch strings.ToUpper(id[:2]) {
+		case "DR":
+			id = id[3:]
+		case "DS", "PL":
+			prefix, id = strings.ToUpper(id[:2])+"-", id[3:]
+		}
 	}
 	if id == "" {
-		return Ref{}, invalidf("record reference %q has no id; want SCOPE/DR-NNNN", s)
+		return Ref{}, invalidf("record reference %q has no id; want SCOPE/DR-NNNN, DS-NNNN or PL-NNNN", s)
 	}
 	for _, c := range id {
 		if c < '0' || c > '9' {
-			return Ref{}, invalidf("record reference %q: the id %q is not a number; want SCOPE/DR-NNNN", s, id)
+			return Ref{}, invalidf("record reference %q: the id %q is not a number; want SCOPE/DR-NNNN, DS-NNNN or PL-NNNN", s, id)
 		}
 	}
 	if len(id) < 4 {
 		id = fmt.Sprintf("%04s", id)
 	}
-	return Ref{Scope: scope, ID: id}, nil
+	return Ref{Scope: scope, ID: prefix + id}, nil
 }
 
 /** AmbiguousRefError reports a bare record id that more than one tier holds. It
@@ -172,7 +201,7 @@ func (kb *KnowledgeBase) ResolveRef(ref Ref, workspace string) (*Record, error) 
 func (kb *KnowledgeBase) refInTier(workspace string, projectID int64, scope string, ref Ref, where string) (*Record, error) {
 	r, err := kb.RecordByIdentity(workspace, projectID, scope, ref.ID)
 	if err != nil {
-		return nil, notFoundf("no record DR-%s in %s", ref.ID, where)
+		return nil, notFoundf("no record %s in %s", RecordLabel(ref.ID), where)
 	}
 	return r, nil
 }

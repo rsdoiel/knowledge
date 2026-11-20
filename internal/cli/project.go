@@ -248,7 +248,7 @@ func cmdProjectRename(kb *knowledge.KnowledgeBase, dl *DebugLog, jsonOut bool, a
 		rf.ProjectName = new
 		rendered, err := knowledge.RenderRecordFile(rf)
 		if err != nil {
-			return fmt.Errorf("rendering DR-%s: %w", rec.RecordID, err)
+			return fmt.Errorf("rendering %s: %w", knowledge.RecordLabel(rec.RecordID), err)
 		}
 		path, err := resolveWithinRoot(rootDir, rec.Path)
 		if err != nil {

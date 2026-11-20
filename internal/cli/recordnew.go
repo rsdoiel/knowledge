@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,8 +169,23 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 		return wrapUsage(err)
 	}
 
+	kind := f.kind
+	if kind == "" {
+		kind = "decision"
+	}
+	prefix := knowledge.RecordIDPrefix(kind)
+	if prefix != "" && f.workspace {
+		return usageErrorf("a %s belongs to a project: give --project P, not --workspace", kind)
+	}
+
 	scope := "project"
 	dir := filepath.Join("agents", "projects", f.project, "decisions")
+	switch kind {
+	case "design":
+		dir = filepath.Join("agents", "projects", f.project, "design")
+	case "plan":
+		dir = filepath.Join("agents", "projects", f.project, "plans")
+	}
 	if f.workspace {
 		scope = "workspace"
 		dir = filepath.Join("agents", "decisions")
@@ -182,13 +199,17 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 		return asCreate(fmt.Errorf("creating %s: %w", absDir, err))
 	}
 
-	id, err := nextRecordID(absDir)
+	var id string
+	var err error
+	if prefix == "" {
+		id, err = nextRecordID(absDir)
+	} else {
+		// A design or a plan is numbered across the whole project tier, not the
+		// one directory, so --dir cannot make two of them share a number.
+		id, err = nextPrefixedRecordID(filepath.Join(root, "agents", "projects", f.project), prefix)
+	}
 	if err != nil {
 		return err
-	}
-	kind := f.kind
-	if kind == "" {
-		kind = "decision"
 	}
 	host, _ := os.Hostname()
 	uuidValue, err := knowledge.NewUUID()
@@ -265,6 +286,9 @@ func nextRecordID(dir string) (string, error) {
 	highest := 0
 	for _, path := range files {
 		name := filepath.Base(path)
+		if len(name) < 4 || name[0] < '0' || name[0] > '9' {
+			continue // a design or a plan has its own sequence (DR-0096)
+		}
 		n := 0
 		for _, r := range name[:4] {
 			n = n*10 + int(r-'0')
@@ -274,6 +298,30 @@ func nextRecordID(dir string) (string, error) {
 		}
 	}
 	return fmt.Sprintf("%04d", highest+1), nil
+}
+
+// nextPrefixedRecordID returns the next free id of a design ("DS") or a plan
+// ("PL"): one past the highest PREFIX-NNNN file anywhere under tierDir.
+func nextPrefixedRecordID(tierDir, prefix string) (string, error) {
+	files, err := collectRecordFiles(tierDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	highest := 0
+	for _, path := range files {
+		name := filepath.Base(path)
+		if len(name) < len(prefix)+5 || name[:len(prefix)+1] != prefix+"-" {
+			continue
+		}
+		n := 0
+		for _, r := range name[len(prefix)+1 : len(prefix)+5] {
+			n = n*10 + int(r-'0')
+		}
+		if n > highest {
+			highest = n
+		}
+	}
+	return fmt.Sprintf("%s-%04d", prefix, highest+1), nil
 }
 
 // slugify derives a filename slug from a title: lowercased, punctuation and

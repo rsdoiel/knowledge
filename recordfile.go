@@ -20,7 +20,7 @@ var (
 	// adopted) and superseded (replaced by a later decision). The reason goes in
 	// the record's body, by convention. See TODO.md, raised 2026-09-21.
 	RecordStatuses = []string{"proposed", "accepted", "superseded", "rejected", "cancelled"}
-	RecordKinds    = []string{"decision", "correction", "refinement"}
+	RecordKinds    = []string{"decision", "correction", "refinement", "design", "plan"}
 	RecordTriggers = []string{
 		"design", "plan-review", "implementation", "live-test",
 		"release-review", "request", "external",
@@ -468,4 +468,27 @@ func nonNil(in []string) []string {
 		return []string{}
 	}
 	return in
+}
+
+/** RecordIDPrefix is the id prefix of a record kind: "DS" for a design, "PL"
+ * for a plan, and "" for the decision kinds, whose ids are bare digits stored
+ * as "0096" and printed "DR-0096" (DR-0096).
+ *
+ * Parameters:
+ *   kind (string) — the record kind.
+ *
+ * Returns:
+ *   string — "DS", "PL" or "".
+ *
+ * Example:
+ *   knowledge.RecordIDPrefix("design") // "DS"
+ */
+func RecordIDPrefix(kind string) string {
+	switch kind {
+	case "design":
+		return "DS"
+	case "plan":
+		return "PL"
+	}
+	return ""
 }

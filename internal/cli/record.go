@@ -614,7 +614,7 @@ func loadRecordFile(root string, rec *knowledge.Record) (*knowledge.RecordFile, 
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, asContent(fmt.Errorf("reading DR-%s at %s: %w", rec.RecordID, path, err))
+		return nil, nil, asContent(fmt.Errorf("reading %s at %s: %w", knowledge.RecordLabel(rec.RecordID), path, err))
 	}
 	rf, err := knowledge.ParseRecord(raw, rec.Path)
 	if err != nil {
@@ -849,11 +849,11 @@ func resolveSupersession(kb *knowledge.KnowledgeBase, newArg, oldArg string, f r
 	}
 	if newer.ProjectID != older.ProjectID || newer.Scope != older.Scope {
 		return nil, nil, usageErrorf(
-			"DR-%s and DR-%s are in different tiers; supersession is same-tier only, because writing both sides would mean writing into another repository",
-			newer.RecordID, older.RecordID)
+			"%s and %s are in different tiers; supersession is same-tier only, because writing both sides would mean writing into another repository",
+			knowledge.RecordLabel(newer.RecordID), knowledge.RecordLabel(older.RecordID))
 	}
 	if newer.ID == older.ID {
-		return nil, nil, usageErrorf("DR-%s cannot supersede itself", newer.RecordID)
+		return nil, nil, usageErrorf("%s cannot supersede itself", knowledge.RecordLabel(newer.RecordID))
 	}
 	return newer, older, nil
 }
@@ -1050,7 +1050,7 @@ func recordRelatesTo(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, o
 		return err
 	}
 	if from.ID == to.ID {
-		return usageErrorf("DR-%s cannot relate to itself", from.RecordID)
+		return usageErrorf("%s cannot relate to itself", knowledge.RecordLabel(from.RecordID))
 	}
 
 	root := recordRoot(kb, f)
