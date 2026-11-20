@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+	<head>
+		<title>knowledge</title>
+		<dateModified>Fri, 20 Nov 2026 14:54:35 -0800</dateModified>
+	</head>
+	<body>
+		<outline text="Pages">
+			<outline text="knowledge" url="https://rsdoiel.github.io/knowledge/index.md"></outline>
+			<outline text="knowledge User Manual" url="https://rsdoiel.github.io/knowledge/user_manual.md"></outline>
+			<outline text="kb" url="https://rsdoiel.github.io/knowledge/kb.1.md"></outline>
+			<outline text="kb-project" url="https://rsdoiel.github.io/knowledge/kb-project.1.md"></outline>
+			<outline text="kb-observation" url="https://rsdoiel.github.io/knowledge/kb-observation.1.md"></outline>
+			<outline text="kb-concept" url="https://rsdoiel.github.io/knowledge/kb-concept.1.md"></outline>
+			<outline text="kb-link" url="https://rsdoiel.github.io/knowledge/kb-link.1.md"></outline>
+			<outline text="kb-unlink" url="https://rsdoiel.github.io/knowledge/kb-unlink.1.md"></outline>
+			<outline text="kb-source" url="https://rsdoiel.github.io/knowledge/kb-source.1.md"></outline>
+			<outline text="kb-search" url="https://rsdoiel.github.io/knowledge/kb-search.1.md"></outline>
+			<outline text="kb-merge" url="https://rsdoiel.github.io/knowledge/kb-merge.1.md"></outline>
+			<outline text="kb-check-db" url="https://rsdoiel.github.io/knowledge/kb-check-db.1.md"></outline>
+			<outline text="kb-stats" url="https://rsdoiel.github.io/knowledge/kb-stats.1.md"></outline>
+			<outline text="kb-story" url="https://rsdoiel.github.io/knowledge/kb-story.1.md"></outline>
+			<outline text="kb-export" url="https://rsdoiel.github.io/knowledge/kb-export.1.md"></outline>
+			<outline text="kb-import" url="https://rsdoiel.github.io/knowledge/kb-import.1.md"></outline>
+			<outline text="kb-ingest" url="https://rsdoiel.github.io/knowledge/kb-ingest.1.md"></outline>
+			<outline text="kb-record" url="https://rsdoiel.github.io/knowledge/kb-record.1.md"></outline>
+			<outline text="kb-document" url="https://rsdoiel.github.io/knowledge/kb-document.1.md"></outline>
+			<outline text="kb-index" url="https://rsdoiel.github.io/knowledge/kb-index.1.md"></outline>
+			<outline text="kb-init" url="https://rsdoiel.github.io/knowledge/kb-init.1.md"></outline>
+			<outline text="kb-model" url="https://rsdoiel.github.io/knowledge/kb-model.1.md"></outline>
+			<outline text="kb-embed" url="https://rsdoiel.github.io/knowledge/kb-embed.1.md"></outline>
+			<outline text="kb-completion" url="https://rsdoiel.github.io/knowledge/kb-completion.1.md"></outline>
+			<outline text="kb-verbs" url="https://rsdoiel.github.io/knowledge/kb-verbs.1.md"></outline>
+			<outline text="kb-version" url="https://rsdoiel.github.io/knowledge/kb-version.1.md"></outline>
+			<outline text="kb-topics" url="https://rsdoiel.github.io/knowledge/kb-topics.1.md"></outline>
+			<outline text="INSTALL" url="https://rsdoiel.github.io/knowledge/INSTALL.md"></outline>
+			<outline text="INSTALL_NOTES_macOS" url="https://rsdoiel.github.io/knowledge/INSTALL_NOTES_macOS.md"></outline>
+			<outline text="INSTALL_NOTES_Windows" url="https://rsdoiel.github.io/knowledge/INSTALL_NOTES_Windows.md"></outline>
+			<outline text="AGENTS.md — using `kb`, the knowledge base tool" url="https://rsdoiel.github.io/knowledge/AGENTS.md"></outline>
+			<outline text="Notes for Claude Code" url="https://rsdoiel.github.io/knowledge/CLAUDE.md"></outline>
+			<outline text="Changes" url="https://rsdoiel.github.io/knowledge/CHANGES.md"></outline>
+			<outline text="knowledge" url="https://rsdoiel.github.io/knowledge/about.md"></outline>
+			<outline text="`agents/projects/&lt;project&gt;/` layout — Feature Request" url="https://rsdoiel.github.io/knowledge/agents-projects-layout-feature-request.md"></outline>
+			<outline text="Concept-tag-based retrieval — Feature Request" url="https://rsdoiel.github.io/knowledge/concept-tag-retrieval-feature-request.md"></outline>
+			<outline text="Frontmatter enhancement for documents — Feature Request" url="https://rsdoiel.github.io/knowledge/frontmatter-generator-feature-request.md"></outline>
+			<outline text="Narrative/document ingestion, at graduated abstraction levels — Feature Request" url="https://rsdoiel.github.io/knowledge/narrative-documents-feature-request.md"></outline>
+			<outline text="`[[double-bracket]]` inline concept tagging — Feature Request" url="https://rsdoiel.github.io/knowledge/wikilink-tagging-feature-request.md"></outline>
+		</outline>
+	</body>
+</opml>

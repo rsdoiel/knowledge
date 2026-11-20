@@ -2,6 +2,7 @@
 <html lang="en-US">
 <head>
     <title>knowledge</title>
+    <link rel="alternate" type="text/markdown" href="kb.1.md">
     <link rel="stylesheet" href="/css/site.css">
 </head>
 <body>
@@ -66,9 +67,12 @@ from the current directory — see WORKSPACE AND ENVIRONMENT
 <dt>-json</dt>
 <dd>
 machine-readable JSON output instead of human-readable text. Applies to
-every verb. Errors always go to stderr, never stdout, in both modes —
-scripts consuming JSON output can rely on stdout staying valid JSON even
-when a call fails.
+every verb. An error is written to standard error as a plain “kb:
+message” line, as in text mode, and in this mode also to standard output
+as a JSON object, so standard output is always valid JSON, a failure
+included. A warning or note is plain text on standard error only. A
+command line whose options do not parse has no mode yet and is reported
+as text.
 </dd>
 <dt>-i</dt>
 <dd>
@@ -180,12 +184,16 @@ scope is filled in, so a number is enough), the field refuses what kb
 record supersede refuses (a record that is not there, itself, one in
 another tier), and the confirmation shows both records and that the
 replaced one becomes superseded; both files and the database are
-written. A text field starts from the current text; Enter accepts it,
-Ctrl-J starts a new line, Ctrl-U clears the line, and Esc cancels. While
-you type every key is text, q included. Each change is made by the
-command’s own function, so a refusal (a rename onto a name that is
-taken) is the command’s refusal, shown on the screen with nothing
-changed, and a success shows the command that does the same.</p>
+written. On a record l links it to another with relates_to: you type
+which one (the scope is filled in and can be changed to reach another
+tier), the field refuses itself and a record that is not there, and only
+the selected record’s file and the database are written. A text field
+starts from the current text; Enter accepts it, Ctrl-J starts a new
+line, Ctrl-U clears the line, and Esc cancels. While you type every key
+is text, q included. Each change is made by the command’s own function,
+so a refusal (a rename onto a name that is taken) is the command’s
+refusal, shown on the screen with nothing changed, and a success shows
+the command that does the same.</p>
 <p>New things are made with a form: the New project…, New observation…,
 New concept…, New source… and New record… rows of the menus, and n on
 the project list (a project), a project’s observations tab (an
@@ -378,8 +386,8 @@ kb-ingest(1)
 <dt>record</dt>
 <dd>
 read and maintain decision records — list, pending, show, new,
-set-status, supersede, fmt, fuzzy-tag (near-miss concept mentions) — see
-kb-record(1)
+set-status, supersede, relates-to, fmt, fuzzy-tag (near-miss concept
+mentions) — see kb-record(1)
 </dd>
 <dt>document</dt>
 <dd>
@@ -415,6 +423,11 @@ see kb-completion(1)
 print the verb table: every verb, subverb, flag and write class, as text
 or with -json — see kb-verbs(1)
 </dd>
+<dt>version, license</dt>
+<dd>
+print the version, or the license, as kb -version and -license do — see
+kb-version(1)
+</dd>
 </dl>
 <h1 id="arguments">ARGUMENTS</h1>
 <p>The global options -json, -db and -debug go before the verb: kb -json
@@ -443,8 +456,11 @@ the number alone. A command that works through many items (ingest, index
 –all, source check-retractions) does all it can, prints the counts, and
 then exits with the class of the first failure: it does not exit 0 with
 failures, and one bad item does not stop the good ones. With -json the
-error on stderr carries the class name beside the number, for example
-{“error”: “…”, “class”: “no_input”, “code”: 66}.</p>
+error is also written to standard output as an object that carries the
+class name beside the number, for example {“error”: “…”, “class”:
+“no_input”, “code”: 66}. A command that prints a result before it fails
+(ingest, check-retractions) leaves the result and then the error object
+on standard output, one after the other.</p>
 <dl>
 <dt>0</dt>
 <dd>
@@ -529,10 +545,11 @@ under WORKSPACE AND ENVIRONMENT
 kb-unlink(1), kb-source(1), kb-search(1), kb-merge(1), kb-check-db(1),
 kb-stats(1), kb-story(1), kb-export(1), kb-import(1), kb-ingest(1),
 kb-record(1), kb-document(1), kb-index(1), kb-init(1), kb-model(1),
-kb-embed(1), kb-completion(1), kb-verbs(1), kb-topics(1)</p>
+kb-embed(1), kb-completion(1), kb-verbs(1), kb-version(1),
+kb-topics(1)</p>
 </section>
 <footer>
-<p>knowledge</p>
+<p>knowledge. This page is also published as <a href="kb.1.md">Markdown</a>.</p>
 </footer>
 </body>
 </html>

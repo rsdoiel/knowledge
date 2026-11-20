@@ -2,6 +2,7 @@
 <html lang="en-US">
 <head>
     <title>knowledge</title>
+    <link rel="alternate" type="text/markdown" href="AGENTS.md">
     <link rel="stylesheet" href="/css/site.css">
 </head>
 <body>
@@ -46,8 +47,9 @@ hand-written <code>INSERT</code> does not. Raw <code>sqlite3</code> is
 for reading what no verb covers.</li>
 <li><strong>Use <code>--json</code> when a program reads the
 output.</strong> It goes before the verb:
-<code>kb --json search    toast</code>. Errors go to standard error, so
-standard output stays parseable.</li>
+<code>kb --json search    toast</code>. Errors go to standard error;
+under <code>--json</code> the error is also an object on standard
+output, so standard output stays parseable.</li>
 <li><strong>Never accept a decision record, and never promote a document
 summary.</strong> A model may write a record (it is created
 <code>proposed</code>) and may draft a summary.
@@ -196,9 +198,11 @@ no database, no network except <code>fetch</code></td>
 verbs keep it current when it exists</td>
 </tr>
 <tr class="even">
-<td><code>init</code>, <code>completion</code>, <code>verbs</code></td>
+<td><code>init</code>, <code>completion</code>, <code>verbs</code>,
+<code>version</code>, <code>license</code></td>
 <td>cli_only</td>
-<td>create a workspace, shell completion, the verb table</td>
+<td>create a workspace, shell completion, the verb table, the version,
+the license (as <code>-version</code> and <code>-license</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -306,7 +310,7 @@ version in its <code>kb_version</code> metadata or later, and says so at
 the top.</p>
 </section>
 <footer>
-<p>knowledge</p>
+<p>knowledge. This page is also published as <a href="AGENTS.md">Markdown</a>.</p>
 </footer>
 </body>
 </html>

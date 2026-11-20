@@ -108,7 +108,7 @@ Measured on a Raspberry Pi 5 (4 cores, 16 GB) over a copy of this workspace's kn
 
 These documents record why `kb` is shaped the way it is — useful if you're extending it, not required to use it:
 
-- **[decisions/index.md](decisions/index.md)** — the decision-record corpus: every architecture/UX decision this module has made, each with its rejected alternatives and the real bugs found along the way. It replaces the old flat `DECISIONS.md`, which was split into records when this module became the format's first conversion pilot; `kb search` reaches the reasoning inside them, not just their titles
+- **`agents/projects/knowledge/decisions/index.md`** (in the Laboratory workspace, not in this repository) — the decision-record corpus: every architecture/UX decision this module has made, each with its rejected alternatives and the real bugs found along the way. It replaces the old flat `DECISIONS.md`, which was split into records when this module became the format's first conversion pilot; `kb search` reaches the reasoning inside them, not just their titles
 - The design briefs and implementation plans behind each part (the CLI and TUI, the `--debug` trace, the JSONL export, decision records, wikilink tagging, concept recall, narrative documents, the story model, provenance) are kept with the project's decision records in the workspace, under `agents/projects/knowledge/design/` and `plans/`, not in this repository.
 
 ---

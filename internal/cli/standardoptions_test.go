@@ -174,10 +174,16 @@ func TestManPageSourcesCarryTheCurrentVersion(t *testing.T) {
 			t.Errorf("%s: %v", path, err)
 			continue
 		}
-		first := strings.SplitN(string(data), "\n", 2)[0]
-		if !strings.Contains(first, knowledge.Version) {
-			t.Errorf("%s is stale: its header says %q but the current version is %s; run make kb-topics-help && make man",
-				filepath.Base(path), first, knowledge.Version)
+		footer := ""
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "footer:") {
+				footer = line
+				break
+			}
+		}
+		if !strings.Contains(footer, knowledge.Version) {
+			t.Errorf("%s is stale: its footer says %q but the current version is %s; run make kb-topics-help && make man",
+				filepath.Base(path), footer, knowledge.Version)
 		}
 	}
 }

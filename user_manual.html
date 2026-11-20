@@ -2,6 +2,7 @@
 <html lang="en-US">
 <head>
     <title>knowledge</title>
+    <link rel="alternate" type="text/markdown" href="user_manual.md">
     <link rel="stylesheet" href="/css/site.css">
 </head>
 <body>
@@ -69,8 +70,8 @@ project’s concepts</td>
 <tr class="odd">
 <td><code>observation</code></td>
 <td><a href="kb-observation.1.html">kb-observation(1)</a></td>
-<td>add, list, show, update observations; list an observation’s
-sources</td>
+<td>add, list, show, update observations; draft observations for a
+person to review and promote; list an observation’s sources</td>
 </tr>
 <tr class="even">
 <td><code>concept</code></td>
@@ -103,7 +104,7 @@ the corpus</td>
 <td><code>record</code></td>
 <td><a href="kb-record.1.html">kb-record(1)</a></td>
 <td>author and maintain decision records — new, list, show, set-status,
-supersede, fmt, concepts</td>
+supersede, relates-to, fmt, concepts</td>
 </tr>
 <tr class="even">
 <td><code>index</code></td>
@@ -167,9 +168,11 @@ it, <code>kb</code> walks up from the current directory to the nearest
 <code>agents/knowledge.db</code> (or
 <code>agents/knowledge.jsonl</code>, in a fresh clone), so it works from
 any subdirectory of a workspace</li>
-<li><code>--json</code> — machine-readable output on stdout; errors
-always go to stderr in both modes, so scripts and other language-model
-harnesses can drive <code>kb</code> directly</li>
+<li><code>--json</code> — machine-readable output on stdout; an error
+goes to stderr as a plain line in both modes and, under
+<code>--json</code>, also to stdout as an
+<code>{"error","class","code"}</code> object, so scripts and other
+language-model harnesses can drive <code>kb</code> directly</li>
 <li><code>--debug</code> — write a JSONL trace of every knowledge-base
 call (and, in the TUI, every input event and view change) to
 <code>./kb-debug-&lt;timestamp&gt;.jsonl</code></li>
@@ -254,11 +257,13 @@ correction (a new observation that supersedes it, as
 <code>kb observation update</code> does); on a concept <code>e</code>
 renames it; on a record <code>u</code> makes it supersede another (you
 type which one, and the field refuses what
-<code>kb record supersede</code> refuses). In a text field
-<code>Enter</code> accepts, <code>Ctrl-J</code> starts a new line,
-<code>Ctrl-U</code> clears the line, and <code>Esc</code> cancels. Each
-change is the command’s own function, so its refusals are shown with
-nothing changed.</p>
+<code>kb record supersede</code> refuses). <code>l</code> links it to
+another with <code>relates_to</code>
+(<code>kb record relates-to</code>). In a text field <code>Enter</code>
+accepts, <code>Ctrl-J</code> starts a new line, <code>Ctrl-U</code>
+clears the line, and <code>Esc</code> cancels. Each change is the
+command’s own function, so its refusals are shown with nothing
+changed.</p>
 <p>New things are made with a form (the New… rows of the menus, and
 <code>n</code> on the project list, an observations tab, a concepts tab
 and the Records screens): the fields are asked one at a time, a line of
@@ -345,8 +350,8 @@ above the cutoff, 2 a build without semantic search or a kind that is
 not embedded, 66 no model or no index, 65 an index built by another
 model (<code>kb embed -rebuild</code>), 75 an index being built.</p>
 <p>Measured on a Raspberry Pi 5 (4 cores, 16 GB) over a copy of this
-workspace’s knowledge base, 893 rows in about 4,100 passages: the first
-index took 14 to 17 minutes and up to 875 MB of memory, a search about
+workspace’s knowledge base, 947 rows in about 4,400 passages: the first
+index took about 15 minutes and up to 0.9 GB of memory, a search about
 half a second, and a repeat <code>kb embed</code> with nothing changed a
 fraction of a second. The semantic <code>kb</code> is about 33 MB
 against 21 MB for the plain one, and the model about 87 MB. Another
@@ -368,8 +373,8 @@ search by meaning. Plain <code>kb search</code> is unchanged.</p>
 <p>These documents record why <code>kb</code> is shaped the way it is —
 useful if you’re extending it, not required to use it:</p>
 <ul>
-<li><strong><a
-href="decisions/index.html">decisions/index.md</a></strong> — the
+<li><strong><code>agents/projects/knowledge/decisions/index.md</code></strong>
+(in the Laboratory workspace, not in this repository) — the
 decision-record corpus: every architecture/UX decision this module has
 made, each with its rejected alternatives and the real bugs found along
 the way. It replaces the old flat <code>DECISIONS.md</code>, which was
@@ -397,7 +402,7 @@ Reporting Bugs</a></strong></li>
 </ul>
 </section>
 <footer>
-<p>knowledge</p>
+<p>knowledge. This page is also published as <a href="user_manual.md">Markdown</a>.</p>
 </footer>
 </body>
 </html>
