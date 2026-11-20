@@ -227,3 +227,40 @@ func TestIngestDocument_SkippedIngestFillsTheDescription(t *testing.T) {
 		t.Error("a skipped ingest did not fill and index the description")
 	}
 }
+
+// DR-0092's open question, decided 2026-11-20: the document entry is embedded,
+// so a document with nothing reviewed is found by meaning as well as by words.
+func TestEmbedCorpus_HoldsTheDocumentEntry(t *testing.T) {
+	kb := openTestKB(t)
+	pid, _ := kb.AddProject("alpha", "")
+	path := writeTempFile(t, "z.md", docFTSFixture)
+	if _, err := kb.IngestDocument(pid, path, DocumentIngestOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := kb.DocumentByPath(path)
+	rows, err := kb.EmbedCorpus(SearchScope{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found *CorpusRow
+	for i, r := range rows {
+		if r.SourceType == "document" && r.SourceID == d.ID {
+			found = &rows[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("the corpus has no document entry for document %d: %v", d.ID, corpusKeys(rows))
+	}
+	for _, want := range []string{"Zebrafish Notebook", "quokka", "Marsupial Census", "Tide Tables"} {
+		if !strings.Contains(found.Text, want) {
+			t.Errorf("the embedded text lacks %q: %q", want, found.Text)
+		}
+	}
+	if strings.Contains(found.Text, "wombat") {
+		t.Errorf("the embedded text has section body text: %q", found.Text)
+	}
+	rows, err = kb.EmbedCorpus(SearchScope{Kinds: []string{"documents"}})
+	if err != nil || len(rows) != 1 {
+		t.Errorf("documents kind: %d rows, %v; want the one entry", len(rows), err)
+	}
+}

@@ -236,6 +236,7 @@ func meaningSearch(kb *knowledge.KnowledgeBase, dl *DebugLog, mode searchMode, m
 	for k, st := range searchTypeOf {
 		kindOf[st] = k
 	}
+	kindOf["document"] = "documents" // the document's own entry, beside its reviewed summaries (DR-0092)
 	for _, k := range order {
 		res.Counts[kindOf[k.SourceType]]++
 	}
