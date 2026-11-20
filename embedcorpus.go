@@ -3,8 +3,9 @@ package knowledge
 import "fmt"
 
 /** EmbeddedKinds are the search kinds semantic search embeds, in the order
- * SearchKinds lists them: observations, decision records, reviewed document
- * summaries and concepts. Projects and sources are short and lexical search
+ * SearchKinds lists them: observations, decision records, documents (each
+ * document's title, description and headings entry, and its reviewed summaries)
+ * and concepts. Projects and sources are short and lexical search
  * serves them (workspace DR-0088, semantic-search-design.md section 6).
  *
  * Example:
@@ -15,7 +16,7 @@ var EmbeddedKinds = []string{"records", "observations", "concepts", "documents"}
 /** CorpusRow is one row of the knowledge base as semantic search sees it.
  *
  * Fields:
- *   SourceType (string) — kb_fts source_type: observation, record, concept or document_summary
+ *   SourceType (string) — kb_fts source_type: observation, record, concept document or document_summary
  *   SourceID   (int64)  — the row's id in its own table
  *   Text       (string) — the text lexical search indexes for the row, which is the text embedded
  *
@@ -32,8 +33,9 @@ type CorpusRow struct {
 /** EmbedCorpus returns the rows semantic search embeds or ranks, narrowed by
  * the same scope lexical search uses (SearchScoped), so the two cannot disagree
  * about what a scope contains. The text is read from the full-text index, so
- * there is one definition of a row's text: an unreviewed document summary is
- * absent because lexical search does not trust it either. Limit is ignored.
+ * there is one definition of a row's text: a drafted document summary is
+ * absent because lexical search does not trust it either, and a section's body
+ * is absent because lexical search does not index it. Limit is ignored.
  *
  * Parameters:
  *   scope (SearchScope) — where to look; the zero value is every embedded row

@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -349,5 +351,33 @@ func TestSearchHybrid_ProsePunctuationDoesNotStopTheWidening(t *testing.T) {
 	}
 	if rows[0].Via != "words" && rows[0].Via != "both" {
 		t.Errorf("first row via %q, want the words half to have found it", rows[0].Via)
+	}
+}
+
+// A document with nothing reviewed is found by meaning: `kb embed` embeds its
+// title, description and headings entry, and `-semantic` lists it among the
+// documents (DR-0092, decided 2026-11-20).
+func TestSearchSemantic_FindsAnUnreviewedDocumentByItsEntry(t *testing.T) {
+	f := newEmbedFixture(t, 0)
+	path := filepath.Join(t.TempDir(), "z.md")
+	if err := os.WriteFile(path, []byte("---\ntitle: Quokka Habitat Fieldwork\ndescription: counting marsupials near the estuary\n---\n\n## Estuary Census\n\nwombat counts\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, e := f.run("document", "ingest", "--project", "p", path); code != 0 {
+		t.Fatalf("document ingest: %s", e)
+	}
+	f.obs("watering the tomato plants on tuesday")
+	if code, _, e := f.run("embed"); code != 0 {
+		t.Fatalf("embed: %s", e)
+	}
+	code, out, errOut := f.run("search", "-semantic", "marsupials estuary census")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if !strings.Contains(out, "Quokka Habitat Fieldwork") || !strings.Contains(out, "documents (1)") {
+		t.Errorf("the unreviewed document is not listed under documents:\n%s", out)
+	}
+	if strings.Contains(out, "tomato") {
+		t.Errorf("an unrelated row is in the output:\n%s", out)
 	}
 }

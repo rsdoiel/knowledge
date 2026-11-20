@@ -16,7 +16,9 @@ release notes; maintained going forward.
   in `kb export`, `kb import` and `kb merge` (the export field is omitted when empty). A document ingested before this release
   gets its description, and its search entry, from its next `kb ingest`, though its file has not changed; a database made by
   merge or import builds the entries when it is opened.
-- Semantic search does not embed the new entry yet (DR-0092 leaves that open).
+- **The document entry is embedded.** `kb embed` embeds it and `kb search -semantic` and `-hybrid` find a document by meaning from the moment it is
+  ingested (DR-0092's open question, decided 2026-11-20). A document with reviewed summaries lists both the entry and the summaries as hits. Run
+  `kb embed` once to index the entries of documents already ingested.
 
 ## v0.0.32 — 2026-11-20
 

@@ -30,17 +30,16 @@ var searchKindSource = map[string]string{
 	"projects":     "project",
 }
 
-// searchKindSources lists every source_type a kind finds. The search verbs see
-// all of them. Semantic search embeds only the first: whether the document
-// entry is embedded too is DR-0092's open question, so for now the always=true
-// path of scopeFilter (the embedder and semantic search) stays as it was.
+// searchKindSources lists every source_type a kind finds, in lexical search and
+// in semantic search alike: the document entry is embedded (DR-0092's open
+// question, decided 2026-11-20), so an unreviewed document is found by meaning.
 var searchKindSources = map[string][]string{
 	"documents": {"document_summary", "document"},
 }
 
 // kindSourceTypes returns the source_types a search kind finds.
-func kindSourceTypes(kind string, summariesOnly bool) []string {
-	if more, ok := searchKindSources[kind]; ok && !summariesOnly {
+func kindSourceTypes(kind string) []string {
+	if more, ok := searchKindSources[kind]; ok {
 		return more
 	}
 	return []string{searchKindSource[kind]}
@@ -194,7 +193,7 @@ func (kb *KnowledgeBase) scopeFilter(scope SearchScope, allowed []string, always
 	if scoped || len(scope.Kinds) > 0 || always {
 		var ors []string
 		for _, k := range kinds {
-			for _, st := range kindSourceTypes(k, always) {
+			for _, st := range kindSourceTypes(k) {
 				switch {
 				case !scoped:
 					ors = append(ors, "kb_fts.source_type = '"+st+"'")
