@@ -32,7 +32,7 @@ Installing from source
 
 ### Required software
 
-- Go >= 1.27.3
+- Go >= 1.27.4
 
 ### Steps
 
@@ -55,7 +55,7 @@ Semantic search (`kb search -semantic`, `-hybrid`) needs a separate build of `kb
 
 ### Required software
 
-- Go >= 1.27.3 (the embedding library needs it, and so does the plain `kb`)
+- Go >= 1.27.4 (the embedding library needs it, and so does the plain `kb`)
 - No C compiler, and no shared libraries: the build is pure Go (`CGO_ENABLED=0`)
 
 ### Steps

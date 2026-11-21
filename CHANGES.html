@@ -92,6 +92,13 @@ exit code stays 1.</li>
 </ul>
 <h3 id="changed">Changed</h3>
 <ul>
+<li><strong>Building from source needs Go 1.27.4 or later</strong> (was
+1.27.3): <code>go.mod</code>, <code>semantic/go.mod</code>,
+<code>go.work</code>, <code>codemeta.json</code>, README and INSTALL
+agree. Go 1.27.4 fixes GO-2026-6859 (an HTTP/1 server crash in
+<code>net/http</code>); <code>kb</code> runs no HTTP server, so it was
+not exposed, but <code>govulncheck</code> flags the standard library of
+an older toolchain.</li>
 <li><strong>The documentation is a Markdown site as well as an HTML
 one</strong> (BonBon, cmarkbrowser). Every page is also published as
 <code>.md</code>, with <code>/.well-known/toc.opml</code>

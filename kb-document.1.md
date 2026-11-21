@@ -2,7 +2,7 @@
 title: kb-document
 section: 1
 header: user manual
-footer: version 0.0.32 43376de
+footer: version 0.0.32 629879b
 date: 2026-11-20
 author: R. S. Doiel
 ---

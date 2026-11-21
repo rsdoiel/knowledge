@@ -49,7 +49,7 @@ A complete command line always runs and prints, on a terminal or not. Only an in
 
 ## Semantic search (preview)
 
-**This preview is not shipped as a binary: to try it you build it from source** (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31`; Go 1.27.3 or later), as [INSTALL.md](INSTALL.md) describes.
+**This preview is not shipped as a binary: to try it you build it from source** (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31`; Go 1.27.4 or later), as [INSTALL.md](INSTALL.md) describes.
 
 `kb search` finds rows that contain your words. The semantic build of `kb` also finds rows by meaning, offline, with no daemon and no network after the model is installed: `kb search -semantic "how do we keep databases in step across machines"` finds the records and notes about cross-machine sync although none of them says "in step". `-hybrid` adds the exact-word matches. It covers observations, decision records, concepts and documents (a document's title, description and headings from the moment it is ingested, and its reviewed summaries); the vectors live in `agents/knowledge.vectors.db` beside the database, never in `knowledge.db` or the JSON-L export.
 
@@ -61,7 +61,7 @@ kb search -semantic "how do we keep databases in step across machines"
 kb search -hybrid hunspell               # meaning, plus rows that contain the word
 ```
 
-In the interactive interface, `Tab` in the search prompt switches the next search between words, meaning and both. The plain `kb` has none of this and stays at about 21 MB; the semantic build is built from the nested `semantic/` module (`make semantic`, Go 1.27.3) and is not in the release archives. See [kb-search(1)](kb-search.1.md), [kb-embed(1)](kb-embed.1.md) and [kb-model(1)](kb-model.1.md).
+In the interactive interface, `Tab` in the search prompt switches the next search between words, meaning and both. The plain `kb` has none of this and stays at about 21 MB; the semantic build is built from the nested `semantic/` module (`make semantic`, Go 1.27.4) and is not in the release archives. See [kb-search(1)](kb-search.1.md), [kb-embed(1)](kb-embed.1.md) and [kb-model(1)](kb-model.1.md).
 
 Measured on a Raspberry Pi 5 (4 cores, 16 GB) over a copy of this workspace's knowledge base, 947 rows in about 4,400 passages: the first index took about 15 minutes and up to 0.9 GB of memory, a search about half a second, and a repeat `kb embed` with nothing changed a fraction of a second. The semantic `kb` is about 33 MB against 21 MB for the plain one, and the model about 87 MB. Another machine will differ.
 
@@ -139,7 +139,7 @@ Checked in this release: `go vet` and the test suite pass on Linux (Raspberry Pi
 
 ## Software Requirements
 
-- Go >= 1.27.3
+- Go >= 1.27.4
 - gopkg.in/yaml.v3 >= 3.0.1
 - github.com/rsdoiel/fountain >= 1.0.3
 - git >= 2.0 (runtime, for kb document frontmatter's provenance detection)

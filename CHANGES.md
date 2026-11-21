@@ -40,6 +40,9 @@ release notes; maintained going forward.
 
 ### Changed
 
+- **Building from source needs Go 1.27.4 or later** (was 1.27.3): `go.mod`, `semantic/go.mod`, `go.work`, `codemeta.json`, README and INSTALL agree.
+  Go 1.27.4 fixes GO-2026-6859 (an HTTP/1 server crash in `net/http`); `kb` runs no HTTP server, so it was not exposed, but `govulncheck` flags
+  the standard library of an older toolchain.
 - **The documentation is a Markdown site as well as an HTML one** (BonBon, cmarkbrowser). Every page is also published as `.md`, with
   `/.well-known/toc.opml` (`toc.bash`), `index.md` (a copy of the README), `.nojekyll`, and a `<link rel="alternate" type="text/markdown">`
   in each HTML page; `website.mak` lists the pages in `PAGE_ORDER` and `site_test.go` keeps the list, the links, the table of contents and
