@@ -49,7 +49,7 @@ A complete command line always runs and prints, on a terminal or not. Only an in
 
 ## Semantic search (preview)
 
-**This preview is not shipped as a binary: to try it you build it from source** (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31`; Go 1.27.4 or later), as [INSTALL.md](INSTALL.md) describes.
+**This preview is not shipped as a binary: to try it you build it from source** (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.32`; Go 1.27.4 or later), as [INSTALL.md](INSTALL.md) describes.
 
 `kb search` finds rows that contain your words. The semantic build of `kb` also finds rows by meaning, offline, with no daemon and no network after the model is installed: `kb search -semantic "how do we keep databases in step across machines"` finds the records and notes about cross-machine sync although none of them says "in step". `-hybrid` adds the exact-word matches. It covers observations, decision records, concepts and documents (a document's title, description and headings from the moment it is ingested, and its reviewed summaries); the vectors live in `agents/knowledge.vectors.db` beside the database, never in `knowledge.db` or the JSON-L export.
 
