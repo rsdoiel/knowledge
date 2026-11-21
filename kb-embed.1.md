@@ -2,7 +2,7 @@
 title: kb-embed
 section: 1
 header: user manual
-footer: version 0.0.32 629879b
+footer: version 0.0.32 178dc6c
 date: 2026-11-20
 author: R. S. Doiel
 ---

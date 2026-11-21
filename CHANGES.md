@@ -17,6 +17,11 @@ release notes; maintained going forward.
 
 ### Fixed
 
+- **The release archives held a stray `agents/knowledge.db`.** `make release` copied the whole `agents/` directory into every zip, and `kb`
+  leaves an empty database there whenever it runs in the repository. Only `agents/skills/` is copied now, and a new `make check-dist`,
+  run by `make release` before it reports ready, fails when any zip holds a file outside the allowed list (the program, the manual
+  pages, the project's documents, the skills). `makefile_dist_test.go` covers both. Earlier archives may hold the same empty database;
+  they were not checked.
 - **Security: `kb record new --project NAME` no longer writes outside the project directory.** NAME was joined into the file's path as
   it was typed, so `--project ../../../x` (or `..`, `a/b`) wrote the record, a design or a plan outside `agents/projects`, and outside the
   workspace for enough `..`. A project name that is a path is now a usage error (exit 2) and nothing is written; the interface refuses the same

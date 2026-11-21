@@ -45,6 +45,16 @@ decision record).</li>
 </ul>
 <h3 id="fixed">Fixed</h3>
 <ul>
+<li><strong>The release archives held a stray
+<code>agents/knowledge.db</code>.</strong> <code>make release</code>
+copied the whole <code>agents/</code> directory into every zip, and
+<code>kb</code> leaves an empty database there whenever it runs in the
+repository. Only <code>agents/skills/</code> is copied now, and a new
+<code>make check-dist</code>, run by <code>make release</code> before it
+reports ready, fails when any zip holds a file outside the allowed list
+(the program, the manual pages, the project’s documents, the skills).
+<code>makefile_dist_test.go</code> covers both. Earlier archives may
+hold the same empty database; they were not checked.</li>
 <li><strong>Security: <code>kb record new --project NAME</code> no
 longer writes outside the project directory.</strong> NAME was joined
 into the file’s path as it was typed, so

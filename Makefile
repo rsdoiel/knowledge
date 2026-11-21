@@ -251,6 +251,9 @@ cross-semantic: .FORCE
 		CGO_ENABLED=0 GOOS=$$OS GOARCH=$$ARCH go build -o "bin/semantic-cross/kb-$$OS-$$ARCH$$EXE" ./semantic/cmd/kb || exit 1; \
 	done
 
+# Only agents/skills is copied from agents/: kb leaves an empty knowledge.db in
+# agents/ whenever it runs in this repository, and a whole-directory copy put it in
+# every archive. check-dist is the check that stands behind this copy.
 distribute_docs:
 	@mkdir -p dist/
 	@cp -v codemeta.json dist/
@@ -260,7 +263,7 @@ distribute_docs:
 	@cp -v INSTALL.md dist/
 	@cp -v CHANGES.md dist/
 	@cp -vR man dist/
-	@cp -vR agents dist/
+	@mkdir -p dist/agents && cp -vR agents/skills dist/agents/
 	@for DNAME in $(DOCS); do cp -vR $$DNAME dist/; done
 
 # check-go-version enforces the Go version policy (kb observation 548): the minimum Go is
@@ -387,7 +390,25 @@ check-semantic-tag: .FORCE
 	if [ $$FAIL -ne 0 ]; then echo "check-semantic-tag: semantic/$$V is NOT ready to tag"; exit 1; fi; \
 	echo "check-semantic-tag: semantic/$$V can be tagged"
 
+# DIST_ALLOWED matches every path a release archive may hold: the program, the
+# manual pages (rendered and as Markdown), the project's own documents and the
+# skills. Anything else, a database or a JSON-L export included, is a stray.
+DIST_ALLOWED = ^(LICENSE|codemeta\.json|CITATION\.cff|README\.md|CHANGES\.md|INSTALL\.md|[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\.[0-9]\.md|bin/|bin/[A-Za-z0-9_-]+(\.exe)?|man/|man/man[0-9]/|man/man[0-9]/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\.[0-9]|agents/|agents/skills/|agents/skills/[A-Za-z0-9_-]+/|agents/skills/[A-Za-z0-9_-]+/SKILL\.md)$$
+
+# check-dist fails when a zip in dist/ holds a file outside DIST_ALLOWED, and when
+# there is no zip to check. The release target runs it before it says it is ready.
+check-dist: .FORCE
+	@FAIL=0; N=0; for Z in dist/*.zip; do \
+		[ -f "$$Z" ] || continue; N=$$((N+1)); \
+		BAD=$$(unzip -Z1 "$$Z" | grep -Ev '$(DIST_ALLOWED)' || true); \
+		if [ -n "$$BAD" ]; then echo "check-dist: $$Z holds files that are not part of a release:" >&2; echo "$$BAD" | sed 's/^/  /' >&2; FAIL=1; fi; \
+	done; \
+	if [ $$N -eq 0 ]; then echo "check-dist: no zip in dist/ to check" >&2; exit 1; fi; \
+	if [ $$FAIL -ne 0 ]; then exit 1; fi; \
+	echo "check-dist: $$N archives hold only release files"
+
 release: check-release build setup_dist distribute_docs dist/Linux-x86_64 dist/Linux-aarch64 dist/macOS-x86_64 dist/macOS-arm64 dist/Windows-x86_64 dist/Windows-arm64
+	@$(MAKE) -s check-dist
 	@$(MAKE) -s check-committed
 	@printf "\nready to run\n\n\trelease.bash\n\n"
 
