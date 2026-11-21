@@ -494,7 +494,7 @@ func resolveRecordScoped(kb *knowledge.KnowledgeBase, arg string, f recordFlags,
 // searched (agents/decisions, or agents/projects/NAME/decisions); a file
 // elsewhere is found by `kb ingest PATH`, not by guessing.
 func recordFileOnDisk(root string, ref knowledge.Ref, workspaceName string) (string, bool) {
-	if ref.Scope == "" || ref.ID == "" {
+	if ref.Scope == "" || ref.ID == "" || !isProjectDirName(ref.Scope) {
 		return "", false
 	}
 	dir := filepath.Join("agents", "projects", ref.Scope, "decisions")

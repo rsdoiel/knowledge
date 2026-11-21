@@ -2,7 +2,7 @@
 title: kb-story
 section: 1
 header: user manual
-footer: version 0.0.32 c66d141
+footer: version 0.0.32 43376de
 date: 2026-11-20
 author: R. S. Doiel
 ---

@@ -80,6 +80,8 @@ In the interface, `Enter` on a record reads it and `s` sets its status; both sho
 
 The moves are a table: `proposed` to `accepted`, `rejected`, `cancelled` or `superseded`; `accepted` to `cancelled` or `superseded`; `rejected` or `cancelled` back to `proposed`; `superseded` is final and needs `superseded_by` (use `kb record supersede`). `rejected` means considered and not pursued; `cancelled` means pursued or explored and then abandoned. Scripts use the direct form, `kb record set-status REF STATUS`, which is held to the same table. `kb record set-status REF accepted` exits 2 unless standard input and output are a terminal, and nothing turns that off, so a script or a model can propose, reject, cancel and supersede but not accept. The same holds for `kb document review promote SECTION_ID`, which makes a document summary trusted and searchable. `kb ingest` reports a status that arrives through a file edit, so that route is visible too. See [kb-record(1)](kb-record.1.md).
 
+Designs and plans go through the same gate. `kb record new --project harvey --kind design --title T --trigger request` writes `design/DS-0001-t.md` and `--kind plan` writes `plans/PL-0001-t.md`, each numbered from its own sequence, `proposed` until a person accepts it with `kb record set-status harvey/DS-0001`. A decision stays `DR-NNNN` (or the bare number). `kb ingest` reads `DS-` and `PL-` files in `design/` and `plans/` and leaves every other file there alone. A file edited by hand can still say `accepted`; the gate is on `set-status`.
+
 ## Counting, and notes
 
 ```shell
@@ -96,11 +98,15 @@ kb document ingest notes/2026-09-29-worklog.md --project harvey
 
 ## Release Notes
 
-- version: 0.0.29
+- version: 0.0.32
 - status: active
-- released: 2026-10-29
+- released: 2026-11-20
 
-Offline semantic search, as a preview. A separate build of `kb` (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31`; Go 1.27.3 or later) finds rows by meaning with no daemon and no network once the model is fetched: `kb search -semantic` and `-hybrid`, `kb model install|fetch|list` and `kb embed`, and `Tab` in the interface search prompt. The plain `kb` and the release archives are unchanged, and `kb search TERM` output is byte-identical. Run for real on linux/arm64 and macOS arm64; the other platforms are built but not run. Building from source now needs Go 1.27.3.
+Designs and plans are records, a document is found as soon as it is ingested, and the documentation site is readable by a Markdown-web browser. `kb record new --kind design` writes a design brief as `design/DS-NNNN-slug.md` and `--kind plan` a plan as `plans/PL-NNNN-slug.md`, each with its own prefix and numbers; they start `proposed` and only a person at a terminal accepts one, as for a decision (DR-0096). `kb ingest` reads them; `project/DS-0001` and `project/PL-0001` name them beside `project/DR-0096`. A document used to be searchable only after a summary was reviewed: ingest now indexes its title, front-matter `description` (a new `documents.description` column, carried by export, import and merge) and section headings, so `kb search` and, after `kb embed`, `kb search -semantic` find it at once (DR-0091, DR-0092; section text is still not searched). `kb record show` and the other record verbs now say when a record's file is on disk but not ingested. The manual pages start with YAML front matter and the documentation is also published as Markdown with a `/.well-known/toc.opml`, so BonBon browsers and cmarkbrowser can read it. Requires fountain 1.0.4. The embedding of the document entry has not been measured with the real model.
+
+v0.0.31 (2026-11-09): An error is also written to standard output under `--json` as `{"error", "class", "code"}` (workspace DR-0011), `kb record relates-to`, `kb version` and `kb license` as verbs, an unknown verb outside a workspace exits 2, and `kb search -hybrid` widens its words half to any word when the typed words find little (DR-0094).
+
+v0.0.29 (2026-10-29): Offline semantic search, as a preview. A separate build of `kb` (`make semantic`, or `go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31`; Go 1.27.3 or later) finds rows by meaning with no daemon and no network once the model is fetched: `kb search -semantic` and `-hybrid`, `kb model install|fetch|list` and `kb embed`, and `Tab` in the interface search prompt. The plain `kb` and the release archives are unchanged, and `kb search TERM` output is byte-identical. Run for real on linux/arm64 and macOS arm64; the other platforms are built but not run. Building from source now needs Go 1.27.3.
 
 v0.0.28 (2026-10-28): An exit status and manual page release. Every manual page now has an EXIT STATUS and a SEE ALSO section: the thirteen pages that lacked EXIT STATUS list the codes they return (workspace DR-0003), and tests keep those pages and the verb tests in step. An unreadable database file now exits 77 (no_permission) and not 74 (io); `knowledge.Open` returns an error that satisfies `errors.Is(err, fs.ErrPermission)` for it. `kb(1)` says what 73 and 77 are and that 78 is unused. The setup, update and review skills are pinned to 0.0.28.
 
@@ -124,7 +130,7 @@ Small fixes. A record's search passage is the paragraph the match is in, without
 
 Concept suggestions. `kb concept suggest` ranks by a damped frequency (DR-0085): numbers and common adverbs no longer head the list, and `change` is no longer grouped with `chance`. The stoplist gains numbers, ordinals and common adverbs, and the frontmatter keyword scorer shares it. Scores are about twenty where they were several hundred.
 
-The setup, update and review knowledge-base skills describe the story verbs, concept kinds, provenance links and `kb stats`, and are pinned to 0.0.25. `make` no longer leaves the website list empty (`HTML_PAGES`), and `publish.bash` stops on a diverged branch.
+The setup, update and review knowledge-base skills describe the story verbs, concept kinds, provenance links and `kb stats`, and are pinned to the release they were last run against (see `kb_version` in each). `make` no longer leaves the website list empty (`HTML_PAGES`), and `publish.bash` stops on a diverged branch.
 
 For packagers and Foul Papers: the library exports `WhoKnows`, `WhoLearns`, `KnownFact`, `WhoKnowsResult`, `Learner`, `ErrAmbiguousScene`, `ParseKnowledgeItem`, `FactKey`, `ParseStoryComment`, `HitProvenance`, `LinkDocumentSource`, `LinkRecordSource`, `ParseSourceRefs` and `SourceCitations`. `KBSearchResult` is no longer comparable with `==`. Requires fountain 1.0.3.
 

@@ -41,9 +41,12 @@ error, exit 2).</p>
 ingests the project’s decisions directory and anything else under it
 that holds record files, and agents/projects ingests every project at
 once. Below PATH the walk skips the project layout’s directories that
-never hold records: design, plans, feature_requests, notes and hand-off.
-A directory given as PATH is read whatever it is called. (kb index, by
-contrast, takes one directory and does not descend.)</p>
+never hold records: feature_requests, notes and hand-off. design and
+plans hold designs and plans (DS-NNNN-slug.md and PL-NNNN-slug.md),
+which are records (DR-0096); the walk reads those and leaves any other
+file in them alone. A directory given as PATH is read whatever it is
+called. (kb index, by contrast, takes one directory and does not
+descend.)</p>
 <p>A record may list the works it cites in an optional sources
 frontmatter key (DR-0081), in the same three forms as a document’s: a
 bare DOI, an absolute URL, or source:ID. Ingest links them through

@@ -3,7 +3,7 @@
 Reconstructed for v0.0.1 through v0.0.3 from each tag's `codemeta.json`
 release notes; maintained going forward.
 
-## Unreleased
+## v0.0.32 — 2026-11-20
 
 ### Added
 
@@ -17,6 +17,11 @@ release notes; maintained going forward.
 
 ### Fixed
 
+- **Security: `kb record new --project NAME` no longer writes outside the project directory.** NAME was joined into the file's path as
+  it was typed, so `--project ../../../x` (or `..`, `a/b`) wrote the record, a design or a plan outside `agents/projects`, and outside the
+  workspace for enough `..`. A project name that is a path is now a usage error (exit 2) and nothing is written; the interface refuses the same
+  name when it runs `index` or `record fmt` for a scope. The flaw is in v0.0.31 and earlier; it needed a caller who chose the project name
+  (an agent, or a script passing untrusted text). `kb project add` still accepts such a name; see the release report.
 - **A document is found by `kb search` as soon as it is ingested.** Until now a document was searchable only after one of its
   summaries was reviewed, so a freshly ingested file could not be found even by its exact title. Ingest now writes one search
   entry per document holding its title, its front-matter `description` and its section headings (knowledge DR-0091 item 4,
@@ -33,10 +38,15 @@ release notes; maintained going forward.
   (agents/decisions/0013-....md) but not ingested; run kb ingest agents/decisions`), instead of the same "no record" as for a record that does not
   exist. The exit code stays 1.
 
-## v0.0.32 — 2026-11-20
-
 ### Changed
 
+- **The documentation is a Markdown site as well as an HTML one** (BonBon, cmarkbrowser). Every page is also published as `.md`, with
+  `/.well-known/toc.opml` (`toc.bash`), `index.md` (a copy of the README), `.nojekyll`, and a `<link rel="alternate" type="text/markdown">`
+  in each HTML page; `website.mak` lists the pages in `PAGE_ORDER` and `site_test.go` keeps the list, the links, the table of contents and
+  the built files in step. `links-to-html.lua` rewrites only relative links to the site's own pages. A link in the user manual to a file
+  that is not in this repository was removed.
+- **The manual page sources start with YAML front matter** (`title`, `section`, `header`, `footer`, `date`, `author`), not a pandoc `%`
+  title block; `make man` renders the same pages. `kb-version.1.html` is now built.
 - Third-party modules refreshed, including `github.com/rsdoiel/fountain` v1.0.4 (the root and `semantic` modules).
 - `release.bash` and `release.ps1` follow workspace DR-0012 and resume an interrupted draft release (DR-0013); the
   Makefile has the DR-0012 flow.

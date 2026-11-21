@@ -217,6 +217,17 @@ accept. The same holds for
 document summary trusted and searchable. <code>kb ingest</code> reports
 a status that arrives through a file edit, so that route is visible too.
 See <a href="kb-record.1.html">kb-record(1)</a>.</p>
+<p>Designs and plans go through the same gate.
+<code>kb record new --project harvey --kind design --title T --trigger request</code>
+writes <code>design/DS-0001-t.md</code> and <code>--kind plan</code>
+writes <code>plans/PL-0001-t.md</code>, each numbered from its own
+sequence, <code>proposed</code> until a person accepts it with
+<code>kb record set-status harvey/DS-0001</code>. A decision stays
+<code>DR-NNNN</code> (or the bare number). <code>kb ingest</code> reads
+<code>DS-</code> and <code>PL-</code> files in <code>design/</code> and
+<code>plans/</code> and leaves every other file there alone. A file
+edited by hand can still say <code>accepted</code>; the gate is on
+<code>set-status</code>.</p>
 <h2 id="counting-and-notes">Counting, and notes</h2>
 <pre class="shell"><code>kb stats                          # rows, links and checks, and a line per project
 kb concept show toast             # what links to it, and the projects it spans
@@ -240,12 +251,41 @@ skills that wrap the verbs (<code>setup-knowledge-base</code>,
 <code>~/.claude/skills</code>.</p>
 <h2 id="release-notes">Release Notes</h2>
 <ul>
-<li>version: 0.0.29</li>
+<li>version: 0.0.32</li>
 <li>status: active</li>
-<li>released: 2026-10-29</li>
+<li>released: 2026-11-20</li>
 </ul>
-<p>Offline semantic search, as a preview. A separate build of
-<code>kb</code> (<code>make semantic</code>, or
+<p>Designs and plans are records, a document is found as soon as it is
+ingested, and the documentation site is readable by a Markdown-web
+browser. <code>kb record new --kind design</code> writes a design brief
+as <code>design/DS-NNNN-slug.md</code> and <code>--kind plan</code> a
+plan as <code>plans/PL-NNNN-slug.md</code>, each with its own prefix and
+numbers; they start <code>proposed</code> and only a person at a
+terminal accepts one, as for a decision (DR-0096).
+<code>kb ingest</code> reads them; <code>project/DS-0001</code> and
+<code>project/PL-0001</code> name them beside
+<code>project/DR-0096</code>. A document used to be searchable only
+after a summary was reviewed: ingest now indexes its title, front-matter
+<code>description</code> (a new <code>documents.description</code>
+column, carried by export, import and merge) and section headings, so
+<code>kb search</code> and, after <code>kb embed</code>,
+<code>kb search -semantic</code> find it at once (DR-0091, DR-0092;
+section text is still not searched). <code>kb record show</code> and the
+other record verbs now say when a record’s file is on disk but not
+ingested. The manual pages start with YAML front matter and the
+documentation is also published as Markdown with a
+<code>/.well-known/toc.opml</code>, so BonBon browsers and cmarkbrowser
+can read it. Requires fountain 1.0.4. The embedding of the document
+entry has not been measured with the real model.</p>
+<p>v0.0.31 (2026-11-09): An error is also written to standard output
+under <code>--json</code> as <code>{"error", "class", "code"}</code>
+(workspace DR-0011), <code>kb record relates-to</code>,
+<code>kb version</code> and <code>kb license</code> as verbs, an unknown
+verb outside a workspace exits 2, and <code>kb search -hybrid</code>
+widens its words half to any word when the typed words find little
+(DR-0094).</p>
+<p>v0.0.29 (2026-10-29): Offline semantic search, as a preview. A
+separate build of <code>kb</code> (<code>make semantic</code>, or
 <code>go install github.com/rsdoiel/knowledge/semantic/cmd/kb@semantic/v0.0.31</code>;
 Go 1.27.3 or later) finds rows by meaning with no daemon and no network
 once the model is fetched: <code>kb search -semantic</code> and
@@ -341,9 +381,10 @@ adverbs, and the frontmatter keyword scorer shares it. Scores are about
 twenty where they were several hundred.</p>
 <p>The setup, update and review knowledge-base skills describe the story
 verbs, concept kinds, provenance links and <code>kb stats</code>, and
-are pinned to 0.0.25. <code>make</code> no longer leaves the website
-list empty (<code>HTML_PAGES</code>), and <code>publish.bash</code>
-stops on a diverged branch.</p>
+are pinned to the release they were last run against (see
+<code>kb_version</code> in each). <code>make</code> no longer leaves the
+website list empty (<code>HTML_PAGES</code>), and
+<code>publish.bash</code> stops on a diverged branch.</p>
 <p>For packagers and Foul Papers: the library exports
 <code>WhoKnows</code>, <code>WhoLearns</code>, <code>KnownFact</code>,
 <code>WhoKnowsResult</code>, <code>Learner</code>,

@@ -29,6 +29,9 @@ func (m *tuiModel) decisionsTarget() (dir, rel string, all bool, err error) {
 	if name == "all scopes" {
 		return filepath.Join(root, "agents"), "agents", true, nil
 	}
+	if !isProjectDirName(name) {
+		return "", "", false, fmt.Errorf("%q is not a project name a directory can be built from; nothing was run", name)
+	}
 	rel = filepath.Join("agents", "projects", name, "decisions")
 	dir = filepath.Join(root, rel)
 	if fi, statErr := os.Stat(dir); statErr != nil || !fi.IsDir() {

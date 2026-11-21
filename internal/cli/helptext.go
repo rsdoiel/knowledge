@@ -2388,9 +2388,11 @@ or surplus one is a usage error, exit 2).
 The walk descends into every subdirectory, so agents/projects/NAME ingests the
 project's decisions directory and anything else under it that holds record
 files, and agents/projects ingests every project at once. Below PATH the walk
-skips the project layout's directories that never hold records: design, plans,
-feature_requests, notes and hand-off. A directory given as PATH is read whatever
-it is called. (kb index, by
+skips the project layout's directories that never hold records:
+feature_requests, notes and hand-off. design and plans hold designs and plans
+(DS-NNNN-slug.md and PL-NNNN-slug.md), which are records (DR-0096); the walk reads
+those and leaves any other file in them alone. A directory given as PATH is read
+whatever it is called. (kb index, by
 contrast, takes one directory and does not descend.)
 
 A record may list the works it cites in an optional sources frontmatter key
@@ -2771,7 +2773,8 @@ status
   cancelled, without writing a replacement record.
 
 kind
-: decision, correction, refinement
+: decision, correction, refinement, design, plan. A design is numbered DS-NNNN and a
+  plan PL-NNNN, each from its own sequence; every other kind is DR-NNNN
 
 trigger
 : design, plan-review, implementation, live-test, release-review, request,

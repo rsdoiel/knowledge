@@ -21,7 +21,7 @@
 <h1 id="changes">Changes</h1>
 <p>Reconstructed for v0.0.1 through v0.0.3 from each tag’s
 <code>codemeta.json</code> release notes; maintained going forward.</p>
-<h2 id="unreleased">Unreleased</h2>
+<h2 id="v0.0.32-2026-11-20">v0.0.32 — 2026-11-20</h2>
 <h3 id="added">Added</h3>
 <ul>
 <li><strong>Designs and plans are records</strong> (knowledge DR-0096).
@@ -45,6 +45,19 @@ decision record).</li>
 </ul>
 <h3 id="fixed">Fixed</h3>
 <ul>
+<li><strong>Security: <code>kb record new --project NAME</code> no
+longer writes outside the project directory.</strong> NAME was joined
+into the file’s path as it was typed, so
+<code>--project ../../../x</code> (or <code>..</code>, <code>a/b</code>)
+wrote the record, a design or a plan outside
+<code>agents/projects</code>, and outside the workspace for enough
+<code>..</code>. A project name that is a path is now a usage error
+(exit 2) and nothing is written; the interface refuses the same name
+when it runs <code>index</code> or <code>record fmt</code> for a scope.
+The flaw is in v0.0.31 and earlier; it needed a caller who chose the
+project name (an agent, or a script passing untrusted text).
+<code>kb project add</code> still accepts such a name; see the release
+report.</li>
 <li><strong>A document is found by <code>kb search</code> as soon as it
 is ingested.</strong> Until now a document was searchable only after one
 of its summaries was reviewed, so a freshly ingested file could not be
@@ -77,9 +90,26 @@ ingested</strong>
 instead of the same “no record” as for a record that does not exist. The
 exit code stays 1.</li>
 </ul>
-<h2 id="v0.0.32-2026-11-20">v0.0.32 — 2026-11-20</h2>
 <h3 id="changed">Changed</h3>
 <ul>
+<li><strong>The documentation is a Markdown site as well as an HTML
+one</strong> (BonBon, cmarkbrowser). Every page is also published as
+<code>.md</code>, with <code>/.well-known/toc.opml</code>
+(<code>toc.bash</code>), <code>index.md</code> (a copy of the README),
+<code>.nojekyll</code>, and a
+<code>&lt;link rel="alternate" type="text/markdown"&gt;</code> in each
+HTML page; <code>website.mak</code> lists the pages in
+<code>PAGE_ORDER</code> and <code>site_test.go</code> keeps the list,
+the links, the table of contents and the built files in step.
+<code>links-to-html.lua</code> rewrites only relative links to the
+site’s own pages. A link in the user manual to a file that is not in
+this repository was removed.</li>
+<li><strong>The manual page sources start with YAML front
+matter</strong> (<code>title</code>, <code>section</code>,
+<code>header</code>, <code>footer</code>, <code>date</code>,
+<code>author</code>), not a pandoc <code>%</code> title block;
+<code>make man</code> renders the same pages.
+<code>kb-version.1.html</code> is now built.</li>
 <li>Third-party modules refreshed, including
 <code>github.com/rsdoiel/fountain</code> v1.0.4 (the root and
 <code>semantic</code> modules).</li>

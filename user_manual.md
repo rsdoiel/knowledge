@@ -26,8 +26,8 @@ Run `kb` with no verb to launch the interactive TUI, or `kb help` / `kb -h` to s
 | `link` | [kb-link(1)](kb-link.1.md) | link projects/observations to concepts |
 | `source` | [kb-source(1)](kb-source.1.md) | manage cited sources; check DOIs against Retraction Watch |
 | `search`, `summary`, `format` | [kb-search(1)](kb-search.1.md) | full-text search (FTS5) and assembled Markdown views |
-| `ingest` | [kb-ingest(1)](kb-ingest.1.md) | index a tree of decision records into the database |
-| `record` | [kb-record(1)](kb-record.1.md) | author and maintain decision records — new, list, show, set-status, supersede, relates-to, fmt, concepts |
+| `ingest` | [kb-ingest(1)](kb-ingest.1.md) | index a tree of decision records, designs and plans into the database |
+| `record` | [kb-record(1)](kb-record.1.md) | author and maintain decision records, design briefs (`DS-NNNN`) and plans (`PL-NNNN`) — new, list, show, set-status, supersede, relates-to, fmt, concepts |
 | `index` | [kb-index(1)](kb-index.1.md) | generate a corpus's `decisions/index.md`; `--check` for staleness, `--all` for a whole tree |
 | `document` | [kb-document(1)](kb-document.1.md) | ingest, draft, review and tag narrative documents (Markdown, Fountain, text) at graduated abstraction levels |
 | `verbs` | [kb-verbs(1)](kb-verbs.1.md) | print the verb table — every verb, subverb, flag and what it does to the database; `kb -json verbs` for models and scripts |

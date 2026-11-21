@@ -169,6 +169,9 @@ func recordNew(kb *knowledge.KnowledgeBase, jsonOut bool, f recordFlags, out io.
 		return wrapUsage(err)
 	}
 
+	if !f.workspace && !isProjectDirName(f.project) {
+		return usageErrorf("%q is not a project name: it is a path, or empty; a name is one directory under agents/projects", f.project)
+	}
 	kind := f.kind
 	if kind == "" {
 		kind = "decision"
@@ -275,6 +278,17 @@ const scaffoldBody = `
 
 **Consequences.**
 `
+
+// isProjectDirName reports whether name can be the one directory a project has
+// under agents/projects: not empty, not "." or "..", and without a path
+// separator or a NUL. record new builds the file's directory from the name, so
+// a name that is a path wrote outside the workspace.
+func isProjectDirName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	return !strings.ContainsAny(name, "/\\\x00")
+}
 
 // nextRecordID returns the next free zero-padded id in a decisions directory,
 // one past the highest already present.

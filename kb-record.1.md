@@ -2,7 +2,7 @@
 title: kb-record
 section: 1
 header: user manual
-footer: version 0.0.32 c66d141
+footer: version 0.0.32 43376de
 date: 2026-11-20
 author: R. S. Doiel
 ---
@@ -231,7 +231,8 @@ status
   cancelled, without writing a replacement record.
 
 kind
-: decision, correction, refinement
+: decision, correction, refinement, design, plan. A design is numbered DS-NNNN and a
+  plan PL-NNNN, each from its own sequence; every other kind is DR-NNNN
 
 trigger
 : design, plan-review, implementation, live-test, release-review, request,

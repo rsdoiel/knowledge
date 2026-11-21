@@ -86,6 +86,9 @@ A record is `agents/projects/PROJECT/decisions/NNNN-slug.md` (or `agents/decisio
 workspace tier), with YAML frontmatter, specified in `DECISION_RECORD_FORMAT.md` at the workspace
 root. Scaffold one with `kb record new --project P --title T --trigger design`, fill in the body,
 then `kb ingest` the directory. Records are `proposed` until a person accepts them.
+`--kind design` and `--kind plan` write a design brief (`design/DS-NNNN-slug.md`) or a plan (`plans/PL-NNNN-slug.md`)
+the same way, each with its own numbers; they are `proposed` until a person accepts them, and a model must
+never write `accepted` into one by hand. A reference is `PROJECT/DR-NNNN`, `PROJECT/DS-NNNN` or `PROJECT/PL-NNNN`.
 
 ## Skills
 

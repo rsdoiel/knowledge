@@ -299,7 +299,14 @@ frontmatter, specified in <code>DECISION_RECORD_FORMAT.md</code> at the
 workspace root. Scaffold one with
 <code>kb record new --project P --title T --trigger design</code>, fill
 in the body, then <code>kb ingest</code> the directory. Records are
-<code>proposed</code> until a person accepts them.</p>
+<code>proposed</code> until a person accepts them.
+<code>--kind design</code> and <code>--kind plan</code> write a design
+brief (<code>design/DS-NNNN-slug.md</code>) or a plan
+(<code>plans/PL-NNNN-slug.md</code>) the same way, each with its own
+numbers; they are <code>proposed</code> until a person accepts them, and
+a model must never write <code>accepted</code> into one by hand. A
+reference is <code>PROJECT/DR-NNNN</code>, <code>PROJECT/DS-NNNN</code>
+or <code>PROJECT/PL-NNNN</code>.</p>
 <h2 id="skills">Skills</h2>
 <p><code>agents/skills/</code> in this repository holds three skills
 that wrap the verbs above: <code>setup-knowledge-base</code>,
