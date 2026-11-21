@@ -1,6 +1,8 @@
 
 # Action items
 
+- [ ] We need to improve the release process. Probably just integrate the `go release edit` into the sequence so the two levels of the reposities get handle correctly. Otherwise we can abandon the semantic or or turning it into a separate module in it's own github.com/rsdoiel namespace.
+
 ## Bugs
 
 - [x] **`kb record show` and `relates-to` say "no record DR-0013 in the workspace tier" for a record whose file is on disk but not yet *Fixed 2026-11-20 (fix (1), unreleased): `resolveRecordScoped` (`internal/cli/record.go`) looks for `NNNN-*.md` in the tier's decisions directory when the database has no such record and says `DR-NNNN is on disk (PATH) but not ingested; run kb ingest DIR`, exit 1; covers every record verb that resolves a reference. Test: `recordondisk_test.go`. Options (2) and (3) not done.*
